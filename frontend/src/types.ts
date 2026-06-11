@@ -1,10 +1,25 @@
-﻿export interface ApiResponse<T> {
+/**
+ * FrontierScan 前端类型定义。
+ *
+ * 定义了所有后端 API 响应的 TypeScript 接口，
+ * 确保前端调用和后端数据模型保持一致的类型安全。
+ *
+ * @module types
+ */
+
+/** 统一 API 响应格式（与后端 ApiResponse.java 对应） */
+export interface ApiResponse<T> {
+  /** 请求是否成功 */
   success: boolean;
+  /** 成功时的业务数据 */
   data: T;
+  /** 响应消息 */
   message: string;
+  /** 服务器时间戳 */
   timestamp: string;
 }
 
+/** 信息分类 */
 export interface Category {
   id: number;
   userId: number;
@@ -16,6 +31,7 @@ export interface Category {
   updatedAt: string;
 }
 
+/** 信息源网站 */
 export interface Site {
   id: number;
   userId: number;
@@ -29,6 +45,7 @@ export interface Site {
   updatedAt: string;
 }
 
+/** 采集文章 */
 export interface Article {
   id: number;
   userId: number;
@@ -46,6 +63,7 @@ export interface Article {
   createdAt: string;
 }
 
+/** 采集任务记录 */
 export interface CollectionRun {
   id: number;
   userId: number;
@@ -58,6 +76,7 @@ export interface CollectionRun {
   errorMessage: string | null;
 }
 
+/** Spring Data 分页响应格式 */
 export interface Page<T> {
   content: T[];
   totalElements: number;

@@ -17,6 +17,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 文章 REST 控制器。
+ * <p>
+ * 提供文章的分页查询、详情获取、收藏切换和统计接口。
+ * 所有操作基于当前认证用户进行数据隔离。
+ * </p>
+ */
 @RestController
 @RequestMapping("/api/articles")
 public class ArticleController {
@@ -27,6 +34,7 @@ public class ArticleController {
         this.articleService = articleService;
     }
 
+    /** 分页查询文章列表，支持按分类和来源网站筛选。 */
     @GetMapping
     public ApiResponse<Page<Article>> list(
             @AuthenticationPrincipal JwtPrincipal principal,
@@ -41,6 +49,7 @@ public class ArticleController {
         ));
     }
 
+    /** 获取文章详情。 */
     @GetMapping("/{id}")
     public ApiResponse<Article> get(
             @AuthenticationPrincipal JwtPrincipal principal,
@@ -49,6 +58,7 @@ public class ArticleController {
         return ApiResponse.ok(articleService.getById(principal.userId(), id));
     }
 
+    /** 获取当前用户的收藏列表。 */
     @GetMapping("/favorites")
     public ApiResponse<List<Map<String, Object>>> favorites(@AuthenticationPrincipal JwtPrincipal principal) {
         List<Favorite> favs = articleService.listFavorites(principal.userId());
@@ -60,6 +70,7 @@ public class ArticleController {
         return ApiResponse.ok(data);
     }
 
+    /** 切换文章收藏状态。 */
     @PostMapping("/{id}/favorite")
     public ApiResponse<Map<String, Object>> toggleFavorite(
             @AuthenticationPrincipal JwtPrincipal principal,
@@ -70,6 +81,7 @@ public class ArticleController {
         return ApiResponse.ok(Map.of("favorited", isFav));
     }
 
+    /** 取消文章收藏。 */
     @DeleteMapping("/{id}/favorite")
     public ApiResponse<Map<String, Object>> removeFavorite(
             @AuthenticationPrincipal JwtPrincipal principal,
@@ -79,6 +91,7 @@ public class ArticleController {
         return ApiResponse.ok(Map.of("favorited", false));
     }
 
+    /** 获取文章统计信息（总量 + 今日采集数）。 */
     @GetMapping("/count")
     public ApiResponse<Map<String, Object>> count(@AuthenticationPrincipal JwtPrincipal principal) {
         long total = articleService.countByUser(principal.userId());

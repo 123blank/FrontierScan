@@ -1,3 +1,19 @@
+-- ============================================================
+-- V1: 初始数据库结构
+-- 创建 FrontierScan 系统的所有基础表
+-- ============================================================
+-- 
+-- 表清单：
+--   app_users        - 用户账号
+--   categories       - 信息分类
+--   sites            - 信息源网站
+--   articles         - 采集文章
+--   collection_runs  - 采集任务记录
+--   favorites        - 用户收藏关系
+--
+-- 所有表均包含 created_at / updated_at 时间戳字段
+-- 外键关系确保数据完整性，联合唯一约束实现数据去重
+-- ============================================================
 create table app_users (
     id bigserial primary key,
     username varchar(100) not null unique,

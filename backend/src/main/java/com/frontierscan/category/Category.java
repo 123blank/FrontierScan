@@ -8,6 +8,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 
+/**
+ * 信息分类实体，映射数据库 {@code categories} 表。
+ * <p>
+ * 用户可自定义分类来组织信息源，支持排序和归档操作。
+ * 每个分类归属于一个用户，实现用户间的数据隔离。
+ * </p>
+ */
 @Entity
 @Table(name = "categories")
 public class Category {
@@ -15,24 +22,31 @@ public class Category {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 所属用户 ID */
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    /** 分类名称 */
     @Column(nullable = false, length = 120)
     private String name;
 
+    /** 分类描述 */
     @Column(length = 500)
     private String description;
 
+    /** 排序序号（数字越小越靠前） */
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
 
+    /** 是否已归档（归档后的分类在默认视图中隐藏） */
     @Column(nullable = false)
     private Boolean archived = false;
 
+    /** 创建时间 */
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    /** 最后更新时间 */
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
