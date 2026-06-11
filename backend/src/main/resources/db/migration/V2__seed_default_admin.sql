@@ -1,0 +1,4 @@
+﻿-- V2__seed_default_admin.sql
+-- 默认管理员将在应用启动时由 DataInitializer 通过 AuthService 创建（密码 BCrypt 加密）
+-- 此迁移仅为确保表结构就绪，无额外 DDL
+-- 管理员账号: admin / admin123

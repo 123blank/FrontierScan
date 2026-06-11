@@ -1,0 +1,301 @@
+:root {
+  color: #17202a;
+  background: #f4f7f6;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  border-radius: 6px;
+  background: #136f63;
+  color: #fff;
+  cursor: pointer;
+  padding: 10px 14px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+input {
+  border: 1px solid #d7dfdc;
+  border-radius: 6px;
+  color: #17202a;
+  outline: none;
+  padding: 10px 12px;
+}
+
+input:focus {
+  border-color: #136f63;
+  box-shadow: 0 0 0 3px rgba(19, 111, 99, 0.12);
+}
+
+.login-page {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(19, 111, 99, 0.88), rgba(27, 43, 52, 0.92)),
+    url("https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1600&q=80");
+  background-size: cover;
+  display: flex;
+  min-height: 100vh;
+  padding: 32px;
+}
+
+.login-panel {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 8px;
+  display: grid;
+  gap: 32px;
+  grid-template-columns: 1.1fr 0.9fr;
+  margin: 0 auto;
+  max-width: 960px;
+  padding: 40px;
+  width: 100%;
+}
+
+.login-copy h1 {
+  font-size: 36px;
+  line-height: 1.2;
+  margin: 16px 0;
+}
+
+.login-copy p {
+  color: #5e6b67;
+  line-height: 1.7;
+}
+
+.eyebrow {
+  color: #136f63;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.login-form {
+  display: grid;
+  gap: 16px;
+}
+
+.login-form label {
+  color: #3e4c48;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.form-error {
+  color: #a5362f;
+  margin: 0;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #10231f;
+  color: #eaf1ef;
+  padding: 24px 18px;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+.brand-mark {
+  align-items: center;
+  background: #20a58f;
+  border-radius: 8px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 800;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.brand small {
+  color: #a9bbb6;
+  display: block;
+  margin-top: 3px;
+}
+
+.nav-list {
+  display: grid;
+  gap: 6px;
+}
+
+.nav-list a {
+  align-items: center;
+  border-radius: 6px;
+  color: #cfe0dc;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  text-decoration: none;
+}
+
+.nav-list a.router-link-active {
+  background: #1e3a34;
+  color: #fff;
+}
+
+.main-panel {
+  min-width: 0;
+  padding: 24px;
+}
+
+.topbar {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.topbar h1 {
+  font-size: 26px;
+  margin: 0 0 6px;
+}
+
+.topbar p {
+  color: #67726f;
+  margin: 0;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.topbar-actions input {
+  min-width: 260px;
+}
+
+.content-surface,
+.section-block,
+.metric-card {
+  background: #fff;
+  border: 1px solid #e3e9e6;
+  border-radius: 8px;
+}
+
+.content-surface {
+  padding: 20px;
+}
+
+.dashboard-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.metric-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+}
+
+.metric-card span,
+.metric-card small {
+  color: #697672;
+}
+
+.metric-card strong {
+  font-size: 32px;
+}
+
+.section-block {
+  padding: 20px;
+}
+
+.section-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.section-heading h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.empty-state {
+  background: #f8faf9;
+  border: 1px dashed #cfd9d5;
+  border-radius: 8px;
+  color: #63706c;
+  padding: 28px;
+  text-align: center;
+}
+
+.empty-state strong {
+  color: #25312d;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.table-placeholder {
+  background: #f1f5f4;
+  border-radius: 6px;
+  color: #53605c;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+@media (max-width: 860px) {
+  .app-shell,
+  .login-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 18px;
+  }
+
+  .topbar,
+  .topbar-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .topbar-actions input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
