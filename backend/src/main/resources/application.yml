@@ -41,3 +41,7 @@ app:
     base-url: ${LLM_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
     api-key: ${DASHSCOPE_API_KEY:${LLM_API_KEY:}}
     model: ${LLM_MODEL:qwen-plus}
+  collection:
+    scheduler-enabled: ${COLLECTION_SCHEDULER_ENABLED:true}
+    scheduler-fixed-delay-ms: ${COLLECTION_SCHEDULER_FIXED_DELAY_MS:10000}
+    lock-ttl-minutes: ${COLLECTION_LOCK_TTL_MINUTES:5}

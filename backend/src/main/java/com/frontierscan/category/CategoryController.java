@@ -46,8 +46,11 @@ public class CategoryController {
 
     /** 获取单个分类详情。 */
     @GetMapping("/{id}")
-    public ApiResponse<Category> get(@PathVariable Long id) {
-        return ApiResponse.ok(categoryService.getById(id));
+    public ApiResponse<Category> get(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long id
+    ) {
+        return ApiResponse.ok(categoryService.getById(principal.userId(), id));
     }
 
     /** 创建新分类。 */
@@ -64,18 +67,22 @@ public class CategoryController {
     /** 更新分类信息。 */
     @PutMapping("/{id}")
     public ApiResponse<Category> update(
+            @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long id,
             @Valid @RequestBody UpdateRequest request
     ) {
         return ApiResponse.ok(categoryService.update(
-                id, request.name(), request.description(), request.sortOrder(), request.archived()
+                principal.userId(), id, request.name(), request.description(), request.sortOrder(), request.archived()
         ));
     }
 
     /** 删除分类。 */
     @DeleteMapping("/{id}")
-    public ApiResponse<Map<String, String>> delete(@PathVariable Long id) {
-        categoryService.delete(id);
+    public ApiResponse<Map<String, String>> delete(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long id
+    ) {
+        categoryService.delete(principal.userId(), id);
         return ApiResponse.ok(Map.of("message", "已删除"));
     }
 

@@ -106,7 +106,7 @@ class CollectionOrchestratorIntegrationTest {
         testCategory = categoryRepository.save(createCategory(testUser.getId(), "测试分类"));
         testSite = siteRepository.save(createSite(testUser, testCategory));
 
-        when(siteService.getById(testSite.getId())).thenReturn(testSite);
+        when(siteService.getById(testUser.getId(), testSite.getId())).thenReturn(testSite);
     }
 
     /**

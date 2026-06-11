@@ -25,3 +25,5 @@ app:
   llm:
     provider: dashscope
     api-key: test-key
+  collection:
+    scheduler-enabled: false

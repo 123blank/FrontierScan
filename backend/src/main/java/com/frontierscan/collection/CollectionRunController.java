@@ -2,6 +2,7 @@ package com.frontierscan.collection;
 
 import com.frontierscan.common.api.ApiResponse;
 import com.frontierscan.common.security.JwtPrincipal;
+import com.frontierscan.site.SiteService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,11 +28,14 @@ public class CollectionRunController {
 
     private final CollectionRunService collectionRunService;
     private final CollectionOrchestrator orchestrator;
+    private final SiteService siteService;
 
     public CollectionRunController(CollectionRunService collectionRunService,
-                                   CollectionOrchestrator orchestrator) {
+                                   CollectionOrchestrator orchestrator,
+                                   SiteService siteService) {
         this.collectionRunService = collectionRunService;
         this.orchestrator = orchestrator;
+        this.siteService = siteService;
     }
 
     /** 查询当前用户的采集任务历史记录（按开始时间倒序）。 */
@@ -55,6 +59,7 @@ public class CollectionRunController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> trigger(
             @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long siteId) {
+        siteService.getById(principal.userId(), siteId);
         CollectionRun run = collectionRunService.create(principal.userId(), siteId, "MANUAL");
         orchestrator.executeCollection(principal.userId(), siteId, run.getId());
         return ResponseEntity.accepted().body(ApiResponse.ok(Map.of(

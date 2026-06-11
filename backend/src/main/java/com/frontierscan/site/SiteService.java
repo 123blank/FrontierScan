@@ -1,5 +1,7 @@
 package com.frontierscan.site;
 
+import com.frontierscan.category.CategoryRepository;
+import com.frontierscan.common.error.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -14,9 +16,11 @@ import java.util.List;
 public class SiteService {
 
     private final SiteRepository siteRepository;
+    private final CategoryRepository categoryRepository;
 
-    public SiteService(SiteRepository siteRepository) {
+    public SiteService(SiteRepository siteRepository, CategoryRepository categoryRepository) {
         this.siteRepository = siteRepository;
+        this.categoryRepository = categoryRepository;
     }
 
     /**
@@ -33,10 +37,17 @@ public class SiteService {
         return siteRepository.findByUserId(userId);
     }
 
-    /** 根据 ID 获取网站。 */
-    public Site getById(Long id) {
-        return siteRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("网站不存在"));
+    /**
+     * 根据 ID 获取当前用户拥有的网站。
+     *
+     * @param userId 当前用户 ID
+     * @param id 网站 ID
+     * @return 网站对象
+     * @throws ResourceNotFoundException 如果网站不存在或不属于当前用户
+     */
+    public Site getById(Long userId, Long id) {
+        return siteRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("网站不存在"));
     }
 
     /**
@@ -53,6 +64,7 @@ public class SiteService {
      */
     public Site create(Long userId, Long categoryId, String name, String url,
                        String rssUrl, Integer collectionIntervalMinutes, Boolean enabled) {
+        ensureCategoryOwnedByUser(userId, categoryId);
         Site site = new Site();
         site.setUserId(userId);
         site.setCategoryId(categoryId);
@@ -66,11 +78,20 @@ public class SiteService {
         return siteRepository.save(site);
     }
 
-    /** 更新网站配置（局部更新）。 */
-    public Site update(Long id, Long categoryId, String name, String url,
+    /**
+     * 更新网站配置（局部更新）。
+     * <p>
+     * 只允许更新当前用户拥有的网站；当传入新的分类 ID 时，也必须属于当前用户，
+     * 防止网站跨用户挂载到其他人的分类下。
+     * </p>
+     */
+    public Site update(Long userId, Long id, Long categoryId, String name, String url,
                        String rssUrl, Integer collectionIntervalMinutes, Boolean enabled) {
-        Site site = getById(id);
-        if (categoryId != null) site.setCategoryId(categoryId);
+        Site site = getById(userId, id);
+        if (categoryId != null) {
+            ensureCategoryOwnedByUser(userId, categoryId);
+            site.setCategoryId(categoryId);
+        }
         if (name != null) site.setName(name);
         if (url != null) site.setUrl(url);
         if (rssUrl != null) site.setRssUrl(rssUrl);
@@ -80,8 +101,29 @@ public class SiteService {
         return siteRepository.save(site);
     }
 
-    /** 删除网站。 */
-    public void delete(Long id) {
-        siteRepository.deleteById(id);
+    /**
+     * 删除当前用户拥有的网站。
+     *
+     * @param userId 当前用户 ID
+     * @param id 网站 ID
+     */
+    public void delete(Long userId, Long id) {
+        Site site = getById(userId, id);
+        siteRepository.delete(site);
+    }
+
+    /**
+     * 校验分类是否属于当前用户。
+     * <p>
+     * 网站与分类都属于用户私有资源，创建/更新网站时必须确保分类归属一致。
+     * </p>
+     *
+     * @param userId 当前用户 ID
+     * @param categoryId 分类 ID
+     */
+    private void ensureCategoryOwnedByUser(Long userId, Long categoryId) {
+        if (categoryId == null || !categoryRepository.existsByIdAndUserId(categoryId, userId)) {
+            throw new ResourceNotFoundException("分类不存在");
+        }
     }
 }

@@ -84,7 +84,7 @@ public class CollectionOrchestrator {
     public CompletableFuture<Long> executeCollection(Long userId, Long siteId, Long runId) {
         log.info("Starting collection task: userId={}, siteId={}, runId={}", userId, siteId, runId);
         try {
-            Site site = siteService.getById(siteId);
+            Site site = siteService.getById(userId, siteId);
             Collector collector = resolveCollector(site);
             log.info("Resolved collector: {} for site: {}", collector.sourceType(), site.getName());
             CollectResult result = collector.collect(site);
@@ -111,7 +111,7 @@ public class CollectionOrchestrator {
             if ("RSS".equals(e.getSourceType())) {
                 log.info("Attempting fallback to HTML collector...");
                 try {
-                    Site site = siteService.getById(siteId);
+                    Site site = siteService.getById(userId, siteId);
                     Collector htmlCollector = findCollector("HTML");
                     if (htmlCollector != null) {
                         CollectResult result = htmlCollector.collect(site);

@@ -4,6 +4,7 @@ import com.frontierscan.common.api.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -42,6 +43,29 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraint(ConstraintViolationException exception) {
         return ResponseEntity.badRequest().body(ApiResponse.error(exception.getMessage()));
+    }
+
+    /**
+     * 处理业务资源不存在异常。
+     * <p>
+     * 对“不存在”和“不属于当前用户”的资源访问统一返回 404，
+     * 避免攻击者通过响应差异探测其他用户资源 ID。
+     * </p>
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(exception.getMessage()));
+    }
+
+    /**
+     * 处理明确的访问拒绝异常。
+     *
+     * @param exception {@link AccessDeniedException}
+     * @return 403 Forbidden
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("无权访问该资源"));
     }
 
     /**

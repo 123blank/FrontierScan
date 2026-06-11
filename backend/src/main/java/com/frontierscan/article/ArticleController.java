@@ -87,7 +87,7 @@ public class ArticleController {
             @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long id
     ) {
-        articleService.toggleFavorite(principal.userId(), id);
+        articleService.removeFavorite(principal.userId(), id);
         return ApiResponse.ok(Map.of("favorited", false));
     }
 

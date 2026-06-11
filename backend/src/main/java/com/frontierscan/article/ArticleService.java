@@ -1,6 +1,7 @@
 package com.frontierscan.article;
 
 import com.frontierscan.collection.CollectResult;
+import com.frontierscan.common.error.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -41,9 +42,9 @@ public class ArticleService {
     /** 获取文章详情，同时校验用户权限。 */
     public Article getById(Long userId, Long id) {
         Article article = articleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("文章不存在"));
+                .orElseThrow(() -> new ResourceNotFoundException("文章不存在"));
         if (!article.getUserId().equals(userId)) {
-            throw new RuntimeException("无权访问该文章");
+            throw new ResourceNotFoundException("文章不存在");
         }
         return article;
     }
@@ -92,6 +93,7 @@ public class ArticleService {
 
     /** 切换收藏状态。 */
     public void toggleFavorite(Long userId, Long articleId) {
+        getById(userId, articleId);
         if (favoriteRepository.existsByUserIdAndArticleId(userId, articleId)) {
             favoriteRepository.deleteByUserIdAndArticleId(userId, articleId);
         } else {
@@ -100,6 +102,19 @@ public class ArticleService {
             fav.setArticleId(articleId);
             fav.setCreatedAt(OffsetDateTime.now());
             favoriteRepository.save(fav);
+        }
+    }
+
+    /**
+     * 取消收藏。
+     * <p>
+     * 取消收藏必须先校验文章归属，避免用户通过收藏接口探测或操作其他用户文章。
+     * </p>
+     */
+    public void removeFavorite(Long userId, Long articleId) {
+        getById(userId, articleId);
+        if (favoriteRepository.existsByUserIdAndArticleId(userId, articleId)) {
+            favoriteRepository.deleteByUserIdAndArticleId(userId, articleId);
         }
     }
 

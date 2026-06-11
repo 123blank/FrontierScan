@@ -46,8 +46,11 @@ public class SiteController {
 
     /** 获取单个网站详情。 */
     @GetMapping("/{id}")
-    public ApiResponse<Site> get(@PathVariable Long id) {
-        return ApiResponse.ok(siteService.getById(id));
+    public ApiResponse<Site> get(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long id
+    ) {
+        return ApiResponse.ok(siteService.getById(principal.userId(), id));
     }
 
     /** 创建新的信息源网站。 */
@@ -65,19 +68,23 @@ public class SiteController {
     /** 更新网站配置。 */
     @PutMapping("/{id}")
     public ApiResponse<Site> update(
+            @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long id,
             @Valid @RequestBody UpdateRequest request
     ) {
         return ApiResponse.ok(siteService.update(
-                id, request.categoryId(), request.name(), request.url(),
+                principal.userId(), id, request.categoryId(), request.name(), request.url(),
                 request.rssUrl(), request.collectionIntervalMinutes(), request.enabled()
         ));
     }
 
     /** 删除网站。 */
     @DeleteMapping("/{id}")
-    public ApiResponse<Map<String, String>> delete(@PathVariable Long id) {
-        siteService.delete(id);
+    public ApiResponse<Map<String, String>> delete(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long id
+    ) {
+        siteService.delete(principal.userId(), id);
         return ApiResponse.ok(Map.of("message", "已删除"));
     }
 

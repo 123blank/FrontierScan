@@ -1,5 +1,6 @@
 package com.frontierscan.category;
 
+import com.frontierscan.common.error.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -35,15 +36,16 @@ public class CategoryService {
     }
 
     /**
-     * 根据 ID 获取分类。
+     * 根据 ID 获取当前用户拥有的分类。
      *
+     * @param userId 当前用户 ID
      * @param id 分类 ID
      * @return 分类对象
-     * @throws RuntimeException 如果分类不存在
+     * @throws ResourceNotFoundException 如果分类不存在或不属于当前用户
      */
-    public Category getById(Long id) {
-        return categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("分类不存在"));
+    public Category getById(Long userId, Long id) {
+        return categoryRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("分类不存在"));
     }
 
     /**
@@ -70,6 +72,7 @@ public class CategoryService {
     /**
      * 更新分类信息（局部更新，只更新非 null 字段）。
      *
+     * @param userId      当前用户 ID
      * @param id          分类 ID
      * @param name        新名称（null 表示不更新）
      * @param description 新描述（null 表示不更新）
@@ -77,8 +80,8 @@ public class CategoryService {
      * @param archived    归档状态（null 表示不更新）
      * @return 更新后的分类对象
      */
-    public Category update(Long id, String name, String description, Integer sortOrder, Boolean archived) {
-        Category category = getById(id);
+    public Category update(Long userId, Long id, String name, String description, Integer sortOrder, Boolean archived) {
+        Category category = getById(userId, id);
         if (name != null) category.setName(name);
         if (description != null) category.setDescription(description);
         if (sortOrder != null) category.setSortOrder(sortOrder);
@@ -90,9 +93,11 @@ public class CategoryService {
     /**
      * 删除分类。
      *
+     * @param userId 当前用户 ID
      * @param id 要删除的分类 ID
      */
-    public void delete(Long id) {
-        categoryRepository.deleteById(id);
+    public void delete(Long userId, Long id) {
+        Category category = getById(userId, id);
+        categoryRepository.delete(category);
     }
 }
