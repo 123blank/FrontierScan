@@ -21,6 +21,12 @@ public class CollectionRunService {
     }
 
     /** 查询指定用户的历史采集记录。 */
+    /** 根据 ID 获取采集任务。 */
+    public CollectionRun getById(Long id) {
+        return collectionRunRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("采集任务不存在"));
+    }
+
     public List<CollectionRun> listByUser(Long userId) {
         return collectionRunRepository.findByUserIdOrderByStartedAtDesc(userId);
     }
