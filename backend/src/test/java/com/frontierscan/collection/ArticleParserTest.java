@@ -116,6 +116,18 @@ class ArticleParserTest {
             assertThat(ArticleParser.extractContent(doc)).contains("文章正文");
         }
 
+        @Test @DisplayName("提取正文时保留段落边界，避免详情页展示为一整段文本")
+        void shouldPreserveParagraphs() {
+            Document doc = Jsoup.parse("""
+                    <html><body>
+                    <article>
+                      <p>第一段正文。</p>
+                      <p>第二段正文。</p>
+                    </article>
+                    </body></html>""");
+            assertThat(ArticleParser.extractContent(doc)).isEqualTo("第一段正文。\n\n第二段正文。");
+        }
+
         @Test @DisplayName("无已知选择器时回退到 {@code <body>} 并移除 aside/sidebar 等噪声")
         void shouldFallbackToBody() {
             Document doc = Jsoup.parse("""
@@ -159,6 +171,16 @@ class ArticleParserTest {
         void noDate_shouldReturnNull() {
             Document doc = Jsoup.parse("<html><body><p>无日期</p></body></html>");
             assertThat(ArticleParser.extractPublishedDate(doc)).isNull();
+        }
+
+        @Test @DisplayName("兼容正文中的中文发布日期，例如 日期：2026年6月5日")
+        void shouldFindChineseDateInBodyText() {
+            Document doc = Jsoup.parse("""
+                    <html><body>
+                    <article>作者：张三 日期：2026年6月5日 正文内容</article>
+                    </body></html>""");
+            Instant date = ArticleParser.extractPublishedDate(doc);
+            assertThat(date).isNotNull();
         }
     }
 }

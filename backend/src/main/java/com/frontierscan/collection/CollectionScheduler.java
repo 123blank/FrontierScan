@@ -172,7 +172,7 @@ public class CollectionScheduler {
      * @return {@code true} 表示需要触发采集
      */
     private boolean isDue(Site site, OffsetDateTime now) {
-        int intervalMinutes = Optional.ofNullable(site.getCollectionIntervalMinutes()).orElse(1440);
+        int intervalMinutes = Optional.ofNullable(site.getCollectionIntervalMinutes()).orElse(720);
         Optional<CollectionRun> latestRun = collectionRunRepository.findFirstBySiteIdOrderByStartedAtDesc(site.getId());
         return latestRun
                 .map(run -> run.getStartedAt().plusMinutes(intervalMinutes).isBefore(now)

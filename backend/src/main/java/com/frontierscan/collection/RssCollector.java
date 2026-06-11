@@ -60,10 +60,16 @@ public class RssCollector implements Collector {
                     contentHtml = entry.getContents().get(0).getValue();
                 }
 
-                String contentExcerpt = ArticleParser.cleanHtml(contentHtml, 5000);
+                Instant extractedPublishedAt = publishedAt;
+                if (extractedPublishedAt == null && contentHtml != null) {
+                    extractedPublishedAt = ArticleParser.extractPublishedDate(
+                            org.jsoup.Jsoup.parse(contentHtml));
+                }
+
+                String contentExcerpt = ArticleParser.cleanHtmlPreserveParagraphs(contentHtml, 5000);
                 articles.add(CollectResult.RawArticle.builder()
                         .title(title).sourceUrl(link).content(contentHtml)
-                        .contentExcerpt(contentExcerpt).publishedAt(publishedAt)
+                        .contentExcerpt(contentExcerpt).publishedAt(extractedPublishedAt)
                         .sourceHash(ArticleParser.generateSourceHash(link)).build());
                 count++;
             }

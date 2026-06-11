@@ -62,6 +62,8 @@ D:\ProjectStudy\FrontierScan\
 │       │   │   ├── RssCollector.java        # RSS/Atom 采集器
 │       │   │   ├── HtmlCollector.java       # 网页抓取采集器
 │       │   │   ├── CollectionOrchestrator.java  # 采集编排器
+│       │   │   ├── CollectionScheduler.java      # 定时采集调度器
+│       │   │   ├── CollectionScheduleProperties.java # 定时调度配置
 │       │   │   ├── CollectorException.java      # 异常基类
 │       │   │   ├── ConnectionTimeoutException.java
 │       │   │   ├── ParseException.java
@@ -70,7 +72,7 @@ D:\ProjectStudy\FrontierScan\
 │       │   └── common/               # 公共基础设施
 │       │       ├── api/              # 统一响应 + Ping 端点
 │       │       ├── config/           # Security + Async + 初始化
-│       │       ├── error/            # 全局异常处理
+│       │       ├── error/            # 全局异常处理 + 资源不存在异常
 │       │       └── security/         # JWT 工具 + 过滤器
 │       ├── main/resources/
 │       │   ├── application.yml
@@ -169,6 +171,8 @@ FrontierScanApplication
 │   ├── RssCollector          ← RSS/Atom 采集器（Rome）
 │   ├── HtmlCollector         ← 网页抓取采集器（Jsoup，含同域名过滤）
 │   ├── CollectionOrchestrator ← 采集编排器（异步执行 + RSS→HTML 自动降级）
+│   ├── CollectionScheduler   ← 定时调度器（扫描启用站点 + 到期触发）
+│   ├── CollectionScheduleProperties ← 定时调度配置(app.collection.*)
 │   ├── CollectionRun         ← 实体: collection_runs 表
 │   ├── CollectionRunController ← 202 Accepted 异步触发
 │   ├── CollectionRunService  ← 状态机(RUNNING→COMPLETED/FAILED)
@@ -201,9 +205,9 @@ FrontierScanApplication
 ### 3.2 核心采集流程（已实现）
 
 ```
-POST /api/collection-runs/sites/{id}
+POST /api/collection-runs/sites/{id}  [手动采集]
   ↓
-Controller (同步): 创建 RUNNING 任务, 返回 202 + runId
+Controller (同步): 先校验 siteId 属于当前 userId → 创建 RUNNING 任务, 返回 202 + runId
   ↓
 @Async("collectionTaskExecutor"): 后台线程执行
   ↓
@@ -239,6 +243,8 @@ CollectResult
 
 [采集编排器 - CollectionOrchestrator]
   ↓
+SiteService.getById(userId, siteId) → 二次校验网站归属（防止绕过 Controller）
+  ↓
 Collector.collect(site) → CollectResult(rawArticles)
   ↓
 RSS 失败 (ParseException) → 自动降级 HTML 采集器
@@ -263,6 +269,39 @@ CollectionRunService.complete(runId, savedCount)
   │
   └─ 异常 → CollectionRunService.fail(runId, errorMessage)
 ```
+
+### 3.2.1 定时采集流程（已实现）
+
+```
+CollectionScheduler @Scheduled
+  ↓
+按 app.collection.scheduler-fixed-delay-ms 固定延迟扫描
+  ↓
+SiteRepository.findByEnabledTrue() 查询所有启用站点
+  ↓
+对每个站点判断是否到期:
+  ├─ 从未采集过 → 到期
+  └─ 最近一次 collection_runs.started_at + site.collection_interval_minutes <= now → 到期
+  ↓
+若 collection_runs 中该 siteId 存在 RUNNING 任务 → 跳过，避免同站点并发采集
+  ↓
+Redis 可用时 SETNX frontierscan:collection:site:{siteId} + TTL 获取站点级锁
+  ├─ 获取失败 → 其他实例已调度，跳过
+  └─ Redis 不可用 → 降级为数据库 RUNNING 状态防重，单机环境继续执行
+  ↓
+CollectionRunService.create(userId, siteId, "SCHEDULED")
+  ↓
+CollectionOrchestrator.executeCollection(userId, siteId, runId)
+  ↓
+异步任务完成后释放当前 token 持有的 Redis 锁
+```
+
+**重要行为说明：**
+
+- 定时任务是否再次触发由“最近一次采集开始时间 + 站点采集间隔”决定。
+- `collectedCount = 0` 的任务也代表一次采集尝试，会参与下一次调度时间计算。
+- 如果站点使用默认 `collectionIntervalMinutes = 1440`，启动后已经触发过一次定时采集，则 24 小时内不会再次触发。
+- 测试或本地排查时，可临时把站点采集间隔改小，并通过 `COLLECTION_SCHEDULER_FIXED_DELAY_MS` 调短扫描间隔。
 
 ### 3.3 数据库表关系
 
@@ -387,6 +426,15 @@ DTO 和配置类使用 Java 16+ record（无需 Lombok）。
 
 所有实体包含 `userId` 字段，Service 层和 Repository 层方法均接受 `userId` 参数，Controller 层通过 `@AuthenticationPrincipal JwtPrincipal` 获取当前用户。**永不可信任客户端提供的 userId**。
 
+当前强制隔离规则：
+
+- 分类详情、更新、删除使用 `CategoryRepository.findByIdAndUserId()` 校验归属。
+- 网站详情、更新、删除使用 `SiteRepository.findByIdAndUserId()` 校验归属。
+- 创建/更新网站时，`categoryId` 必须属于当前用户，防止把网站挂载到其他用户分类。
+- 手动采集触发前先校验 `siteId` 属于当前用户；`CollectionOrchestrator` 内部再次用 `SiteService.getById(userId, siteId)` 二次校验。
+- 文章详情、收藏、取消收藏前先校验文章属于当前用户。
+- 资源不存在或不属于当前用户统一抛出 `ResourceNotFoundException`，对外返回 404，避免通过 ID 探测其他用户数据。
+
 ### 5.5 采集器设计模式：策略模式
 
 `Collector` 接口定义采集抽象，`RssCollector` 和 `HtmlCollector` 分别实现。
@@ -412,10 +460,12 @@ LLM 摘要通过独立的 `llmTaskExecutor` 线程池并发执行，`Completable
 - [x] **文章提取工具** — ArticleParser（正文提取/日期提取/SHA-256 哈希）
 - [x] **采集异常体系** — CollectorException / ConnectionTimeoutException / ParseException / EmptyResultException
 - [x] **异步线程池** — AsyncConfig（core=2, max=4, queue=10）
+- [x] **定时采集调度** — CollectionScheduler + app.collection.* 配置 + Redis SETNX TTL 站点级锁 + 数据库 RUNNING 防重
 - [x] **批量去重落库** — ArticleService.batchSaveArticles()（@Transactional + sourceHash 过滤）
 - [x] **202 Accepted 异步响应** — CollectionRunController 改造
 - [x] 后端项目结构（实体/Repository/Service/Controller 全链路）
 - [x] JWT 认证（登录/Token 发放/请求过滤/用户数据隔离）
+- [x] 用户数据隔离加固（分类/网站/文章/收藏/采集触发均按 userId 校验）
 - [x] 分类管理（完整 CRUD）
 - [x] 网站管理（完整 CRUD）
 - [x] 文章查询（分页/详情/收藏/统计）
@@ -432,11 +482,8 @@ LLM 摘要通过独立的 `llmTaskExecutor` 线程池并发执行，`Completable
 
 1. ~~大模型集成~~ — ✅ 已实现
 
-### 第二阶段（定时调度 + 前端完善）
+### 第二阶段（前端完善）
 
-3. **定时采集调度**
-   - `@Scheduled` + `SiteRepository.findByUserIdAndEnabledTrue()`
-   - Redis 任务锁防止重复调度（`spring-integration-redis` 或自定义）
 4. **文章详情页**
    - 前端新增详情抽屉或详情路由
    - 展示摘要/要点/标签/来源链接
@@ -461,11 +508,14 @@ LLM 摘要通过独立的 `llmTaskExecutor` 线程池并发执行，`Completable
 | `backend/pom.xml` | 依赖管理，含 Lombok/Rome/Jsoup |
 | `backend/src/main/resources/application.yml` | 主配置，含 `repair-on-migrate` |
 | `backend/src/main/java/.../collection/CollectionOrchestrator.java` | **采集编排器入口** |
+| `backend/src/main/java/.../collection/CollectionScheduler.java` | 定时采集调度器，扫描启用站点并触发 SCHEDULED 任务 |
+| `backend/src/main/java/.../collection/CollectionScheduleProperties.java` | 定时调度配置（开关、扫描间隔、锁 TTL） |
 | `backend/src/main/java/.../collection/RssCollector.java` | RSS 采集器（可测试：protected buildFeed） |
 | `backend/src/main/java/.../collection/HtmlCollector.java` | HTML 采集器（同域名过滤） |
 | `backend/src/main/java/.../collection/ArticleParser.java` | 正文/日期提取工具 |
 | `backend/src/main/java/.../collection/Collector.java` | 策略接口，扩展新采集类型实现此接口 |
 | `backend/src/main/java/.../common/config/AsyncConfig.java` | 异步线程池配置 |
+| `backend/src/main/java/.../common/error/ResourceNotFoundException.java` | 用户隔离场景下的统一 404 业务异常 |
 | `backend/src/main/java/.../common/security/JwtUtil.java` | JWT 工具 |
 | `backend/src/main/java/.../llm/DashScopeLlmProvider.java` | DashScope 真实 API（RestTemplate + 外置模板） |
 | `backend/src/main/resources/prompt_template/article-zh-llm-summary-prompt.stg` | LLM 提示词模板（模板与代码分离） |
@@ -479,6 +529,9 @@ LLM 摘要通过独立的 `llmTaskExecutor` 线程池并发执行，`Completable
 | `backend/src/test/java/.../collection/ArticleParserTest.java` | 15 个用例 |
 | `backend/src/test/java/.../collection/RssCollectorTest.java` | 9 个用例 |
 | `backend/src/test/java/.../collection/CollectionOrchestratorIntegrationTest.java` | 6 个集成用例 |
+| `backend/src/test/java/.../collection/CollectionSchedulerTest.java` | 7 个定时调度单元测试 |
+| `backend/src/test/java/.../collection/CollectionSchedulerIntegrationTest.java` | 3 个定时调度集成测试 |
+| `backend/src/test/java/.../security/UserDataIsolationIntegrationTest.java` | 10 个用户数据隔离集成测试 |
 | `backend/src/test/resources/application-test.yml` | H2 测试配置 |
 | `backend/src/test/resources/test-rss.xml` | RSS 测试夹具（6 条 item） |
 
