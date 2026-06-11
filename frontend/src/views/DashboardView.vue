@@ -53,10 +53,13 @@
         @keydown.enter="openArticleDetail(article.id)"
       >
         <div class="article-card-header">
-          <h3>{{ article.title }}</h3>
+          <h3>
+            <span>{{ article.title }}</span><sup v-if="isNewArticle(article.collectedAt)" class="new-badge">new</sup>
+          </h3>
           <button
             class="icon-button favorite-button"
             :class="{ active: favoriteArticleIds.has(article.id) }"
+            :disabled="favoritePendingIds.has(article.id)"
             :aria-label="favoriteArticleIds.has(article.id) ? '取消收藏' : '收藏文章'"
             :title="favoriteArticleIds.has(article.id) ? '取消收藏' : '收藏文章'"
             @click.stop="toggleFavorite(article.id)"
@@ -65,9 +68,11 @@
           </button>
         </div>
         <p class="article-meta">
-          <span v-if="article.tags">{{ article.tags }}</span>
-          <span>{{ new Date(article.collectedAt).toLocaleDateString('zh-CN') }}</span>
+          <span>发布时间 {{ formatDate(article.publishedAt) }}</span>
         </p>
+        <div v-if="splitCsv(article.tags).length" class="tag-list article-card-tags" aria-label="文章标签">
+          <span v-for="tag in splitCsv(article.tags)" :key="tag">{{ tag }}</span>
+        </div>
         <p v-if="article.summary" class="article-summary">{{ article.summary }}</p>
         <a :href="article.sourceUrl" target="_blank" rel="noopener" @click.stop>查看原文</a>
       </article>
@@ -102,11 +107,14 @@
       <div v-else-if="selectedArticle" class="drawer-content">
         <div class="drawer-actions">
           <button
-            class="secondary-button"
+            class="icon-button favorite-button"
             :class="{ active: favoriteArticleIds.has(selectedArticle.id) }"
+            :disabled="favoritePendingIds.has(selectedArticle.id)"
+            :aria-label="favoriteArticleIds.has(selectedArticle.id) ? '取消收藏' : '收藏文章'"
+            :title="favoriteArticleIds.has(selectedArticle.id) ? '取消收藏' : '收藏文章'"
             @click="toggleFavorite(selectedArticle.id)"
           >
-            {{ favoriteArticleIds.has(selectedArticle.id) ? '取消收藏' : '收藏文章' }}
+            ★
           </button>
           <a class="primary-link" :href="selectedArticle.sourceUrl" target="_blank" rel="noopener">打开原文</a>
         </div>
@@ -165,12 +173,16 @@ const currentPage = ref(0);
 const pageSize = ref(10);
 /** 用户可选分页大小 */
 const pageSizeOptions = [10, 20, 50];
+/** 新文章标识展示窗口，当前产品约定为采集后 12 小时内显示。 */
+const newArticleWindowMs = 12 * 60 * 60 * 1000;
 /** 最新文章总数 */
 const totalElements = ref(0);
 /** 最新文章总页数 */
 const totalPages = ref(0);
 /** 当前用户已收藏的文章 ID 集合，用于列表和详情同步展示收藏状态 */
 const favoriteArticleIds = ref<Set<number>>(new Set());
+/** 正在提交收藏状态变更的文章 ID 集合，防止用户连续点击造成前后端状态错乱 */
+const favoritePendingIds = ref<Set<number>>(new Set());
 /** 详情抽屉是否打开 */
 const detailOpen = ref(false);
 /** 详情抽屉加载状态 */
@@ -274,8 +286,16 @@ function closeArticleDetail() {
 
 /** 收藏或取消收藏文章，并同步列表/详情中的收藏状态。 */
 async function toggleFavorite(articleId: number) {
+  if (favoritePendingIds.value.has(articleId)) {
+    return;
+  }
+
   const wasFavorite = favoriteArticleIds.value.has(articleId);
   const next = new Set(favoriteArticleIds.value);
+  const pending = new Set(favoritePendingIds.value);
+  pending.add(articleId);
+  favoritePendingIds.value = pending;
+
   if (wasFavorite) {
     next.delete(articleId);
   } else {
@@ -291,6 +311,10 @@ async function toggleFavorite(articleId: number) {
     }
   } catch {
     favoriteArticleIds.value = new Set(wasFavorite ? [...next, articleId] : [...next].filter((id) => id !== articleId));
+  } finally {
+    const latestPending = new Set(favoritePendingIds.value);
+    latestPending.delete(articleId);
+    favoritePendingIds.value = latestPending;
   }
 }
 
@@ -308,6 +332,24 @@ function splitCsv(value?: string | null) {
     .split(/[,，]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+/** 判断文章是否为 12 小时内采集的新消息，用于卡片标题旁展示 new 标识。 */
+function isNewArticle(collectedAt?: string | null) {
+  if (!collectedAt) {
+    return false;
+  }
+  const collectedTime = new Date(collectedAt).getTime();
+  if (Number.isNaN(collectedTime)) {
+    return false;
+  }
+  const diff = Date.now() - collectedTime;
+  return diff >= 0 && diff <= newArticleWindowMs;
+}
+
+/** 格式化原文发布时间，仅用于文章卡片日期展示，空值按产品约定显示占位。 */
+function formatDate(value?: string | null) {
+  return value ? new Date(value).toLocaleDateString('zh-CN') : '-';
 }
 
 /** 格式化日期时间，空值显示占位。 */
@@ -340,8 +382,18 @@ function formatDateTime(value?: string | null) {
 }
 .article-card-header { align-items: start; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 34px; }
 .article-card h3 { font-size: 16px; margin: 0 0 6px; }
+.new-badge {
+  color: #d93025;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 4px;
+  text-transform: lowercase;
+  vertical-align: super;
+}
 .article-meta { color: #67726f; font-size: 13px; margin: 0 0 8px; }
 .article-meta span + span::before { content: "·"; margin: 0 6px; }
+.article-card-tags { margin: 0 0 10px; }
 .article-summary { color: #3e4c48; font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
 .article-card a { color: #136f63; font-size: 13px; text-decoration: none; }
 .article-card a:hover { text-decoration: underline; }
@@ -355,6 +407,10 @@ function formatDateTime(value?: string | null) {
   justify-content: center;
   padding: 0;
   width: 34px;
+}
+.icon-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 .icon-button.active, .favorite-button.active { background: #fff5da; color: #8a5d00; }
 .pagination-bar {

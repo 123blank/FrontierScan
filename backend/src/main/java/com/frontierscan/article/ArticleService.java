@@ -92,6 +92,7 @@ public class ArticleService {
     }
 
     /** 切换收藏状态。 */
+    @Transactional
     public void toggleFavorite(Long userId, Long articleId) {
         getById(userId, articleId);
         if (favoriteRepository.existsByUserIdAndArticleId(userId, articleId)) {
@@ -111,6 +112,7 @@ public class ArticleService {
      * 取消收藏必须先校验文章归属，避免用户通过收藏接口探测或操作其他用户文章。
      * </p>
      */
+    @Transactional
     public void removeFavorite(Long userId, Long articleId) {
         getById(userId, articleId);
         if (favoriteRepository.existsByUserIdAndArticleId(userId, articleId)) {
@@ -126,6 +128,20 @@ public class ArticleService {
     /** 获取收藏列表。 */
     public List<Favorite> listFavorites(Long userId) {
         return favoriteRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    /**
+     * 获取当前用户收藏的文章视图列表。
+     * <p>
+     * 收藏页直接使用该方法渲染文章卡片，避免前端逐条请求文章详情。
+     * Repository 查询同时校验收藏关系和文章本体的 {@code userId}，保证用户数据隔离。
+     * </p>
+     *
+     * @param userId 当前用户 ID
+     * @return 收藏文章视图列表
+     */
+    public List<FavoriteArticleView> listFavoriteArticles(Long userId) {
+        return favoriteRepository.findFavoriteArticleViewsByUserId(userId);
     }
 
     /** 统计文章总数。 */

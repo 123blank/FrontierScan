@@ -7,7 +7,7 @@
  * @module api/articles
  */
 import { apiClient } from './client';
-import type { ApiResponse, Article, Page } from '@/types';
+import type { ApiResponse, Article, FavoriteArticle, Page } from '@/types';
 
 export const articleApi = {
   /** 分页查询文章列表（支持按分类/来源网站筛选） */
@@ -28,7 +28,7 @@ export const articleApi = {
   },
   /** 获取收藏列表 */
   favorites() {
-    return apiClient.get<ApiResponse<Array<{ id: number; articleId: number; createdAt: string }>>>('/articles/favorites');
+    return apiClient.get<ApiResponse<FavoriteArticle[]>>('/articles/favorites');
   },
   /** 获取文章统计（总量 + 今日采集数） */
   count() {

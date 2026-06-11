@@ -3,6 +3,8 @@ package com.frontierscan.security;
 import com.frontierscan.article.Article;
 import com.frontierscan.article.ArticleRepository;
 import com.frontierscan.article.ArticleService;
+import com.frontierscan.article.Favorite;
+import com.frontierscan.article.FavoriteArticleView;
 import com.frontierscan.article.FavoriteRepository;
 import com.frontierscan.auth.UserAccount;
 import com.frontierscan.auth.UserAccountRepository;
@@ -185,10 +187,45 @@ class UserDataIsolationIntegrationTest {
         }
 
         @Test
+        @DisplayName("用户可以取消收藏自己的文章")
+        void shouldRemoveFavoriteForOwnArticle() {
+            articleService.toggleFavorite(owner.getId(), ownerArticle.getId());
+            assertThat(favoriteRepository.existsByUserIdAndArticleId(owner.getId(), ownerArticle.getId()))
+                    .isTrue();
+
+            articleService.removeFavorite(owner.getId(), ownerArticle.getId());
+            articleService.removeFavorite(owner.getId(), ownerArticle.getId());
+
+            // 取消收藏接口保持幂等，方便前端在列表页和详情抽屉复用同一个星标交互。
+            assertThat(favoriteRepository.existsByUserIdAndArticleId(owner.getId(), ownerArticle.getId()))
+                    .isFalse();
+        }
+
+        @Test
         @DisplayName("用户只能统计到自己的文章数量")
         void shouldOnlyCountOwnArticles() {
             assertThat(articleService.countByUser(owner.getId())).isEqualTo(1);
             assertThat(articleService.countByUser(intruder.getId())).isZero();
+        }
+
+        @Test
+        @DisplayName("收藏页只能返回当前用户收藏的文章卡片信息")
+        void shouldOnlyListOwnFavoriteArticleViews() {
+            articleService.toggleFavorite(owner.getId(), ownerArticle.getId());
+
+            // 手工写入一条异常收藏关系，模拟历史脏数据或误操作写库场景。
+            // 收藏页查询必须同时校验 favorites.user_id 与 articles.user_id，不能因为收藏关系存在就泄露他人文章。
+            Favorite dirtyFavorite = new Favorite();
+            dirtyFavorite.setUserId(intruder.getId());
+            dirtyFavorite.setArticleId(ownerArticle.getId());
+            dirtyFavorite.setCreatedAt(OffsetDateTime.now());
+            favoriteRepository.save(dirtyFavorite);
+
+            assertThat(articleService.listFavoriteArticles(intruder.getId())).isEmpty();
+
+            assertThat(articleService.listFavoriteArticles(owner.getId()))
+                    .singleElement()
+                    .satisfies(view -> assertFavoriteArticleViewMatchesOwnerArticle(view, ownerArticle));
         }
     }
 
@@ -239,11 +276,32 @@ class UserDataIsolationIntegrationTest {
         article.setSiteId(siteId);
         article.setCategoryId(categoryId);
         article.setTitle("Owner 私有文章");
+        article.setSummary("用于收藏页继续阅读的文章摘要");
+        article.setKeyPoints("第一条要点\n第二条要点");
+        article.setTags("AI,前沿");
         article.setSourceUrl("https://example.com/article");
         article.setSourceHash("hash-" + userId + "-" + siteId);
         article.setContentExcerpt("隔离测试正文");
+        article.setPublishedAt(OffsetDateTime.now().minusDays(1));
         article.setCollectedAt(OffsetDateTime.now());
         article.setCreatedAt(OffsetDateTime.now());
         return article;
+    }
+
+    /** 断言收藏文章视图完整承载收藏页继续阅读所需的文章卡片信息。 */
+    private void assertFavoriteArticleViewMatchesOwnerArticle(FavoriteArticleView view, Article article) {
+        assertThat(view.favoriteId()).isNotNull();
+        assertThat(view.articleId()).isEqualTo(article.getId());
+        assertThat(view.title()).isEqualTo(article.getTitle());
+        assertThat(view.summary()).isEqualTo(article.getSummary());
+        assertThat(view.keyPoints()).isEqualTo(article.getKeyPoints());
+        assertThat(view.tags()).isEqualTo(article.getTags());
+        assertThat(view.sourceUrl()).isEqualTo(article.getSourceUrl());
+        assertThat(view.publishedAt()).isNotNull();
+        assertThat(view.publishedAt().toInstant().toEpochMilli())
+                .isEqualTo(article.getPublishedAt().toInstant().toEpochMilli());
+        assertThat(view.collectedAt().toInstant().toEpochMilli())
+                .isEqualTo(article.getCollectedAt().toInstant().toEpochMilli());
+        assertThat(view.favoritedAt()).isNotNull();
     }
 }

@@ -76,6 +76,20 @@ export interface CollectionRun {
   errorMessage: string | null;
 }
 
+/** 收藏文章视图 */
+export interface FavoriteArticle {
+  favoriteId: number;
+  articleId: number;
+  title: string;
+  summary: string | null;
+  keyPoints: string | null;
+  tags: string | null;
+  sourceUrl: string;
+  publishedAt: string | null;
+  collectedAt: string;
+  favoritedAt: string;
+}
+
 /** Spring Data 分页响应格式 */
 export interface Page<T> {
   content: T[];

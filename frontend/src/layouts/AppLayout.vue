@@ -61,6 +61,7 @@ const auth = useAuthStore();
 /** 侧边栏导航项配置 */
 const navItems = [
   { to: '/dashboard', label: '信息看板', icon: '◆' },
+  { to: '/favorites', label: '我的收藏', icon: '★' },
   { to: '/categories', label: '分类管理', icon: '▣' },
   { to: '/sites', label: '网站管理', icon: '◎' },
   { to: '/collection-runs', label: '任务记录', icon: '◷' },
@@ -69,6 +70,7 @@ const navItems = [
 /** 页面标题映射表 */
 const titles: Record<string, string> = {
   dashboard: '信息看板',
+  favorites: '我的收藏',
   categories: '分类管理',
   sites: '网站管理',
   collectionRuns: '任务记录',

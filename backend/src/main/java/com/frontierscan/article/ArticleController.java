@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -60,14 +59,8 @@ public class ArticleController {
 
     /** 获取当前用户的收藏列表。 */
     @GetMapping("/favorites")
-    public ApiResponse<List<Map<String, Object>>> favorites(@AuthenticationPrincipal JwtPrincipal principal) {
-        List<Favorite> favs = articleService.listFavorites(principal.userId());
-        List<Map<String, Object>> data = favs.stream().map(f -> Map.<String, Object>of(
-                "id", f.getId(),
-                "articleId", f.getArticleId(),
-                "createdAt", f.getCreatedAt().toString()
-        )).toList();
-        return ApiResponse.ok(data);
+    public ApiResponse<java.util.List<FavoriteArticleView>> favorites(@AuthenticationPrincipal JwtPrincipal principal) {
+        return ApiResponse.ok(articleService.listFavoriteArticles(principal.userId()));
     }
 
     /** 切换文章收藏状态。 */

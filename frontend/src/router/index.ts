@@ -19,6 +19,7 @@ import DashboardView from '@/views/DashboardView.vue';
 import CategoriesView from '@/views/CategoriesView.vue';
 import SitesView from '@/views/SitesView.vue';
 import CollectionRunsView from '@/views/CollectionRunsView.vue';
+import FavoritesView from '@/views/FavoritesView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -33,6 +34,7 @@ const router = createRouter({
         { path: 'dashboard', name: 'dashboard', component: DashboardView },
         { path: 'categories', name: 'categories', component: CategoriesView },
         { path: 'sites', name: 'sites', component: SitesView },
+        { path: 'favorites', name: 'favorites', component: FavoritesView },
         { path: 'collection-runs', name: 'collectionRuns', component: CollectionRunsView },
       ],
     },
