@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Test Tech Feed</title>
+    <link>https://example.com</link>
+    <description>测试 RSS 订阅源</description>
+    <language>zh-cn</language>
+
+    <item>
+      <title>OpenAI 发布新模型</title>
+      <link>https://example.com/articles/openai-new-model</link>
+      <description><![CDATA[<p>OpenAI 今日发布了最新的 AI 模型，性能大幅提升。</p><p>新模型在多项基准测试中刷新记录。</p>]]></description>
+      <content:encoded><![CDATA[<p>OpenAI 今日发布了最新的 AI 模型，性能大幅提升。</p><p>新模型在多项基准测试中刷新记录。</p><p>开发者已可在 API 中体验。</p>]]></content:encoded>
+      <pubDate>Tue, 10 Jun 2026 08:00:00 GMT</pubDate>
+      <guid>https://example.com/articles/openai-new-model</guid>
+    </item>
+
+    <item>
+      <title>TypeScript 6.0 发布公告</title>
+      <link>https://example.com/articles/typescript-6</link>
+      <description><![CDATA[TypeScript 6.0 正式发布，带来了多项新特性。]]></description>
+      <pubDate>Mon, 09 Jun 2026 14:30:00 GMT</pubDate>
+      <guid>https://example.com/articles/typescript-6</guid>
+    </item>
+
+    <item>
+      <title>无发布时间的文章</title>
+      <link>https://example.com/articles/no-date</link>
+      <description>这篇文章没有发布时间字段。</description>
+    </item>
+
+    <item>
+      <title>含特殊字符 &amp; 符号 &lt; &gt; 的文章</title>
+      <link>https://example.com/articles/special-chars</link>
+      <description>测试 XML 实体转义 &amp; &lt; &gt; &quot; &apos;</description>
+      <pubDate>Sun, 08 Jun 2026 10:00:00 GMT</pubDate>
+    </item>
+
+    <item>
+      <title></title>
+      <link>https://example.com/articles/empty-title</link>
+      <description>标题为空，应被跳过。</description>
+      <pubDate>Sat, 07 Jun 2026 12:00:00 GMT</pubDate>
+    </item>
+
+    <item>
+      <title>无链接的文章</title>
+      <link></link>
+      <description>链接为空，应被跳过。</description>
+      <pubDate>Sat, 07 Jun 2026 12:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

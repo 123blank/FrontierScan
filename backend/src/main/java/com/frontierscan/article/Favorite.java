@@ -7,16 +7,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
  * 用户收藏关系实体，映射数据库 {@code favorites} 表。
  * <p>通过 {@code (userId, articleId)} 联合唯一约束防止重复收藏。</p>
  */
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Data @NoArgsConstructor @AllArgsConstructor
 @Entity @Table(name = "favorites")
 public class Favorite {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

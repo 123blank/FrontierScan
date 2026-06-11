@@ -7,16 +7,19 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
  * 用户账号实体，映射数据库 {@code app_users} 表。
  * <p>存储用户登录凭证、角色和状态信息。密码以 BCrypt 哈希形式存储。</p>
+ *
+ * <p><b>注解说明：</b>
+ * {@code @Data} = @Getter + @Setter + @ToString + @EqualsAndHashCode + @RequiredArgsConstructor。
+ * 由于 JPA 需要无参构造函数，额外添加 {@code @NoArgsConstructor}。</p>
  */
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Data @NoArgsConstructor @AllArgsConstructor
 @Entity @Table(name = "app_users")
 public class UserAccount {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

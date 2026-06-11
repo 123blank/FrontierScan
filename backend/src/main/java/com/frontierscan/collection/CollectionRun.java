@@ -7,16 +7,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
  * 采集任务运行记录实体，映射数据库 {@code collection_runs} 表。
  * <p>跟踪每次采集任务的执行状态、耗时和采集数量，用于监控和审计。</p>
  */
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Data @NoArgsConstructor @AllArgsConstructor
 @Entity @Table(name = "collection_runs")
 public class CollectionRun {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

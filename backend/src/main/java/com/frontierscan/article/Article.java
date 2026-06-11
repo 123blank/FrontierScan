@@ -7,9 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
@@ -17,7 +16,7 @@ import java.time.OffsetDateTime;
  * <p>存储从信息源采集并经大模型处理后的文章数据。
  * 通过 {@code (userId, sourceHash)} 联合唯一约束实现跨采集去重。</p>
  */
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Data @NoArgsConstructor @AllArgsConstructor
 @Entity @Table(name = "articles")
 public class Article {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

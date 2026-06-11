@@ -7,16 +7,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
  * 信息源网站实体，映射数据库 {@code sites} 表。
  * <p>表示待采集的技术/AI 前沿网站，包含 RSS 地址和采集调度参数。</p>
  */
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Data @NoArgsConstructor @AllArgsConstructor
 @Entity @Table(name = "sites")
 public class Site {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

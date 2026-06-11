@@ -7,16 +7,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
  * 信息分类实体，映射数据库 {@code categories} 表。
  * <p>用户自定义分类来组织信息源，支持排序和归档操作。</p>
  */
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Data @NoArgsConstructor @AllArgsConstructor
 @Entity @Table(name = "categories")
 public class Category {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
