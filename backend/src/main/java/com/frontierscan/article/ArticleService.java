@@ -128,4 +128,36 @@ public class ArticleService {
     public boolean existsByHash(Long userId, String hash) {
         return articleRepository.existsByUserIdAndSourceHash(userId, hash);
     }
+
+    /**
+     * 更新文章的 LLM 摘要结果。
+     * <p>
+     * 采集完成后由 {@link com.frontierscan.collection.CollectionOrchestrator} 异步调用。
+     * 摘要/要点/标签全部为 {@code null} 时表示 LLM 未处理或不支持。
+     * </p>
+     *
+     * @param articleId 文章 ID
+     * @param summary   LLM 返回的结构化摘要
+     */
+    @Transactional
+    public void updateLlmSummary(Long articleId, com.frontierscan.llm.SummaryResult summary) {
+        if (summary == null) {
+            return;
+        }
+        articleRepository.findById(articleId).ifPresent(article -> {
+            if (summary.optimizedTitle() != null) {
+                article.setTitle(summary.optimizedTitle());
+            }
+            if (summary.summary() != null) {
+                article.setSummary(summary.summary());
+            }
+            if (summary.keyPoints() != null && !summary.keyPoints().isEmpty()) {
+                article.setKeyPoints(String.join("\n", summary.keyPoints()));
+            }
+            if (summary.tags() != null && !summary.tags().isEmpty()) {
+                article.setTags(String.join(",", summary.tags()));
+            }
+            articleRepository.save(article);
+        });
+    }
 }

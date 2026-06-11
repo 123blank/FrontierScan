@@ -39,6 +39,7 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-dashscope}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-qwen-plus}
     depends_on:
       postgres:
