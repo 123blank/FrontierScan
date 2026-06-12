@@ -45,6 +45,41 @@ public class CollectionRunController {
     }
 
     /**
+     * 获取单个采集任务的详细信息。
+     */
+    @GetMapping("/{runId}")
+    public ApiResponse<CollectionRun> get(@AuthenticationPrincipal JwtPrincipal principal,
+                                          @PathVariable Long runId) {
+        CollectionRun run = collectionRunService.getById(runId);
+        if (!run.getUserId().equals(principal.userId())) {
+            throw new RuntimeException("任务不存在");
+        }
+        return ApiResponse.ok(run);
+    }
+
+    /**
+     * 重试失败的采集任务。
+     * <p>
+     * 只有 FAILED 状态的任务可以重试。创建新的 MANUAL 任务并异步执行，
+     * 同时重置对应站点的连续失败计数。
+     * </p>
+     *
+     * @param principal 当前认证用户
+     * @param runId     失败的采集任务 ID
+     * @return 202 Accepted，包含新任务记录 ID
+     */
+    @PostMapping("/{runId}/retry")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> retry(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long runId) {
+        CollectionRun newRun = collectionRunService.retry(runId, principal.userId());
+        return ResponseEntity.accepted().body(ApiResponse.ok(Map.of(
+                "message", "采集任务已重新提交",
+                "runId", newRun.getId()
+        )));
+    }
+
+    /**
      * 手动触发对指定网站的采集。
      * <p>
      * 创建 RUNNING 状态的任务记录后立即返回 202 Accepted，

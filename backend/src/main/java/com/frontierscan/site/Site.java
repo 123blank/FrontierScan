@@ -38,4 +38,16 @@ public class Site {
     private OffsetDateTime createdAt;
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
+
+    /** 连续采集失败次数，超过阈值时跳过定时调度。 */
+    @Column(name = "consecutive_failures", nullable = false)
+    private Integer consecutiveFailures = 0;
+
+    /** 最近一次失败的详细原因。 */
+    @Column(name = "last_failure_reason", columnDefinition = "TEXT")
+    private String lastFailureReason;
+
+    /** 最近一次失败的时间。 */
+    @Column(name = "last_failure_at")
+    private OffsetDateTime lastFailureAt;
 }

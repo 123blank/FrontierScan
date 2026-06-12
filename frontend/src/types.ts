@@ -41,6 +41,9 @@ export interface Site {
   rssUrl: string | null;
   collectionIntervalMinutes: number;
   enabled: boolean;
+  consecutiveFailures: number;
+  lastFailureReason: string | null;
+  lastFailureAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +77,7 @@ export interface CollectionRun {
   finishedAt: string | null;
   collectedCount: number;
   errorMessage: string | null;
+  retryCount: number;
 }
 
 /** 收藏文章视图 */

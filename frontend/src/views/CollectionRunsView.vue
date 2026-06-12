@@ -21,6 +21,7 @@
         <tr>
           <th>任务类型</th><th>状态</th><th>开始时间</th><th>结束时间</th>
           <th>耗时</th><th>采集数量</th><th>错误信息</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody>
@@ -32,6 +33,12 @@
           <td>{{ run.finishedAt ? duration(run.startedAt, run.finishedAt) : '-' }}</td>
           <td>{{ run.collectedCount }}</td>
           <td class="error-cell">{{ run.errorMessage || '-' }}</td>
+          <td>
+            <button v-if="run.status === 'FAILED'" type="button" class="retry-btn"
+                    @click="retryRun(run.id)">
+              重试
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -45,6 +52,7 @@ import type { CollectionRun } from '@/types';
 
 const runs = ref<CollectionRun[]>([]);
 const loading = ref(true);
+const retrying = ref<Set<number>>(new Set());
 
 /** 加载任务记录列表 */
 async function load() {
@@ -60,6 +68,20 @@ async function load() {
 function statusText(status: string) {
   const map: Record<string, string> = { RUNNING: '运行中', COMPLETED: '完成', FAILED: '失败' };
   return map[status] || status;
+}
+
+/** 重试失败的采集任务 */
+async function retryRun(runId: number) {
+  const pending = new Set(retrying.value);
+  pending.add(runId);
+  retrying.value = pending;
+  try {
+    await collectionRunApi.retry(runId);
+    await load();
+  } catch {}
+  const latest = new Set(retrying.value);
+  latest.delete(runId);
+  retrying.value = latest;
 }
 
 /** 格式化 ISO 时间戳为本地可读时间 */
@@ -86,4 +108,17 @@ onMounted(load);
 .status-running { color: #136f63; font-weight: 600; }
 .status-completed { color: #1a7a3a; }
 .status-failed { color: #a5362f; }
+
+.retry-btn {
+  background: #eef4f2;
+  border: none;
+  border-radius: 5px;
+  color: #136f63;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 6px 10px;
+  transition: background 0.15s;
+}
+.retry-btn:hover { background: #dce8e5; }
+.retry-btn:disabled { opacity: 0.6; cursor: wait; }
 </style>

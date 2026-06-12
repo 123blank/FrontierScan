@@ -1,6 +1,9 @@
 package com.frontierscan.collection;
 
+import com.frontierscan.site.SiteService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -15,9 +18,16 @@ import java.util.List;
 public class CollectionRunService {
 
     private final CollectionRunRepository collectionRunRepository;
+    private final SiteService siteService;
+    private final CollectionOrchestrator collectionOrchestrator;
 
-    public CollectionRunService(CollectionRunRepository collectionRunRepository) {
+    public CollectionRunService(CollectionRunRepository collectionRunRepository,
+                                SiteService siteService,
+                                @Lazy
+                                CollectionOrchestrator collectionOrchestrator) {
         this.collectionRunRepository = collectionRunRepository;
+        this.siteService = siteService;
+        this.collectionOrchestrator = collectionOrchestrator;
     }
 
     /** 查询指定用户的历史采集记录。 */
@@ -25,6 +35,45 @@ public class CollectionRunService {
     public CollectionRun getById(Long id) {
         return collectionRunRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("采集任务不存在"));
+    }
+
+    /**
+     * 重试失败的采集任务。
+     */
+    @Transactional
+    public CollectionRun retry(Long runId, Long userId) {
+        CollectionRun originalRun = getById(runId);
+        if (!"FAILED".equals(originalRun.getStatus())) {
+            throw new IllegalStateException("只能重试已失败的任务");
+        }
+        if (!originalRun.getUserId().equals(userId)) {
+            throw new RuntimeException("任务不存在");
+        }
+        if (originalRun.getSiteId() != null) {
+            siteService.resetFailureCount(originalRun.getSiteId());
+        }
+        CollectionRun newRun = create(userId, originalRun.getSiteId(), "MANUAL");
+        collectionOrchestrator.executeCollection(userId, originalRun.getSiteId(), newRun.getId());
+        return newRun;
+    }
+    /**
+     * 重试失败的采集任务。
+     */
+    @Transactional
+    public CollectionRun retry(Long runId, Long userId) {
+        CollectionRun originalRun = getById(runId);
+        if (!"FAILED".equals(originalRun.getStatus())) {
+            throw new IllegalStateException("只能重试已失败的任务");
+        }
+        if (!originalRun.getUserId().equals(userId)) {
+            throw new RuntimeException("任务不存在");
+        }
+        if (originalRun.getSiteId() != null) {
+            siteService.resetFailureCount(originalRun.getSiteId());
+        }
+        CollectionRun newRun = create(userId, originalRun.getSiteId(), "MANUAL");
+        collectionOrchestrator.executeCollection(userId, originalRun.getSiteId(), newRun.getId());
+        return newRun;
     }
 
     public List<CollectionRun> listByUser(Long userId) {

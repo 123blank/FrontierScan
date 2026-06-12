@@ -118,6 +118,12 @@ public class CollectionScheduler {
 
         OffsetDateTime now = OffsetDateTime.now();
         for (Site site : enabledSites) {
+            // 跳过连续失败次数过多的站点
+            if (site.getConsecutiveFailures() != null && site.getConsecutiveFailures() >= 5) {
+                log.warn("Skipping site {} due to {} consecutive failures", site.getId(), site.getConsecutiveFailures());
+                continue;
+            }
+
             try {
                 scheduleSiteIfDue(site, now);
             } catch (Exception e) {

@@ -123,7 +123,9 @@ public class CollectionOrchestrator {
                                 userId, siteId, site.getCategoryId(), result.rawArticles());
                         // 降级成功后的文章也进行 LLM 摘要
                         summarizeArticlesConcurrently(saved);
-                        collectionRunService.complete(runId, saved.size());
+            // 采集成功：重置站点连续失败计数
+            siteService.resetFailureCount(siteId);
+            collectionRunService.complete(runId, saved.size());
                         return CompletableFuture.completedFuture(runId);
                     }
                 } catch (CollectorException fallbackEx) {

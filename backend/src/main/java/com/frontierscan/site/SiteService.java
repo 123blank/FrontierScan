@@ -3,6 +3,7 @@ package com.frontierscan.site;
 import com.frontierscan.category.CategoryRepository;
 import com.frontierscan.common.error.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -48,6 +49,47 @@ public class SiteService {
     public Site getById(Long userId, Long id) {
         return siteRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("网站不存在"));
+    }
+
+    /**
+     * 记录站点采集失败信息。
+     * <p>
+     * 递增连续失败计数器，记录失败原因和时间。
+     * 供 {@link com.frontierscan.collection.CollectionOrchestrator} 在采集失败时调用。
+     * </p>
+     *
+     * @param siteId 站点 ID
+     * @param reason 失败原因描述
+     */
+    @Transactional
+    public void recordFailure(Long siteId, String reason) {
+        siteRepository.findById(siteId).ifPresent(site -> {
+            site.setConsecutiveFailures(site.getConsecutiveFailures() != null
+                    ? site.getConsecutiveFailures() + 1 : 1);
+            site.setLastFailureReason(reason);
+            site.setLastFailureAt(OffsetDateTime.now());
+            site.setUpdatedAt(OffsetDateTime.now());
+            siteRepository.save(site);
+        });
+    }
+
+    /**
+     * 重置站点连续失败计数。
+     * <p>
+     * 采集成功后调用，清零失败计数器并清除上次失败信息。
+     * </p>
+     *
+     * @param siteId 站点 ID
+     */
+    @Transactional
+    public void resetFailureCount(Long siteId) {
+        siteRepository.findById(siteId).ifPresent(site -> {
+            site.setConsecutiveFailures(0);
+            site.setLastFailureReason(null);
+            site.setLastFailureAt(null);
+            site.setUpdatedAt(OffsetDateTime.now());
+            siteRepository.save(site);
+        });
     }
 
     /**

@@ -14,8 +14,16 @@ export const collectionRunApi = {
   list() {
     return apiClient.get<ApiResponse<CollectionRun[]>>('/collection-runs');
   },
+  /** 获取单个采集任务的详细信息 */
+  get(runId: number) {
+    return apiClient.get<ApiResponse<CollectionRun>>(`/collection-runs/${runId}`);
+  },
+  /** 重试失败的采集任务 */
+  retry(runId: number) {
+    return apiClient.post<ApiResponse<{ message: string; runId: number }>>(`/collection-runs/${runId}/retry`);
+  },
   /** 手动触发对指定网站的采集 */
   trigger(siteId: number) {
-    return apiClient.post<ApiResponse<CollectionRun>>(`/collection-runs/sites/${siteId}`);
+    return apiClient.post<ApiResponse<{ message: string; runId: number }>>(`/collection-runs/sites/${siteId}`);
   },
 };
