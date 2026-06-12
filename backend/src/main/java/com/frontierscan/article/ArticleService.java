@@ -52,12 +52,10 @@ public class ArticleService {
             }
             return articleRepository.findByUserIdOrderByCollectedAtDesc(userId, pageable);
         }
-        // Filters present: use native query with explicit type casting
-        String keywordPattern = keyword != null ? "%" + keyword.toLowerCase() + "%" : null;
-        log.debug("Using native query: keywordPattern={}, startDateStr={}, endDateStr={}",
-                keywordPattern, startDateStr, endDateStr);
-        return articleRepository.findWithFilters(
-                userId, categoryId, siteId, keywordPattern, tagId, startDateStr, endDateStr, pageable);
+       // Filters present: use native query with explicit type casting
+       String keywordPattern = keyword != null ? "%" + keyword.toLowerCase() + "%" : null;
+       return articleRepository.findWithFilters(
+               userId, categoryId, siteId, keywordPattern, tagId, startDateStr, endDateStr, pageable);
     }
 
     /** 获取文章详情，同时校验用户权限。 */

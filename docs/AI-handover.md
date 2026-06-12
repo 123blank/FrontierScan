@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-06-11  
+> 最后更新：2026-06-12  
 > 项目版本：0.1.0-SNAPSHOT  
-> 当前重点：采集闭环、AI 摘要、阅读闭环、用户数据隔离、收藏体验已完成，后续建议进入搜索/筛选/任务可靠性增强。
+> 当前重点：文章搜索与筛选（关键词+标签+日期范围）、多领域标签系统已上线。后续建议进入采集可靠性增强和 LLM 摘要治理。
 
 ---
 
@@ -46,26 +46,34 @@ D:\ProjectStudy\FrontierScan\
 │       │   ├── category/             # 分类 CRUD
 │       │   ├── site/                 # 网站 CRUD
 │       │   ├── article/              # 文章、收藏、收藏文章视图
+│       │   ├── article/              # 文章、收藏、收藏文章视图、筛选查询
 │       │   ├── collection/           # 采集器、调度器、任务记录
-│       │   ├── llm/                  # LLM Provider 抽象和 DashScope 实现
+│       │   ├── llm/                  # LLM Provider 抽象、DashScope 实现、标签系统
+│       │   ├── llm/tag/             # 多领域标签系统（TagEvaluationAgent、领域分类、标签评分）
+│       │   ├── llm/prompt_template/ # 提示词模板（domain-classifier.stg, tag-scorer.stg）
 │       │   └── common/               # 响应、异常、安全、异步配置
 │       └── resources/
 │           ├── application.yml
 │           ├── db/migration/
 │           │   ├── V1__initial_schema.sql
 │           │   ├── V2__seed_default_admin.sql
-│           │   └── V3__add_schema_comments.sql
+│           │   ├── V3__add_schema_comments.sql
+│           │   └── V4__create_tag_system.sql  # tag_domains + tech_tags + article_tags
 │           └── prompt_template/article-zh-llm-summary-prompt.stg
 ├── frontend/
 │   └── src/
 │       ├── api/                      # Axios API 封装
+│       │   ├── articles.ts           # 文章 API（含筛选参数）
+│       │   ├── tags.ts              # 标签系统 API（listDomains, listTags）
 │       ├── layouts/AppLayout.vue
 │       ├── router/index.ts
 │       ├── stores/auth.ts
 │       ├── types.ts
+│       ├── components/
+│       │   └── ArticleFilterBar.vue  # 文章筛选栏（关键词+标签+日期范围）
 │       └── views/
-│           ├── DashboardView.vue     # 信息看板：分页、详情抽屉、收藏
-│           ├── FavoritesView.vue     # 我的收藏：继续阅读、取消收藏
+│           ├── DashboardView.vue     # 信息看板：分页、详情抽屉、收藏、筛选
+│           ├── FavoritesView.vue     # 我的收藏：继续阅读、取消收藏、筛选
 │           ├── CategoriesView.vue
 │           ├── SitesView.vue
 │           ├── CollectionRunsView.vue
@@ -80,8 +88,8 @@ D:\ProjectStudy\FrontierScan\
 
 ### 迁移文件重要约定
 
-- 当前数据库注释迁移文件是 `V3__add_schema_comments.sql`。
-- 用户已明确修正过该版本号，后续新增 Flyway 迁移应继续从 `V4__...sql` 开始，不要再创建或改回 V2。
+ 当前最新迁移文件是 `V4__create_tag_system.sql`（V4：标签系统），继续从 V5 开始递增。
+ 注意：用户已明确修正过版本号，不要再创建或改回 V2/V3。
 
 ---
 
@@ -103,7 +111,9 @@ D:\ProjectStudy\FrontierScan\
 
 文章模块已经完成阅读闭环所需能力：
 
-- `GET /api/articles`：分页查询当前用户文章，支持 `categoryId`、`siteId` 筛选。
+- `GET /api/articles`：分页查询，支持 categoryId、siteId、keyword、tagId、startDate/endDate 筛选。
+- 信息看板使用 `ArticleRepository.findWithFilters()`（原生 SQL + cast() 确保类型安全）。
+- 收藏页使用 `ArticleService.listFavoriteArticlesWithFilters()`（内存过滤避免 JPQL 参数问题）。
 - `GET /api/articles/{id}`：查询文章详情，Service 层校验文章归属。
 - `GET /api/articles/favorites`：返回收藏文章视图，而不是只返回收藏关系。
 - `POST /api/articles/{id}/favorite`：切换收藏状态。
@@ -243,6 +253,15 @@ count()
 ```
 
 所有 API 通过 `apiClient` 自动携带 JWT。
+
+### 4.5 文章筛选栏组件
+
+`ArticleFilterBar.vue` 是共享筛选组件，注入到信息看板和收藏页：
+
+- 关键词搜索：300ms 防抖，自动触发刷新。
+- 标签下拉：从 `GET /api/tags/domains` 加载全领域标签，合并去重后平铺展示。
+- 日期范围：两个原生 `<input type="date">`，选择后即时触发。
+- 事件机制：`@filter-change` emit 筛选条件变更，父组件重置到第 1 页并重新请求。
 
 ---
 
@@ -398,24 +417,25 @@ npm run build
 
 建议优先级如下：
 
-1. **文章搜索与筛选增强**
-   - 信息看板增加关键词搜索。
-   - 支持按标签、来源网站、分类、发布时间筛选。
-   - 后端可先用 PostgreSQL `LIKE`/全文索引实现，后续再考虑 Elasticsearch。
-
-2. **采集可靠性增强**
-   - 采集失败重试策略。
-   - 针对单站点连续失败记录失败次数和最后失败原因。
+1. **采集可靠性增强**
+   - 采集失败重试策略（指数退避）。
+   - 单站点连续失败次数追踪和最后失败原因展示。
    - 前端任务记录页增加失败原因查看和重新采集入口。
 
-3. **LLM 摘要治理**
+2. **LLM 摘要治理**
    - 对摘要为空或 LLM 调用失败的文章提供重试摘要功能。
    - 给 `SummaryResult` 增加更严格的解析/兜底策略。
+   - 接入 TagEvaluationAgent 到采集管线（两阶段标签评分：领域分类→标签评分）。
 
-4. **阅读体验增强**
+3. **阅读体验增强**
    - 收藏页分页。
    - 已读/未读状态。
    - 卡片按发布时间、采集时间、收藏时间排序切换。
+
+4. **标签系统完善**
+   - 在分类管理中添加领域标签扩展。
+   - 更多领域种子数据。
+   - 标签用于文章推荐和发现。
 
 5. **账号体系完善**
    - 用户注册。
@@ -450,3 +470,12 @@ mvn test -q
 ---
 
 本文档由 Codex 维护。每次用户明确要求更新交接文档，或发生重大业务/接口/数据库变更时，再同步更新。
+11. 多领域标签系统：`tag_domains` 表注册领域→`tech_tags` 等独立标签表→`article_tags` 多态关联。
+12. 标签系统 V4 迁移已部署（`V4__create_tag_system.sql`），仅有科技领域种子标签。
+13. TagEvaluationAgent 已实现但暂未接入采集管线，LLM 仍自由生成标签。
+14. 收藏页筛选使用内存过滤（不翻页），信息看板使用原生 SQL（正划分页）。
+ | `GET` | `/api/tags/domains` | 返回全部领域及其标签列表 |
+> 新增：`GET /api/tags/domains` — 返回全部领域及其标签列表。
+> `GET /api/tags/domains/{domainName}` — 返回指定领域的所有标签。
+>
+> 原有 `GET /api/articles` 和 `GET /api/articles/favorites` 接口已扩展 keyword、tagId、startDate、endDate 筛选参数。

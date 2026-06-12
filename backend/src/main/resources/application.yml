@@ -46,3 +46,7 @@ app:
     scheduler-fixed-delay-ms: ${COLLECTION_SCHEDULER_FIXED_DELAY_MS:10000}
     lock-ttl-minutes: ${COLLECTION_LOCK_TTL_MINUTES:5}
 
+logging:
+  level:
+    org.hibernate.SQL: WARN
+
