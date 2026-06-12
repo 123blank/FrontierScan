@@ -38,6 +38,7 @@
         </label>
       </div>
     </div>
+    <ArticleFilterBar @filter-change="onFilterChange" />
     <div v-if="loading" class="empty-state"><p>加载中...</p></div>
     <div v-else-if="articles.length === 0" class="empty-state">
       <strong>还没有采集内容</strong>
@@ -158,6 +159,7 @@
 import { computed, ref, onMounted } from 'vue';
 import { articleApi } from '@/api/articles';
 import { categoryApi } from '@/api/categories';
+import ArticleFilterBar from '@/components/ArticleFilterBar.vue';
 import { siteApi } from '@/api/sites';
 import type { Article } from '@/types';
 
@@ -173,6 +175,11 @@ const currentPage = ref(0);
 const pageSize = ref(10);
 /** 用户可选分页大小 */
 const pageSizeOptions = [10, 20, 50];
+/** ????? */
+const filterKeyword = ref('');
+const filterTagId = ref<number | undefined>(undefined);
+const filterStartDate = ref('');
+const filterEndDate = ref('');
 /** 新文章标识展示窗口，当前产品约定为采集后 12 小时内显示。 */
 const newArticleWindowMs = 12 * 60 * 60 * 1000;
 /** 最新文章总数 */
@@ -203,6 +210,16 @@ onMounted(async () => {
 });
 
 /** 加载看板统计、收藏状态和当前页文章。 */
+/** ??????????? 1 ?????? */
+function onFilterChange(filters: { keyword?: string; tagId?: number; startDate?: string; endDate?: string }) {
+  filterKeyword.value = filters.keyword ?? '';
+  filterTagId.value = filters.tagId;
+  filterStartDate.value = filters.startDate ?? '';
+  filterEndDate.value = filters.endDate ?? '';
+  currentPage.value = 0;
+  reloadArticlePage();
+}
+
 async function loadDashboard() {
   loading.value = true;
   try {
@@ -227,7 +244,12 @@ async function loadDashboard() {
 
 /** 按当前分页参数加载最新文章。 */
 async function loadArticles() {
-  const articleRes = await articleApi.list({ page: currentPage.value, size: pageSize.value });
+  const params: Record<string, any> = { page: currentPage.value, size: pageSize.value };
+  if (filterKeyword.value) params.keyword = filterKeyword.value;
+  if (filterTagId.value) params.tagId = filterTagId.value;
+  if (filterStartDate.value) params.startDate = filterStartDate.value;
+  if (filterEndDate.value) params.endDate = filterEndDate.value;
+  const articleRes = await articleApi.list(params);
   const page = articleRes.data.data;
   articles.value = page.content;
   totalElements.value = page.totalElements;

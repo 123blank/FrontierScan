@@ -10,6 +10,7 @@
       <h2>收藏文章</h2>
       <button type="button" :disabled="loading" @click="loadFavorites">刷新</button>
     </div>
+    <ArticleFilterBar @filter-change="onFilterChange" />
 
     <div v-if="loading" class="empty-state"><p>加载中...</p></div>
     <div v-else-if="favorites.length === 0" class="empty-state">
@@ -119,6 +120,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { articleApi } from '@/api/articles';
+import ArticleFilterBar from '@/components/ArticleFilterBar.vue';
 import type { Article, FavoriteArticle } from '@/types';
 
 /** 收藏文章列表。 */
@@ -142,14 +144,33 @@ const keyPoints = computed(() => splitMultiline(selectedArticle.value?.keyPoints
 const tagList = computed(() => splitCsv(selectedArticle.value?.tags));
 /** 新文章标识展示窗口，当前产品约定为采集后 12 小时内显示。 */
 const newArticleWindowMs = 12 * 60 * 60 * 1000;
+/** ???? */
+const filterKeyword = ref('');
+const filterTagId = ref<number | undefined>(undefined);
+const filterStartDate = ref('');
+const filterEndDate = ref('');
 
 onMounted(loadFavorites);
 
 /** 加载当前用户的收藏文章列表。 */
+/** ????????????? */
+function onFilterChange(filters: { keyword?: string; tagId?: number; startDate?: string; endDate?: string }) {
+  filterKeyword.value = filters.keyword ?? '';
+  filterTagId.value = filters.tagId;
+  filterStartDate.value = filters.startDate ?? '';
+  filterEndDate.value = filters.endDate ?? '';
+  loadFavorites();
+}
+
 async function loadFavorites() {
   loading.value = true;
   try {
-    const res = await articleApi.favorites();
+    const params: Record<string, any> = {};
+    if (filterKeyword.value) params.keyword = filterKeyword.value;
+    if (filterTagId.value) params.tagId = filterTagId.value;
+    if (filterStartDate.value) params.startDate = filterStartDate.value;
+    if (filterEndDate.value) params.endDate = filterEndDate.value;
+    const res = await articleApi.favorites(Object.keys(params).length ? params as any : undefined);
     favorites.value = res.data.data;
   } finally {
     loading.value = false;

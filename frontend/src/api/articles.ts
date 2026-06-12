@@ -11,8 +11,21 @@ import type { ApiResponse, Article, FavoriteArticle, Page } from '@/types';
 
 export const articleApi = {
   /** 分页查询文章列表（支持按分类/来源网站筛选） */
-  list(params: { categoryId?: number; siteId?: number; page?: number; size?: number }) {
-    return apiClient.get<ApiResponse<Page<Article>>>('/articles', { params });
+  list(params: {
+    categoryId?: number;
+    siteId?: number;
+    keyword?: string;
+    tagId?: number;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    size?: number;
+  }) {
+    const clean: Record<string, any> = {};
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) clean[key] = value;
+    }
+    return apiClient.get<ApiResponse<Page<Article>>>('/articles', { params: clean });
   },
   /** 获取文章详情 */
   get(id: number) {
@@ -27,8 +40,19 @@ export const articleApi = {
     return apiClient.delete<ApiResponse<{ favorited: boolean }>>(`/articles/${id}/favorite`);
   },
   /** 获取收藏列表 */
-  favorites() {
-    return apiClient.get<ApiResponse<FavoriteArticle[]>>('/articles/favorites');
+  favorites(params?: {
+    keyword?: string;
+    tagId?: number;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const clean: Record<string, any> = {};
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null) clean[key] = value;
+      }
+    }
+    return apiClient.get<ApiResponse<FavoriteArticle[]>>('/articles/favorites', { params: Object.keys(clean).length ? clean : undefined });
   },
   /** 获取文章统计（总量 + 今日采集数） */
   count() {

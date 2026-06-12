@@ -4,7 +4,6 @@ import com.frontierscan.common.api.ApiResponse;
 import com.frontierscan.common.security.JwtPrincipal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,7 +12,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -27,6 +30,7 @@ import java.util.Map;
 @RequestMapping("/api/articles")
 public class ArticleController {
 
+
     private final ArticleService articleService;
 
     public ArticleController(ArticleService articleService) {
@@ -39,12 +43,16 @@ public class ArticleController {
             @AuthenticationPrincipal JwtPrincipal principal,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long siteId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long tagId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         return ApiResponse.ok(articleService.listByUser(
-                principal.userId(), categoryId, siteId,
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "collectedAt"))
+                principal.userId(), categoryId, siteId, keyword, tagId, startDate, endDate,
+                PageRequest.of(page, size)
         ));
     }
 
@@ -59,7 +67,19 @@ public class ArticleController {
 
     /** 获取当前用户的收藏列表。 */
     @GetMapping("/favorites")
-    public ApiResponse<java.util.List<FavoriteArticleView>> favorites(@AuthenticationPrincipal JwtPrincipal principal) {
+    public ApiResponse<List<FavoriteArticleView>> favorites(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long tagId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate
+    ) {
+        if (keyword != null || tagId != null || startDate != null || endDate != null) {
+            OffsetDateTime start = parseDate(startDate);
+            OffsetDateTime end = parseDateEnd(endDate);
+            return ApiResponse.ok(articleService.listFavoriteArticlesWithFilters(
+                    principal.userId(), keyword, tagId, start, end));
+        }
         return ApiResponse.ok(articleService.listFavoriteArticles(principal.userId()));
     }
 
@@ -90,5 +110,15 @@ public class ArticleController {
         long total = articleService.countByUser(principal.userId());
         long today = articleService.countToday(principal.userId());
         return ApiResponse.ok(Map.of("total", total, "today", today));
+    }
+    private static OffsetDateTime parseDate(String dateStr) {
+        if (dateStr == null || dateStr.isBlank()) return null;
+        try { return LocalDate.parse(dateStr).atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime(); }
+        catch (Exception e) { return null; }
+    }
+    private static OffsetDateTime parseDateEnd(String dateStr) {
+        if (dateStr == null || dateStr.isBlank()) return null;
+        try { return LocalDate.parse(dateStr).atTime(LocalTime.MAX).atZone(ZoneId.systemDefault()).toOffsetDateTime(); }
+        catch (Exception e) { return null; }
     }
 }

@@ -6,6 +6,7 @@ import com.frontierscan.llm.LlmProvider;
 import com.frontierscan.llm.SummaryRequest;
 import com.frontierscan.llm.SummaryResult;
 import com.frontierscan.site.Site;
+import com.frontierscan.collection.TagEvaluationAsyncService;
 import com.frontierscan.site.SiteService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -46,6 +47,7 @@ public class CollectionOrchestrator {
     private final ArticleService articleService;
     private final CollectionRunService collectionRunService;
     private final LlmProvider llmProvider;
+    private final TagEvaluationAsyncService tagEvaluationAsyncService;
 
     /** LLM 调用专用线程池，与大模型 API 并发交互。 */
     private final Executor llmTaskExecutor;
@@ -62,12 +64,14 @@ public class CollectionOrchestrator {
     public CollectionOrchestrator(List<Collector> collectors, SiteService siteService,
                                   ArticleService articleService, CollectionRunService collectionRunService,
                                   LlmProvider llmProvider,
+                                  TagEvaluationAsyncService tagEvaluationAsyncService,
                                   @Qualifier("llmTaskExecutor") Executor llmTaskExecutor) {
         this.collectors = collectors;
         this.siteService = siteService;
         this.articleService = articleService;
         this.collectionRunService = collectionRunService;
         this.llmProvider = llmProvider;
+        this.tagEvaluationAsyncService = tagEvaluationAsyncService;
         this.llmTaskExecutor = llmTaskExecutor;
     }
 

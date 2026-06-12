@@ -3,6 +3,8 @@ package com.frontierscan.article;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -35,4 +37,36 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     /** 统计指定用户在指定时间之后的文章数（用于"今日采集"指标）。 */
     long countByUserIdAndCollectedAtAfter(Long userId, OffsetDateTime after);
+
+    /**
+     * ????????????????????????????????
+     * ????????????? SQL + cast ?????????
+     * ?? PostgreSQL ? null ??????????
+     */
+    @Query(value = """
+            select * from articles a
+            where a.user_id = :userId
+            and (:categoryId is null or a.category_id = :categoryId)
+            and (:siteId is null or a.site_id = :siteId)
+            and (:keywordPattern is null or lower(a.title) like :keywordPattern or lower(a.summary) like :keywordPattern)
+            and (cast(:tagId as bigint) is null or exists (select 1 from article_tags m where m.article_id = a.id and m.tag_id = cast(:tagId as bigint)))
+            and (cast(:startDate as timestamp with time zone) is null or a.published_at >= cast(:startDate as timestamp with time zone))
+            and (cast(:endDate as timestamp with time zone) is null or a.published_at <= cast(:endDate as timestamp with time zone))
+            order by a.collected_at desc
+            """,
+            countQuery = """
+            select count(*) from articles a
+            where a.user_id = :userId
+            and (:categoryId is null or a.category_id = :categoryId)
+            and (:siteId is null or a.site_id = :siteId)
+            and (:keywordPattern is null or lower(a.title) like :keywordPattern or lower(a.summary) like :keywordPattern)
+            and (cast(:tagId as bigint) is null or exists (select 1 from article_tags m where m.article_id = a.id and m.tag_id = cast(:tagId as bigint)))
+            and (cast(:startDate as timestamp with time zone) is null or a.published_at >= cast(:startDate as timestamp with time zone))
+            and (cast(:endDate as timestamp with time zone) is null or a.published_at <= cast(:endDate as timestamp with time zone))
+            """,
+            nativeQuery = true)
+    Page<Article> findWithFilters(@Param("userId") Long userId, @Param("categoryId") Long categoryId,
+            @Param("siteId") Long siteId, @Param("keywordPattern") String keywordPattern, @Param("tagId") Long tagId,
+            @Param("startDate") String startDate, @Param("endDate") String endDate, Pageable pageable);
+
 }

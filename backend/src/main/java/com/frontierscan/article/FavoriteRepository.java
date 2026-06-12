@@ -3,6 +3,7 @@ package com.frontierscan.article;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -43,4 +44,27 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
 
     /** 取消用户对某篇文章的收藏。 */
     void deleteByUserIdAndArticleId(Long userId, Long articleId);
+
+    /**
+     * ?????????????????????????????????????
+     * ???????????
+     */
+    @Query("""
+            select new com.frontierscan.article.FavoriteArticleView(
+                f.id, a.id, a.title, a.summary, a.keyPoints, a.tags,
+                a.sourceUrl, a.publishedAt, a.collectedAt, f.createdAt
+            )
+            from Favorite f
+            join Article a on a.id = f.articleId
+            where f.userId = :userId and a.userId = :userId
+            and (:keyword is null or locate(:keyword, a.title) > 0 or locate(:keyword, a.summary) > 0)
+            and (:startDate is null or a.publishedAt >= :startDate)
+            and (:endDate is null or a.publishedAt <= :endDate)
+            order by f.createdAt desc
+            """)
+    List<FavoriteArticleView> findFavoriteArticleViewsByUserIdWithFilters(
+            @Param("userId") Long userId,
+            @Param("keyword") String keyword,
+            @Param("startDate") OffsetDateTime startDate,
+            @Param("endDate") OffsetDateTime endDate);
 }

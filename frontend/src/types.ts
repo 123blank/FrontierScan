@@ -91,6 +91,20 @@ export interface FavoriteArticle {
 }
 
 /** Spring Data 分页响应格式 */
+/** ???????????????? */
+export interface TagDomain {
+  id: number;
+  name: string;
+  tags: TagItem[];
+}
+
+/** ??? */
+export interface TagItem {
+  id: number;
+  name: string;
+  description: string;
+}
+
 export interface Page<T> {
   content: T[];
   totalElements: number;

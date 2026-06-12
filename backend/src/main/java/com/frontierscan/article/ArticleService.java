@@ -2,7 +2,11 @@ package com.frontierscan.article;
 
 import com.frontierscan.collection.CollectResult;
 import com.frontierscan.common.error.ResourceNotFoundException;
+import com.frontierscan.llm.tag.ArticleTagMappingRepository;
+import com.frontierscan.llm.tag.TagEvaluationAgent;
 import org.springframework.data.domain.Page;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,21 +26,38 @@ public class ArticleService {
 
     private final ArticleRepository articleRepository;
     private final FavoriteRepository favoriteRepository;
+    private final TagEvaluationAgent tagEvaluationAgent;
+    private final ArticleTagMappingRepository articleTagMappingRepository;
+    private static final Logger log = LoggerFactory.getLogger(ArticleService.class);
 
-    public ArticleService(ArticleRepository articleRepository, FavoriteRepository favoriteRepository) {
+    public ArticleService(ArticleRepository articleRepository, FavoriteRepository favoriteRepository, TagEvaluationAgent tagEvaluationAgent, ArticleTagMappingRepository articleTagMappingRepository) {
         this.articleRepository = articleRepository;
         this.favoriteRepository = favoriteRepository;
+        this.tagEvaluationAgent = tagEvaluationAgent;
+        this.articleTagMappingRepository = articleTagMappingRepository;
     }
 
     /** 分页查询文章列表，支持按分类和来源网站筛选。 */
-    public Page<Article> listByUser(Long userId, Long categoryId, Long siteId, Pageable pageable) {
-        if (categoryId != null) {
-            return articleRepository.findByUserIdAndCategoryIdOrderByCollectedAtDesc(userId, categoryId, pageable);
+    public Page<Article> listByUser(Long userId, Long categoryId, Long siteId,
+                                    String keyword, Long tagId,
+                                    String startDateStr, String endDateStr,
+                                    Pageable pageable) {
+        // No search filters: use proven JPA derived query methods
+        if (keyword == null && tagId == null && startDateStr == null && endDateStr == null) {
+            if (categoryId != null) {
+                return articleRepository.findByUserIdAndCategoryIdOrderByCollectedAtDesc(userId, categoryId, pageable);
+            }
+            if (siteId != null) {
+                return articleRepository.findByUserIdAndSiteIdOrderByCollectedAtDesc(userId, siteId, pageable);
+            }
+            return articleRepository.findByUserIdOrderByCollectedAtDesc(userId, pageable);
         }
-        if (siteId != null) {
-            return articleRepository.findByUserIdAndSiteIdOrderByCollectedAtDesc(userId, siteId, pageable);
-        }
-        return articleRepository.findByUserIdOrderByCollectedAtDesc(userId, pageable);
+        // Filters present: use native query with explicit type casting
+        String keywordPattern = keyword != null ? "%" + keyword.toLowerCase() + "%" : null;
+        log.debug("Using native query: keywordPattern={}, startDateStr={}, endDateStr={}",
+                keywordPattern, startDateStr, endDateStr);
+        return articleRepository.findWithFilters(
+                userId, categoryId, siteId, keywordPattern, tagId, startDateStr, endDateStr, pageable);
     }
 
     /** 获取文章详情，同时校验用户权限。 */
@@ -145,6 +166,53 @@ public class ArticleService {
     }
 
     /** 统计文章总数。 */
+    public List<FavoriteArticleView> listFavoriteArticlesWithFilters(Long userId, String keyword,
+                                                                      Long tagId,
+                                                                      OffsetDateTime startDate,
+                                                                      OffsetDateTime endDate) {
+        // ????????????????? JPQL ???
+        List<FavoriteArticleView> favorites = favoriteRepository.findFavoriteArticleViewsByUserId(userId);
+
+        // ?????????
+        if (keyword != null && !keyword.isBlank()) {
+            String lowerKw = keyword.toLowerCase();
+            favorites = favorites.stream()
+                    .filter(fav -> fav.title().toLowerCase().contains(lowerKw)
+                            || (fav.summary() != null && fav.summary().toLowerCase().contains(lowerKw)))
+                    .toList();
+        }
+
+        // ????????
+        if (tagId != null) {
+            List<Long> ids = articleTagMappingRepository.findArticleIdsByTagId(tagId);
+            favorites = favorites.stream()
+                    .filter(fav -> ids.contains(fav.articleId()))
+                    .toList();
+        }
+
+        // ??????????
+        if (startDate != null) {
+            favorites = favorites.stream()
+                    .filter(fav -> fav.publishedAt() != null
+                            && (fav.publishedAt().isEqual(startDate) || fav.publishedAt().isAfter(startDate)))
+                    .toList();
+        }
+        if (endDate != null) {
+            favorites = favorites.stream()
+                    .filter(fav -> fav.publishedAt() != null
+                            && (fav.publishedAt().isEqual(endDate) || fav.publishedAt().isBefore(endDate)))
+                    .toList();
+        }
+
+        return favorites;
+    }
+
+    public void evaluateArticleTags(Long articleId, String title, String content) {
+        try { tagEvaluationAgent.evaluate(articleId, title, content); }
+        catch (Exception e) { log.warn("Tag evaluation failed for article {}: {}", articleId, e.getMessage()); }
+    }
+
+    /** ???????????? */
     public long countByUser(Long userId) {
         return articleRepository.countByUserId(userId);
     }
