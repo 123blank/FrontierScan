@@ -54,20 +54,54 @@ public class SiteService {
     /**
      * 记录站点采集失败信息。
      * <p>
-     * 递增连续失败计数器，记录失败原因和时间。
-     * 供 {@link com.frontierscan.collection.CollectionOrchestrator} 在采集失败时调用。
+     * 递增连续失败计数，写入最近失败原因、失败时间和下一次自动重试时间。
+     * 站点健康状态是面向用户的长期状态，因此只在最终采集失败时调用；RSS 失败但 HTML
+     * 降级成功的场景不会污染站点健康信息。
      * </p>
      *
-     * @param siteId 站点 ID
-     * @param reason 失败原因描述
+     * @param siteId      站点 ID
+     * @param reason      失败原因描述
+     * @param nextRetryAt 下一次自动重试时间；超过最大重试次数时为空
      */
     @Transactional
-    public void recordFailure(Long siteId, String reason) {
+    public void recordFailure(Long siteId, String reason, OffsetDateTime nextRetryAt) {
         siteRepository.findById(siteId).ifPresent(site -> {
             site.setConsecutiveFailures(site.getConsecutiveFailures() != null
                     ? site.getConsecutiveFailures() + 1 : 1);
             site.setLastFailureReason(reason);
             site.setLastFailureAt(OffsetDateTime.now());
+            site.setNextRetryAt(nextRetryAt);
+            site.setUpdatedAt(OffsetDateTime.now());
+            siteRepository.save(site);
+        });
+    }
+
+    /**
+     * 兼容旧调用点的失败记录方法。
+     * <p>没有重试时间的失败仍会递增健康计数，但不会安排自动重试。</p>
+     */
+    @Transactional
+    public void recordFailure(Long siteId, String reason) {
+        recordFailure(siteId, reason, null);
+    }
+
+    /**
+     * 记录站点采集成功并恢复健康状态。
+     * <p>
+     * 采集链路正常完成时调用，即使本次新增文章为 0 也代表站点可访问、解析链路可用。
+     * 成功后清空失败原因和重试时间，避免旧故障继续误导用户。
+     * </p>
+     *
+     * @param siteId 站点 ID
+     */
+    @Transactional
+    public void recordSuccess(Long siteId) {
+        siteRepository.findById(siteId).ifPresent(site -> {
+            site.setConsecutiveFailures(0);
+            site.setLastFailureReason(null);
+            site.setLastFailureAt(null);
+            site.setNextRetryAt(null);
+            site.setLastSuccessAt(OffsetDateTime.now());
             site.setUpdatedAt(OffsetDateTime.now());
             siteRepository.save(site);
         });
@@ -76,7 +110,8 @@ public class SiteService {
     /**
      * 重置站点连续失败计数。
      * <p>
-     * 采集成功后调用，清零失败计数器并清除上次失败信息。
+     * 保留该方法用于手动重试等显式恢复操作；真实采集成功后优先使用 {@link #recordSuccess(Long)}，
+     * 以便同步更新最近成功时间。
      * </p>
      *
      * @param siteId 站点 ID
@@ -87,6 +122,7 @@ public class SiteService {
             site.setConsecutiveFailures(0);
             site.setLastFailureReason(null);
             site.setLastFailureAt(null);
+            site.setNextRetryAt(null);
             site.setUpdatedAt(OffsetDateTime.now());
             siteRepository.save(site);
         });

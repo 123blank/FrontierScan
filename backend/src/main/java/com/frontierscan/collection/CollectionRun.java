@@ -36,4 +36,28 @@ public class CollectionRun {
     private Integer collectedCount = 0;
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
+
+    /** 当前任务的自动重试序号：原始任务为 0，第 1/2/3 次自动重试分别为 1/2/3。 */
+    @Column(name = "retry_count", nullable = false)
+    private Integer retryCount = 0;
+
+    /** 结构化失败类型，用于前端快速区分网络、RSS、HTML、空结果等失败。 */
+    @Column(name = "failure_type", length = 80)
+    private String failureType;
+
+    /** 失败发生阶段，用于定位是 RSS、HTML、LLM 摘要还是未知阶段。 */
+    @Column(name = "failure_stage", length = 80)
+    private String failureStage;
+
+    /** 本次失败任务的下一次自动重试时间，超过最大重试次数时为空。 */
+    @Column(name = "next_retry_at")
+    private OffsetDateTime nextRetryAt;
+
+    /** 当前任务是由哪个失败任务重试产生的；原始任务为空。 */
+    @Column(name = "retry_of_run_id")
+    private Long retryOfRunId;
+
+    /** 非阻断告警信息，例如 LLM 摘要部分失败但文章采集已成功。 */
+    @Column(name = "warning_message", columnDefinition = "TEXT")
+    private String warningMessage;
 }

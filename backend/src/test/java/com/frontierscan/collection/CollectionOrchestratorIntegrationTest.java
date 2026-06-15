@@ -5,6 +5,7 @@ import com.frontierscan.auth.UserAccount;
 import com.frontierscan.auth.UserAccountRepository;
 import com.frontierscan.category.Category;
 import com.frontierscan.category.CategoryRepository;
+import com.frontierscan.llm.LlmProvider;
 import com.frontierscan.site.Site;
 import com.frontierscan.site.SiteRepository;
 import com.frontierscan.site.SiteService;
@@ -24,6 +25,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -64,6 +68,10 @@ class CollectionOrchestratorIntegrationTest {
     /** SiteService Mock：返回预设的 Site 对象，不查询数据库。 */
     @MockBean
     private SiteService siteService;
+
+    /** LLM Provider Mock：避免测试调用真实大模型服务。 */
+    @MockBean
+    private LlmProvider llmProvider;
 
     // ===== 注入真实组件 =====
 
@@ -151,12 +159,18 @@ class CollectionOrchestratorIntegrationTest {
             assertThat(done.getFinishedAt()).isNotNull();
             assertThat(articleRepository.findByUserIdOrderByCollectedAtDesc(testUser.getId(), PageRequest.of(0, 10)))
                     .isNotEmpty();
+            verify(siteService).recordSuccess(testSite.getId());
         }
 
-        @Test @DisplayName("采集 0 篇（空结果）→ COMPLETED，collectedCount=0")
-        void emptyResult() throws Exception {
+        @Test @DisplayName("候选文章已存在（去重后新增 0 篇）→ COMPLETED，collectedCount=0")
+        void duplicateCandidateShouldCompleteWithZeroNewArticles() throws Exception {
+            CollectResult result = mockRssResult(1);
             when(rssCollector.sourceType()).thenReturn("RSS");
-            when(rssCollector.collect(any())).thenReturn(mockRssResult(0));
+            when(rssCollector.collect(any())).thenReturn(result);
+
+            CollectionRun firstRun = collectionRunService.create(testUser.getId(), testSite.getId(), "MANUAL");
+            orchestrator.executeCollection(testUser.getId(), testSite.getId(), firstRun.getId())
+                    .get(30, TimeUnit.SECONDS);
 
             CollectionRun run = collectionRunService.create(testUser.getId(), testSite.getId(), "MANUAL");
             Long runId = orchestrator.executeCollection(testUser.getId(), testSite.getId(), run.getId())
@@ -164,6 +178,23 @@ class CollectionOrchestratorIntegrationTest {
 
             assertThat(collectionRunRepository.findById(runId).orElseThrow().getStatus()).isEqualTo("COMPLETED");
             assertThat(collectionRunRepository.findById(runId).orElseThrow().getCollectedCount()).isZero();
+        }
+
+        @Test @DisplayName("LLM 摘要失败 → 任务仍 COMPLETED，并记录 warningMessage")
+        void llmFailureShouldCompleteWithWarning() throws Exception {
+            when(rssCollector.sourceType()).thenReturn("RSS");
+            when(rssCollector.collect(any())).thenReturn(mockRssResult(2));
+            when(llmProvider.summarize(any())).thenThrow(new RuntimeException("llm down"));
+
+            CollectionRun run = collectionRunService.create(testUser.getId(), testSite.getId(), "MANUAL");
+            Long runId = orchestrator.executeCollection(testUser.getId(), testSite.getId(), run.getId())
+                    .get(30, TimeUnit.SECONDS);
+
+            CollectionRun done = collectionRunRepository.findById(runId).orElseThrow();
+            assertThat(done.getStatus()).isEqualTo("COMPLETED");
+            assertThat(done.getWarningMessage()).contains(CollectionFailureClassifier.LLM_SUMMARY_FAILED);
+            verify(siteService).recordSuccess(testSite.getId());
+            verify(siteService, never()).recordFailure(any(), any(), any());
         }
 
         @Test @DisplayName("重复采集相同数据 → 第二次 collectedCount=0（去重生效）")
@@ -222,6 +253,30 @@ class CollectionOrchestratorIntegrationTest {
             CollectionRun failed = collectionRunRepository.findById(run.getId()).orElseThrow();
             assertThat(failed.getStatus()).isEqualTo("FAILED");
             assertThat(failed.getErrorMessage()).contains("超时");
+            assertThat(failed.getFailureType()).isEqualTo(CollectionFailureClassifier.NETWORK_TIMEOUT);
+            assertThat(failed.getFailureStage()).isEqualTo(CollectionFailureClassifier.STAGE_HTML);
+            assertThat(failed.getNextRetryAt()).isNotNull();
+            verify(siteService).recordFailure(eq(testSite.getId()), any(), any());
+        }
+
+        @Test @DisplayName("RSS 和 HTML 均解析不到候选文章 → EMPTY_RESULT 失败并设置重试")
+        void emptyCandidatesShouldFailAndScheduleRetry() throws Exception {
+            when(rssCollector.sourceType()).thenReturn("RSS");
+            when(rssCollector.collect(any())).thenReturn(mockRssResult(0));
+            when(htmlCollector.sourceType()).thenReturn("HTML");
+            when(htmlCollector.collect(any())).thenReturn(mockRssResult(0));
+
+            CollectionRun run = collectionRunService.create(testUser.getId(), testSite.getId(), "MANUAL");
+            try {
+                orchestrator.executeCollection(testUser.getId(), testSite.getId(), run.getId())
+                        .get(30, TimeUnit.SECONDS);
+            } catch (Exception ignored) {}
+
+            CollectionRun failed = collectionRunRepository.findById(run.getId()).orElseThrow();
+            assertThat(failed.getStatus()).isEqualTo("FAILED");
+            assertThat(failed.getFailureType()).isEqualTo(CollectionFailureClassifier.EMPTY_RESULT);
+            assertThat(failed.getFailureStage()).isEqualTo(CollectionFailureClassifier.STAGE_HTML);
+            assertThat(failed.getNextRetryAt()).isNotNull();
         }
     }
 

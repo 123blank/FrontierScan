@@ -50,4 +50,12 @@ public class Site {
     /** 最近一次失败的时间。 */
     @Column(name = "last_failure_at")
     private OffsetDateTime lastFailureAt;
+
+    /** 最近一次采集链路成功完成的时间，新增 0 篇但无采集异常也视为成功。 */
+    @Column(name = "last_success_at")
+    private OffsetDateTime lastSuccessAt;
+
+    /** 最近一次失败任务计算出的下一次自动重试时间，超过最大重试次数后为空。 */
+    @Column(name = "next_retry_at")
+    private OffsetDateTime nextRetryAt;
 }

@@ -19,7 +19,10 @@
     </div>
     <table v-else class="data-table">
       <thead>
-        <tr><th>网站</th><th>分类</th><th>RSS</th><th>采集频率</th><th>连续失败</th><th>最后失败</th><th>状态</th><th>操作</th></tr>
+        <tr>
+          <th>网站</th><th>分类</th><th>RSS</th><th>采集频率</th><th>连续失败</th>
+          <th>最后成功</th><th>最后失败</th><th>下次重试</th><th>状态</th><th>操作</th>
+        </tr>
       </thead>
       <tbody>
         <tr v-for="site in sites" :key="site.id">
@@ -33,7 +36,9 @@
     <span v-if="(site.consecutiveFailures ?? 0) > 0" class="failure-badge">{{ site.consecutiveFailures }}次</span>
     <span v-else>-</span>
           </td>
-          <td>{{ site.lastFailureReason ? formatTime(site.lastFailureAt ?? '') : '-' }}</td>
+          <td>{{ formatNullableTime(site.lastSuccessAt) }}</td>
+          <td :title="site.lastFailureReason || ''">{{ site.lastFailureReason ? formatNullableTime(site.lastFailureAt) : '-' }}</td>
+          <td>{{ formatNullableTime(site.nextRetryAt) }}</td>
           <td>
             <span :class="site.enabled ? 'status-on' : 'status-off'">{{ site.enabled ? '启用' : '停用' }}</span>
           </td>
@@ -95,6 +100,11 @@
             <p>连续失败 {{ form.consecutiveFailures }} 次</p>
             <p v-if="form.lastFailureReason">原因：{{ form.lastFailureReason }}</p>
             <p v-if="form.lastFailureAt">最近失败：{{ formatTime(form.lastFailureAt) }}</p>
+            <p v-if="form.nextRetryAt">下次自动重试：{{ formatTime(form.nextRetryAt) }}</p>
+          </div>
+          <div v-if="isEditing && form.lastSuccessAt" class="success-info">
+            <strong>最近成功</strong>
+            <p>{{ formatTime(form.lastSuccessAt) }}</p>
           </div>
 
           <div class="drawer-actions">
@@ -152,12 +162,15 @@ interface SiteForm {
   consecutiveFailures: number;
   lastFailureReason: string | null;
   lastFailureAt: string | null;
+  lastSuccessAt: string | null;
+  nextRetryAt: string | null;
 }
 
 const emptyForm = (): SiteForm => ({
   name: '', url: '', categoryId: 0, rssUrl: '',
   collectionIntervalMinutes: 1440, enabledBoolean: true,
   consecutiveFailures: 0, lastFailureReason: null, lastFailureAt: null,
+  lastSuccessAt: null, nextRetryAt: null,
 });
 const form = ref<SiteForm>(emptyForm());
 let editingSite: Site | null = null;
@@ -185,8 +198,17 @@ function categoryName(id: number) {
   return categories.value.find(c => c.id === id)?.name || '-';
 }
 
+/**
+ * 格式化后端 ISO 时间字符串。
+ * <p>站点健康状态字段允许为空，调用前应使用 {@link formatNullableTime} 做空值保护。</p>
+ */
 function formatTime(t: string) {
   return new Date(t).toLocaleString('zh-CN');
+}
+
+/** 格式化可空时间字段，避免空值在表格中显示 Invalid Date。 */
+function formatNullableTime(t: string | null | undefined) {
+  return t ? formatTime(t) : '-';
 }
 
 function openCreateDialog() {
@@ -206,6 +228,8 @@ function openEditDialog(site: Site) {
     consecutiveFailures: site.consecutiveFailures || 0,
     lastFailureReason: site.lastFailureReason || null,
     lastFailureAt: site.lastFailureAt || null,
+    lastSuccessAt: site.lastSuccessAt || null,
+    nextRetryAt: site.nextRetryAt || null,
   };
   dialogVisible.value = true;
 }
@@ -512,6 +536,15 @@ onMounted(load);
   padding: 12px;
 }
 .failure-info p { margin: 4px 0; }
+.success-info {
+  background: #eef7f0;
+  border: 1px solid #cfe8d7;
+  border-radius: 8px;
+  color: #1a7a3a;
+  font-size: 13px;
+  padding: 12px;
+}
+.success-info p { margin: 4px 0; }
 .drawer-actions {
   display: flex;
   gap: 10px;

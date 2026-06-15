@@ -1,6 +1,7 @@
 package com.frontierscan.collection;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,4 +35,14 @@ public interface CollectionRunRepository extends JpaRepository<CollectionRun, Lo
      * </p>
      */
     boolean existsBySiteIdAndStatus(Long siteId, String status);
+
+    /**
+     * 查询已经到达自动重试时间且未超过最大重试次数的失败任务。
+     * <p>
+     * 调度器通过该查询驱动失败任务的后台重试。这里按 {@code nextRetryAt} 升序返回，
+     * 让积压任务按照最早到期优先的顺序被重新提交。
+     * </p>
+     */
+    List<CollectionRun> findByStatusAndNextRetryAtLessThanEqualAndRetryCountLessThanOrderByNextRetryAtAsc(
+            String status, OffsetDateTime nextRetryAt, Integer retryCount);
 }

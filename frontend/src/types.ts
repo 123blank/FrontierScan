@@ -44,6 +44,8 @@ export interface Site {
   consecutiveFailures: number;
   lastFailureReason: string | null;
   lastFailureAt: string | null;
+  lastSuccessAt: string | null;
+  nextRetryAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,6 +80,11 @@ export interface CollectionRun {
   collectedCount: number;
   errorMessage: string | null;
   retryCount: number;
+  failureType: string | null;
+  failureStage: string | null;
+  nextRetryAt: string | null;
+  retryOfRunId: number | null;
+  warningMessage: string | null;
 }
 
 /** 收藏文章视图 */

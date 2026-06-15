@@ -175,6 +175,72 @@ class CollectionSchedulerTest {
     }
 
     @Nested
+    @DisplayName("失败任务自动重试")
+    class ScheduledRetry {
+
+        @Test
+        @DisplayName("失败任务到达 nextRetryAt 时，应创建 SCHEDULED_RETRY 任务并投递采集")
+        void shouldCreateScheduledRetryWhenFailedRunIsDue() {
+            CollectionRun failedRun = createRun(700L, dueSite.getUserId(), dueSite.getId(),
+                    CollectionRunService.RUN_TYPE_SCHEDULED, OffsetDateTime.now().minusMinutes(10));
+            failedRun.setStatus(CollectionRunService.STATUS_FAILED);
+            failedRun.setRetryCount(0);
+            failedRun.setNextRetryAt(OffsetDateTime.now().minusMinutes(1));
+            CollectionRun retryRun = createRun(701L, dueSite.getUserId(), dueSite.getId(),
+                    CollectionRunService.RUN_TYPE_SCHEDULED_RETRY, OffsetDateTime.now());
+            retryRun.setRetryCount(1);
+            retryRun.setRetryOfRunId(failedRun.getId());
+
+            when(collectionRunService.listDueRetries(any(OffsetDateTime.class))).thenReturn(List.of(failedRun));
+            when(siteRepository.findById(dueSite.getId())).thenReturn(Optional.of(dueSite));
+            when(collectionRunRepository.existsBySiteIdAndStatus(dueSite.getId(), CollectionRunService.STATUS_RUNNING))
+                    .thenReturn(false);
+            when(redisTemplateProvider.getIfAvailable()).thenReturn(null);
+            when(collectionRunService.createScheduledRetry(failedRun)).thenReturn(retryRun);
+            when(collectionOrchestrator.executeCollection(dueSite.getUserId(), dueSite.getId(), retryRun.getId()))
+                    .thenReturn(CompletableFuture.completedFuture(retryRun.getId()));
+            when(siteRepository.findByEnabledTrue()).thenReturn(List.of());
+
+            scheduler.scheduleDueCollections();
+
+            verify(collectionRunService).createScheduledRetry(failedRun);
+            verify(collectionOrchestrator).executeCollection(dueSite.getUserId(), dueSite.getId(), retryRun.getId());
+        }
+
+        @Test
+        @DisplayName("没有到期失败任务时，不应创建自动重试任务")
+        void shouldSkipWhenNoFailedRetryIsDue() {
+            when(collectionRunService.listDueRetries(any(OffsetDateTime.class))).thenReturn(List.of());
+            when(siteRepository.findByEnabledTrue()).thenReturn(List.of());
+
+            scheduler.scheduleDueCollections();
+
+            verify(collectionRunService, never()).createScheduledRetry(any());
+        }
+
+        @Test
+        @DisplayName("失败任务关联站点已有 RUNNING 任务时，应跳过自动重试")
+        void shouldSkipRetryWhenSiteHasRunningRun() {
+            CollectionRun failedRun = createRun(700L, dueSite.getUserId(), dueSite.getId(),
+                    CollectionRunService.RUN_TYPE_SCHEDULED, OffsetDateTime.now().minusMinutes(10));
+            failedRun.setStatus(CollectionRunService.STATUS_FAILED);
+            failedRun.setRetryCount(1);
+            failedRun.setNextRetryAt(OffsetDateTime.now().minusMinutes(1));
+
+            when(collectionRunService.listDueRetries(any(OffsetDateTime.class))).thenReturn(List.of(failedRun));
+            when(siteRepository.findById(dueSite.getId())).thenReturn(Optional.of(dueSite));
+            when(collectionRunRepository.existsBySiteIdAndStatus(dueSite.getId(), CollectionRunService.STATUS_RUNNING))
+                    .thenReturn(true);
+            when(siteRepository.findByEnabledTrue()).thenReturn(List.of());
+
+            scheduler.scheduleDueCollections();
+
+            verify(collectionRunService, never()).createScheduledRetry(any());
+            verify(collectionOrchestrator, never()).executeCollection(any(), any(), any());
+        }
+    }
+
+    @Nested
     @DisplayName("Redis 分布式锁")
     class RedisLocking {
 

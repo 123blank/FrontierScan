@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.time.OffsetDateTime;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 采集任务编排器。
@@ -89,58 +91,92 @@ public class CollectionOrchestrator {
         log.info("Starting collection task: userId={}, siteId={}, runId={}", userId, siteId, runId);
         try {
             Site site = siteService.getById(userId, siteId);
-            Collector collector = resolveCollector(site);
-            log.info("Resolved collector: {} for site: {}", collector.sourceType(), site.getName());
-            CollectResult result = collector.collect(site);
-
-            // 去重后批量保存文章
-            List<Article> saved = articleService.batchSaveArticles(userId, siteId,
-                    site.getCategoryId(), result.rawArticles());
+            List<Article> saved = collectAndSaveWithFallback(userId, site);
             log.info("Saved {} new articles for site {}", saved.size(), site.getName());
 
-            // 并发调用 LLM 生成结构化摘要
-            summarizeArticlesConcurrently(saved);
+            // 并发调用 LLM 生成结构化摘要；失败作为告警记录，不阻断采集成功状态。
+            String warningMessage = summarizeArticlesConcurrently(saved);
 
-            collectionRunService.complete(runId, saved.size());
-            return CompletableFuture.completedFuture(runId);
-
-        } catch (EmptyResultException e) {
-            log.info("Collection returned no new content: {}", e.getMessage());
-            collectionRunService.complete(runId, 0);
+            siteService.recordSuccess(siteId);
+            collectionRunService.complete(runId, saved.size(), warningMessage);
             return CompletableFuture.completedFuture(runId);
 
         } catch (CollectorException e) {
             log.warn("Collection failed: {} (source={}, site={})", e.getMessage(), e.getSourceType(), e.getSiteUrl());
-            // RSS 失败 → 自动降级 HTML
-            if ("RSS".equals(e.getSourceType())) {
-                log.info("Attempting fallback to HTML collector...");
-                try {
-                    Site site = siteService.getById(userId, siteId);
-                    Collector htmlCollector = findCollector("HTML");
-                    if (htmlCollector != null) {
-                        CollectResult result = htmlCollector.collect(site);
-                        List<Article> saved = articleService.batchSaveArticles(
-                                userId, siteId, site.getCategoryId(), result.rawArticles());
-                        // 降级成功后的文章也进行 LLM 摘要
-                        summarizeArticlesConcurrently(saved);
-            // 采集成功：重置站点连续失败计数
-            siteService.resetFailureCount(siteId);
-            collectionRunService.complete(runId, saved.size());
-                        return CompletableFuture.completedFuture(runId);
-                    }
-                } catch (CollectorException fallbackEx) {
-                    collectionRunService.fail(runId, "RSS失败且HTML降级也失败: " + fallbackEx.getMessage());
-                    return CompletableFuture.failedFuture(fallbackEx);
-                }
-            }
-            collectionRunService.fail(runId, e.getMessage());
+            String failureType = CollectionFailureClassifier.failureType(e);
+            String failureStage = CollectionFailureClassifier.failureStage(e);
+            OffsetDateTime nextRetryAt = collectionRunService.fail(runId, failureType, failureStage, e.getMessage());
+            siteService.recordFailure(siteId, e.getMessage(), nextRetryAt);
             return CompletableFuture.failedFuture(e);
 
         } catch (Exception e) {
             log.error("Unexpected error during collection: {}", e.getMessage(), e);
-            collectionRunService.fail(runId, "Unexpected error: " + e.getMessage());
+            String message = "Unexpected error: " + e.getMessage();
+            OffsetDateTime nextRetryAt = collectionRunService.fail(
+                    runId,
+                    CollectionFailureClassifier.UNKNOWN,
+                    CollectionFailureClassifier.STAGE_UNKNOWN,
+                    message);
+            siteService.recordFailure(siteId, message, nextRetryAt);
             return CompletableFuture.failedFuture(e);
         }
+    }
+
+    /**
+     * 执行采集并保存文章，RSS 失败时自动降级 HTML。
+     * <p>
+     * 只有最终采集失败才向上抛出异常；如果 RSS 失败但 HTML 成功，则外层会按成功任务处理。
+     * 采集器返回空候选文章视为 {@code EMPTY_RESULT} 失败，因为这代表系统无法从站点解析出可用内容；
+     * 与“解析出候选文章但去重后新增 0 篇”的成功场景严格区分。
+     * </p>
+     */
+    private List<Article> collectAndSaveWithFallback(Long userId, Site site) {
+        Collector collector = resolveCollector(site);
+        log.info("Resolved collector: {} for site: {}", collector.sourceType(), site.getName());
+        try {
+            return collectAndSave(userId, site, collector);
+        } catch (CollectorException primaryEx) {
+            if (!CollectionFailureClassifier.STAGE_RSS.equals(primaryEx.getSourceType())) {
+                throw primaryEx;
+            }
+            log.info("RSS collection failed for site {}, attempting HTML fallback...", site.getId());
+            Collector htmlCollector = findCollector(CollectionFailureClassifier.STAGE_HTML);
+            if (htmlCollector == null) {
+                throw primaryEx;
+            }
+            try {
+                return collectAndSave(userId, site, htmlCollector);
+            } catch (CollectorException fallbackEx) {
+                String message = "RSS失败: " + primaryEx.getMessage()
+                        + "；HTML降级失败: " + fallbackEx.getMessage();
+                throw new CollectorException(
+                        fallbackEx.getSourceType(),
+                        fallbackEx.getSiteUrl(),
+                        fallbackEx.getErrorCode(),
+                        message,
+                        fallbackEx);
+            }
+        }
+    }
+
+    /**
+     * 执行单个采集器并将候选文章去重落库。
+     * <p>
+     * 采集器返回候选文章数量为 0 时抛出 {@link EmptyResultException}，
+     * 让失败重试机制处理“无法解析出内容”的站点波动；若候选文章存在但去重后新增 0 篇，
+     * 仍然视为一次成功采集。
+     * </p>
+     */
+    private List<Article> collectAndSave(Long userId, Site site, Collector collector) {
+        CollectResult result = collector.collect(site);
+        if (result.rawArticles() == null || result.rawArticles().isEmpty()) {
+            throw new EmptyResultException(
+                    collector.sourceType(),
+                    CollectionFailureClassifier.STAGE_RSS.equals(collector.sourceType())
+                            ? site.getRssUrl() : site.getUrl(),
+                    collector.sourceType() + " 未解析到可采集文章");
+        }
+        return articleService.batchSaveArticles(userId, site.getId(), site.getCategoryId(), result.rawArticles());
     }
 
     /**
@@ -162,12 +198,14 @@ public class CollectionOrchestrator {
      *
      * @param articles 已保存的文章列表
      */
-    private void summarizeArticlesConcurrently(List<Article> articles) {
+    private String summarizeArticlesConcurrently(List<Article> articles) {
         if (articles == null || articles.isEmpty()) {
-            return;
+            return null;
         }
         log.info("Concurrently summarizing {} articles via LLM (pool={}, maxConcurrency={})",
                 articles.size(), "llmTaskExecutor", 5);
+
+        AtomicInteger failureCount = new AtomicInteger();
 
         // 提交所有 LLM 调用任务到线程池
         List<CompletableFuture<Void>> futures = articles.stream()
@@ -183,6 +221,7 @@ public class CollectionOrchestrator {
                                     article.getId(), article.getTitle());
                         }
                     } catch (Exception e) {
+                        failureCount.incrementAndGet();
                         log.warn("LLM summarization failed for article {} ({}): {}",
                                 article.getId(), article.getTitle(), e.getMessage());
                     }
@@ -193,6 +232,7 @@ public class CollectionOrchestrator {
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .orTimeout(LLM_BATCH_TIMEOUT_MINUTES, TimeUnit.MINUTES)
                 .exceptionally(ex -> {
+                    failureCount.incrementAndGet();
                     log.warn("LLM batch summarization partially timed out after {} min: {}",
                             LLM_BATCH_TIMEOUT_MINUTES, ex.getMessage());
                     return null;
@@ -200,6 +240,11 @@ public class CollectionOrchestrator {
                 .join();
 
         log.info("LLM batch summarization complete for {} articles", articles.size());
+        if (failureCount.get() > 0) {
+            return CollectionFailureClassifier.LLM_SUMMARY_FAILED
+                    + ": " + failureCount.get() + " 篇文章摘要生成失败";
+        }
+        return null;
     }
 
     /**

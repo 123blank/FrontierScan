@@ -20,23 +20,34 @@
       <thead>
         <tr>
           <th>任务类型</th><th>状态</th><th>开始时间</th><th>结束时间</th>
-          <th>耗时</th><th>采集数量</th><th>错误信息</th>
+          <th>耗时</th><th>采集数量</th><th>失败类型</th><th>失败阶段</th>
+          <th>重试</th><th>下次重试</th><th>错误/告警</th>
           <th>操作</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="run in runs" :key="run.id">
-          <td>{{ run.runType === 'MANUAL' ? '手动' : '定时' }}</td>
+          <td>{{ runTypeText(run.runType) }}</td>
           <td><span :class="'status-' + run.status.toLowerCase()">{{ statusText(run.status) }}</span></td>
           <td>{{ formatTime(run.startedAt) }}</td>
           <td>{{ run.finishedAt ? formatTime(run.finishedAt) : '-' }}</td>
           <td>{{ run.finishedAt ? duration(run.startedAt, run.finishedAt) : '-' }}</td>
           <td>{{ run.collectedCount }}</td>
-          <td class="error-cell">{{ run.errorMessage || '-' }}</td>
-          <td>
+          <td>{{ failureTypeText(run.failureType) }}</td>
+          <td>{{ failureStageText(run.failureStage) }}</td>
+          <td>{{ run.retryCount || 0 }}</td>
+          <td>{{ formatNullableTime(run.nextRetryAt) }}</td>
+          <td class="error-cell" :title="run.errorMessage || run.warningMessage || ''">
+            {{ run.errorMessage || run.warningMessage || '-' }}
+          </td>
+          <td class="action-cell">
             <button v-if="run.status === 'FAILED'" type="button" class="retry-btn"
-                    @click="retryRun(run.id)">
+                    :disabled="retrying.has(run.id)" @click="retryRun(run.id)">
               重试
+            </button>
+            <button v-if="run.siteId" type="button" class="retry-btn"
+                    :disabled="retrying.has(run.id)" @click="collectSite(run.siteId)">
+              重新采集
             </button>
           </td>
         </tr>
@@ -70,6 +81,43 @@ function statusText(status: string) {
   return map[status] || status;
 }
 
+/** 将任务类型转为业务可读文本，便于区分普通采集和重试采集。 */
+function runTypeText(runType: string) {
+  const map: Record<string, string> = {
+    MANUAL: '手动',
+    SCHEDULED: '定时',
+    MANUAL_RETRY: '手动重试',
+    SCHEDULED_RETRY: '自动重试',
+  };
+  return map[runType] || runType;
+}
+
+/** 将稳定失败类型转为中文，前端展示不依赖后端错误文案。 */
+function failureTypeText(type: string | null) {
+  if (!type) return '-';
+  const map: Record<string, string> = {
+    NETWORK_TIMEOUT: '网络超时',
+    RSS_PARSE_ERROR: 'RSS错误',
+    HTML_PARSE_ERROR: 'HTML解析失败',
+    EMPTY_RESULT: '空结果',
+    LLM_SUMMARY_FAILED: 'LLM摘要失败',
+    UNKNOWN: '未知错误',
+  };
+  return map[type] || type;
+}
+
+/** 将失败阶段转为中文，帮助快速定位采集链路中的故障位置。 */
+function failureStageText(stage: string | null) {
+  if (!stage) return '-';
+  const map: Record<string, string> = {
+    RSS: 'RSS',
+    HTML: 'HTML',
+    LLM_SUMMARY: 'LLM摘要',
+    UNKNOWN: '未知',
+  };
+  return map[stage] || stage;
+}
+
 /** 重试失败的采集任务 */
 async function retryRun(runId: number) {
   const pending = new Set(retrying.value);
@@ -84,9 +132,22 @@ async function retryRun(runId: number) {
   retrying.value = latest;
 }
 
+/** 对任务关联站点立即发起一次手动采集，适用于任意带站点的历史任务。 */
+async function collectSite(siteId: number) {
+  try {
+    await collectionRunApi.trigger(siteId);
+    await load();
+  } catch {}
+}
+
 /** 格式化 ISO 时间戳为本地可读时间 */
 function formatTime(t: string) {
   return new Date(t).toLocaleString('zh-CN');
+}
+
+/** 格式化可空时间字段，空值统一展示为短横线。 */
+function formatNullableTime(t: string | null | undefined) {
+  return t ? formatTime(t) : '-';
 }
 
 /** 计算两个 ISO 时间戳之间的耗时（秒或分钟+秒） */
@@ -105,6 +166,7 @@ onMounted(load);
 .data-table th, .data-table td { border-bottom: 1px solid #e3e9e6; padding: 12px 8px; text-align: left; }
 .data-table th { color: #5e6b67; font-size: 13px; font-weight: 600; }
 .error-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.action-cell { display: flex; gap: 6px; white-space: nowrap; }
 .status-running { color: #136f63; font-weight: 600; }
 .status-completed { color: #1a7a3a; }
 .status-failed { color: #a5362f; }

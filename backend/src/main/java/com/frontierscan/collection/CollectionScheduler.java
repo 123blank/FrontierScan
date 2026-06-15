@@ -44,12 +44,6 @@ import java.util.UUID;
 @ConditionalOnProperty(prefix = "app.collection", name = "scheduler-enabled", havingValue = "true", matchIfMissing = true)
 public class CollectionScheduler {
 
-    /** 定时调度创建的采集任务类型，与手动触发的 MANUAL 任务区分。 */
-    private static final String RUN_TYPE_SCHEDULED = "SCHEDULED";
-
-    /** 采集任务运行中状态，用于防止同一站点重复调度。 */
-    private static final String STATUS_RUNNING = "RUNNING";
-
     /** Redis 站点级调度锁前缀，完整 key 形如 {@code frontierscan:collection:site:123}。 */
     private static final String LOCK_PREFIX = "frontierscan:collection:site:";
 
@@ -111,12 +105,14 @@ public class CollectionScheduler {
             fixedDelayString = "${app.collection.scheduler-fixed-delay-ms:60000}"
     )
     public void scheduleDueCollections() {
+        OffsetDateTime now = OffsetDateTime.now();
+        scheduleDueRetries(now);
+
         List<Site> enabledSites = siteRepository.findByEnabledTrue();
         if (enabledSites.isEmpty()) {
             return;
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
         for (Site site : enabledSites) {
             // 跳过连续失败次数过多的站点
             if (site.getConsecutiveFailures() != null && site.getConsecutiveFailures() >= 5) {
@@ -142,7 +138,7 @@ public class CollectionScheduler {
         if (!isDue(site, now)) {
             return;
         }
-        if (collectionRunRepository.existsBySiteIdAndStatus(site.getId(), STATUS_RUNNING)) {
+        if (collectionRunRepository.existsBySiteIdAndStatus(site.getId(), CollectionRunService.STATUS_RUNNING)) {
             log.debug("Skip scheduled collection for site {} because a run is already RUNNING", site.getId());
             return;
         }
@@ -154,13 +150,78 @@ public class CollectionScheduler {
 
         try {
             // 先落库 RUNNING 任务，再投递异步采集，便于前端和后续调度立即感知任务状态。
-            CollectionRun run = collectionRunService.create(site.getUserId(), site.getId(), RUN_TYPE_SCHEDULED);
+            CollectionRun run = collectionRunService.create(
+                    site.getUserId(), site.getId(), CollectionRunService.RUN_TYPE_SCHEDULED);
             log.info("Scheduled collection triggered: userId={}, siteId={}, runId={}",
                     site.getUserId(), site.getId(), run.getId());
             collectionOrchestrator.executeCollection(site.getUserId(), site.getId(), run.getId())
                     .whenComplete((ignored, ex) -> releaseLock(site.getId(), lockToken));
         } catch (RuntimeException e) {
             releaseLock(site.getId(), lockToken);
+            throw e;
+        }
+    }
+
+    /**
+     * 扫描并提交已经到期的失败任务自动重试。
+     * <p>
+     * 自动重试不复用原失败任务，而是创建新的 {@code SCHEDULED_RETRY} 任务并关联原任务 ID。
+     * 旧任务的 {@code nextRetryAt} 会在创建重试任务时清空，避免同一个失败任务被重复提交。
+     * </p>
+     *
+     * @param now 本轮调度统一时间
+     */
+    private void scheduleDueRetries(OffsetDateTime now) {
+        List<CollectionRun> dueRetries = collectionRunService.listDueRetries(now);
+        if (dueRetries == null || dueRetries.isEmpty()) {
+            return;
+        }
+        for (CollectionRun failedRun : dueRetries) {
+            try {
+                scheduleRetryIfPossible(failedRun);
+            } catch (Exception e) {
+                log.warn("Scheduled retry check failed for run {}: {}", failedRun.getId(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 对单个失败任务执行自动重试投递。
+     * <p>
+     * 自动重试沿用站点级 Redis 锁和数据库 RUNNING 防重，保证不会与手动采集或普通定时采集并发执行。
+     * 站点被删除或停用时保留原失败任务，等待用户恢复站点或手动处理。
+     * </p>
+     */
+    private void scheduleRetryIfPossible(CollectionRun failedRun) {
+        Long siteId = failedRun.getSiteId();
+        if (siteId == null) {
+            return;
+        }
+        Optional<Site> site = siteRepository.findById(siteId);
+        if (site.isEmpty() || !Boolean.TRUE.equals(site.get().getEnabled())) {
+            log.debug("Skip scheduled retry for run {} because site {} is unavailable or disabled",
+                    failedRun.getId(), siteId);
+            return;
+        }
+        if (collectionRunRepository.existsBySiteIdAndStatus(siteId, CollectionRunService.STATUS_RUNNING)) {
+            log.debug("Skip scheduled retry for run {} because site {} has a RUNNING task",
+                    failedRun.getId(), siteId);
+            return;
+        }
+        String lockToken = acquireLock(siteId);
+        if (lockToken == null) {
+            log.debug("Skip scheduled retry for run {} because site lock is held", failedRun.getId());
+            return;
+        }
+
+        try {
+            CollectionRun retryRun = collectionRunService.createScheduledRetry(failedRun);
+            log.info("Scheduled retry triggered: userId={}, siteId={}, originalRunId={}, retryRunId={}, retryCount={}",
+                    retryRun.getUserId(), siteId, failedRun.getId(), retryRun.getId(), retryRun.getRetryCount());
+            collectionOrchestrator.executeCollection(retryRun.getUserId(), siteId, retryRun.getId())
+                    .whenComplete((ignored, ex) -> releaseLock(siteId, lockToken));
+        } catch (RuntimeException e) {
+            releaseLock(siteId, lockToken);
             throw e;
         }
     }

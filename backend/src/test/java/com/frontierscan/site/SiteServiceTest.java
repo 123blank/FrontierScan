@@ -117,21 +117,25 @@ class SiteServiceTest {
         void shouldRecordFailure() {
             var site = createSite();
             site.setConsecutiveFailures(2);
+            OffsetDateTime nextRetryAt = OffsetDateTime.now().plusMinutes(5);
             when(siteRepository.findById(SITE_ID)).thenReturn(Optional.of(site));
             when(siteRepository.save(any(Site.class))).thenAnswer(i -> i.getArgument(0));
-            siteService.recordFailure(SITE_ID, "连接超时");
+            siteService.recordFailure(SITE_ID, "连接超时", nextRetryAt);
             assertThat(site.getConsecutiveFailures()).isEqualTo(3);
             assertThat(site.getLastFailureReason()).isEqualTo("连接超时");
+            assertThat(site.getNextRetryAt()).isEqualTo(nextRetryAt);
         }
 
         @Test @DisplayName("resetFailureCount 清零")
         void shouldResetFailureCount() {
             var site = createSite();
             site.setConsecutiveFailures(5);
+            site.setNextRetryAt(OffsetDateTime.now().plusMinutes(15));
             when(siteRepository.findById(SITE_ID)).thenReturn(Optional.of(site));
             when(siteRepository.save(any(Site.class))).thenAnswer(i -> i.getArgument(0));
             siteService.resetFailureCount(SITE_ID);
             assertThat(site.getConsecutiveFailures()).isZero();
+            assertThat(site.getNextRetryAt()).isNull();
         }
 
         @Test @DisplayName("recordFailure null 字段处理")
@@ -142,6 +146,25 @@ class SiteServiceTest {
             when(siteRepository.save(any(Site.class))).thenAnswer(i -> i.getArgument(0));
             siteService.recordFailure(SITE_ID, "错误");
             assertThat(site.getConsecutiveFailures()).isEqualTo(1);
+        }
+
+        @Test @DisplayName("recordSuccess 写入最后成功时间并清理失败状态")
+        void shouldRecordSuccessAndClearFailureState() {
+            var site = createSite();
+            site.setConsecutiveFailures(2);
+            site.setLastFailureReason("RSS 解析失败");
+            site.setLastFailureAt(OffsetDateTime.now().minusMinutes(1));
+            site.setNextRetryAt(OffsetDateTime.now().plusMinutes(5));
+            when(siteRepository.findById(SITE_ID)).thenReturn(Optional.of(site));
+            when(siteRepository.save(any(Site.class))).thenAnswer(i -> i.getArgument(0));
+
+            siteService.recordSuccess(SITE_ID);
+
+            assertThat(site.getConsecutiveFailures()).isZero();
+            assertThat(site.getLastFailureReason()).isNull();
+            assertThat(site.getLastFailureAt()).isNull();
+            assertThat(site.getNextRetryAt()).isNull();
+            assertThat(site.getLastSuccessAt()).isNotNull();
         }
     }
 
