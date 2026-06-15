@@ -31,6 +31,10 @@ export const articleApi = {
   get(id: number) {
     return apiClient.get<ApiResponse<Article>>(`/articles/${id}`);
   },
+  /** 重新生成文章摘要 */
+  retrySummary(id: number) {
+    return apiClient.post<ApiResponse<Article>>(`/articles/${id}/summary/retry`);
+  },
   /** 切换收藏状态 */
   toggleFavorite(id: number) {
     return apiClient.post<ApiResponse<{ favorited: boolean }>>(`/articles/${id}/favorite`);

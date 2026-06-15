@@ -37,6 +37,36 @@ public class Article {
     private String tags;
     @Column(name = "content_excerpt", columnDefinition = "TEXT")
     private String contentExcerpt;
+    /**
+     * 文章级 LLM 摘要状态。
+     * <p>该状态用于区分待生成、已生成、生成失败和质量不佳，前端详情抽屉据此展示治理提示和重试入口。</p>
+     */
+    @Column(name = "summary_status", nullable = false, length = 40)
+    private String summaryStatus = "PENDING";
+    /**
+     * 摘要质量规则评分，满分 100。
+     * <p>一期不额外调用大模型评审，统一由规则评分器写入该字段，低于阈值时标记为 LOW_QUALITY。</p>
+     */
+    @Column(name = "summary_quality_score")
+    private Integer summaryQualityScore;
+    /**
+     * 摘要失败或低质量原因。
+     * <p>面向用户和运维排障展示，避免只看到“失败”而无法判断是正文缺失、模型空返回还是格式污染。</p>
+     */
+    @Column(name = "summary_quality_reason", columnDefinition = "TEXT")
+    private String summaryQualityReason;
+    /**
+     * 用户手动重新生成摘要的次数。
+     * <p>采集阶段的自动首次生成不累计该值，用于后续观察人工治理成本。</p>
+     */
+    @Column(name = "summary_retry_count", nullable = false)
+    private Integer summaryRetryCount = 0;
+    /** 最近一次尝试生成摘要的时间，无论成功、失败或低质量都会更新。 */
+    @Column(name = "summary_last_attempt_at")
+    private OffsetDateTime summaryLastAttemptAt;
+    /** 最近一次成功写入摘要内容的时间，LOW_QUALITY 也表示已有可展示内容，因此会更新。 */
+    @Column(name = "summary_updated_at")
+    private OffsetDateTime summaryUpdatedAt;
     @Column(name = "source_url", nullable = false, length = 1200)
     private String sourceUrl;
     @Column(name = "source_hash", nullable = false, length = 128)

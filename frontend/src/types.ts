@@ -61,6 +61,12 @@ export interface Article {
   keyPoints: string | null;
   tags: string | null;
   contentExcerpt: string | null;
+  summaryStatus: string;
+  summaryQualityScore: number | null;
+  summaryQualityReason: string | null;
+  summaryRetryCount: number;
+  summaryLastAttemptAt: string | null;
+  summaryUpdatedAt: string | null;
   sourceUrl: string;
   sourceHash: string;
   publishedAt: string | null;

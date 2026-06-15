@@ -94,6 +94,9 @@ public class ArticleService {
                     article.setTitle(raw.title());
                     article.setSourceUrl(raw.sourceUrl());
                     article.setContentExcerpt(raw.contentExcerpt());
+                    // 新文章入库后统一进入 PENDING，等待采集编排器调用 LLM 生成摘要并写入质量状态。
+                    article.setSummaryStatus(ArticleSummaryStatus.PENDING);
+                    article.setSummaryRetryCount(0);
                     article.setSourceHash(raw.sourceHash());
                     article.setPublishedAt(raw.publishedAt() != null
                             ? raw.publishedAt().atOffset(OffsetDateTime.now().getOffset())

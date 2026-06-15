@@ -536,3 +536,129 @@ mvn test -q
 ---
 
 本文档由 Codex 维护。每次用户明确要求更新交接文档，或发生重大业务/接口/数据库变更时，再同步更新。
+---
+
+## 13. 2026-06-15 最新补充：LLM 摘要治理一期
+
+本次已完成 LLM 摘要治理一期。注意：如果本文档上方仍出现“当前最新迁移为 V6”或“下一步进入 LLM 摘要治理”等旧描述，以本节为准。
+
+### 13.1 当前最新迁移版本
+
+当前最新 Flyway 迁移为：
+
+```text
+V8__backfill_article_summary_status.sql
+```
+
+迁移说明：
+
+- `V7__add_article_summary_governance.sql`：为 `articles` 表新增文章级摘要治理字段。
+- `V8__backfill_article_summary_status.sql`：修复已经执行过 V7 的环境，将“已有 summary 但 summary_status 仍为 PENDING”的历史文章回填为 `COMPLETED`。
+- 重要约定：**不要再修改 V7**。V7 已经在本地数据库执行过，修改会导致 Flyway checksum mismatch。后续数据库变更从 V9 开始。
+
+`articles` 新增字段：
+
+```text
+summary_status              摘要状态：PENDING / COMPLETED / FAILED / LOW_QUALITY
+summary_quality_score       摘要质量规则评分，满分 100
+summary_quality_reason      摘要失败或低质量原因
+summary_retry_count         用户手动重新生成摘要次数
+summary_last_attempt_at     最近一次尝试生成摘要时间
+summary_updated_at          最近一次成功写入摘要时间
+```
+
+### 13.2 后端摘要治理实现
+
+核心文件：
+
+```text
+backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java
+backend/src/main/java/com/frontierscan/article/ArticleSummaryStatus.java
+backend/src/main/java/com/frontierscan/llm/SummaryQualityEvaluator.java
+backend/src/main/java/com/frontierscan/llm/SummaryQualityResult.java
+```
+
+业务规则：
+
+- 新文章入库时默认 `summary_status = PENDING`。
+- 采集保存新文章后，由 `CollectionOrchestrator` 调用 `ArticleSummaryService.summarizeCollectedArticle()` 生成摘要。
+- 摘要生成成功后先经过 `SummaryQualityEvaluator` 评分：
+  - 分数大于等于 70：`COMPLETED`
+  - 分数低于 70：`LOW_QUALITY`，仍保存摘要内容，方便用户先读再决定是否重试
+- LLM 返回空、调用异常、正文片段为空：`FAILED`
+- LLM 摘要失败不阻断采集任务，采集任务仍可 `COMPLETED`，并通过 `collection_runs.warning_message` 保留告警。
+
+摘要质量判断规则：
+
+- 硬性不合格：摘要为空、包含模板占位符、包含模型原始格式污染、疑似直接截断原文。
+- 扣分项：过短、过长、句子数量不足、关键要点不足、标签为空、重复句子、无效兜底表达。
+
+新增接口：
+
+```text
+POST /api/articles/{id}/summary/retry
+```
+
+接口说明：
+
+- 当前用户只能重新生成自己的文章摘要。
+- Service 层通过文章 `userId` 做隔离校验，文章不存在或不属于当前用户统一返回 404。
+- 当前为同步生成并返回更新后的 `Article`；如果后续响应时间影响体验，再考虑异步任务化。
+
+### 13.3 前端摘要治理展示
+
+核心文件：
+
+```text
+frontend/src/views/DashboardView.vue
+frontend/src/api/articles.ts
+frontend/src/types.ts
+```
+
+文章详情抽屉新增展示：
+
+- 摘要状态
+- 摘要质量分
+- 摘要失败或低质量原因
+- 用户手动重试次数
+- “重新生成摘要”按钮
+
+“重新生成摘要”按钮只在文章详情抽屉出现。按钮出现并可用的条件：
+
+- `summary` 为空；或
+- `summaryStatus = FAILED`；或
+- `summaryStatus = LOW_QUALITY`；或
+- `summaryStatus = PENDING` 且没有 `summary`
+
+按钮不会出现的情况：
+
+- `summaryStatus = COMPLETED`
+- `summaryStatus = PENDING` 但文章已有 `summary`
+
+前端已做兼容兜底：如果历史脏数据出现 `PENDING + 有 summary`，详情抽屉显示为“摘要已生成”，不显示重新生成按钮，避免误导用户。
+
+### 13.4 最近验证结果
+
+已验证：
+
+```powershell
+Set-Location D:\ProjectStudy\FrontierScan\frontend
+npm run build
+```
+
+结果：前端构建通过。
+
+后端启动已验证：
+
+```powershell
+Set-Location D:\ProjectStudy\FrontierScan\backend
+mvn spring-boot:run
+```
+
+结果：
+
+- Flyway 成功校验 8 个迁移。
+- 数据库从 version 7 成功迁移到 version 8。
+- 后端成功启动。
+
+注意：`mvn spring-boot:run` 启动成功后会持续运行，命令超时不代表启动失败；以日志中的 `Started FrontierScanApplication` 为准。

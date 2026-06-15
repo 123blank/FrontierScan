@@ -32,9 +32,11 @@ public class ArticleController {
 
 
     private final ArticleService articleService;
+    private final ArticleSummaryService articleSummaryService;
 
-    public ArticleController(ArticleService articleService) {
+    public ArticleController(ArticleService articleService, ArticleSummaryService articleSummaryService) {
         this.articleService = articleService;
+        this.articleSummaryService = articleSummaryService;
     }
 
     /** 分页查询文章列表，支持按分类和来源网站筛选。 */
@@ -63,6 +65,21 @@ public class ArticleController {
             @PathVariable Long id
     ) {
         return ApiResponse.ok(articleService.getById(principal.userId(), id));
+    }
+
+    /**
+     * 手动重新生成文章摘要。
+     * <p>
+     * 接口只接收文章 ID，不接收 userId 或站点信息；用户归属统一从 JWT 获取并在 Service 层校验，
+     * 避免前端参数被篡改后重试其他用户文章。
+     * </p>
+     */
+    @PostMapping("/{id}/summary/retry")
+    public ApiResponse<Article> retrySummary(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long id
+    ) {
+        return ApiResponse.ok(articleSummaryService.retrySummary(principal.userId(), id));
     }
 
     /** 获取当前用户的收藏列表。 */

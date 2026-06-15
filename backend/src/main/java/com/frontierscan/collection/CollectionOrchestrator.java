@@ -2,9 +2,8 @@ package com.frontierscan.collection;
 
 import com.frontierscan.article.Article;
 import com.frontierscan.article.ArticleService;
-import com.frontierscan.llm.LlmProvider;
-import com.frontierscan.llm.SummaryRequest;
-import com.frontierscan.llm.SummaryResult;
+import com.frontierscan.article.ArticleSummaryService;
+import com.frontierscan.article.ArticleSummaryStatus;
 import com.frontierscan.site.Site;
 import com.frontierscan.collection.TagEvaluationAsyncService;
 import com.frontierscan.site.SiteService;
@@ -47,8 +46,8 @@ public class CollectionOrchestrator {
     private final List<Collector> collectors;
     private final SiteService siteService;
     private final ArticleService articleService;
+    private final ArticleSummaryService articleSummaryService;
     private final CollectionRunService collectionRunService;
-    private final LlmProvider llmProvider;
     private final TagEvaluationAsyncService tagEvaluationAsyncService;
 
     /** LLM 调用专用线程池，与大模型 API 并发交互。 */
@@ -65,14 +64,14 @@ public class CollectionOrchestrator {
      */
     public CollectionOrchestrator(List<Collector> collectors, SiteService siteService,
                                   ArticleService articleService, CollectionRunService collectionRunService,
-                                  LlmProvider llmProvider,
+                                  ArticleSummaryService articleSummaryService,
                                   TagEvaluationAsyncService tagEvaluationAsyncService,
                                   @Qualifier("llmTaskExecutor") Executor llmTaskExecutor) {
         this.collectors = collectors;
         this.siteService = siteService;
         this.articleService = articleService;
+        this.articleSummaryService = articleSummaryService;
         this.collectionRunService = collectionRunService;
-        this.llmProvider = llmProvider;
         this.tagEvaluationAsyncService = tagEvaluationAsyncService;
         this.llmTaskExecutor = llmTaskExecutor;
     }
@@ -211,14 +210,13 @@ public class CollectionOrchestrator {
         List<CompletableFuture<Void>> futures = articles.stream()
                 .map(article -> CompletableFuture.runAsync(() -> {
                     try {
-                        SummaryResult summary = llmProvider.summarize(new SummaryRequest(
-                                article.getTitle(),
-                                article.getSourceUrl(),
-                                article.getContentExcerpt()));
-                        if (summary != null) {
-                            articleService.updateLlmSummary(article.getId(), summary);
-                            log.debug("LLM summary updated for article {}: {}",
-                                    article.getId(), article.getTitle());
+                        Article summarized = articleSummaryService.summarizeCollectedArticle(article.getId());
+                        if (summarized == null || ArticleSummaryStatus.FAILED.equals(summarized.getSummaryStatus())) {
+                            failureCount.incrementAndGet();
+                            log.warn("LLM summarization produced FAILED status for article {}", article.getId());
+                        } else {
+                            log.debug("LLM summary governance completed for article {}: status={}",
+                                    article.getId(), summarized.getSummaryStatus());
                         }
                     } catch (Exception e) {
                         failureCount.incrementAndGet();

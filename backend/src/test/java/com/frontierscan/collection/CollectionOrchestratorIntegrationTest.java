@@ -1,11 +1,13 @@
 package com.frontierscan.collection;
 
 import com.frontierscan.article.ArticleRepository;
+import com.frontierscan.article.ArticleSummaryStatus;
 import com.frontierscan.auth.UserAccount;
 import com.frontierscan.auth.UserAccountRepository;
 import com.frontierscan.category.Category;
 import com.frontierscan.category.CategoryRepository;
 import com.frontierscan.llm.LlmProvider;
+import com.frontierscan.llm.SummaryResult;
 import com.frontierscan.site.Site;
 import com.frontierscan.site.SiteRepository;
 import com.frontierscan.site.SiteService;
@@ -195,6 +197,44 @@ class CollectionOrchestratorIntegrationTest {
             assertThat(done.getWarningMessage()).contains(CollectionFailureClassifier.LLM_SUMMARY_FAILED);
             verify(siteService).recordSuccess(testSite.getId());
             verify(siteService, never()).recordFailure(any(), any(), any());
+        }
+
+        @Test @DisplayName("LLM 返回低质量摘要时，采集任务仍 COMPLETED，文章状态为 LOW_QUALITY")
+        void llmLowQualityShouldComplete() throws Exception {
+            when(rssCollector.sourceType()).thenReturn("RSS");
+            when(rssCollector.collect(any())).thenReturn(mockRssResult(1));
+            when(llmProvider.summarize(any())).thenReturn(new SummaryResult(
+                    "治理标题",
+                    "摘要过短。",
+                    List.of("要点1"),
+                    List.of()));
+
+            CollectionRun run = collectionRunService.create(testUser.getId(), testSite.getId(), "MANUAL");
+            Long runId = orchestrator.executeCollection(testUser.getId(), testSite.getId(), run.getId())
+                    .get(30, TimeUnit.SECONDS);
+
+            CollectionRun done = collectionRunRepository.findById(runId).orElseThrow();
+            assertThat(done.getStatus()).isEqualTo("COMPLETED");
+            assertThat(done.getWarningMessage()).isNull();
+            assertThat(articleRepository.findByUserIdOrderByCollectedAtDesc(testUser.getId(), PageRequest.of(0, 10))
+                    .getContent().get(0).getSummaryStatus()).isEqualTo(ArticleSummaryStatus.LOW_QUALITY);
+        }
+
+        @Test @DisplayName("LLM 失败时文章状态为 FAILED，但采集任务仍保持 COMPLETED")
+        void llmFailedArticleShouldBeMarkedFailed() throws Exception {
+            when(rssCollector.sourceType()).thenReturn("RSS");
+            when(rssCollector.collect(any())).thenReturn(mockRssResult(1));
+            when(llmProvider.summarize(any())).thenThrow(new RuntimeException("llm down"));
+
+            CollectionRun run = collectionRunService.create(testUser.getId(), testSite.getId(), "MANUAL");
+            Long runId = orchestrator.executeCollection(testUser.getId(), testSite.getId(), run.getId())
+                    .get(30, TimeUnit.SECONDS);
+
+            CollectionRun done = collectionRunRepository.findById(runId).orElseThrow();
+            assertThat(done.getStatus()).isEqualTo("COMPLETED");
+            assertThat(done.getWarningMessage()).contains(CollectionFailureClassifier.LLM_SUMMARY_FAILED);
+            assertThat(articleRepository.findByUserIdOrderByCollectedAtDesc(testUser.getId(), PageRequest.of(0, 10))
+                    .getContent().get(0).getSummaryStatus()).isEqualTo(ArticleSummaryStatus.FAILED);
         }
 
         @Test @DisplayName("重复采集相同数据 → 第二次 collectedCount=0（去重生效）")

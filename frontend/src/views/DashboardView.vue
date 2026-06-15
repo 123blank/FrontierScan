@@ -75,6 +75,7 @@
           <span v-for="tag in splitCsv(article.tags)" :key="tag">{{ tag }}</span>
         </div>
         <p v-if="article.summary" class="article-summary">{{ article.summary }}</p>
+        <p v-if="summaryStatusText(article)" class="summary-status-chip">{{ summaryStatusText(article) }}</p>
         <a :href="article.sourceUrl" target="_blank" rel="noopener" @click.stop>查看原文</a>
       </article>
     </div>
@@ -117,8 +118,23 @@
           >
             ★
           </button>
+          <button
+            v-if="canRetrySummary(selectedArticle)"
+            class="secondary-button"
+            :disabled="summaryRetrying"
+            @click="retrySummary"
+          >
+            {{ summaryRetrying ? '生成中...' : '重新生成摘要' }}
+          </button>
           <a class="primary-link" :href="selectedArticle.sourceUrl" target="_blank" rel="noopener">打开原文</a>
         </div>
+
+        <section class="summary-governance">
+          <span>{{ summaryStatusLabel(selectedArticle) }}</span>
+          <span v-if="selectedArticle.summaryQualityScore !== null">质量分 {{ selectedArticle.summaryQualityScore }}</span>
+          <span v-if="selectedArticle.summaryRetryCount">已重试 {{ selectedArticle.summaryRetryCount }} 次</span>
+          <p v-if="selectedArticle.summaryQualityReason">{{ selectedArticle.summaryQualityReason }}</p>
+        </section>
 
         <dl class="detail-meta">
           <div>
@@ -198,6 +214,8 @@ const detailLoading = ref(false);
 const detailError = ref('');
 /** 当前详情文章 */
 const selectedArticle = ref<Article | null>(null);
+/** 摘要重新生成提交状态，防止用户在 LLM 调用期间重复点击。 */
+const summaryRetrying = ref(false);
 
 /** 当前文章关键要点列表 */
 const keyPoints = computed(() => splitMultiline(selectedArticle.value?.keyPoints));
@@ -289,6 +307,7 @@ async function openArticleDetail(articleId: number) {
   detailLoading.value = true;
   detailError.value = '';
   selectedArticle.value = null;
+  summaryRetrying.value = false;
   try {
     const res = await articleApi.get(articleId);
     selectedArticle.value = res.data.data;
@@ -304,6 +323,7 @@ function closeArticleDetail() {
   detailOpen.value = false;
   detailError.value = '';
   selectedArticle.value = null;
+  summaryRetrying.value = false;
 }
 
 /** 收藏或取消收藏文章，并同步列表/详情中的收藏状态。 */
@@ -337,6 +357,71 @@ async function toggleFavorite(articleId: number) {
     const latestPending = new Set(favoritePendingIds.value);
     latestPending.delete(articleId);
     favoritePendingIds.value = latestPending;
+  }
+}
+
+/** 判断当前文章是否需要向用户提供手动重新生成摘要入口。 */
+function canRetrySummary(article?: Article | null) {
+  if (!article) {
+    return false;
+  }
+  return !article.summary
+    || article.summaryStatus === 'FAILED'
+    || article.summaryStatus === 'LOW_QUALITY'
+    || (article.summaryStatus === 'PENDING' && !article.summary);
+}
+
+/** 将后端摘要状态转换为面向用户的短文本。 */
+function summaryStatusLabel(article?: Article | null) {
+  if (!article) {
+    return '摘要状态未知';
+  }
+  if (article.summaryStatus === 'PENDING' && article.summary) {
+    return '摘要已生成';
+  }
+  switch (article.summaryStatus) {
+    case 'COMPLETED':
+      return '摘要已生成';
+    case 'LOW_QUALITY':
+      return '摘要质量待确认';
+    case 'FAILED':
+      return '摘要生成失败';
+    case 'PENDING':
+      return '摘要待生成';
+    default:
+      return '摘要状态未知';
+  }
+}
+
+/** 列表卡片只展示需要用户留意的摘要状态，避免干扰正常阅读。 */
+function summaryStatusText(article: Article) {
+  if (article.summaryStatus === 'LOW_QUALITY') {
+    return '摘要质量待确认';
+  }
+  if (article.summaryStatus === 'FAILED') {
+    return '摘要生成失败，可在详情中重试';
+  }
+  if (article.summaryStatus === 'PENDING' && !article.summary) {
+    return '摘要待生成';
+  }
+  return '';
+}
+
+/** 手动重新生成摘要，并同步刷新详情抽屉与当前分页卡片中的摘要内容。 */
+async function retrySummary() {
+  if (!selectedArticle.value || summaryRetrying.value) {
+    return;
+  }
+  summaryRetrying.value = true;
+  try {
+    const res = await articleApi.retrySummary(selectedArticle.value.id);
+    const updated = res.data.data;
+    selectedArticle.value = updated;
+    articles.value = articles.value.map((article) => article.id === updated.id ? updated : article);
+  } catch {
+    detailError.value = '摘要重新生成失败，请稍后重试。';
+  } finally {
+    summaryRetrying.value = false;
   }
 }
 
@@ -417,6 +502,16 @@ function formatDateTime(value?: string | null) {
 .article-meta span + span::before { content: "·"; margin: 0 6px; }
 .article-card-tags { margin: 0 0 10px; }
 .article-summary { color: #3e4c48; font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
+.summary-status-chip {
+  background: #fff8e6;
+  border: 1px solid #f3dfad;
+  border-radius: 6px;
+  color: #7a5200;
+  display: inline-flex;
+  font-size: 12px;
+  margin: 0 0 8px;
+  padding: 4px 8px;
+}
 .article-card a { color: #136f63; font-size: 13px; text-decoration: none; }
 .article-card a:hover { text-decoration: underline; }
 .icon-button {
@@ -484,6 +579,30 @@ function formatDateTime(value?: string | null) {
 .close-button { font-size: 24px; line-height: 1; }
 .drawer-content { display: grid; gap: 20px; padding-top: 18px; }
 .drawer-actions { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+.summary-governance {
+  align-items: center;
+  background: #f8faf9;
+  border: 1px solid #e3e9e6;
+  border-radius: 8px;
+  color: #53605c;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+}
+.summary-governance span {
+  background: #eef4f2;
+  border-radius: 6px;
+  color: #136f63;
+  font-size: 13px;
+  padding: 5px 8px;
+}
+.summary-governance p {
+  color: #7a5200;
+  flex-basis: 100%;
+  font-size: 13px;
+  margin: 2px 0 0;
+}
 .primary-link {
   background: #136f63;
   border-radius: 6px;
