@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-06-12  
+> 最后更新：2026-06-15  
 > 项目版本：0.1.0-SNAPSHOT  
-> 当前重点：文章搜索与筛选（关键词+标签+日期范围）、多领域标签系统已上线。后续建议进入采集可靠性增强和 LLM 摘要治理。
+> 当前重点：采集可靠性增强一期已完成（失败分类、站点健康状态、手动/自动重试、任务记录增强）。后续建议进入 LLM 摘要治理、标签评分接入采集管线和阅读体验增强。
 
 ---
 
@@ -58,7 +58,9 @@ D:\ProjectStudy\FrontierScan\
 │           │   ├── V1__initial_schema.sql
 │           │   ├── V2__seed_default_admin.sql
 │           │   ├── V3__add_schema_comments.sql
-│           │   └── V4__create_tag_system.sql  # tag_domains + tech_tags + article_tags
+│           │   ├── V4__create_tag_system.sql  # tag_domains + tech_tags + article_tags
+│           │   ├── V5__add_collection_reliability.sql
+│           │   └── V6__extend_collection_reliability.sql
 │           └── prompt_template/article-zh-llm-summary-prompt.stg
 ├── frontend/
 │   └── src/
@@ -88,8 +90,8 @@ D:\ProjectStudy\FrontierScan\
 
 ### 迁移文件重要约定
 
- 当前最新迁移文件是 `V4__create_tag_system.sql`（V4：标签系统），继续从 V5 开始递增。
- 注意：用户已明确修正过版本号，不要再创建或改回 V2/V3。
+当前最新迁移文件是 `V6__extend_collection_reliability.sql`（V6：采集可靠性增强扩展），后续迁移继续从 V7 递增。
+注意：用户已明确修正过版本号，不要再创建或改回 V2/V3；新增迁移前必须先检查 `backend/src/main/resources/db/migration` 的真实最新版本。
 
 ---
 
@@ -149,9 +151,9 @@ Controller 校验 siteId 属于当前用户
   -> CollectionOrchestrator 异步执行
   -> RSS 优先，失败时降级 HTML
   -> ArticleService.batchSaveArticles() 按 userId + sourceHash 去重落库
-  -> LLM 并发摘要
+  -> LLM 并发摘要（失败仅记录 warningMessage，不阻断采集成功）
   -> updateLlmSummary() 写回 summary/keyPoints/tags/title
-  -> CollectionRun 标记 COMPLETED 或 FAILED
+  -> CollectionRun 标记 COMPLETED 或 FAILED，并同步站点健康状态
 ```
 
 定时采集入口：
@@ -167,9 +169,53 @@ CollectionScheduler @Scheduled
 - 站点到期逻辑为：最近一次采集开始时间 + `site.collectionIntervalMinutes` <= 当前时间。
 - `collection_runs` 中已有同站点 `RUNNING` 任务时跳过，避免重复采集。
 - Redis 可用时使用 `frontierscan:collection:site:{siteId}` 站点级锁；Redis 不可用时降级为数据库 RUNNING 状态防重。
-- 即使 `collectedCount = 0`，也代表一次采集尝试，会影响下一次到期时间。
+- 定时调度会先扫描到期失败任务并创建 `SCHEDULED_RETRY`，再扫描普通到期站点。
+- 自动重试最多 3 次，退避间隔为 5 / 15 / 60 分钟；超过最大次数后 `nextRetryAt = null`，不再自动重试。
+- 即使 `collectedCount = 0`，只要采集链路正常完成，也代表一次成功采集尝试，会影响下一次到期时间。
 
-### 3.4 发布时间与正文处理
+### 3.4 采集可靠性增强一期
+
+本轮已完成采集可靠性增强一期，核心文件：
+
+```text
+backend/src/main/java/com/frontierscan/collection/CollectionFailureClassifier.java
+backend/src/main/java/com/frontierscan/collection/CollectionRunService.java
+backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java
+backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java
+backend/src/main/java/com/frontierscan/site/SiteService.java
+backend/src/main/resources/db/migration/V6__extend_collection_reliability.sql
+```
+
+数据库字段：
+
+- `sites.consecutive_failures`、`last_failure_reason`、`last_failure_at`：V5 已增加，用于站点连续失败追踪。
+- `sites.last_success_at`、`sites.next_retry_at`：V6 增加，用于展示最近成功和下一次自动重试时间。
+- `collection_runs.retry_count`：V5 已增加，V6 后实体已映射。
+- `collection_runs.failure_type`、`failure_stage`、`next_retry_at`、`retry_of_run_id`、`warning_message`：V6 增加，用于失败分类、重试审计和非阻断告警。
+
+失败分类口径：
+
+```text
+NETWORK_TIMEOUT
+RSS_PARSE_ERROR
+HTML_PARSE_ERROR
+EMPTY_RESULT
+LLM_SUMMARY_FAILED
+UNKNOWN
+```
+
+关键业务规则：
+
+- RSS 失败会先降级 HTML；只有最终失败才写站点失败状态。
+- 采集器解析出候选文章但去重后新增 0 篇，视为成功采集。
+- 采集器无法解析出任何候选文章，视为 `EMPTY_RESULT` 失败并进入重试。
+- 成功采集会写入 `sites.last_success_at`，清空连续失败、最后失败原因和 `next_retry_at`。
+- 失败采集会写入 `collection_runs.failure_type/failure_stage/error_message/next_retry_at`，并同步站点健康状态。
+- LLM 摘要失败写入 `collection_runs.warning_message`，任务仍为 `COMPLETED`，不增加站点连续失败次数。
+- 手动重试创建 `MANUAL_RETRY` 新任务；创建成功后才清理原失败任务 `nextRetryAt` 和站点失败状态，避免“重试未提交但状态被清空”。
+- 自动重试创建 `SCHEDULED_RETRY` 新任务，并通过 `retry_of_run_id` 关联原失败任务。
+
+### 3.5 发布时间与正文处理
 
 近期已增强发布时间提取：
 
@@ -263,6 +309,25 @@ count()
 - 日期范围：两个原生 `<input type="date">`，选择后即时触发。
 - 事件机制：`@filter-change` emit 筛选条件变更，父组件重置到第 1 页并重新请求。
 
+### 4.6 网站管理与任务记录增强
+
+`SitesView.vue` 当前已展示站点采集健康状态：
+
+- 连续失败次数。
+- 最近成功时间 `lastSuccessAt`。
+- 最近失败时间 `lastFailureAt`。
+- 最近失败原因 `lastFailureReason`。
+- 下次自动重试时间 `nextRetryAt`。
+- 网站抽屉中展示完整失败原因和最近成功信息。
+
+`CollectionRunsView.vue` 当前已增强任务排障能力：
+
+- 展示任务类型：手动、定时、手动重试、自动重试。
+- 展示失败类型 `failureType` 和失败阶段 `failureStage`。
+- 展示重试次数 `retryCount`、下次重试时间 `nextRetryAt`。
+- 展示错误信息 `errorMessage` 或非阻断告警 `warningMessage`。
+- 失败任务支持“重试”；任意带站点的历史任务支持“重新采集”。
+
 ---
 
 ## 5. 用户数据隔离
@@ -310,7 +375,11 @@ backend/src/test/java/com/frontierscan/security/UserDataIsolationIntegrationTest
 | DELETE | `/api/articles/{id}/favorite` | 取消收藏 |
 | GET | `/api/articles/count` | 文章总数与今日采集数 |
 | GET | `/api/collection-runs` | 采集任务历史 |
+| GET | `/api/collection-runs/{runId}` | 单个采集任务详情 |
+| POST | `/api/collection-runs/{runId}/retry` | 重试失败采集任务，创建 `MANUAL_RETRY` 新任务 |
 | POST | `/api/collection-runs/sites/{siteId}` | 手动触发站点采集，返回 202 |
+| GET | `/api/tags/domains` | 返回全部领域及其标签列表 |
+| GET | `/api/tags/domains/{domainName}` | 返回指定领域的所有标签 |
 | GET | `/actuator/health` | 健康检查 |
 
 ---
@@ -375,8 +444,9 @@ npm run build
 |---|---|
 | `ArticleParserTest` | 正文清洗、正文提取、发布时间提取、sourceHash |
 | `RssCollectorTest` | RSS 正常采集、异常处理、发布时间兜底 |
-| `CollectionOrchestratorIntegrationTest` | 手动采集编排、去重、隔离、异常 |
-| `CollectionSchedulerTest` | 到期判断、重复任务保护、Redis 锁 |
+| `CollectionOrchestratorIntegrationTest` | 手动采集编排、去重、隔离、RSS/HTML 降级、空结果失败、LLM 告警 |
+| `CollectionRunServiceTest` | 任务失败记录、手动重试、用户隔离、重试失败时保持原失败状态 |
+| `CollectionSchedulerTest` | 到期判断、重复任务保护、Redis 锁、失败任务自动重试 |
 | `CollectionSchedulerIntegrationTest` | 定时调度集成行为 |
 | `UserDataIsolationIntegrationTest` | 分类/网站/文章/收藏隔离、收藏文章视图、取消收藏幂等 |
 
@@ -384,6 +454,7 @@ npm run build
 
 - 前端 `npm run build` 通过。
 - 后端 Surefire 报告显示测试通过；最近一次完整测试为 55 个测试，`Failures: 0, Errors: 0`。
+- 最近一次单独运行 `CollectionRunServiceTest` 时，被本地 `backend/target/classes/application.yml` 文件占用挡在 Maven resources 阶段，报“拒绝访问”；这是本地文件句柄/进程占用问题，不是测试断言失败。
 
 ---
 
@@ -408,7 +479,7 @@ npm run build
 3. 信息看板和收藏页的 `new` 标志按 `collectedAt` 判断，不按发布时间或收藏时间判断。
 4. 前端卡片标签目前从逗号/中文逗号拆分，后端存储仍是字符串，不是独立标签表。
 5. 详情抽屉不展示原文正文，避免长正文撑开页面；用户通过原文链接查看全文。
-6. Flyway 后续新增迁移从 V4 开始。
+6. Flyway 后续新增迁移从 V7 开始。
 7. 不要在未被用户要求时更新交接文档；本次更新是用户明确要求。
 
 ---
@@ -417,27 +488,22 @@ npm run build
 
 建议优先级如下：
 
-1. **采集可靠性增强**
-   - 采集失败重试策略（指数退避）。
-   - 单站点连续失败次数追踪和最后失败原因展示。
-   - 前端任务记录页增加失败原因查看和重新采集入口。
-
-2. **LLM 摘要治理**
+1. **LLM 摘要治理**
    - 对摘要为空或 LLM 调用失败的文章提供重试摘要功能。
    - 给 `SummaryResult` 增加更严格的解析/兜底策略。
    - 接入 TagEvaluationAgent 到采集管线（两阶段标签评分：领域分类→标签评分）。
 
-3. **阅读体验增强**
+2. **阅读体验增强**
    - 收藏页分页。
    - 已读/未读状态。
    - 卡片按发布时间、采集时间、收藏时间排序切换。
 
-4. **标签系统完善**
+3. **标签系统完善**
    - 在分类管理中添加领域标签扩展。
    - 更多领域种子数据。
    - 标签用于文章推荐和发现。
 
-5. **账号体系完善**
+4. **账号体系完善**
    - 用户注册。
    - 修改密码。
    - 管理员用户管理。
@@ -450,7 +516,7 @@ npm run build
 
 1. 阅读 `docs/AI-handover.md`、`docs/local-development.md`、`docs/architecture.md`。
 2. 查看 `git status --short`，确认是否有用户未提交改动。
-3. 若要改数据库，先确认 `backend/src/main/resources/db/migration` 最新版本号，当前最新为 V3。
+3. 若要改数据库，先确认 `backend/src/main/resources/db/migration` 最新版本号，当前最新为 V6。
 4. 若要改用户私有资源，先检查 Service 层是否绑定 `userId`。
 5. 若要改前端文章卡片，确保信息看板和我的收藏样式一致。
 6. 完成后至少运行：
@@ -470,12 +536,3 @@ mvn test -q
 ---
 
 本文档由 Codex 维护。每次用户明确要求更新交接文档，或发生重大业务/接口/数据库变更时，再同步更新。
-11. 多领域标签系统：`tag_domains` 表注册领域→`tech_tags` 等独立标签表→`article_tags` 多态关联。
-12. 标签系统 V4 迁移已部署（`V4__create_tag_system.sql`），仅有科技领域种子标签。
-13. TagEvaluationAgent 已实现但暂未接入采集管线，LLM 仍自由生成标签。
-14. 收藏页筛选使用内存过滤（不翻页），信息看板使用原生 SQL（正划分页）。
- | `GET` | `/api/tags/domains` | 返回全部领域及其标签列表 |
-> 新增：`GET /api/tags/domains` — 返回全部领域及其标签列表。
-> `GET /api/tags/domains/{domainName}` — 返回指定领域的所有标签。
->
-> 原有 `GET /api/articles` 和 `GET /api/articles/favorites` 接口已扩展 keyword、tagId、startDate、endDate 筛选参数。
