@@ -1,5 +1,10 @@
 package com.frontierscan.llm.tag;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.frontierscan.llm.tag.mapper.ArticleTagMappingMapper;
+import com.frontierscan.llm.tag.mapper.TagDomainMapper;
+import com.frontierscan.llm.tag.mp.ArticleTagMappingPo;
+import com.frontierscan.llm.tag.mp.TagDomainPo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -7,28 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 标签评估 Agent — 两阶段闭环。
+ * 标签评估 Agent：完成领域分类、标签评分和文章标签落库。
  * <p>
- * <b>Phase 1 — 领域分类：</b>从 {@code tag_domains} 表中获取所有可用领域，
- * 调用 {@link DomainClassifier} 对文章内容与各领域的相关性评分，
- * 取最多前 3 个最相关领域。<br>
- * <b>Phase 2 — 标签评分：</b>遍历 top 领域，通过 {@link JdbcTemplate} 动态查询对应的标签表
- * （表名从 {@code tag_domains.table_name} 获取），合并所有候选标签后调用
- * {@link LlmTagScorer} 评分，取 top 3 作为文章最终标签。<br>
- * <b>保存：</b>替换文章旧标签关联，并同步更新 {@code article.tags} 字段。
+ * 本期将标签模块作为 MyBatis-Plus 试点：领域路由表 {@code tag_domains} 和文章标签关联表
+ * {@code article_tags} 通过 MP Mapper 访问；动态领域标签表仍通过受控的 {@link JdbcTemplate}
+ * 查询，因为表名来自 {@code tag_domains.table_name}，不适合绑定成固定 Mapper。
  * </p>
  *
- * <p><b>扩展性：</b>新增领域只需要：
- * <ol>
- *   <li>创建新的标签表（如 {@code finance_tags}）</li>
- *   <li>在 {@code tag_domains} 中插入一行记录</li>
- *   <li>无需修改任何 Java 代码</li>
- * </ol>
+ * <p>
+ * 标签评估不属于采集主链路的硬性成功条件。调用方会捕获异常并记录告警，避免 LLM 标签波动导致文章采集失败。
  * </p>
  */
 @Slf4j
@@ -38,105 +37,99 @@ public class TagEvaluationAgent {
     private static final int MAX_DOMAINS = 3;
     private static final int MAX_TAGS = 3;
 
-    private final TagDomainRepository tagDomainRepository;
-    private final ArticleTagMappingRepository articleTagMappingRepository;
+    private final TagDomainMapper tagDomainMapper;
+    private final ArticleTagMappingMapper articleTagMappingMapper;
     private final DomainClassifier domainClassifier;
     private final LlmTagScorer llmTagScorer;
     private final JdbcTemplate jdbcTemplate;
 
-    public TagEvaluationAgent(TagDomainRepository tagDomainRepository,
-                              ArticleTagMappingRepository articleTagMappingRepository,
+    public TagEvaluationAgent(TagDomainMapper tagDomainMapper,
+                              ArticleTagMappingMapper articleTagMappingMapper,
                               DomainClassifier domainClassifier,
                               LlmTagScorer llmTagScorer,
                               JdbcTemplate jdbcTemplate) {
-        this.tagDomainRepository = tagDomainRepository;
-        this.articleTagMappingRepository = articleTagMappingRepository;
+        this.tagDomainMapper = tagDomainMapper;
+        this.articleTagMappingMapper = articleTagMappingMapper;
         this.domainClassifier = domainClassifier;
         this.llmTagScorer = llmTagScorer;
         this.jdbcTemplate = jdbcTemplate;
     }
 
     /**
-     * 对一篇文章执行完整的标签评估流程。
+     * 对文章执行完整标签评估流程。
      *
      * @param articleId 文章 ID
      * @param title     文章标题
-     * @param content   文章正文（用于 LLM 评估）
-     * @return 选中的标签列表（ScoredTag 包含 tagId, tagName, score），失败时返回空列表
+     * @param content   标签评估输入，推荐由摘要、关键要点和正文片段拼接而成
+     * @return 本轮选中的标签；失败或无法评估时返回空列表
      */
     @Transactional
     public List<ScoredTag> evaluate(Long articleId, String title, String content) {
-        // Phase 1: 获取所有领域 → LLM 分类
-        List<TagDomain> allDomains = tagDomainRepository.findAll();
-        if (allDomains.isEmpty()) {
+        List<TagDomainPo> domainRows = tagDomainMapper.selectList(null);
+        if (domainRows.isEmpty()) {
             log.warn("No tag domains configured; skipping tag evaluation for article {}", articleId);
             return List.of();
         }
 
-        List<ScoredDomain> scoredDomains = domainClassifier.classify(allDomains, title, content);
+        List<TagDomain> classifierDomains = domainRows.stream()
+                .map(TagEvaluationAgent::toDomainEntity)
+                .toList();
+        Map<String, TagDomainPo> domainByName = domainRows.stream()
+                .collect(Collectors.toMap(TagDomainPo::getName, row -> row, (a, b) -> a, LinkedHashMap::new));
+
+        List<ScoredDomain> scoredDomains = domainClassifier.classify(classifierDomains, title, content);
         if (scoredDomains.isEmpty()) {
             log.debug("Domain classifier returned no results for article {}", articleId);
             return List.of();
         }
 
-        // 取 top N 领域
         List<ScoredDomain> topDomains = scoredDomains.stream()
                 .sorted(Comparator.comparingInt(ScoredDomain::score).reversed())
                 .limit(MAX_DOMAINS)
                 .toList();
-        log.debug("Article {} classified into domains: {}", articleId,
-                topDomains.stream().map(ScoredDomain::toString).collect(Collectors.joining(", ")));
 
-        // Phase 2: 对每个 top 领域查询对应标签表，合并候选标签
-        List<TagInfo> allCandidateTags = new ArrayList<>();
+        List<TagInfo> candidateTags = new ArrayList<>();
+        Map<String, CandidateTag> candidateByName = new HashMap<>();
         for (ScoredDomain scoredDomain : topDomains) {
-            String domainName = scoredDomain.domain();
-            TagDomain domain = allDomains.stream()
-                    .filter(d -> d.getName().equals(domainName))
-                    .findFirst()
-                    .orElse(null);
+            TagDomainPo domain = domainByName.get(scoredDomain.domain());
             if (domain == null) {
-                log.warn("Domain '{}' not found in tag_domains table", domainName);
+                log.warn("Domain '{}' not found in tag_domains table", scoredDomain.domain());
                 continue;
             }
             List<TagInfo> tags = queryTagsFromTable(domain.getTableName());
-            allCandidateTags.addAll(tags);
+            candidateTags.addAll(tags);
+            for (TagInfo tag : tags) {
+                candidateByName.putIfAbsent(tag.name(), new CandidateTag(tag.id(), tag.name(), domain.getName()));
+            }
         }
 
-        if (allCandidateTags.isEmpty()) {
+        if (candidateTags.isEmpty()) {
             log.warn("No candidate tags found for article {}", articleId);
             return List.of();
         }
 
-        // LLM 评分
-        List<ScoredTag> scoredTags = llmTagScorer.scoreTags(allCandidateTags, title, content);
+        List<ScoredTag> scoredTags = llmTagScorer.scoreTags(candidateTags, title, content);
         if (scoredTags.isEmpty()) {
+            log.debug("Tag scorer returned no results for article {}", articleId);
             return List.of();
         }
 
-        // 取 top 3
         List<ScoredTag> topTags = scoredTags.stream()
                 .sorted(Comparator.comparingInt(ScoredTag::score).reversed())
                 .limit(MAX_TAGS)
                 .toList();
 
-        // 保存文章-标签关联
-        saveArticleTags(articleId, topTags, topDomains);
-
-        log.info("Tag evaluation complete for article {}: selected tags: {}",
-                articleId, topTags.stream().map(ScoredTag::tagName).collect(Collectors.joining(", ")));
+        saveArticleTags(articleId, topTags, candidateByName);
+        log.info("Tag evaluation complete for article {}: {}", articleId,
+                topTags.stream().map(ScoredTag::tagName).collect(Collectors.joining(",")));
         return topTags;
     }
 
     /**
-     * 通过 JdbcTemplate 动态查询领域标签表。
+     * 从领域标签表读取候选标签。
      * <p>
-     * 表名从 {@code tag_domains.table_name} 获取，完全动态，
-     * 新增领域时无需修改 Java 代码。
+     * 表名只能来自 {@code tag_domains.table_name}，不得使用外部请求参数拼接 SQL，避免动态表名成为 SQL 注入入口。
      * </p>
-     *
-     * @param tableName 标签表名（如 tech_tags）
-     * @return 标签列表
      */
     private List<TagInfo> queryTagsFromTable(String tableName) {
         String sql = "SELECT id, name FROM " + tableName + " ORDER BY id";
@@ -150,60 +143,51 @@ public class TagEvaluationAgent {
     }
 
     /**
-     * 保存文章标签关联并同步更新 {@code article.tags} 字符串字段。
+     * 保存本轮标签评估结果。
      * <p>
-     * 先删除该文章所有旧关联，再批量插入新关联。在同一个事务内执行。
+     * 保存策略是先清理旧关联，再写入本轮结果，确保重摘要或重新评估后不会混用旧标签。
+     * 同时同步更新 {@code articles.tags}，作为文章卡片展示和历史兼容的兜底字段。
      * </p>
-     *
-     * @param articleId 文章 ID
-     * @param topTags   选中的 top 标签
-     * @param domains   标签所属的领域（用于确定 tagDomain 字段）
      */
-    private void saveArticleTags(Long articleId, List<ScoredTag> topTags, List<ScoredDomain> domains) {
-        // 删除旧关联
-        articleTagMappingRepository.deleteByArticleId(articleId);
+    private void saveArticleTags(Long articleId, List<ScoredTag> topTags, Map<String, CandidateTag> candidateByName) {
+        articleTagMappingMapper.delete(new QueryWrapper<ArticleTagMappingPo>().eq("article_id", articleId));
 
-        // 我们需要知道每个标签属于哪个领域。由于 Phase 2 从多个领域合并了标签，
-        // 但 topTags 现在只包含标签名称，没有领域信息。我们需要回查。
-        // 简化方案：遍历所有 top 领域，在每个领域表中查找标签
         OffsetDateTime now = OffsetDateTime.now();
-        List<ArticleTagMapping> mappings = new ArrayList<>();
-
         for (ScoredTag scoredTag : topTags) {
-            for (ScoredDomain domain : domains) {
-                TagDomain domainEntity = tagDomainRepository.findAll().stream()
-                        .filter(d -> d.getName().equals(domain.domain()))
-                        .findFirst().orElse(null);
-                if (domainEntity == null) continue;
-
-                String findSql = "SELECT id FROM " + domainEntity.getTableName()
-                        + " WHERE name = ?";
-                try {
-                    Long tagId = jdbcTemplate.queryForObject(findSql, Long.class, scoredTag.tagName());
-                    if (tagId != null) {
-                        ArticleTagMapping mapping = new ArticleTagMapping();
-                        mapping.setArticleId(articleId);
-                        mapping.setTagId(tagId);
-                        mapping.setTagDomain(domain.domain());
-                        mapping.setCreatedAt(now);
-                        mappings.add(mapping);
-                        break; // 已找到，不再查找其他领域
-                    }
-                } catch (Exception e) {
-                    // 该标签不在这个领域表中，继续查找下一个领域
-                }
+            CandidateTag candidate = candidateByName.get(scoredTag.tagName());
+            if (candidate == null) {
+                continue;
             }
+            ArticleTagMappingPo mapping = new ArticleTagMappingPo();
+            mapping.setArticleId(articleId);
+            mapping.setTagId(candidate.id());
+            mapping.setTagDomain(candidate.domainName());
+            mapping.setCreatedAt(now);
+            articleTagMappingMapper.insert(mapping);
         }
 
-        if (!mappings.isEmpty()) {
-            articleTagMappingRepository.saveAll(mappings);
-        }
-
-        // 同步更新 article.tags 字符串字段
         String tagsStr = topTags.stream()
                 .map(ScoredTag::tagName)
                 .collect(Collectors.joining(","));
-        String updateSql = "UPDATE articles SET tags = ? WHERE id = ?";
-        jdbcTemplate.update(updateSql, tagsStr, articleId);
+        jdbcTemplate.update("UPDATE articles SET tags = ? WHERE id = ?", tagsStr, articleId);
+    }
+
+    /** 转换为现有分类器需要的领域对象，避免本期扩大改造 LLM 分类器接口。 */
+    private static TagDomain toDomainEntity(TagDomainPo row) {
+        TagDomain domain = new TagDomain();
+        domain.setId(row.getId());
+        domain.setName(row.getName());
+        domain.setTableName(row.getTableName());
+        domain.setDescription(row.getDescription());
+        domain.setSortOrder(row.getSortOrder());
+        domain.setCreatedAt(row.getCreatedAt());
+        return domain;
+    }
+
+    /**
+     * 候选标签结构化定位信息。
+     * <p>LLM 打分结果只返回标签名称，落库时需要用该记录定位标签 ID 和所属领域。</p>
+     */
+    private record CandidateTag(long id, String name, String domainName) {
     }
 }

@@ -1,5 +1,6 @@
 package com.frontierscan;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
@@ -18,6 +19,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableScheduling
+@MapperScan("com.frontierscan.llm.tag.mapper")
 public class FrontierScanApplication {
 
     public static void main(String[] args) {

@@ -94,7 +94,10 @@ public class CollectionOrchestrator {
             log.info("Saved {} new articles for site {}", saved.size(), site.getName());
 
             // 并发调用 LLM 生成结构化摘要；失败作为告警记录，不阻断采集成功状态。
-            String warningMessage = summarizeArticlesConcurrently(saved);
+            // 摘要治理和标签评估都属于非阻断增强步骤；失败时合并写入 warningMessage，采集任务仍可完成。
+            String summaryWarning = summarizeArticlesConcurrently(saved);
+            String tagWarning = tagEvaluationAsyncService.evaluateArticlesConcurrently(saved);
+            String warningMessage = combineWarnings(summaryWarning, tagWarning);
 
             siteService.recordSuccess(siteId);
             collectionRunService.complete(runId, saved.size(), warningMessage);
@@ -119,6 +122,14 @@ public class CollectionOrchestrator {
             siteService.recordFailure(siteId, message, nextRetryAt);
             return CompletableFuture.failedFuture(e);
         }
+    }
+
+    /** 合并采集后增强步骤产生的非阻断告警，便于任务记录页集中展示。 */
+    private static String combineWarnings(String... warnings) {
+        List<String> validWarnings = java.util.Arrays.stream(warnings)
+                .filter(warning -> warning != null && !warning.isBlank())
+                .toList();
+        return validWarnings.isEmpty() ? null : String.join("; ", validWarnings);
     }
 
     /**

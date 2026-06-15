@@ -76,6 +76,8 @@ public class HtmlCollector implements Collector {
                     String title = articleDoc.title();
                     if (title == null || title.isBlank()) continue;
 
+                    // HTML 采集链路必须保留清洗后的全文正文，供后续摘要 Map-Reduce 覆盖完整文章。
+                    // contentExcerpt 仅作为列表展示和历史兜底片段，不能反向限制全文字段。
                     String content = ArticleParser.extractContent(articleDoc);
                     if (content.length() < 20) continue; // 正文太短，跳过
 

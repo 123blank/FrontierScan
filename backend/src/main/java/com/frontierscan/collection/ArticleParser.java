@@ -29,7 +29,6 @@ import java.util.regex.Pattern;
  */
 public final class ArticleParser {
 
-    private static final int MAX_CONTENT_LENGTH = 5000;
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
     private static final Pattern CHINESE_DATE_PATTERN =
             Pattern.compile("(20\\d{2})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日?");
@@ -42,7 +41,7 @@ public final class ArticleParser {
      * 回退到 {@code <body>} 并去除 nav/header/footer/aside 等噪声元素。</p>
      *
      * @param doc Jsoup 解析后的 HTML 文档
-     * @return 提取的正文纯文本，段落之间以空行分隔
+     * @return 提取的全文正文纯文本，段落之间以空行分隔
      */
     public static String extractContent(Document doc) {
         Elements content = doc.select("article");
@@ -56,8 +55,7 @@ public final class ArticleParser {
         // 移除已知噪声元素
         content.select("nav, header, footer, aside, .sidebar, .menu, .comments, " +
                 ".comment, .nav, .footer, .header, script, style, iframe, noscript").remove();
-        String text = extractReadableText(content);
-        return text.length() > MAX_CONTENT_LENGTH ? text.substring(0, MAX_CONTENT_LENGTH) : text;
+        return extractReadableText(content);
     }
 
     /**
@@ -126,10 +124,25 @@ public final class ArticleParser {
      * @param maxLength 最大字符数（超过则截断）
      * @return 带段落换行的纯文本
      */
-    public static String cleanHtmlPreserveParagraphs(String html, int maxLength) {
+    public static String cleanHtmlPreserveParagraphs(String html) {
         if (html == null || html.isBlank()) return "";
         Document doc = Jsoup.parse(html);
-        String text = extractReadableText(doc.select("body"));
+        return extractReadableText(doc.select("body"));
+    }
+
+    /**
+     * 清理 HTML 并保留段落边界，同时按指定长度截断。
+     * <p>
+     * 采集链路会同时保存全文和列表片段：全文通过 {@link #cleanHtmlPreserveParagraphs(String)} 生成，
+     * 片段通过本方法生成。两者共用同一套清洗逻辑，避免摘要输入和卡片展示出现语义不一致。
+     * </p>
+     *
+     * @param html      原始 HTML
+     * @param maxLength 最大字符数，超过则截断
+     * @return 带段落换行的纯文本片段
+     */
+    public static String cleanHtmlPreserveParagraphs(String html, int maxLength) {
+        String text = cleanHtmlPreserveParagraphs(html);
         return text.length() > maxLength ? text.substring(0, maxLength) : text;
     }
 

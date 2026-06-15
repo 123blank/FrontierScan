@@ -1,11 +1,12 @@
 package com.frontierscan.article;
 
 import com.frontierscan.common.error.ResourceNotFoundException;
-import com.frontierscan.llm.LlmProvider;
 import com.frontierscan.llm.SummaryQualityEvaluator;
 import com.frontierscan.llm.SummaryQualityResult;
 import com.frontierscan.llm.SummaryRequest;
 import com.frontierscan.llm.SummaryResult;
+import com.frontierscan.llm.SummaryMapReduceException;
+import com.frontierscan.llm.SummaryMapReduceService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,14 +28,17 @@ public class ArticleSummaryService {
     private static final String EMPTY_LLM_REASON = "LLM 未返回有效摘要";
 
     private final ArticleRepository articleRepository;
-    private final LlmProvider llmProvider;
+    private final ArticleService articleService;
+    private final SummaryMapReduceService summaryMapReduceService;
     private final SummaryQualityEvaluator qualityEvaluator;
 
     public ArticleSummaryService(ArticleRepository articleRepository,
-                                 LlmProvider llmProvider,
+                                 ArticleService articleService,
+                                 SummaryMapReduceService summaryMapReduceService,
                                  SummaryQualityEvaluator qualityEvaluator) {
         this.articleRepository = articleRepository;
-        this.llmProvider = llmProvider;
+        this.articleService = articleService;
+        this.summaryMapReduceService = summaryMapReduceService;
         this.qualityEvaluator = qualityEvaluator;
     }
 
@@ -85,23 +89,46 @@ public class ArticleSummaryService {
         }
         articleRepository.save(article);
 
-        if (isBlank(article.getContentExcerpt())) {
+        String sourceContent = resolveSummarySourceContent(article);
+        if (isBlank(sourceContent)) {
             return markFailed(article, MISSING_CONTENT_REASON);
         }
 
         try {
-            SummaryResult result = llmProvider.summarize(new SummaryRequest(
+            SummaryResult result = summaryMapReduceService.summarize(new SummaryRequest(
                     article.getTitle(),
                     article.getSourceUrl(),
-                    article.getContentExcerpt()));
+                    sourceContent));
             if (result == null || isBlank(result.summary())) {
                 return markFailed(article, EMPTY_LLM_REASON);
             }
-            return applySummaryResult(article, result);
+            Article updated = applySummaryResult(article, result);
+            if (manualRetry) {
+                // 手动重摘要成功后同步重评标签，使结构化标签与最新摘要、要点和标题保持一致。
+                articleService.evaluateArticleTags(updated.getId());
+            }
+            return updated;
+        } catch (SummaryMapReduceException e) {
+            log.warn("LLM summary Map-Reduce failed for article {}: {}", article.getId(), e.getMessage());
+            return markFailed(article, e.getMessage());
         } catch (Exception e) {
             log.warn("LLM summary generation failed for article {}: {}", article.getId(), e.getMessage());
             return markFailed(article, "LLM 摘要生成失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 选择摘要输入正文。
+     * <p>
+     * 新文章优先使用 contentFull；历史文章在本期未回填全文时回退到 contentExcerpt，
+     * 保证用户仍可对旧数据执行摘要治理。
+     * </p>
+     */
+    private static String resolveSummarySourceContent(Article article) {
+        if (!isBlank(article.getContentFull())) {
+            return article.getContentFull();
+        }
+        return article.getContentExcerpt();
     }
 
     /**
@@ -122,7 +149,7 @@ public class ArticleSummaryService {
                 ? String.join(",", result.tags())
                 : null);
 
-        SummaryQualityResult quality = qualityEvaluator.evaluate(result, article.getContentExcerpt());
+        SummaryQualityResult quality = qualityEvaluator.evaluate(result, resolveSummarySourceContent(article));
         article.setSummaryQualityScore(quality.score());
         article.setSummaryQualityReason(quality.qualified() ? null : quality.reason());
         article.setSummaryStatus(quality.qualified()

@@ -128,6 +128,16 @@ class ArticleParserTest {
             assertThat(ArticleParser.extractContent(doc)).isEqualTo("第一段正文。\n\n第二段正文。");
         }
 
+        @Test @DisplayName("提取全文正文时不提前按 5000 字截断")
+        void shouldKeepFullContentForSummaryPipeline() {
+            String longText = "a".repeat(6000);
+            Document doc = Jsoup.parse("<html><body><article><p>" + longText + "</p></article></body></html>");
+
+            String content = ArticleParser.extractContent(doc);
+
+            assertThat(content).hasSize(6000);
+        }
+
         @Test @DisplayName("无已知选择器时回退到 {@code <body>} 并移除 aside/sidebar 等噪声")
         void shouldFallbackToBody() {
             Document doc = Jsoup.parse("""

@@ -38,6 +38,15 @@ public class Article {
     @Column(name = "content_excerpt", columnDefinition = "TEXT")
     private String contentExcerpt;
     /**
+     * 采集到的清洗后全文正文。
+     * <p>
+     * 该字段用于摘要 Map-Reduce 和标签语义兜底，不直接在前端详情中展示，避免长文本影响页面性能。
+     * 历史文章在 V9 迁移后允许为空，此时摘要链路会回退到 {@link #contentExcerpt}，保证旧数据仍可治理。
+     * </p>
+     */
+    @Column(name = "content_full", columnDefinition = "TEXT")
+    private String contentFull;
+    /**
      * 文章级 LLM 摘要状态。
      * <p>该状态用于区分待生成、已生成、生成失败和质量不佳，前端详情抽屉据此展示治理提示和重试入口。</p>
      */

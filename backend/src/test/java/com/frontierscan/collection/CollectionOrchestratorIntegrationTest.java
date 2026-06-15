@@ -75,6 +75,10 @@ class CollectionOrchestratorIntegrationTest {
     @MockBean
     private LlmProvider llmProvider;
 
+    /** 标签评估 Mock：采集编排测试默认不依赖真实标签 LLM，单独验证触发和告警合并。 */
+    @MockBean
+    private TagEvaluationAsyncService tagEvaluationAsyncService;
+
     // ===== 注入真实组件 =====
 
     @Autowired
@@ -162,6 +166,7 @@ class CollectionOrchestratorIntegrationTest {
             assertThat(articleRepository.findByUserIdOrderByCollectedAtDesc(testUser.getId(), PageRequest.of(0, 10)))
                     .isNotEmpty();
             verify(siteService).recordSuccess(testSite.getId());
+            verify(tagEvaluationAsyncService).evaluateArticlesConcurrently(any());
         }
 
         @Test @DisplayName("候选文章已存在（去重后新增 0 篇）→ COMPLETED，collectedCount=0")
@@ -235,6 +240,28 @@ class CollectionOrchestratorIntegrationTest {
             assertThat(done.getWarningMessage()).contains(CollectionFailureClassifier.LLM_SUMMARY_FAILED);
             assertThat(articleRepository.findByUserIdOrderByCollectedAtDesc(testUser.getId(), PageRequest.of(0, 10))
                     .getContent().get(0).getSummaryStatus()).isEqualTo(ArticleSummaryStatus.FAILED);
+        }
+
+        @Test @DisplayName("重复采集相同数据 → 第二次 collectedCount=0（去重生效）")
+        void tagFailureShouldCompleteWithWarning() throws Exception {
+            when(rssCollector.sourceType()).thenReturn("RSS");
+            when(rssCollector.collect(any())).thenReturn(mockRssResult(1));
+            when(llmProvider.summarize(any())).thenReturn(new SummaryResult(
+                    "标签标题",
+                    "这是一段足够长的摘要内容，用于模拟摘要治理成功完成，然后标签评估返回非阻断告警，采集任务仍然应该完成。",
+                    List.of("摘要完成", "标签失败"),
+                    List.of("测试")));
+            when(tagEvaluationAsyncService.evaluateArticlesConcurrently(any()))
+                    .thenReturn(CollectionFailureClassifier.TAG_EVALUATION_FAILED + ": 1 篇文章标签评估失败");
+
+            CollectionRun run = collectionRunService.create(testUser.getId(), testSite.getId(), "MANUAL");
+            Long runId = orchestrator.executeCollection(testUser.getId(), testSite.getId(), run.getId())
+                    .get(30, TimeUnit.SECONDS);
+
+            CollectionRun done = collectionRunRepository.findById(runId).orElseThrow();
+            assertThat(done.getStatus()).isEqualTo("COMPLETED");
+            assertThat(done.getWarningMessage()).contains(CollectionFailureClassifier.TAG_EVALUATION_FAILED);
+            verify(siteService).recordSuccess(testSite.getId());
         }
 
         @Test @DisplayName("重复采集相同数据 → 第二次 collectedCount=0（去重生效）")

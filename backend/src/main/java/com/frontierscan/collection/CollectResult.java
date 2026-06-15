@@ -30,7 +30,7 @@ public record CollectResult(
      *
      * @param title          文章标题
      * @param sourceUrl      原文链接
-     * @param content        文章正文（全文 HTML）
+     * @param content        文章清洗后全文正文，用于落库后执行 LLM 全文摘要和标签语义兜底
      * @param contentExcerpt 正文纯文本截断（最长 5000 字）
      * @param publishedAt    发布时间
      * @param sourceHash     内容去重哈希

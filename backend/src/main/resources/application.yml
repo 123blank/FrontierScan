@@ -41,6 +41,13 @@ app:
     base-url: ${LLM_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
     api-key: ${DASHSCOPE_API_KEY:${LLM_API_KEY:}}
     model: ${LLM_MODEL:qwen-plus}
+    summary-map-reduce:
+      enabled: ${LLM_SUMMARY_MAP_REDUCE_ENABLED:true}
+      chunk-size-chars: ${LLM_SUMMARY_CHUNK_SIZE_CHARS:6000}
+      overlap-chars: ${LLM_SUMMARY_OVERLAP_CHARS:500}
+      max-chunks: ${LLM_SUMMARY_MAX_CHUNKS:0}
+    tag:
+      max-content-chars: ${LLM_TAG_MAX_CONTENT_CHARS:8000}
   collection:
     scheduler-enabled: ${COLLECTION_SCHEDULER_ENABLED:true}
     scheduler-fixed-delay-ms: ${COLLECTION_SCHEDULER_FIXED_DELAY_MS:10000}

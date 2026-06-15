@@ -24,6 +24,9 @@ final class CollectionFailureClassifier {
     /** LLM 摘要失败，默认作为非阻断告警记录。 */
     static final String LLM_SUMMARY_FAILED = "LLM_SUMMARY_FAILED";
 
+    /** 标签评估失败，作为非阻断告警记录。 */
+    static final String TAG_EVALUATION_FAILED = "TAG_EVALUATION_FAILED";
+
     /** 未能归类的异常。 */
     static final String UNKNOWN = "UNKNOWN";
 

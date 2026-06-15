@@ -66,9 +66,12 @@ public class RssCollector implements Collector {
                             org.jsoup.Jsoup.parse(contentHtml));
                 }
 
+                // RSS 内容可能是 HTML 摘要或全文片段。落库时统一保存清洗后的全文文本，
+                // 避免后续摘要治理直接把 HTML 标签发送给大模型；列表展示仍使用 5000 字片段。
+                String content = ArticleParser.cleanHtmlPreserveParagraphs(contentHtml);
                 String contentExcerpt = ArticleParser.cleanHtmlPreserveParagraphs(contentHtml, 5000);
                 articles.add(CollectResult.RawArticle.builder()
-                        .title(title).sourceUrl(link).content(contentHtml)
+                        .title(title).sourceUrl(link).content(content)
                         .contentExcerpt(contentExcerpt).publishedAt(extractedPublishedAt)
                         .sourceHash(ArticleParser.generateSourceHash(link)).build());
                 count++;

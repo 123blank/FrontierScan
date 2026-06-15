@@ -1,7 +1,9 @@
 package com.frontierscan.article;
 
-import com.frontierscan.llm.tag.ArticleTagMappingRepository;
+import com.frontierscan.collection.CollectResult;
 import com.frontierscan.llm.tag.TagEvaluationAgent;
+import com.frontierscan.llm.tag.mapper.ArticleTagMappingMapper;
+import com.frontierscan.llm.LlmProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -38,7 +41,7 @@ class ArticleServiceFilterTest {
     @Mock
     private TagEvaluationAgent tagEvaluationAgent;
     @Mock
-    private ArticleTagMappingRepository articleTagMappingRepository;
+    private ArticleTagMappingMapper articleTagMappingMapper;
 
     private ArticleService articleService;
     private List<FavoriteArticleView> allFavorites;
@@ -52,7 +55,7 @@ class ArticleServiceFilterTest {
     @BeforeEach
     void setUp() {
         articleService = new ArticleService(articleRepository, favoriteRepository,
-                tagEvaluationAgent, articleTagMappingRepository);
+                tagEvaluationAgent, articleTagMappingMapper, new LlmProperties(null, null, null, null, null, null));
     }
 
     @Nested
@@ -115,6 +118,49 @@ class ArticleServiceFilterTest {
         }
     }
 
+    @Test
+    @DisplayName("批量保存新文章时写入全文正文并保留片段")
+    void shouldSaveFullContentAndExcerptForNewArticles() {
+        String fullContent = "这是采集器清洗后的全文正文，用于摘要 Map-Reduce。";
+        String excerpt = "这是列表展示片段。";
+        CollectResult.RawArticle rawArticle = CollectResult.RawArticle.builder()
+                .title("全文文章")
+                .sourceUrl("https://example.com/full")
+                .content(fullContent)
+                .contentExcerpt(excerpt)
+                .sourceHash("hash-full")
+                .build();
+        when(articleRepository.existsByUserIdAndSourceHash(USER_ID, "hash-full")).thenReturn(false);
+        when(articleRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<Article> saved = articleService.batchSaveArticles(USER_ID, 11L, 22L, List.of(rawArticle));
+
+        assertThat(saved).hasSize(1);
+        assertThat(saved.get(0).getContentFull()).isEqualTo(fullContent);
+        assertThat(saved.get(0).getContentExcerpt()).isEqualTo(excerpt);
+    }
+
+    @Test
+    @DisplayName("标签评估使用受控全文作为正文兜底")
+    void shouldUseControlledFullContentForTagEvaluation() {
+        Article article = new Article();
+        article.setId(100L);
+        article.setTitle("标签文章");
+        article.setSummary("摘要内容");
+        article.setKeyPoints("关键要点");
+        article.setContentFull("x".repeat(9000));
+        article.setContentExcerpt("片段内容");
+        when(articleRepository.findById(100L)).thenReturn(Optional.of(article));
+        when(tagEvaluationAgent.evaluate(eq(100L), eq("标签文章"), anyString())).thenReturn(List.of());
+
+        articleService.evaluateArticleTags(100L);
+
+        verify(tagEvaluationAgent).evaluate(eq(100L), eq("标签文章"),
+                argThat(content -> content.contains("正文兜底：")
+                        && content.contains("摘要内容")
+                        && content.length() < 8300));
+    }
+
     @Nested
     @DisplayName("listFavoriteArticlesWithFilters 内存过滤逻辑")
     class FavoritesFiltering {
@@ -157,7 +203,7 @@ class ArticleServiceFilterTest {
         @Test
         @DisplayName("tagId 筛选")
         void shouldFilterByTagId() {
-            when(articleTagMappingRepository.findArticleIdsByTagId(10L)).thenReturn(List.of(100L));
+            when(articleTagMappingMapper.findArticleIdsByTagId(10L)).thenReturn(List.of(100L));
 
             var result = articleService.listFavoriteArticlesWithFilters(USER_ID, null, 10L, null, null);
 
@@ -168,7 +214,7 @@ class ArticleServiceFilterTest {
         @Test
         @DisplayName("空标签列表过滤后无结果")
         void shouldReturnEmptyWhenTagMatchEmpty() {
-            when(articleTagMappingRepository.findArticleIdsByTagId(999L)).thenReturn(List.of());
+            when(articleTagMappingMapper.findArticleIdsByTagId(999L)).thenReturn(List.of());
 
             var result = articleService.listFavoriteArticlesWithFilters(USER_ID, null, 999L, null, null);
 
@@ -196,7 +242,7 @@ class ArticleServiceFilterTest {
         @Test
         @DisplayName("组合筛选：关键词 + 标签 + 日期")
         void shouldFilterCombined() {
-            when(articleTagMappingRepository.findArticleIdsByTagId(10L)).thenReturn(List.of(100L, 200L));
+            when(articleTagMappingMapper.findArticleIdsByTagId(10L)).thenReturn(List.of(100L, 200L));
 
             var start = OffsetDateTime.now().minusDays(2).minusMinutes(1);
             var result = articleService.listFavoriteArticlesWithFilters(USER_ID, "云", 10L, start, null);
