@@ -7,6 +7,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +30,8 @@ class SummaryMapReduceServiceTest {
     @Mock
     private LlmProvider llmProvider;
 
+    private final CountingExecutor mapReduceExecutor = new CountingExecutor();
+
     @Test
     @DisplayName("短文不分块，直接走单次摘要")
     void shouldBypassMapReduceForShortContent() {
@@ -35,7 +39,7 @@ class SummaryMapReduceServiceTest {
                 null, null, null, null,
                 new LlmProperties.SummaryMapReduceProperties(true, 200, 20, 0),
                 new LlmProperties.TagProperties(8000));
-        SummaryMapReduceService service = new SummaryMapReduceService(llmProvider, properties);
+        SummaryMapReduceService service = new SummaryMapReduceService(llmProvider, properties, mapReduceExecutor);
         when(llmProvider.summarize(any())).thenReturn(new SummaryResult(
                 "标题", "摘要", List.of("要点1", "要点2"), List.of("标签1")));
 
@@ -54,7 +58,7 @@ class SummaryMapReduceServiceTest {
                 null, null, null, null,
                 new LlmProperties.SummaryMapReduceProperties(true, 40, 10, 0),
                 new LlmProperties.TagProperties(8000));
-        SummaryMapReduceService service = new SummaryMapReduceService(llmProvider, properties);
+        SummaryMapReduceService service = new SummaryMapReduceService(llmProvider, properties, mapReduceExecutor);
         when(llmProvider.summarize(any())).thenReturn(new SummaryResult(
                 "标题", "摘要", List.of("要点1", "要点2"), List.of("标签1")));
 
@@ -67,6 +71,7 @@ class SummaryMapReduceServiceTest {
         List<SummaryRequest> requests = captor.getAllValues();
 
         assertThat(chunks).hasSizeGreaterThan(1);
+        assertThat(mapReduceExecutor.submittedCount()).isEqualTo(chunks.size());
         assertThat(chunks.get(1)).startsWith(chunks.get(0).substring(chunks.get(0).length() - 10));
         assertThat(requests.get(0).content()).contains("第 1/" + chunks.size() + " 个分块");
         assertThat(requests.get(chunks.size()).content()).contains("分块 1");
@@ -79,7 +84,7 @@ class SummaryMapReduceServiceTest {
                 null, null, null, null,
                 new LlmProperties.SummaryMapReduceProperties(true, 20, 5, 0),
                 new LlmProperties.TagProperties(8000));
-        SummaryMapReduceService service = new SummaryMapReduceService(llmProvider, properties);
+        SummaryMapReduceService service = new SummaryMapReduceService(llmProvider, properties, mapReduceExecutor);
         when(llmProvider.summarize(any()))
                 .thenReturn(new SummaryResult("标题", "摘要", List.of("要点1", "要点2"), List.of("标签1")))
                 .thenReturn(null);
@@ -88,5 +93,23 @@ class SummaryMapReduceServiceTest {
                 service.summarize(new SummaryRequest(
                         "标题", "https://example.com/a",
                         "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")));
+    }
+
+    /**
+     * 测试用同步 Executor。
+     * <p>生产环境使用真实线程池并行执行；单元测试用同步执行器降低不确定性，同时记录提交次数验证分块确实进入 executor。</p>
+     */
+    private static class CountingExecutor implements Executor {
+        private final AtomicInteger submittedCount = new AtomicInteger();
+
+        @Override
+        public void execute(Runnable command) {
+            submittedCount.incrementAndGet();
+            command.run();
+        }
+
+        int submittedCount() {
+            return submittedCount.get();
+        }
     }
 }

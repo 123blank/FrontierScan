@@ -1,9 +1,13 @@
 package com.frontierscan.llm;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 
 /**
  * 长文摘要 Map-Reduce 编排服务。
@@ -21,10 +25,14 @@ public class SummaryMapReduceService {
 
     private final LlmProvider llmProvider;
     private final LlmProperties properties;
+    private final Executor mapReduceExecutor;
 
-    public SummaryMapReduceService(LlmProvider llmProvider, LlmProperties properties) {
+    public SummaryMapReduceService(LlmProvider llmProvider,
+                                   LlmProperties properties,
+                                   @Qualifier("frontierScanLlmMapReduceExecutor") Executor mapReduceExecutor) {
         this.llmProvider = llmProvider;
         this.properties = properties;
+        this.mapReduceExecutor = mapReduceExecutor;
     }
 
     /**
@@ -53,23 +61,53 @@ public class SummaryMapReduceService {
         }
 
         log.info("Summarizing article '{}' with Map-Reduce chunks={}", request.title(), chunks.size());
-        List<SummaryResult> mappedResults = new ArrayList<>();
-        for (int i = 0; i < chunks.size(); i++) {
-            SummaryResult mapped = llmProvider.summarize(new SummaryRequest(
-                    request.title(),
-                    request.sourceUrl(),
-                    buildMapContent(chunks.get(i), i + 1, chunks.size())));
-            if (mapped == null || isBlank(mapped.summary())) {
-                throw new SummaryMapReduceException(
-                        "第 " + (i + 1) + "/" + chunks.size() + " 个分块摘要失败，已停止聚合以避免摘要缺失原文信息");
-            }
-            mappedResults.add(mapped);
-        }
+        List<SummaryResult> mappedResults = summarizeChunksConcurrently(request, chunks);
 
         return llmProvider.summarize(new SummaryRequest(
                 request.title(),
                 request.sourceUrl(),
                 buildReduceContent(mappedResults)));
+    }
+
+    /**
+     * 并发执行 Map 阶段分块摘要。
+     * <p>
+     * 每个分块之间没有数据依赖，适合使用 {@link CompletableFuture} 并行请求大模型；
+     * 但 Reduce 汇总必须等待所有分块成功后再执行，避免用不完整分块结果生成看似成功的最终摘要。
+     * </p>
+     */
+    private List<SummaryResult> summarizeChunksConcurrently(SummaryRequest request, List<String> chunks) {
+        List<CompletableFuture<SummaryResult>> futures = new ArrayList<>();
+        for (int i = 0; i < chunks.size(); i++) {
+            int chunkIndex = i;
+            futures.add(CompletableFuture.supplyAsync(() -> summarizeChunk(request, chunks, chunkIndex), mapReduceExecutor));
+        }
+        return futures.stream()
+                .map(SummaryMapReduceService::joinChunkResult)
+                .toList();
+    }
+
+    private static SummaryResult joinChunkResult(CompletableFuture<SummaryResult> future) {
+        try {
+            return future.join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof SummaryMapReduceException summaryException) {
+                throw summaryException;
+            }
+            throw e;
+        }
+    }
+
+    private SummaryResult summarizeChunk(SummaryRequest request, List<String> chunks, int chunkIndex) {
+        SummaryResult mapped = llmProvider.summarize(new SummaryRequest(
+                request.title(),
+                request.sourceUrl(),
+                buildMapContent(chunks.get(chunkIndex), chunkIndex + 1, chunks.size())));
+        if (mapped == null || isBlank(mapped.summary())) {
+            throw new SummaryMapReduceException(
+                    "第 " + (chunkIndex + 1) + "/" + chunks.size() + " 个分块摘要失败，已停止聚合以避免摘要缺失原文信息");
+        }
+        return mapped;
     }
 
     /**

@@ -25,12 +25,32 @@ public class TagEvaluationAsyncService {
     private static final int TAG_BATCH_TIMEOUT_MINUTES = 5;
 
     private final ArticleService articleService;
-    private final Executor llmTaskExecutor;
+    private final Executor tagExecutor;
 
     public TagEvaluationAsyncService(ArticleService articleService,
-                                     @Qualifier("llmTaskExecutor") Executor llmTaskExecutor) {
+                                     @Qualifier("frontierScanLlmTagExecutor") Executor tagExecutor) {
         this.articleService = articleService;
-        this.llmTaskExecutor = llmTaskExecutor;
+        this.tagExecutor = tagExecutor;
+    }
+
+    /**
+     * 异步评估单篇文章标签。
+     * <p>
+     * 采集增强流水线会在单篇文章摘要尝试完成后立即调用本方法，而不是等待整批摘要全部结束。
+     * 这样可以让标签评估与其他文章的摘要计算形成流水线并行，同时标签内部仍保持“领域评分 -> 候选标签评分”的业务顺序。
+     * </p>
+     *
+     * @param article 已入库文章，仅使用 ID 重新读取最新摘要和正文，避免使用采集刚落库时的旧对象
+     * @return 异步结果，{@code true} 表示至少选中一个结构化标签
+     */
+    public CompletableFuture<Boolean> evaluateArticleAsync(Article article) {
+        return CompletableFuture.supplyAsync(() -> {
+            boolean success = articleService.evaluateArticleTags(article.getId());
+            if (!success) {
+                log.warn("Tag evaluation produced no selected tags for article {}", article.getId());
+            }
+            return success;
+        }, tagExecutor);
     }
 
     /**
@@ -51,13 +71,11 @@ public class TagEvaluationAsyncService {
 
         AtomicInteger failureCount = new AtomicInteger();
         List<CompletableFuture<Void>> futures = articles.stream()
-                .map(article -> CompletableFuture.runAsync(() -> {
-                    boolean success = articleService.evaluateArticleTags(article.getId());
+                .map(article -> evaluateArticleAsync(article).thenAccept(success -> {
                     if (!success) {
                         failureCount.incrementAndGet();
-                        log.warn("Tag evaluation produced no selected tags for article {}", article.getId());
                     }
-                }, llmTaskExecutor).exceptionally(ex -> {
+                }).exceptionally(ex -> {
                     failureCount.incrementAndGet();
                     log.warn("Tag evaluation failed for article {}: {}", article.getId(), ex.getMessage());
                     return null;

@@ -23,12 +23,14 @@ import org.springframework.test.context.ActiveProfiles;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -121,6 +123,8 @@ class CollectionOrchestratorIntegrationTest {
         testSite = siteRepository.save(createSite(testUser, testCategory));
 
         when(siteService.getById(testUser.getId(), testSite.getId())).thenReturn(testSite);
+        when(tagEvaluationAsyncService.evaluateArticleAsync(any()))
+                .thenReturn(CompletableFuture.completedFuture(true));
     }
 
     /**
@@ -166,7 +170,7 @@ class CollectionOrchestratorIntegrationTest {
             assertThat(articleRepository.findByUserIdOrderByCollectedAtDesc(testUser.getId(), PageRequest.of(0, 10)))
                     .isNotEmpty();
             verify(siteService).recordSuccess(testSite.getId());
-            verify(tagEvaluationAsyncService).evaluateArticlesConcurrently(any());
+            verify(tagEvaluationAsyncService, times(3)).evaluateArticleAsync(any());
         }
 
         @Test @DisplayName("候选文章已存在（去重后新增 0 篇）→ COMPLETED，collectedCount=0")
@@ -251,8 +255,8 @@ class CollectionOrchestratorIntegrationTest {
                     "这是一段足够长的摘要内容，用于模拟摘要治理成功完成，然后标签评估返回非阻断告警，采集任务仍然应该完成。",
                     List.of("摘要完成", "标签失败"),
                     List.of("测试")));
-            when(tagEvaluationAsyncService.evaluateArticlesConcurrently(any()))
-                    .thenReturn(CollectionFailureClassifier.TAG_EVALUATION_FAILED + ": 1 篇文章标签评估失败");
+            when(tagEvaluationAsyncService.evaluateArticleAsync(any()))
+                    .thenReturn(CompletableFuture.completedFuture(false));
 
             CollectionRun run = collectionRunService.create(testUser.getId(), testSite.getId(), "MANUAL");
             Long runId = orchestrator.executeCollection(testUser.getId(), testSite.getId(), run.getId())

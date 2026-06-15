@@ -8,14 +8,11 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * 异步任务执行器配置。
+ * FrontierScan 异步任务执行器配置。
  * <p>
- * 为不同类型的异步任务提供独立的线程池，避免资源竞争：
- * <ul>
- *   <li>{@code collectionTaskExecutor}：采集任务，核心 2、最大 4、队列 10</li>
- *   <li>{@code llmTaskExecutor}：LLM API 调用，核心 2、最大 5、队列 100</li>
- * </ul>
- * 两个线程池均使用 CallerRunsPolicy 拒绝策略，确保任务不丢失。
+ * 按企业级可观测性要求拆分采集、摘要、长文 Map 分块和标签评估线程池，避免不同类型的任务互相抢占资源。
+ * 线程名前缀统一使用 {@code frontierscan-模块-能力-} 格式，便于日志、线程 dump 和生产排障快速定位。
+ * 所有线程池均使用 {@link ThreadPoolExecutor.CallerRunsPolicy}，当队列已满时由调用线程执行，形成自然回压且不丢任务。
  * </p>
  */
 @Configuration
@@ -24,36 +21,49 @@ public class AsyncConfig {
 
     /**
      * 采集任务线程池。
-     * <p>用于 {@code @Async("collectionTaskExecutor")} 标注的采集任务。
-     * 避免阻塞 Web 请求线程，核心 2、最大 4、队列 10。</p>
+     * <p>用于 {@code @Async("frontierScanCollectionExecutor")} 标注的采集任务，避免阻塞 Web 请求线程。</p>
      */
-    @Bean("collectionTaskExecutor")
-    public Executor collectionTaskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(10);
-        executor.setThreadNamePrefix("collect-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        executor.initialize();
-        return executor;
+    @Bean("frontierScanCollectionExecutor")
+    public Executor frontierScanCollectionExecutor() {
+        return buildExecutor(2, 4, 10, "frontierscan-collection-");
     }
 
     /**
-     * LLM API 调用线程池。
+     * 文章级摘要线程池。
      * <p>
-     * 用于大模型 API 的并发调用。核心 2、最大 5，最多 5 篇文章同时请求 LLM。
-     * 队列容量 100，CallerRunsPolicy 确保提交不失败（队列满时由调用线程执行）。
-     * 线程名前缀 {@code llm-} 便于日志区分。
+     * 用于多篇文章之间的摘要并发。单篇长文内部的 Map 分块不使用该线程池，
+     * 防止一篇超长文章占满所有文章级摘要并发额度。
      * </p>
      */
-    @Bean("llmTaskExecutor")
-    public Executor llmTaskExecutor() {
+    @Bean("frontierScanLlmSummaryExecutor")
+    public Executor frontierScanLlmSummaryExecutor() {
+        return buildExecutor(2, 4, 100, "frontierscan-llm-summary-");
+    }
+
+    /**
+     * 长文 Map-Reduce 分块摘要线程池。
+     * <p>仅用于同一篇文章内部的 Map 分块并发；Reduce 汇总仍保持串行，确保最终摘要基于完整分块结果。</p>
+     */
+    @Bean("frontierScanLlmMapReduceExecutor")
+    public Executor frontierScanLlmMapReduceExecutor() {
+        return buildExecutor(2, 4, 100, "frontierscan-llm-map-");
+    }
+
+    /**
+     * 标签评估线程池。
+     * <p>单篇文章内部“领域评分 -> 标签评分”存在数据依赖，保持串行；多篇文章之间通过该线程池并发。</p>
+     */
+    @Bean("frontierScanLlmTagExecutor")
+    public Executor frontierScanLlmTagExecutor() {
+        return buildExecutor(1, 3, 100, "frontierscan-llm-tag-");
+    }
+
+    private static Executor buildExecutor(int corePoolSize, int maxPoolSize, int queueCapacity, String threadNamePrefix) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(5);
-        executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("llm-");
+        executor.setCorePoolSize(corePoolSize);
+        executor.setMaxPoolSize(maxPoolSize);
+        executor.setQueueCapacity(queueCapacity);
+        executor.setThreadNamePrefix(threadNamePrefix);
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;

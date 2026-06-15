@@ -96,7 +96,7 @@ public class CollectionScheduler {
      * 扫描到期站点并触发异步采集。
      * <p>
      * 该方法由 Spring Scheduling 按固定延迟触发。方法内部只负责轻量扫描和任务投递，
-     * 真实采集逻辑在 {@code collectionTaskExecutor} 线程池中执行，避免阻塞调度线程。
+     * 真实采集逻辑在 {@code frontierScanCollectionExecutor} 线程池中执行，避免阻塞调度线程。
      * 单个站点判断失败时只记录日志并继续处理其他站点，防止某个坏数据影响整轮调度。
      * </p>
      */
