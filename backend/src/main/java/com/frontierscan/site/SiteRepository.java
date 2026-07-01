@@ -41,4 +41,6 @@ public interface SiteRepository extends JpaRepository<Site, Long> {
 
     /** 统计指定用户在指定分类下的网站数量。 */
     long countByUserIdAndCategoryId(Long userId, Long categoryId);
+
+    boolean existsByUserIdAndCategoryId(Long userId, Long categoryId);
 }

@@ -1,4 +1,3 @@
-
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
 ## 1. Think Before Coding
@@ -11,6 +10,7 @@ Before implementing:
 - If multiple interpretations exist, present them - don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
+- Adopt TDD as the primary approach for business development; use alternative suitable development methods only when you determine TDD is unnecessary.
 
 ## 2. Simplicity First
 

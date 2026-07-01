@@ -1,33 +1,36 @@
 package com.frontierscan.category;
 
+import com.frontierscan.article.ArticleRepository;
+import com.frontierscan.common.error.BusinessRuleException;
 import com.frontierscan.common.error.ResourceNotFoundException;
+import com.frontierscan.site.SiteRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * 分类管理业务服务，提供分类的完整 CRUD 操作。
- * <p>
- * 支持创建、更新、删除和按用户查询分类，
- * 以及通过 {@code includeArchived} 参数控制是否显示已归档分类。
- * </p>
+ * Category domain service.
+ *
+ * Categories are user-owned navigation buckets. They organize sites first, and
+ * collected articles inherit the category from their source site.
  */
 @Service
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final SiteRepository siteRepository;
+    private final ArticleRepository articleRepository;
 
-    public CategoryService(CategoryRepository categoryRepository) {
+    public CategoryService(CategoryRepository categoryRepository,
+                           SiteRepository siteRepository,
+                           ArticleRepository articleRepository) {
         this.categoryRepository = categoryRepository;
+        this.siteRepository = siteRepository;
+        this.articleRepository = articleRepository;
     }
 
-    /**
-     * 查询指定用户的分列表。
-     *
-     * @param userId          用户 ID
-     * @param includeArchived 是否包含已归档分类
-     * @return 分类列表
-     */
     public List<Category> listByUser(Long userId, boolean includeArchived) {
         if (includeArchived) {
             return categoryRepository.findByUserIdOrderBySortOrderAsc(userId);
@@ -35,33 +38,30 @@ public class CategoryService {
         return categoryRepository.findByUserIdAndArchivedFalseOrderBySortOrderAsc(userId);
     }
 
-    /**
-     * 根据 ID 获取当前用户拥有的分类。
-     *
-     * @param userId 当前用户 ID
-     * @param id 分类 ID
-     * @return 分类对象
-     * @throws ResourceNotFoundException 如果分类不存在或不属于当前用户
-     */
+    public List<CategoryView> listViewsByUser(Long userId, boolean includeArchived) {
+        return listByUser(userId, includeArchived).stream()
+                .map(category -> toView(userId, category))
+                .toList();
+    }
+
     public Category getById(Long userId, Long id) {
         return categoryRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("分类不存在"));
     }
 
-    /**
-     * 创建新的分类。
-     *
-     * @param userId      所属用户 ID
-     * @param name        分类名称
-     * @param description 分类描述（可选）
-     * @param sortOrder   排序序号（可选，默认 0）
-     * @return 创建成功的分类对象
-     */
+    public CategoryView getViewById(Long userId, Long id) {
+        return toView(userId, getById(userId, id));
+    }
+
+    @Transactional
     public Category create(Long userId, String name, String description, Integer sortOrder) {
+        String normalizedName = normalizeName(name);
+        ensureNameAvailableForCreate(userId, normalizedName);
+
         Category category = new Category();
         category.setUserId(userId);
-        category.setName(name);
-        category.setDescription(description);
+        category.setName(normalizedName);
+        category.setDescription(normalizeOptional(description));
         category.setSortOrder(sortOrder != null ? sortOrder : 0);
         category.setArchived(false);
         category.setCreatedAt(OffsetDateTime.now());
@@ -69,35 +69,82 @@ public class CategoryService {
         return categoryRepository.save(category);
     }
 
-    /**
-     * 更新分类信息（局部更新，只更新非 null 字段）。
-     *
-     * @param userId      当前用户 ID
-     * @param id          分类 ID
-     * @param name        新名称（null 表示不更新）
-     * @param description 新描述（null 表示不更新）
-     * @param sortOrder   新排序序号（null 表示不更新）
-     * @param archived    归档状态（null 表示不更新）
-     * @return 更新后的分类对象
-     */
+    public CategoryView createView(Long userId, String name, String description, Integer sortOrder) {
+        return toView(userId, create(userId, name, description, sortOrder));
+    }
+
+    @Transactional
     public Category update(Long userId, Long id, String name, String description, Integer sortOrder, Boolean archived) {
         Category category = getById(userId, id);
-        if (name != null) category.setName(name);
-        if (description != null) category.setDescription(description);
-        if (sortOrder != null) category.setSortOrder(sortOrder);
-        if (archived != null) category.setArchived(archived);
+        if (name != null) {
+            String normalizedName = normalizeName(name);
+            ensureNameAvailableForUpdate(userId, category.getId(), normalizedName);
+            category.setName(normalizedName);
+        }
+        if (description != null) {
+            category.setDescription(normalizeOptional(description));
+        }
+        if (sortOrder != null) {
+            category.setSortOrder(sortOrder);
+        }
+        if (archived != null) {
+            category.setArchived(archived);
+        }
         category.setUpdatedAt(OffsetDateTime.now());
         return categoryRepository.save(category);
     }
 
-    /**
-     * 删除分类。
-     *
-     * @param userId 当前用户 ID
-     * @param id 要删除的分类 ID
-     */
+    public CategoryView updateView(Long userId, Long id, String name, String description,
+                                   Integer sortOrder, Boolean archived) {
+        return toView(userId, update(userId, id, name, description, sortOrder, archived));
+    }
+
+    @Transactional
     public void delete(Long userId, Long id) {
         Category category = getById(userId, id);
+        if (siteRepository.existsByUserIdAndCategoryId(userId, id)
+                || articleRepository.existsByUserIdAndCategoryId(userId, id)) {
+            throw new BusinessRuleException("分类已被网站或文章使用，请先归档或迁移关联数据");
+        }
         categoryRepository.delete(category);
+    }
+
+    private CategoryView toView(Long userId, Category category) {
+        return CategoryView.of(
+                category,
+                siteRepository.countByUserIdAndCategoryId(userId, category.getId()),
+                articleRepository.countByUserIdAndCategoryId(userId, category.getId())
+        );
+    }
+
+    private String normalizeName(String name) {
+        String normalized = name == null ? "" : name.trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessRuleException("分类名称不能为空");
+        }
+        if (normalized.length() > 120) {
+            throw new BusinessRuleException("分类名称不能超过120个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private void ensureNameAvailableForCreate(Long userId, String name) {
+        if (categoryRepository.existsByUserIdAndNameIgnoreCase(userId, name)) {
+            throw new BusinessRuleException("同名分类已存在");
+        }
+    }
+
+    private void ensureNameAvailableForUpdate(Long userId, Long id, String name) {
+        if (categoryRepository.existsByUserIdAndNameIgnoreCaseAndIdNot(userId, name, id)) {
+            throw new BusinessRuleException("同名分类已存在");
+        }
     }
 }

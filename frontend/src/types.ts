@@ -27,6 +27,8 @@ export interface Category {
   description: string | null;
   sortOrder: number;
   archived: boolean;
+  siteCount: number;
+  articleCount: number;
   createdAt: string;
   updatedAt: string;
 }

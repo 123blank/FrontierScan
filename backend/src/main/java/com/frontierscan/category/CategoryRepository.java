@@ -42,4 +42,8 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
      * <p>网站创建和更新时使用该方法校验分类归属，防止跨用户挂载。</p>
      */
     boolean existsByIdAndUserId(Long id, Long userId);
+
+    boolean existsByUserIdAndNameIgnoreCase(Long userId, String name);
+
+    boolean existsByUserIdAndNameIgnoreCaseAndIdNot(Long userId, String name, Long id);
 }

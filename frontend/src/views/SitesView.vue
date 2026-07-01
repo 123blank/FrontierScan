@@ -75,7 +75,7 @@
             <span>所属分类 *</span>
             <select v-model.number="form.categoryId" :disabled="saving">
               <option :value="0" disabled>选择分类</option>
-              <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+              <option v-for="cat in selectableCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
             </select>
           </label>
           <label class="form-field">
@@ -147,6 +147,9 @@ import type { Site, Category } from '@/types';
 
 const sites = ref<Site[]>([]);
 const categories = ref<Category[]>([]);
+const selectableCategories = computed(() =>
+  categories.value.filter((category) => !category.archived || category.id === form.value.categoryId)
+);
 const loading = ref(true);
 const dialogVisible = ref(false);
 const isEditing = ref(false);

@@ -38,6 +38,10 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
     /** 统计指定用户的文章总数。 */
     long countByUserId(Long userId);
 
+    long countByUserIdAndCategoryId(Long userId, Long categoryId);
+
+    boolean existsByUserIdAndCategoryId(Long userId, Long categoryId);
+
     /** 统计指定用户在指定时间之后的文章数（用于"今日采集"指标）。 */
     long countByUserIdAndCollectedAtAfter(Long userId, OffsetDateTime after);
 

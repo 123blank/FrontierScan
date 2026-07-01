@@ -37,41 +37,41 @@ public class CategoryController {
 
     /** 查询分类列表。 */
     @GetMapping
-    public ApiResponse<List<Category>> list(
+    public ApiResponse<List<CategoryView>> list(
             @AuthenticationPrincipal JwtPrincipal principal,
             @RequestParam(defaultValue = "false") boolean includeArchived
     ) {
-        return ApiResponse.ok(categoryService.listByUser(principal.userId(), includeArchived));
+        return ApiResponse.ok(categoryService.listViewsByUser(principal.userId(), includeArchived));
     }
 
     /** 获取单个分类详情。 */
     @GetMapping("/{id}")
-    public ApiResponse<Category> get(
+    public ApiResponse<CategoryView> get(
             @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long id
     ) {
-        return ApiResponse.ok(categoryService.getById(principal.userId(), id));
+        return ApiResponse.ok(categoryService.getViewById(principal.userId(), id));
     }
 
     /** 创建新分类。 */
     @PostMapping
-    public ApiResponse<Category> create(
+    public ApiResponse<CategoryView> create(
             @AuthenticationPrincipal JwtPrincipal principal,
             @Valid @RequestBody CreateRequest request
     ) {
-        return ApiResponse.ok(categoryService.create(
+        return ApiResponse.ok(categoryService.createView(
                 principal.userId(), request.name(), request.description(), request.sortOrder()
         ));
     }
 
     /** 更新分类信息。 */
     @PutMapping("/{id}")
-    public ApiResponse<Category> update(
+    public ApiResponse<CategoryView> update(
             @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long id,
             @Valid @RequestBody UpdateRequest request
     ) {
-        return ApiResponse.ok(categoryService.update(
+        return ApiResponse.ok(categoryService.updateView(
                 principal.userId(), id, request.name(), request.description(), request.sortOrder(), request.archived()
         ));
     }

@@ -782,3 +782,115 @@ mvn compile -q
 结果：后端编译通过。
 
 本次未运行完整 `mvn test -q` 和前端 `npm run build`。如果后续改动涉及后端业务逻辑，建议运行完整后端测试；涉及前端时继续运行前端构建。
+
+---
+
+## 15. 2026-07-01 补充：分类业务企业级完善
+
+本次已完成分类业务从“基础 CRUD”到“可用于真实管理和阅读入口”的增强。分类仍然是用户手动维护的信息源组织维度，不等同于 AI 标签；文章分类来自其来源网站的 `categoryId`，标签仍由 LLM/标签系统根据文章内容评估。
+
+### 15.1 后端分类业务规则
+
+核心文件：
+
+```text
+backend/src/main/java/com/frontierscan/category/CategoryService.java
+backend/src/main/java/com/frontierscan/category/CategoryController.java
+backend/src/main/java/com/frontierscan/category/CategoryView.java
+backend/src/main/java/com/frontierscan/category/CategoryRepository.java
+backend/src/main/java/com/frontierscan/common/error/BusinessRuleException.java
+backend/src/main/java/com/frontierscan/common/error/GlobalExceptionHandler.java
+backend/src/main/java/com/frontierscan/site/SiteRepository.java
+backend/src/main/java/com/frontierscan/article/ArticleRepository.java
+backend/src/test/java/com/frontierscan/category/CategoryServiceTest.java
+```
+
+当前规则：
+
+- 创建/更新分类时会 trim 分类名称和描述。
+- 同一用户下分类名称不允许重复，忽略大小写；跨用户仍可使用同名分类。
+- 分类名称不能为空，且不能超过 120 个字符。
+- 删除分类前会检查是否已有网站或文章引用；如存在引用，返回业务冲突，提示先归档或迁移关联数据。
+- 新增 `BusinessRuleException`，由全局异常处理器统一映射为 HTTP 409。
+- `GET /api/categories` 和 `GET /api/categories/{id}` 返回 `CategoryView`，在原分类字段基础上增加 `siteCount`、`articleCount`，用于管理页和看板展示。
+
+### 15.2 前端分类管理体验
+
+核心文件：
+
+```text
+frontend/src/views/CategoriesView.vue
+frontend/src/views/DashboardView.vue
+frontend/src/views/SitesView.vue
+frontend/src/types.ts
+```
+
+当前交互：
+
+- 分类管理页主界面只展示列表、归档筛选和操作入口，保持页面干净。
+- “新增分类”和“编辑分类”均通过弹窗完成，不再把表单常驻在页面上。
+- 长描述、创建时间、更新时间、排序、状态、网站数、文章数通过“详情”按钮打开详情弹窗查看。
+- 分类列表展示网站数和文章数；已有引用的分类禁用删除，避免用户触发后端外键或业务冲突。
+- 看板 `DashboardView.vue` 已增加分类筛选条，点击分类后通过 `categoryId` 查询文章，使分类成为阅读入口。
+- 网站管理 `SitesView.vue` 的分类下拉默认只展示未归档分类；编辑已有站点时，如果当前分类已归档，仍保留当前分类可见，避免表单状态失真。
+
+### 15.3 验证结果
+
+已执行：
+
+```powershell
+Set-Location D:\ProjectStudy\FrontierScan\backend
+mvn compile -q
+
+Set-Location D:\ProjectStudy\FrontierScan\backend
+mvn -q -Dtest=CategoryServiceTest test
+
+Set-Location D:\ProjectStudy\FrontierScan\frontend
+npm run build
+```
+
+结果：
+
+- 后端编译通过。
+- `CategoryServiceTest` 共 5 个测试通过，`Failures: 0, Errors: 0`。
+- 完整后端 Surefire 报告未发现失败或错误。
+- 前端 `npm run build` 通过。
+
+注意：当前 PowerShell 环境有时会把 JVM warning 当成 `NativeCommandError` 输出；遇到这种情况以 `backend/target/surefire-reports` 中的 `Failures: 0, Errors: 0` 为准。
+
+### 15.4 后续建议
+
+- 如后续要支持“分类下批量迁移网站/文章”，应新增明确迁移接口，不建议通过直接改库处理。
+- 如后续要把 AI 标签和用户分类联动，应设计独立映射规则，例如“标签推荐分类”或“分类默认标签范围”，不要把分类直接替换为标签。
+- 若继续改分类相关前端，保持当前约定：列表页轻量展示，新增/编辑走弹窗，长文本和审计信息进详情弹窗。
+
+### 15.5 浏览器实测与移动端布局补充
+
+2026-07-01 已通过本机 Chrome 远程调试访问正在运行的本地项目：
+
+```text
+http://localhost:5173
+```
+
+实测结论：
+
+- 登录页、信息看板、分类管理、网站管理均可正常访问。
+- 登录、分类列表、站点列表、文章列表等已观察到的接口返回 200，未发现新的前端控制台错误或请求失败。
+- 分类管理的“新增分类”“编辑分类”“详情”均为弹窗交互，未出现表单常驻主页面的问题。
+- 网站管理的“新增网站”“编辑网站”也为右侧子窗口/抽屉式交互，符合“点击按钮后再设置”的交互要求。
+
+本次前端补充修复：
+
+- `frontend/src/views/CategoriesView.vue` 为分类表格单元格补充 `data-label`。
+- 在 `max-width: 760px` 下将分类表格视觉转换为字段卡片，解决移动端文字和操作按钮被压成竖排的问题。
+- 移动端分类操作按钮改为 2 列布局，分类名称、排序、使用情况、状态、操作均可读。
+- 桌面端仍保持原表格布局，未改变分类业务逻辑或接口。
+
+已重新执行：
+
+```powershell
+Set-Location D:\ProjectStudy\FrontierScan\frontend
+npm run build
+```
+
+结果：前端构建通过。浏览器测试产生的临时 Chrome profile 目录 `.tmp-chrome-profile/` 已清理，不应出现在后续提交中。

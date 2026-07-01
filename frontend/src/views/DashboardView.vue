@@ -38,6 +38,28 @@
         </label>
       </div>
     </div>
+    <div v-if="categories.length" class="category-strip" aria-label="分类筛选">
+      <button
+        type="button"
+        class="category-tab"
+        :class="{ active: selectedCategoryId === undefined }"
+        @click="selectCategory(undefined)"
+      >
+        <span>全部</span>
+        <strong>{{ stats.totalArticles }}</strong>
+      </button>
+      <button
+        v-for="category in categories"
+        :key="category.id"
+        type="button"
+        class="category-tab"
+        :class="{ active: selectedCategoryId === category.id }"
+        @click="selectCategory(category.id)"
+      >
+        <span>{{ category.name }}</span>
+        <strong>{{ category.articleCount || 0 }}</strong>
+      </button>
+    </div>
     <ArticleFilterBar @filter-change="onFilterChange" />
     <div v-if="loading" class="empty-state"><p>加载中...</p></div>
     <div v-else-if="articles.length === 0" class="empty-state">
@@ -177,10 +199,11 @@ import { articleApi } from '@/api/articles';
 import { categoryApi } from '@/api/categories';
 import ArticleFilterBar from '@/components/ArticleFilterBar.vue';
 import { siteApi } from '@/api/sites';
-import type { Article } from '@/types';
+import type { Article, Category } from '@/types';
 
 /** 仪表盘统计信息 */
 const stats = ref({ categories: 0, sites: 0, today: 0, totalArticles: 0 });
+const categories = ref<Category[]>([]);
 /** 最新文章列表 */
 const articles = ref<Article[]>([]);
 /** 数据加载状态 */
@@ -196,6 +219,7 @@ const filterKeyword = ref('');
 const filterTagId = ref<number | undefined>(undefined);
 const filterStartDate = ref('');
 const filterEndDate = ref('');
+const selectedCategoryId = ref<number | undefined>(undefined);
 /** 新文章标识展示窗口，当前产品约定为采集后 12 小时内显示。 */
 const newArticleWindowMs = 12 * 60 * 60 * 1000;
 /** 最新文章总数 */
@@ -238,6 +262,12 @@ function onFilterChange(filters: { keyword?: string; tagId?: number; startDate?:
   reloadArticlePage();
 }
 
+function selectCategory(categoryId?: number) {
+  selectedCategoryId.value = categoryId;
+  currentPage.value = 0;
+  reloadArticlePage();
+}
+
 async function loadDashboard() {
   loading.value = true;
   try {
@@ -247,7 +277,8 @@ async function loadDashboard() {
       articleApi.count(),
       articleApi.favorites(),
     ]);
-    stats.value.categories = catRes.data.data.length;
+    categories.value = catRes.data.data;
+    stats.value.categories = categories.value.length;
     stats.value.sites = siteRes.data.data.length;
     stats.value.today = countRes.data.data.today;
     stats.value.totalArticles = countRes.data.data.total;
@@ -263,6 +294,7 @@ async function loadDashboard() {
 /** 按当前分页参数加载最新文章。 */
 async function loadArticles() {
   const params: Record<string, any> = { page: currentPage.value, size: pageSize.value };
+  if (selectedCategoryId.value) params.categoryId = selectedCategoryId.value;
   if (filterKeyword.value) params.keyword = filterKeyword.value;
   if (filterTagId.value) params.tagId = filterTagId.value;
   if (filterStartDate.value) params.startDate = filterStartDate.value;
@@ -473,6 +505,41 @@ function formatDateTime(value?: string | null) {
   border-radius: 6px;
   color: #17202a;
   padding: 8px 10px;
+}
+.category-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.category-tab {
+  align-items: center;
+  background: #f8faf9;
+  border: 1px solid #dce6e2;
+  border-radius: 6px;
+  color: #3e4c48;
+  display: inline-flex;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+.category-tab strong {
+  background: #e7efed;
+  border-radius: 999px;
+  color: #136f63;
+  font-size: 12px;
+  min-width: 24px;
+  padding: 2px 7px;
+  text-align: center;
+}
+.category-tab.active {
+  background: #136f63;
+  border-color: #136f63;
+  color: #fff;
+}
+.category-tab.active strong {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 .article-list { display: grid; gap: 12px; }
 .article-card {
