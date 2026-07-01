@@ -130,7 +130,7 @@ class ArticleServiceFilterTest {
                 .contentExcerpt(excerpt)
                 .sourceHash("hash-full")
                 .build();
-        when(articleRepository.existsByUserIdAndSourceHash(USER_ID, "hash-full")).thenReturn(false);
+        when(articleRepository.existsBySourceHash("hash-full")).thenReturn(false);
         when(articleRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<Article> saved = articleService.batchSaveArticles(USER_ID, 11L, 22L, List.of(rawArticle));
@@ -138,6 +138,25 @@ class ArticleServiceFilterTest {
         assertThat(saved).hasSize(1);
         assertThat(saved.get(0).getContentFull()).isEqualTo(fullContent);
         assertThat(saved.get(0).getContentExcerpt()).isEqualTo(excerpt);
+    }
+
+    @Test
+    @DisplayName("批量保存按全局 sourceHash 去重，跨用户重复文章不再入库")
+    void shouldDeduplicateByGlobalSourceHash() {
+        CollectResult.RawArticle rawArticle = CollectResult.RawArticle.builder()
+                .title("跨用户重复文章")
+                .sourceUrl("https://example.com/duplicated")
+                .content("全文")
+                .contentExcerpt("片段")
+                .sourceHash("global-hash")
+                .build();
+        when(articleRepository.existsBySourceHash("global-hash")).thenReturn(true);
+
+        List<Article> saved = articleService.batchSaveArticles(99L, 11L, 22L, List.of(rawArticle));
+
+        assertThat(saved).isEmpty();
+        verify(articleRepository, never()).saveAll(anyList());
+        verify(articleRepository, never()).existsByUserIdAndSourceHash(anyLong(), anyString());
     }
 
     @Test

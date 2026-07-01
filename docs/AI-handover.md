@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-06-15  
+> 最后更新：2026-07-01  
 > 项目版本：0.1.0-SNAPSHOT  
-> 当前重点：采集可靠性增强一期已完成（失败分类、站点健康状态、手动/自动重试、任务记录增强）。后续建议进入 LLM 摘要治理、标签评分接入采集管线和阅读体验增强。
+> 当前重点：采集可靠性增强、LLM 摘要治理一期、全文摘要 Map-Reduce 和标签评分采集流水线均已完成。后续建议进入阅读体验增强、标签系统管理能力完善和账号体系完善。
 
 ---
 
@@ -47,8 +47,8 @@ D:\ProjectStudy\FrontierScan\
 │       │   ├── site/                 # 网站 CRUD
 │       │   ├── article/              # 文章、收藏、收藏文章视图
 │       │   ├── article/              # 文章、收藏、收藏文章视图、筛选查询
-│       │   ├── collection/           # 采集器、调度器、任务记录
-│       │   ├── llm/                  # LLM Provider 抽象、DashScope 实现、标签系统
+│       │   ├── collection/           # 采集器、调度器、任务记录、标签异步评估
+│       │   ├── llm/                  # LLM Provider 抽象、DashScope 实现、摘要 Map-Reduce、标签系统
 │       │   ├── llm/tag/             # 多领域标签系统（TagEvaluationAgent、领域分类、标签评分）
 │       │   ├── llm/prompt_template/ # 提示词模板（domain-classifier.stg, tag-scorer.stg）
 │       │   └── common/               # 响应、异常、安全、异步配置
@@ -60,7 +60,11 @@ D:\ProjectStudy\FrontierScan\
 │           │   ├── V3__add_schema_comments.sql
 │           │   ├── V4__create_tag_system.sql  # tag_domains + tech_tags + article_tags
 │           │   ├── V5__add_collection_reliability.sql
-│           │   └── V6__extend_collection_reliability.sql
+│           │   ├── V6__extend_collection_reliability.sql
+│           │   ├── V7__add_article_summary_governance.sql
+│           │   ├── V8__backfill_article_summary_status.sql
+│           │   ├── V9__add_article_full_content.sql
+│           │   └── V10__make_article_source_hash_global_unique.sql
 │           └── prompt_template/article-zh-llm-summary-prompt.stg
 ├── frontend/
 │   └── src/
@@ -90,7 +94,7 @@ D:\ProjectStudy\FrontierScan\
 
 ### 迁移文件重要约定
 
-当前最新迁移文件是 `V6__extend_collection_reliability.sql`（V6：采集可靠性增强扩展），后续迁移继续从 V7 递增。
+当前最新迁移文件是 `V10__make_article_source_hash_global_unique.sql`（V10：基于规范化 URL 的 sourceHash 全局唯一约束），后续迁移继续从 V11 递增。
 注意：用户已明确修正过版本号，不要再创建或改回 V2/V3；新增迁移前必须先检查 `backend/src/main/resources/db/migration` 的真实最新版本。
 
 ---
@@ -150,7 +154,7 @@ Controller 校验 siteId 属于当前用户
   -> 创建 RUNNING CollectionRun，立即返回 202 + runId
   -> CollectionOrchestrator 异步执行
   -> RSS 优先，失败时降级 HTML
-  -> ArticleService.batchSaveArticles() 按 userId + sourceHash 去重落库
+  -> ArticleService.batchSaveArticles() 按全局 sourceHash 去重落库
   -> LLM 并发摘要（失败仅记录 warningMessage，不阻断采集成功）
   -> updateLlmSummary() 写回 summary/keyPoints/tags/title
   -> CollectionRun 标记 COMPLETED 或 FAILED，并同步站点健康状态
@@ -172,6 +176,14 @@ CollectionScheduler @Scheduled
 - 定时调度会先扫描到期失败任务并创建 `SCHEDULED_RETRY`，再扫描普通到期站点。
 - 自动重试最多 3 次，退避间隔为 5 / 15 / 60 分钟；超过最大次数后 `nextRetryAt = null`，不再自动重试。
 - 即使 `collectedCount = 0`，只要采集链路正常完成，也代表一次成功采集尝试，会影响下一次到期时间。
+
+去重规则：
+
+- `ArticleParser.generateSourceHash()` 会先调用 `normalizeSourceUrl()` 规范化 URL，再对规范化结果做 SHA-256。
+- 规范化会移除 fragment、`utm_*`、`fbclid`、`gclid`、`spm` 等常见追踪参数，统一 host 大小写、`www.`、默认端口、末尾斜杠，并排序保留的业务参数。
+- `HtmlCollector` 优先使用文章页 `link[rel=canonical]`，其次使用 `meta[property=og:url]`，再回退到实际抓取 URL，降低 RSS 与 HTML 链路 URL 形态不同造成的重复。
+- `ArticleService.batchSaveArticles()` 使用全局 `existsBySourceHash()` 查重；V10 将 `articles.source_hash` 提升为全局唯一。
+- 当前模型是“同一 sourceHash 全局只保存一篇文章”。如果未来要支持多用户都看到同一篇文章但底层内容只存一份，需要拆分为全局文章表 + 用户文章关系表。
 
 ### 3.4 采集可靠性增强一期
 
@@ -477,9 +489,9 @@ npm run build
 1. 历史文章的 `publishedAt = null` 不会自动修复；如需补齐，需要新增回填任务。
 2. 收藏页依赖 `GET /api/articles/favorites` 返回文章视图，前端不再逐条请求卡片数据。
 3. 信息看板和收藏页的 `new` 标志按 `collectedAt` 判断，不按发布时间或收藏时间判断。
-4. 前端卡片标签目前从逗号/中文逗号拆分，后端存储仍是字符串，不是独立标签表。
+4. 前端卡片标签目前仍优先展示文章字符串标签；后端已存在结构化 `article_tags` 关系表，并已接入采集后的标签评分流水线。
 5. 详情抽屉不展示原文正文，避免长正文撑开页面；用户通过原文链接查看全文。
-6. Flyway 后续新增迁移从 V7 开始。
+6. Flyway 后续新增迁移从 V11 开始；V7/V8/V9/V10 都不要改历史文件，避免已执行环境出现 checksum mismatch。
 7. 不要在未被用户要求时更新交接文档；本次更新是用户明确要求。
 
 ---
@@ -488,20 +500,21 @@ npm run build
 
 建议优先级如下：
 
-1. **LLM 摘要治理**
-   - 对摘要为空或 LLM 调用失败的文章提供重试摘要功能。
-   - 给 `SummaryResult` 增加更严格的解析/兜底策略。
-   - 接入 TagEvaluationAgent 到采集管线（两阶段标签评分：领域分类→标签评分）。
-
-2. **阅读体验增强**
+1. **阅读体验增强**
    - 收藏页分页。
    - 已读/未读状态。
    - 卡片按发布时间、采集时间、收藏时间排序切换。
 
-3. **标签系统完善**
+2. **标签系统完善**
    - 在分类管理中添加领域标签扩展。
    - 更多领域种子数据。
    - 标签用于文章推荐和发现。
+   - 前端卡片/详情逐步从字符串标签过渡到结构化标签关系展示。
+
+3. **摘要治理二期**
+   - 为摘要重试做异步任务化，避免超长文章同步等待影响交互。
+   - 增加历史文章全文回填或重新抓取任务，降低旧数据只能依赖 `content_excerpt` 的比例。
+   - 增加摘要/标签治理的可观测统计，如失败率、低质量率、平均耗时。
 
 4. **账号体系完善**
    - 用户注册。
@@ -516,7 +529,7 @@ npm run build
 
 1. 阅读 `docs/AI-handover.md`、`docs/local-development.md`、`docs/architecture.md`。
 2. 查看 `git status --short`，确认是否有用户未提交改动。
-3. 若要改数据库，先确认 `backend/src/main/resources/db/migration` 最新版本号，当前最新为 V6。
+3. 若要改数据库，先确认 `backend/src/main/resources/db/migration` 最新版本号，当前最新为 V10，后续从 V11 开始。
 4. 若要改用户私有资源，先检查 Service 层是否绑定 `userId`。
 5. 若要改前端文章卡片，确保信息看板和我的收藏样式一致。
 6. 完成后至少运行：
@@ -538,13 +551,13 @@ mvn test -q
 本文档由 Codex 维护。每次用户明确要求更新交接文档，或发生重大业务/接口/数据库变更时，再同步更新。
 ---
 
-## 13. 2026-06-15 最新补充：LLM 摘要治理一期
+## 13. 2026-06-15 补充：LLM 摘要治理一期
 
-本次已完成 LLM 摘要治理一期。注意：如果本文档上方仍出现“当前最新迁移为 V6”或“下一步进入 LLM 摘要治理”等旧描述，以本节为准。
+本次已完成 LLM 摘要治理一期。注意：如果本文档上方仍出现“当前最新迁移为 V6”或“下一步进入 LLM 摘要治理”等旧描述，以第 14 节和当前迁移目录为准。
 
 ### 13.1 当前最新迁移版本
 
-当前最新 Flyway 迁移为：
+截至 2026-06-15，当时最新 Flyway 迁移为：
 
 ```text
 V8__backfill_article_summary_status.sql
@@ -554,7 +567,8 @@ V8__backfill_article_summary_status.sql
 
 - `V7__add_article_summary_governance.sql`：为 `articles` 表新增文章级摘要治理字段。
 - `V8__backfill_article_summary_status.sql`：修复已经执行过 V7 的环境，将“已有 summary 但 summary_status 仍为 PENDING”的历史文章回填为 `COMPLETED`。
-- 重要约定：**不要再修改 V7**。V7 已经在本地数据库执行过，修改会导致 Flyway checksum mismatch。后续数据库变更从 V9 开始。
+- 重要约定：**不要再修改 V7**。V7 已经在本地数据库执行过，修改会导致 Flyway checksum mismatch。
+- 2026-07-01 已新增 V10，后续数据库变更从 V11 开始。
 
 `articles` 新增字段：
 
@@ -662,3 +676,109 @@ mvn spring-boot:run
 - 后端成功启动。
 
 注意：`mvn spring-boot:run` 启动成功后会持续运行，命令超时不代表启动失败；以日志中的 `Started FrontierScanApplication` 为准。
+
+---
+
+## 14. 2026-07-01 最新补充：全文摘要 Map-Reduce 与标签流水线
+
+本次核对当前代码后，同步更新交接状态。当前项目已经走到 V10，且摘要治理已经从“片段摘要”扩展到“全文字段 + 长文 Map-Reduce + 摘要后标签评估流水线”，采集去重也已升级为规范化 URL sourceHash 全局去重。
+
+### 14.1 当前最新迁移版本
+
+当前最新 Flyway 迁移为：
+
+```text
+V10__make_article_source_hash_global_unique.sql
+```
+
+迁移说明：
+
+- `V9__add_article_full_content.sql`：为 `articles` 表新增 `content_full` 字段。
+- `V10__make_article_source_hash_global_unique.sql`：将 `articles.source_hash` 提升为全局唯一，用于跨用户、跨 RSS/HTML 链路去重。
+- `content_excerpt` 继续承担列表展示和历史兜底职责。
+- `content_full` 保存采集到的清洗后全文正文，用于 LLM 全文摘要 Map-Reduce 和标签语义兜底。
+- 本期不重新抓取历史文章，因此 `content_full` 允许为空；历史文章重新摘要或标签评估时会回退到 `content_excerpt`。
+- 重要约定：**后续数据库变更从 V11 开始**；V7/V8/V9/V10 都不要改历史迁移文件。
+
+### 14.2 全文摘要 Map-Reduce
+
+核心文件：
+
+```text
+backend/src/main/java/com/frontierscan/llm/SummaryMapReduceService.java
+backend/src/main/java/com/frontierscan/llm/SummaryMapReduceException.java
+backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java
+backend/src/main/java/com/frontierscan/article/Article.java
+backend/src/main/java/com/frontierscan/collection/CollectResult.java
+backend/src/main/java/com/frontierscan/collection/HtmlCollector.java
+backend/src/main/java/com/frontierscan/collection/RssCollector.java
+backend/src/main/java/com/frontierscan/common/config/AsyncConfig.java
+```
+
+关键规则：
+
+- 新采集文章会同时保存 `content_excerpt` 和 `content_full`。
+- 摘要输入优先使用 `content_full`；如果为空，则回退到 `content_excerpt`。
+- `SummaryMapReduceService` 在正文过长且配置开启时，将正文按配置拆分为多个 chunk，先并发执行 map 摘要，再把分块摘要合并后执行 reduce 摘要。
+- 任一分块摘要失败会抛出 `SummaryMapReduceException`，避免用不完整分块结果生成看似成功的最终摘要。
+- `frontierScanLlmMapReduceExecutor` 只负责单篇长文内部的 map 分块并发；文章级摘要并发仍使用 `frontierScanLlmSummaryExecutor`。
+
+相关配置在 `backend/src/main/resources/application.yml`：
+
+```yaml
+app:
+  llm:
+    summary-map-reduce:
+      enabled: ${LLM_SUMMARY_MAP_REDUCE_ENABLED:true}
+      chunk-size-chars: ${LLM_SUMMARY_CHUNK_SIZE_CHARS:6000}
+      overlap-chars: ${LLM_SUMMARY_OVERLAP_CHARS:500}
+      max-chunks: ${LLM_SUMMARY_MAX_CHUNKS:0}
+    tag:
+      max-content-chars: ${LLM_TAG_MAX_CONTENT_CHARS:8000}
+```
+
+### 14.3 标签评分采集流水线
+
+当前标签评分已经接入采集增强链路，不再只是后续建议。
+
+核心文件：
+
+```text
+backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java
+backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java
+backend/src/main/java/com/frontierscan/article/ArticleService.java
+backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java
+```
+
+流水线规则：
+
+- 采集器保存新文章后，`CollectionOrchestrator` 会对每篇文章执行“摘要治理 -> 标签评估”流水线。
+- 单篇文章摘要尝试完成后立即触发标签评估，不等待整批文章全部摘要完成。
+- 标签评估输入由“摘要 + 关键要点 + 正文兜底”拼接而成；正文兜底优先使用 `content_full`，并按 `app.llm.tag.max-content-chars` 截断。
+- 标签评估失败属于非阻断增强失败，只写入 `collection_runs.warning_message`，不把采集任务标记为失败，也不增加站点连续失败次数。
+- 手动重新生成摘要成功后，会同步重新评估该文章标签，保证结构化标签和最新摘要/标题一致。
+
+### 14.4 当前测试覆盖补充
+
+新增或当前已存在的关键测试：
+
+```text
+backend/src/test/java/com/frontierscan/llm/SummaryMapReduceServiceTest.java
+backend/src/test/java/com/frontierscan/collection/TagEvaluationAsyncServiceTest.java
+backend/src/test/java/com/frontierscan/llm/SummaryQualityEvaluatorTest.java
+backend/src/test/java/com/frontierscan/article/ArticleSummaryServiceTest.java
+backend/src/test/java/com/frontierscan/article/ArticleFilterIntegrationTest.java
+```
+
+### 14.5 最近验证结果
+
+2026-07-01 本次核对时已执行：
+
+```powershell
+Set-Location D:\ProjectStudy\FrontierScan\backend
+mvn compile -q
+```
+
+结果：后端编译通过。
+
+本次未运行完整 `mvn test -q` 和前端 `npm run build`。如果后续改动涉及后端业务逻辑，建议运行完整后端测试；涉及前端时继续运行前端构建。

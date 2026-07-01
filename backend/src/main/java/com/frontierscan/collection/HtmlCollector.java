@@ -84,14 +84,15 @@ public class HtmlCollector implements Collector {
                     String contentExcerpt = content.length() > MAX_ARTICLE_CONTENT
                             ? content.substring(0, MAX_ARTICLE_CONTENT) : content;
                     Instant publishedAt = ArticleParser.extractPublishedDate(articleDoc);
-                    String sourceHash = ArticleParser.generateSourceHash(articleUrl);
+                    String canonicalUrl = resolveCanonicalUrl(articleDoc, articleUrl);
+                    String sourceHash = ArticleParser.generateSourceHash(canonicalUrl);
 
                     // 清理标题中的站点名后缀
                     String cleanTitle = title.replaceAll("\\s*[-–|]\\s*.*$", "").trim();
 
                     articles.add(CollectResult.RawArticle.builder()
                             .title(cleanTitle)
-                            .sourceUrl(articleUrl)
+                            .sourceUrl(canonicalUrl)
                             .content(content)
                             .contentExcerpt(contentExcerpt)
                             .publishedAt(publishedAt)
@@ -130,6 +131,25 @@ public class HtmlCollector implements Collector {
                 .timeout(TIMEOUT_MILLIS)
                 .followRedirects(true)
                 .get();
+    }
+
+    /**
+     * 解析文章详情页声明的规范 URL。
+     * <p>
+     * 首页文章链接、RSS 链接和分享链接可能包含不同参数或路径别名；优先采用 canonical / og:url
+     * 作为 sourceUrl，可让 RSS 与 HTML 两条采集链路更容易命中同一个 sourceHash。
+     * </p>
+     */
+    static String resolveCanonicalUrl(Document doc, String fallbackUrl) {
+        String canonical = doc.select("link[rel=canonical]").attr("abs:href");
+        if (canonical != null && !canonical.isBlank()) {
+            return canonical;
+        }
+        String ogUrl = doc.select("meta[property=og:url]").attr("content");
+        if (ogUrl != null && !ogUrl.isBlank()) {
+            return ogUrl;
+        }
+        return fallbackUrl;
     }
 
     /** 从 URL 中提取域名。 */

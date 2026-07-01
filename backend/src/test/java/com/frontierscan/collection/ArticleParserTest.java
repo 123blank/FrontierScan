@@ -52,6 +52,31 @@ class ArticleParserTest {
             String hash = ArticleParser.generateSourceHash("");
             assertThat(hash).hasSize(64);
         }
+
+        @Test @DisplayName("忽略常见追踪参数和 fragment")
+        void trackingParamsAndFragment_shouldReturnSameHash() {
+            String hash1 = ArticleParser.generateSourceHash(
+                    "https://example.com/article/1?utm_source=rss&utm_campaign=x#comments");
+            String hash2 = ArticleParser.generateSourceHash("https://example.com/article/1");
+
+            assertThat(hash1).isEqualTo(hash2);
+        }
+
+        @Test @DisplayName("保留业务参数但忽略顺序差异")
+        void businessParams_shouldBeSortedBeforeHashing() {
+            String hash1 = ArticleParser.generateSourceHash("https://example.com/a?b=2&id=1");
+            String hash2 = ArticleParser.generateSourceHash("https://example.com/a?id=1&b=2&utm_medium=social");
+
+            assertThat(hash1).isEqualTo(hash2);
+        }
+
+        @Test @DisplayName("统一协议、host 大小写、www、默认端口和末尾斜杠")
+        void equivalentUrlForms_shouldReturnSameHash() {
+            String hash1 = ArticleParser.generateSourceHash("http://WWW.Example.com:80/article/1/");
+            String hash2 = ArticleParser.generateSourceHash("https://example.com/article/1");
+
+            assertThat(hash1).isEqualTo(hash2);
+        }
     }
 
     // ==================== cleanHtml ====================

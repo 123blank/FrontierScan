@@ -32,11 +32,34 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
     /** 检查某篇文章是否已存在（按用户 + 内容哈希）。 */
     boolean existsByUserIdAndSourceHash(Long userId, String sourceHash);
 
+    /** 检查某篇文章是否已存在（全局 sourceHash，用于跨用户去重）。 */
+    boolean existsBySourceHash(String sourceHash);
+
     /** 统计指定用户的文章总数。 */
     long countByUserId(Long userId);
 
     /** 统计指定用户在指定时间之后的文章数（用于"今日采集"指标）。 */
     long countByUserIdAndCollectedAtAfter(Long userId, OffsetDateTime after);
+
+    /**
+     * 查询长时间停留在 PENDING 且尚未生成摘要的文章。
+     * <p>
+     * 用于自动恢复采集增强阶段被服务重启、批量超时或线程中断遗留的文章，避免只能依赖用户手动点击
+     * “重新生成摘要”。
+     * </p>
+     */
+    @Query("""
+            select a from Article a
+            where a.summaryStatus = :status
+            and (a.summary is null or trim(a.summary) = '')
+            and (a.summaryLastAttemptAt is null or a.summaryLastAttemptAt < :attemptBefore)
+            and a.collectedAt < :collectedBefore
+            order by a.collectedAt asc
+            """)
+    List<Article> findStalePendingSummaries(@Param("status") String status,
+                                            @Param("attemptBefore") OffsetDateTime attemptBefore,
+                                            @Param("collectedBefore") OffsetDateTime collectedBefore,
+                                            Pageable pageable);
 
     /**
      * ????????????????????????????????

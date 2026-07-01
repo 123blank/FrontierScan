@@ -79,6 +79,7 @@ public class ArticleService {
      * 批量去重并保存采集到的文章。
      * <p>
      * 根据 sourceHash 过滤数据库中已有的内容，只保存新文章。
+     * sourceHash 基于规范化 URL 全局生成，因此同一篇文章跨用户、跨 RSS/HTML 链路也只入库一次。
      * 使用 {@code @Transactional} 保证批量操作的原子性。
      * </p>
      *
@@ -92,7 +93,7 @@ public class ArticleService {
     public List<Article> batchSaveArticles(Long userId, Long siteId, Long categoryId,
                                            List<CollectResult.RawArticle> rawArticles) {
         List<Article> newArticles = rawArticles.stream()
-                .filter(raw -> !articleRepository.existsByUserIdAndSourceHash(userId, raw.sourceHash()))
+                .filter(raw -> !articleRepository.existsBySourceHash(raw.sourceHash()))
                 .map(raw -> {
                     Article article = new Article();
                     article.setUserId(userId);

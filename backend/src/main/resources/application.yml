@@ -52,6 +52,11 @@ app:
     scheduler-enabled: ${COLLECTION_SCHEDULER_ENABLED:true}
     scheduler-fixed-delay-ms: ${COLLECTION_SCHEDULER_FIXED_DELAY_MS:10000}
     lock-ttl-minutes: ${COLLECTION_LOCK_TTL_MINUTES:5}
+  summary-recovery:
+    enabled: ${SUMMARY_RECOVERY_ENABLED:true}
+    fixed-delay-ms: ${SUMMARY_RECOVERY_FIXED_DELAY_MS:300000}
+    stale-after-minutes: ${SUMMARY_RECOVERY_STALE_AFTER_MINUTES:10}
+    batch-size: ${SUMMARY_RECOVERY_BATCH_SIZE:10}
 
 logging:
   level:

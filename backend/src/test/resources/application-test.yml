@@ -27,3 +27,5 @@ app:
     api-key: test-key
   collection:
     scheduler-enabled: false
+  summary-recovery:
+    enabled: false

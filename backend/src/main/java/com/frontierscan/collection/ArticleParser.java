@@ -4,6 +4,9 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -16,8 +19,10 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -34,6 +39,10 @@ public final class ArticleParser {
             Pattern.compile("(20\\d{2})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日?");
     private static final Pattern SLASH_DATE_PATTERN =
             Pattern.compile("(20\\d{2})[/-](\\d{1,2})[/-](\\d{1,2})");
+    private static final List<String> TRACKING_QUERY_KEYS = List.of(
+            "fbclid", "gclid", "msclkid", "yclid", "igshid", "mc_cid", "mc_eid",
+            "spm", "spm_id_from", "from", "ref", "ref_src", "share", "share_token"
+    );
 
     /**
      * 从 HTML 文档中提取文章正文纯文本。
@@ -162,18 +171,133 @@ public final class ArticleParser {
 
     /**
      * 从原文 URL 生成 SHA-256 去重哈希。
+     * <p>
+     * 哈希前会先做 URL 规范化：去除 fragment 和常见追踪参数、统一 host 大小写和默认端口、排序剩余参数。
+     * 这样 RSS/HTML 或不同分享入口给出同一文章的不同 URL 形态时，仍能命中同一个 sourceHash。
+     * </p>
      *
      * @param sourceUrl 原文链接
      * @return 64 字符十六进制哈希
      */
     public static String generateSourceHash(String sourceUrl) {
+        String normalizedUrl = normalizeSourceUrl(sourceUrl);
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(sourceUrl.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = digest.digest(normalizedUrl.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 not available", e);
         }
+    }
+
+    /**
+     * 规范化用于去重的来源 URL。
+     * <p>
+     * 该方法只移除不会改变文章身份的噪声：fragment、默认端口、常见追踪参数和末尾斜杠。
+     * 业务参数（如 id、page、articleId）会保留并按 key/value 排序，避免参数顺序导致误判为不同文章。
+     * </p>
+     */
+    public static String normalizeSourceUrl(String sourceUrl) {
+        if (sourceUrl == null || sourceUrl.isBlank()) {
+            return "";
+        }
+        String trimmed = sourceUrl.trim();
+        try {
+            URI uri = new URI(trimmed).normalize();
+            String scheme = normalizeScheme(uri.getScheme());
+            String host = normalizeHost(uri.getHost());
+            if (host == null || host.isBlank()) {
+                return trimmed;
+            }
+            int port = normalizePort(scheme, uri.getPort());
+            String path = normalizePath(uri.getRawPath());
+            String query = normalizeQuery(uri.getRawQuery());
+            URI normalized = new URI(scheme, null, host, port, path, query, null);
+            return normalized.toASCIIString();
+        } catch (Exception ignored) {
+            return trimmed;
+        }
+    }
+
+    private static String normalizeScheme(String scheme) {
+        if (scheme == null || scheme.isBlank()) {
+            return "https";
+        }
+        String lower = scheme.toLowerCase(Locale.ROOT);
+        return "http".equals(lower) ? "https" : lower;
+    }
+
+    private static String normalizeHost(String host) {
+        if (host == null) {
+            return null;
+        }
+        String lower = host.toLowerCase(Locale.ROOT);
+        return lower.startsWith("www.") ? lower.substring(4) : lower;
+    }
+
+    private static int normalizePort(String scheme, int port) {
+        if (port == -1 || port == 80 || port == 443) {
+            return -1;
+        }
+        return port;
+    }
+
+    private static String normalizePath(String rawPath) {
+        if (rawPath == null || rawPath.isBlank()) {
+            return "/";
+        }
+        String path = rawPath.replaceAll("/{2,}", "/");
+        path = path.replaceAll("(?i)/index\\.(html?|php)$", "/");
+        while (path.length() > 1 && path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return path;
+    }
+
+    private static String normalizeQuery(String rawQuery) {
+        if (rawQuery == null || rawQuery.isBlank()) {
+            return null;
+        }
+        List<QueryParam> params = new ArrayList<>();
+        for (String pair : rawQuery.split("&")) {
+            if (pair.isBlank()) {
+                continue;
+            }
+            int split = pair.indexOf('=');
+            String rawName = split >= 0 ? pair.substring(0, split) : pair;
+            String rawValue = split >= 0 ? pair.substring(split + 1) : "";
+            String name = decodeQueryPart(rawName);
+            if (isTrackingQueryKey(name)) {
+                continue;
+            }
+            params.add(new QueryParam(name, decodeQueryPart(rawValue)));
+        }
+        if (params.isEmpty()) {
+            return null;
+        }
+        params.sort(Comparator
+                .comparing(QueryParam::name)
+                .thenComparing(QueryParam::value));
+        return params.stream()
+                .map(param -> encodeQueryPart(param.name()) + "=" + encodeQueryPart(param.value()))
+                .reduce((left, right) -> left + "&" + right)
+                .orElse(null);
+    }
+
+    private static boolean isTrackingQueryKey(String name) {
+        if (name == null || name.isBlank()) {
+            return true;
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        return lower.startsWith("utm_") || TRACKING_QUERY_KEYS.contains(lower);
+    }
+
+    private static String decodeQueryPart(String value) {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8);
+    }
+
+    private static String encodeQueryPart(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     /**
@@ -255,4 +379,7 @@ public final class ArticleParser {
     }
 
     private ArticleParser() {}
+
+    private record QueryParam(String name, String value) {
+    }
 }
