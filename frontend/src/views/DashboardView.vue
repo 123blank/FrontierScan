@@ -543,6 +543,7 @@ function formatDateTime(value?: string | null) {
 }
 .article-list { display: grid; gap: 12px; }
 .article-card {
+  background: #fff;
   border: 1px solid #e3e9e6;
   border-radius: 8px;
   cursor: pointer;
@@ -555,7 +556,12 @@ function formatDateTime(value?: string | null) {
   outline: none;
 }
 .article-card-header { align-items: start; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 34px; }
-.article-card h3 { font-size: 16px; margin: 0 0 6px; }
+.article-card h3 {
+  font-size: 16px;
+  line-height: 1.45;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
 .new-badge {
   color: #d93025;
   font-size: 11px;
@@ -565,7 +571,14 @@ function formatDateTime(value?: string | null) {
   text-transform: lowercase;
   vertical-align: super;
 }
-.article-meta { color: #67726f; font-size: 13px; margin: 0 0 8px; }
+.article-meta {
+  color: #67726f;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+}
 .article-meta span + span::before { content: "·"; margin: 0 6px; }
 .article-card-tags { margin: 0 0 10px; }
 .article-summary { color: #3e4c48; font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
@@ -709,8 +722,25 @@ function formatDateTime(value?: string | null) {
 }
 @media (max-width: 720px) {
   .section-heading, .pagination-bar, .drawer-actions { align-items: stretch; flex-direction: column; }
+  .category-strip {
+    flex-wrap: nowrap;
+    margin-left: -2px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .category-tab {
+    flex: 0 0 auto;
+  }
   .pagination-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .article-card {
+    padding: 14px;
+  }
   .detail-meta { grid-template-columns: 1fr; }
   .detail-meta div + div { border-left: 0; border-top: 1px solid #e3e9e6; }
+  .article-drawer {
+    max-width: none;
+    padding: 18px;
+    width: 100%;
+  }
 }
 </style>

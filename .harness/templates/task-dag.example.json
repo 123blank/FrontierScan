@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "S1",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "Backend API change",
+      "type": "backend",
+      "status": "pending",
+      "predictedFiles": [
+        "backend/src/main/java/com/frontierscan/**"
+      ],
+      "acceptanceCriteria": [
+        "Backend behavior satisfies the story acceptance criteria."
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T2",
+      "title": "Frontend admin UI change",
+      "type": "frontend",
+      "status": "pending",
+      "predictedFiles": [
+        "frontend/src/views/**",
+        "frontend/src/api/**"
+      ],
+      "acceptanceCriteria": [
+        "Frontend behavior satisfies the story acceptance criteria."
+      ],
+      "ownerAgent": "frontend-developer"
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "Frontend depends on backend API behavior."
+    }
+  ],
+  "waves": [
+    [
+      "T1"
+    ],
+    [
+      "T2"
+    ]
+  ],
+  "globalChanges": [],
+  "risks": []
+}

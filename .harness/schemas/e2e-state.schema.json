@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/e2e-state.schema.json",
+  "title": "FrontierScan E2E Harness State",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "phase",
+    "requirement",
+    "knowledge",
+    "tasks",
+    "dag",
+    "worktrees",
+    "tests",
+    "review",
+    "verification",
+    "delivery",
+    "logs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "storyId": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "requirement",
+        "technical-design",
+        "task-dag",
+        "implementation",
+        "unit-test",
+        "code-review",
+        "build-publish",
+        "interface-verification",
+        "git-delivery",
+        "done",
+        "blocked"
+      ]
+    },
+    "requirement": {
+      "type": "object",
+      "required": ["summary", "openQuestions", "acceptanceCriteria"],
+      "properties": {
+        "summary": {
+          "type": "string"
+        },
+        "openQuestions": {
+          "type": "array"
+        },
+        "acceptanceCriteria": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "knowledge": {
+      "type": "object",
+      "required": ["loadedFiles", "staleFiles", "missingAreas"],
+      "properties": {
+        "loadedFiles": {
+          "type": "array"
+        },
+        "staleFiles": {
+          "type": "array"
+        },
+        "missingAreas": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "tasks": {
+      "type": "array"
+    },
+    "dag": {
+      "type": "object",
+      "required": ["nodes", "edges", "waves"],
+      "properties": {
+        "nodes": {
+          "type": "array"
+        },
+        "edges": {
+          "type": "array"
+        },
+        "waves": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "worktrees": {
+      "type": "array"
+    },
+    "tests": {
+      "type": "object",
+      "required": ["commands", "results"],
+      "properties": {
+        "commands": {
+          "type": "array"
+        },
+        "results": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "review": {
+      "type": "object",
+      "required": ["findings", "status"],
+      "properties": {
+        "findings": {
+          "type": "array"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "verification": {
+      "type": "object",
+      "required": ["cases", "results"],
+      "properties": {
+        "cases": {
+          "type": "array"
+        },
+        "results": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "delivery": {
+      "type": "object",
+      "required": ["ownedFiles", "commit", "pr"],
+      "properties": {
+        "ownedFiles": {
+          "type": "array"
+        },
+        "commit": {
+          "type": ["string", "null"]
+        },
+        "pr": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "logs": {
+      "type": "array"
+    }
+  },
+  "additionalProperties": true
+}

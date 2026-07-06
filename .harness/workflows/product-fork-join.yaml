@@ -1,0 +1,26 @@
+schema_version: "1.0"
+name: frontier-product-fork-join
+description: Product-level workflow that splits one request into multiple stories and joins them after review.
+state_file: .harness/states/product-state.template.json
+phases:
+  - id: breakdown
+    owner_agent: product-analyst
+    purpose: Split a product request into stories and initialize story state files.
+  - id: forking
+    owner_agent: task-planner
+    purpose: Run each story through the single-story workflow until code review.
+  - id: joining
+    owner_agent: backend-developer
+    purpose: Merge reviewed story work into an integration branch, then build and verify.
+  - id: done
+    owner_agent: git-committer
+    purpose: Prepare final delivery after validation and user approval.
+fork_policy:
+  parallel_until_phase: code-review
+  join_after_phase: code-review
+  shared_file_policy: serial
+  global_change_policy: confirm-before-implementation
+conflict_policy:
+  predicted_same_file_touch: do-not-parallelize
+  merge_conflict: stop-and-diagnose
+  destructive_resolution: forbidden

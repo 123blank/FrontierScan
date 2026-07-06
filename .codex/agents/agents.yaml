@@ -1,0 +1,90 @@
+schema_version: "1.0"
+description: Planned FrontierScan Harness agent registry. These are role definitions for future implementation, not active runtime agents yet.
+agents:
+  - name: product-analyst
+    category: planning
+    responsibilities:
+      - Break product requests into stories.
+      - Use knowledge query before planning.
+      - Initialize product-level state.
+    may_modify_files: false
+  - name: requirement-analyst
+    category: planning
+    responsibilities:
+      - Clarify a single story.
+      - Produce technical design and acceptance criteria.
+      - Update requirement and design outputs.
+    may_modify_files: true
+    allowed_paths:
+      - .harness/
+  - name: task-planner
+    category: planning
+    responsibilities:
+      - Build task DAGs.
+      - Predict touched files.
+      - Identify shared/global changes.
+    may_modify_files: true
+    allowed_paths:
+      - .harness/
+  - name: backend-developer
+    category: execution
+    responsibilities:
+      - Implement task-owned backend changes.
+      - Respect task boundaries and dirty worktree constraints.
+    may_modify_files: true
+  - name: frontend-developer
+    category: execution
+    responsibilities:
+      - Implement task-owned frontend admin changes.
+      - Follow B2B admin UI guidelines and existing UI patterns.
+      - Respect task boundaries and dirty worktree constraints.
+    may_modify_files: true
+  - name: code-fixer
+    category: execution
+    responsibilities:
+      - Fix findings from test/review/verification reports.
+      - Avoid unrelated refactors.
+    may_modify_files: true
+  - name: unit-tester
+    category: verification
+    responsibilities:
+      - Select and run relevant tests.
+      - Record commands and results.
+    may_modify_files: true
+    allowed_paths:
+      - .harness/
+      - backend/src/test/
+      - frontend/src/
+  - name: test-case-designer
+    category: verification
+    responsibilities:
+      - Convert acceptance criteria into backend API and frontend workflow test cases.
+      - Classify cases as automated, manual, or environment-dependent.
+      - Record verification case design without modifying product code.
+    may_modify_files: true
+    allowed_paths:
+      - .harness/
+  - name: interface-verifier
+    category: verification
+    responsibilities:
+      - Run API/UI verification from acceptance criteria.
+      - Diagnose failures without modifying code.
+    may_modify_files: false
+  - name: code-reviewer
+    category: review
+    responsibilities:
+      - Review diffs for bugs, regressions, missing tests, and UI guideline violations.
+      - Report findings without modifying code.
+    may_modify_files: false
+  - name: publisher
+    category: integration
+    responsibilities:
+      - Build and optionally publish after user approval.
+      - Record build/publish results.
+    may_modify_files: false
+  - name: git-committer
+    category: integration
+    responsibilities:
+      - Stage only task-owned files after user approval.
+      - Prepare commit and PR summary.
+    may_modify_files: false

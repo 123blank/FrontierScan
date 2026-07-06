@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/task-dag.schema.json",
+  "title": "FrontierScan Harness Task DAG",
+  "type": "object",
+  "required": ["schemaVersion", "storyId", "nodes", "edges", "waves", "globalChanges", "risks"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "storyId": {
+      "type": "string"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["taskId", "title", "type", "status", "predictedFiles", "acceptanceCriteria"],
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["backend", "frontend", "database", "docs", "test", "integration", "unknown"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "running", "done", "blocked"]
+          },
+          "predictedFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "acceptanceCriteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "reason"],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "waves": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "globalChanges": {
+      "type": "array"
+    },
+    "risks": {
+      "type": "array"
+    }
+  },
+  "additionalProperties": true
+}

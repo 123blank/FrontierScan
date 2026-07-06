@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "requestId": "YYYYMMDD-HHMM-short-name",
+  "phase": "breakdown",
+  "sourceRequest": "",
+  "stories": [
+    {
+      "storyId": "S1",
+      "title": "",
+      "status": "pending",
+      "stateFile": ".harness/states/e2e-S1.json",
+      "affectedModules": [],
+      "acceptanceCriteria": []
+    }
+  ],
+  "join": {
+    "integrationBranch": "",
+    "mergeStatus": "pending",
+    "verificationStatus": "pending"
+  },
+  "decisions": [],
+  "logs": []
+}

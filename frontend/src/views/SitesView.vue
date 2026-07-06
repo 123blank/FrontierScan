@@ -26,23 +26,23 @@
       </thead>
       <tbody>
         <tr v-for="site in sites" :key="site.id">
-          <td>
+          <td data-label="网站">
             <a :href="site.url" target="_blank" rel="noopener">{{ site.name }}</a>
           </td>
-          <td>{{ categoryName(site.categoryId) }}</td>
-          <td>{{ site.rssUrl ? '✓' : '-' }}</td>
-  <td>{{ site.collectionIntervalMinutes }}分钟</td>
-  <td>
+          <td data-label="分类">{{ categoryName(site.categoryId) }}</td>
+          <td data-label="RSS">{{ site.rssUrl ? '✓' : '-' }}</td>
+  <td data-label="采集频率">{{ site.collectionIntervalMinutes }}分钟</td>
+  <td data-label="连续失败">
     <span v-if="(site.consecutiveFailures ?? 0) > 0" class="failure-badge">{{ site.consecutiveFailures }}次</span>
     <span v-else>-</span>
           </td>
-          <td>{{ formatNullableTime(site.lastSuccessAt) }}</td>
-          <td :title="site.lastFailureReason || ''">{{ site.lastFailureReason ? formatNullableTime(site.lastFailureAt) : '-' }}</td>
-          <td>{{ formatNullableTime(site.nextRetryAt) }}</td>
-          <td>
+          <td data-label="最后成功">{{ formatNullableTime(site.lastSuccessAt) }}</td>
+          <td data-label="最后失败" :title="site.lastFailureReason || ''">{{ site.lastFailureReason ? formatNullableTime(site.lastFailureAt) : '-' }}</td>
+          <td data-label="下次重试">{{ formatNullableTime(site.nextRetryAt) }}</td>
+          <td data-label="状态">
             <span :class="site.enabled ? 'status-on' : 'status-off'">{{ site.enabled ? '启用' : '停用' }}</span>
           </td>
-          <td class="action-cell">
+          <td class="action-cell" data-label="操作">
             <button type="button" class="btn-sm" title="编辑" @click="openEditDialog(site)">编辑</button>
             <button type="button" class="btn-sm" @click="toggleSite(site)">{{ site.enabled ? '停用' : '启用' }}</button>
             <button type="button" class="btn-sm" @click="triggerCollect(site.id)">采集</button>
@@ -553,5 +553,56 @@ onMounted(load);
   gap: 10px;
   justify-content: flex-end;
   padding-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td {
+    display: block;
+    width: 100%;
+  }
+  .data-table thead {
+    display: none;
+  }
+  .data-table tr {
+    border: 1px solid #e3e9e6;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+  .data-table td {
+    align-items: flex-start;
+    border-bottom: 0;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 86px minmax(0, 1fr);
+    padding: 8px 0;
+  }
+  .data-table td::before {
+    color: #67726f;
+    content: attr(data-label);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .action-cell {
+    display: grid !important;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    white-space: normal;
+  }
+  .btn-sm {
+    margin-right: 0;
+    width: 100%;
+  }
+  .site-drawer {
+    max-width: none;
+    width: 100%;
+  }
+  .drawer-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>

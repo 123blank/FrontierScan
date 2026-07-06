@@ -27,20 +27,20 @@
       </thead>
       <tbody>
         <tr v-for="run in runs" :key="run.id">
-          <td>{{ runTypeText(run.runType) }}</td>
-          <td><span :class="'status-' + run.status.toLowerCase()">{{ statusText(run.status) }}</span></td>
-          <td>{{ formatTime(run.startedAt) }}</td>
-          <td>{{ run.finishedAt ? formatTime(run.finishedAt) : '-' }}</td>
-          <td>{{ run.finishedAt ? duration(run.startedAt, run.finishedAt) : '-' }}</td>
-          <td>{{ run.collectedCount }}</td>
-          <td>{{ failureTypeText(run.failureType) }}</td>
-          <td>{{ failureStageText(run.failureStage) }}</td>
-          <td>{{ run.retryCount || 0 }}</td>
-          <td>{{ formatNullableTime(run.nextRetryAt) }}</td>
-          <td class="error-cell" :title="run.errorMessage || run.warningMessage || ''">
+          <td data-label="任务类型">{{ runTypeText(run.runType) }}</td>
+          <td data-label="状态"><span :class="'status-' + run.status.toLowerCase()">{{ statusText(run.status) }}</span></td>
+          <td data-label="开始时间">{{ formatTime(run.startedAt) }}</td>
+          <td data-label="结束时间">{{ run.finishedAt ? formatTime(run.finishedAt) : '-' }}</td>
+          <td data-label="耗时">{{ run.finishedAt ? duration(run.startedAt, run.finishedAt) : '-' }}</td>
+          <td data-label="采集数量">{{ run.collectedCount }}</td>
+          <td data-label="失败类型">{{ failureTypeText(run.failureType) }}</td>
+          <td data-label="失败阶段">{{ failureStageText(run.failureStage) }}</td>
+          <td data-label="重试">{{ run.retryCount || 0 }}</td>
+          <td data-label="下次重试">{{ formatNullableTime(run.nextRetryAt) }}</td>
+          <td data-label="错误/告警" class="error-cell" :title="run.errorMessage || run.warningMessage || ''">
             {{ run.errorMessage || run.warningMessage || '-' }}
           </td>
-          <td class="action-cell">
+          <td data-label="操作" class="action-cell">
             <button v-if="run.status === 'FAILED'" type="button" class="retry-btn"
                     :disabled="retrying.has(run.id)" @click="retryRun(run.id)">
               重试
@@ -183,4 +183,52 @@ onMounted(load);
 }
 .retry-btn:hover { background: #dce8e5; }
 .retry-btn:disabled { opacity: 0.6; cursor: wait; }
+
+@media (max-width: 980px) {
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td {
+    display: block;
+    width: 100%;
+  }
+  .data-table thead {
+    display: none;
+  }
+  .data-table tr {
+    border: 1px solid #e3e9e6;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+  .data-table td {
+    align-items: flex-start;
+    border-bottom: 0;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 88px minmax(0, 1fr);
+    padding: 8px 0;
+  }
+  .data-table td::before {
+    color: #67726f;
+    content: attr(data-label);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .error-cell {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .action-cell {
+    display: grid !important;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    white-space: normal;
+  }
+  .retry-btn {
+    width: 100%;
+  }
+}
 </style>

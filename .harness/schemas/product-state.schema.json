@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/product-state.schema.json",
+  "title": "FrontierScan Product Harness State",
+  "type": "object",
+  "required": ["schemaVersion", "requestId", "phase", "sourceRequest", "stories", "join", "decisions", "logs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "requestId": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["breakdown", "forking", "joining", "done", "blocked"]
+    },
+    "sourceRequest": {
+      "type": "string"
+    },
+    "stories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["storyId", "title", "status", "stateFile", "affectedModules", "acceptanceCriteria"],
+        "properties": {
+          "storyId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "running", "reviewed", "joined", "blocked", "done"]
+          },
+          "stateFile": {
+            "type": "string"
+          },
+          "affectedModules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "acceptanceCriteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "join": {
+      "type": "object",
+      "required": ["integrationBranch", "mergeStatus", "verificationStatus"],
+      "properties": {
+        "integrationBranch": {
+          "type": "string"
+        },
+        "mergeStatus": {
+          "type": "string",
+          "enum": ["pending", "running", "done", "blocked"]
+        },
+        "verificationStatus": {
+          "type": "string",
+          "enum": ["pending", "passed", "failed", "skipped"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "decisions": {
+      "type": "array"
+    },
+    "logs": {
+      "type": "array"
+    }
+  },
+  "additionalProperties": true
+}

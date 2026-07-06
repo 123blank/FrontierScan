@@ -1,0 +1,28 @@
+schema_version: "1.0"
+area: backend
+root_path: backend
+technology:
+  language: Java 17
+  framework: Spring Boot 3.3.5
+  build: Maven
+  database: PostgreSQL
+  cache: Redis
+  migrations: Flyway
+  security: Spring Security
+modules:
+  - name: application
+    path: backend/src/main/java/com/frontierscan
+    type: spring-boot-application
+    docs:
+      overview: llm-knowledge/backend/modules/application/overview.md
+      interfaces: llm-knowledge/backend/modules/application/interfaces.md
+      architecture: llm-knowledge/backend/modules/application/architecture.md
+      dependencies: llm-knowledge/backend/modules/application/dependencies.md
+      storage: llm-knowledge/backend/modules/application/storage.md
+      config: llm-knowledge/backend/modules/application/config.md
+      pitfalls: llm-knowledge/backend/modules/application/pitfalls.md
+      log: llm-knowledge/backend/modules/application/log.md
+    freshness:
+      git_hash: ""
+      generated_at: ""
+      status: scaffold

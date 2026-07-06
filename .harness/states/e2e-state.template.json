@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "S1",
+  "phase": "requirement",
+  "requirement": {
+    "summary": "",
+    "openQuestions": [],
+    "acceptanceCriteria": []
+  },
+  "knowledge": {
+    "loadedFiles": [],
+    "staleFiles": [],
+    "missingAreas": []
+  },
+  "tasks": [],
+  "dag": {
+    "nodes": [],
+    "edges": [],
+    "waves": []
+  },
+  "worktrees": [],
+  "tests": {
+    "commands": [],
+    "results": []
+  },
+  "review": {
+    "findings": [],
+    "status": "pending"
+  },
+  "verification": {
+    "cases": [],
+    "results": []
+  },
+  "delivery": {
+    "ownedFiles": [],
+    "commit": null,
+    "pr": null
+  },
+  "logs": []
+}
