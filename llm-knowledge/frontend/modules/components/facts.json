@@ -1,0 +1,39 @@
+{
+  "area": "frontend",
+  "module": "components",
+  "root_path": "frontend/src/components",
+  "source_files": [
+    "frontend/src/components/ArticleFilterBar.vue",
+    "frontend/src/components/ToastMessage.vue"
+  ],
+  "file_count": 2,
+  "files": [
+    {
+      "file": "frontend/src/components/ArticleFilterBar.vue",
+      "kind": "vue"
+    },
+    {
+      "file": "frontend/src/components/ToastMessage.vue",
+      "kind": "vue"
+    }
+  ],
+  "api_calls": [],
+  "routes": [],
+  "stores": [],
+  "exports": [
+    {
+      "name": "ToastType",
+      "file": "frontend/src/components/ToastMessage.vue"
+    }
+  ],
+  "components": [
+    {
+      "name": "ArticleFilterBar.vue",
+      "file": "frontend/src/components/ArticleFilterBar.vue"
+    },
+    {
+      "name": "ToastMessage.vue",
+      "file": "frontend/src/components/ToastMessage.vue"
+    }
+  ]
+}

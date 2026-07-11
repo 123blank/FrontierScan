@@ -35,6 +35,10 @@ required_files:
   - .harness/scripts/validate-state.ps1
   - .harness/scripts/validate-task-dag.ps1
   - .harness/scripts/kb-query.ps1
+  - .harness/scripts/generate-kb.ps1
+  - .harness/scripts/lib/generate-kb.mjs
+  - .harness/scripts/tests/generate-kb.test.mjs
+  - .harness/scripts/tests/kb-query.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
   - .harness/scripts/scan-knowledge-inputs.ps1

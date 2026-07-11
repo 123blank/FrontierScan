@@ -1,6 +1,15 @@
-schema_version: "1.0"
+schema_version: "2.0"
 area: backend
 root_path: backend
+generated_at: "2026-07-06T09:39:30.103Z"
+git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+status: fresh
+baseline_status: fresh
+semantic_status: pending
+index_status: fresh
+source_changed: false
+semantic_model: "gpt-4.1-mini"
+embedding_model: "text-embedding-3-small"
 technology:
   language: Java 17
   framework: Spring Boot 3.3.5
@@ -8,21 +17,137 @@ technology:
   database: PostgreSQL
   cache: Redis
   migrations: Flyway
-  security: Spring Security
 modules:
-  - name: application
-    path: backend/src/main/java/com/frontierscan
-    type: spring-boot-application
+  - name: article
+    path: backend/src/main/java/com/frontierscan/article
+    type: spring-package
     docs:
-      overview: llm-knowledge/backend/modules/application/overview.md
-      interfaces: llm-knowledge/backend/modules/application/interfaces.md
-      architecture: llm-knowledge/backend/modules/application/architecture.md
-      dependencies: llm-knowledge/backend/modules/application/dependencies.md
-      storage: llm-knowledge/backend/modules/application/storage.md
-      config: llm-knowledge/backend/modules/application/config.md
-      pitfalls: llm-knowledge/backend/modules/application/pitfalls.md
-      log: llm-knowledge/backend/modules/application/log.md
+      overview: llm-knowledge/backend/modules/article/overview.md
+      interfaces: llm-knowledge/backend/modules/article/interfaces.md
+      architecture: llm-knowledge/backend/modules/article/architecture.md
+      dependencies: llm-knowledge/backend/modules/article/dependencies.md
+      storage: llm-knowledge/backend/modules/article/storage.md
+      config: llm-knowledge/backend/modules/article/config.md
+      pitfalls: llm-knowledge/backend/modules/article/pitfalls.md
+      semantic: llm-knowledge/backend/modules/article/semantic.md
+      facts: llm-knowledge/backend/modules/article/facts.json
     freshness:
-      git_hash: ""
-      generated_at: ""
-      status: scaffold
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:39:30.103Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: auth
+    path: backend/src/main/java/com/frontierscan/auth
+    type: spring-package
+    docs:
+      overview: llm-knowledge/backend/modules/auth/overview.md
+      interfaces: llm-knowledge/backend/modules/auth/interfaces.md
+      architecture: llm-knowledge/backend/modules/auth/architecture.md
+      dependencies: llm-knowledge/backend/modules/auth/dependencies.md
+      storage: llm-knowledge/backend/modules/auth/storage.md
+      config: llm-knowledge/backend/modules/auth/config.md
+      pitfalls: llm-knowledge/backend/modules/auth/pitfalls.md
+      semantic: llm-knowledge/backend/modules/auth/semantic.md
+      facts: llm-knowledge/backend/modules/auth/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:39:30.103Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: category
+    path: backend/src/main/java/com/frontierscan/category
+    type: spring-package
+    docs:
+      overview: llm-knowledge/backend/modules/category/overview.md
+      interfaces: llm-knowledge/backend/modules/category/interfaces.md
+      architecture: llm-knowledge/backend/modules/category/architecture.md
+      dependencies: llm-knowledge/backend/modules/category/dependencies.md
+      storage: llm-knowledge/backend/modules/category/storage.md
+      config: llm-knowledge/backend/modules/category/config.md
+      pitfalls: llm-knowledge/backend/modules/category/pitfalls.md
+      semantic: llm-knowledge/backend/modules/category/semantic.md
+      facts: llm-knowledge/backend/modules/category/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:39:30.103Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: collection
+    path: backend/src/main/java/com/frontierscan/collection
+    type: spring-package
+    docs:
+      overview: llm-knowledge/backend/modules/collection/overview.md
+      interfaces: llm-knowledge/backend/modules/collection/interfaces.md
+      architecture: llm-knowledge/backend/modules/collection/architecture.md
+      dependencies: llm-knowledge/backend/modules/collection/dependencies.md
+      storage: llm-knowledge/backend/modules/collection/storage.md
+      config: llm-knowledge/backend/modules/collection/config.md
+      pitfalls: llm-knowledge/backend/modules/collection/pitfalls.md
+      semantic: llm-knowledge/backend/modules/collection/semantic.md
+      facts: llm-knowledge/backend/modules/collection/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:39:30.103Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: common
+    path: backend/src/main/java/com/frontierscan/common
+    type: spring-package
+    docs:
+      overview: llm-knowledge/backend/modules/common/overview.md
+      interfaces: llm-knowledge/backend/modules/common/interfaces.md
+      architecture: llm-knowledge/backend/modules/common/architecture.md
+      dependencies: llm-knowledge/backend/modules/common/dependencies.md
+      storage: llm-knowledge/backend/modules/common/storage.md
+      config: llm-knowledge/backend/modules/common/config.md
+      pitfalls: llm-knowledge/backend/modules/common/pitfalls.md
+      semantic: llm-knowledge/backend/modules/common/semantic.md
+      facts: llm-knowledge/backend/modules/common/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:39:30.103Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: llm
+    path: backend/src/main/java/com/frontierscan/llm
+    type: spring-package
+    docs:
+      overview: llm-knowledge/backend/modules/llm/overview.md
+      interfaces: llm-knowledge/backend/modules/llm/interfaces.md
+      architecture: llm-knowledge/backend/modules/llm/architecture.md
+      dependencies: llm-knowledge/backend/modules/llm/dependencies.md
+      storage: llm-knowledge/backend/modules/llm/storage.md
+      config: llm-knowledge/backend/modules/llm/config.md
+      pitfalls: llm-knowledge/backend/modules/llm/pitfalls.md
+      semantic: llm-knowledge/backend/modules/llm/semantic.md
+      facts: llm-knowledge/backend/modules/llm/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:39:30.103Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: site
+    path: backend/src/main/java/com/frontierscan/site
+    type: spring-package
+    docs:
+      overview: llm-knowledge/backend/modules/site/overview.md
+      interfaces: llm-knowledge/backend/modules/site/interfaces.md
+      architecture: llm-knowledge/backend/modules/site/architecture.md
+      dependencies: llm-knowledge/backend/modules/site/dependencies.md
+      storage: llm-knowledge/backend/modules/site/storage.md
+      config: llm-knowledge/backend/modules/site/config.md
+      pitfalls: llm-knowledge/backend/modules/site/pitfalls.md
+      semantic: llm-knowledge/backend/modules/site/semantic.md
+      facts: llm-knowledge/backend/modules/site/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:39:30.103Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh

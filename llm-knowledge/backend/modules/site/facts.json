@@ -1,0 +1,135 @@
+{
+  "area": "backend",
+  "module": "site",
+  "root_path": "backend/src/main/java/com/frontierscan/site",
+  "source_files": [
+    "backend/src/main/java/com/frontierscan/site/Site.java",
+    "backend/src/main/java/com/frontierscan/site/SiteController.java",
+    "backend/src/main/java/com/frontierscan/site/SiteRepository.java",
+    "backend/src/main/java/com/frontierscan/site/SiteService.java",
+    "backend/src/main/java/com/frontierscan/site/package-info.java"
+  ],
+  "file_count": 5,
+  "classes": [
+    {
+      "kind": "class",
+      "name": "Site",
+      "file": "backend/src/main/java/com/frontierscan/site/Site.java"
+    },
+    {
+      "kind": "class",
+      "name": "SiteController",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    },
+    {
+      "kind": "record",
+      "name": "CreateRequest",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    },
+    {
+      "kind": "record",
+      "name": "UpdateRequest",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    },
+    {
+      "kind": "interface",
+      "name": "SiteRepository",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteRepository.java"
+    },
+    {
+      "kind": "class",
+      "name": "SiteService",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteService.java"
+    }
+  ],
+  "controllers": [
+    {
+      "name": "SiteController",
+      "base_path": "/api/sites",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    }
+  ],
+  "endpoints": [
+    {
+      "controller": "SiteController",
+      "method": "GET",
+      "path": "/api/sites",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    },
+    {
+      "controller": "SiteController",
+      "method": "GET",
+      "path": "/api/sites/{id}",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    },
+    {
+      "controller": "SiteController",
+      "method": "POST",
+      "path": "/api/sites",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    },
+    {
+      "controller": "SiteController",
+      "method": "PUT",
+      "path": "/api/sites/{id}",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    },
+    {
+      "controller": "SiteController",
+      "method": "DELETE",
+      "path": "/api/sites/{id}",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Site",
+      "table": "sites",
+      "file": "backend/src/main/java/com/frontierscan/site/Site.java"
+    }
+  ],
+  "repositories": [
+    {
+      "name": "SiteRepository",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteRepository.java"
+    }
+  ],
+  "config_properties": [],
+  "scheduled_jobs": [],
+  "async_methods": [],
+  "imports": [
+    "com.frontierscan.category.CategoryRepository",
+    "com.frontierscan.common.api.ApiResponse",
+    "com.frontierscan.common.error.ResourceNotFoundException",
+    "com.frontierscan.common.security.JwtPrincipal",
+    "jakarta.persistence.Column",
+    "jakarta.persistence.Entity",
+    "jakarta.persistence.GeneratedValue",
+    "jakarta.persistence.GenerationType",
+    "jakarta.persistence.Id",
+    "jakarta.persistence.Table",
+    "jakarta.validation.Valid",
+    "jakarta.validation.constraints.NotBlank",
+    "java.time.OffsetDateTime",
+    "java.util.List",
+    "java.util.Map",
+    "java.util.Optional",
+    "lombok.AllArgsConstructor",
+    "lombok.Data",
+    "lombok.NoArgsConstructor",
+    "org.springframework.data.jpa.repository.JpaRepository",
+    "org.springframework.security.core.annotation.AuthenticationPrincipal",
+    "org.springframework.stereotype.Service",
+    "org.springframework.transaction.annotation.Transactional",
+    "org.springframework.web.bind.annotation.DeleteMapping",
+    "org.springframework.web.bind.annotation.GetMapping",
+    "org.springframework.web.bind.annotation.PathVariable",
+    "org.springframework.web.bind.annotation.PostMapping",
+    "org.springframework.web.bind.annotation.PutMapping",
+    "org.springframework.web.bind.annotation.RequestBody",
+    "org.springframework.web.bind.annotation.RequestMapping",
+    "org.springframework.web.bind.annotation.RequestParam",
+    "org.springframework.web.bind.annotation.RestController"
+  ],
+  "resources": []
+}

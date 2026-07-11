@@ -40,6 +40,10 @@ Invoke-Step -Name "Knowledge Freshness" -Action {
   & (Join-Path $Root ".harness\scripts\check-kb-freshness.ps1") -Root $Root
 }
 
+Invoke-Step -Name "Knowledge Generate Dry Run" -Action {
+  & (Join-Path $Root ".harness\scripts\generate-kb.ps1") -Root $Root -Area all -Mode all -DryRun
+}
+
 Invoke-Step -Name "Worktree Plan" -Action {
   & (Join-Path $Root ".harness\scripts\plan-worktrees.ps1") -Root $Root -TaskDagFile $TaskDagFile
 }

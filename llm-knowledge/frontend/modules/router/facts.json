@@ -1,0 +1,51 @@
+{
+  "area": "frontend",
+  "module": "router",
+  "root_path": "frontend/src/router",
+  "source_files": [
+    "frontend/src/router/index.ts"
+  ],
+  "file_count": 1,
+  "files": [
+    {
+      "file": "frontend/src/router/index.ts",
+      "kind": "ts"
+    }
+  ],
+  "api_calls": [],
+  "routes": [
+    {
+      "path": "/login",
+      "name": "login",
+      "file": "frontend/src/router/index.ts"
+    },
+    {
+      "path": "/",
+      "name": "dashboard",
+      "file": "frontend/src/router/index.ts"
+    },
+    {
+      "path": "categories",
+      "name": "categories",
+      "file": "frontend/src/router/index.ts"
+    },
+    {
+      "path": "sites",
+      "name": "sites",
+      "file": "frontend/src/router/index.ts"
+    },
+    {
+      "path": "favorites",
+      "name": "favorites",
+      "file": "frontend/src/router/index.ts"
+    },
+    {
+      "path": "collection-runs",
+      "name": "collectionRuns",
+      "file": "frontend/src/router/index.ts"
+    }
+  ],
+  "stores": [],
+  "exports": [],
+  "components": []
+}

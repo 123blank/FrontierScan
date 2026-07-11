@@ -1,0 +1,25 @@
+{
+  "area": "frontend",
+  "module": "layouts",
+  "root_path": "frontend/src/layouts",
+  "source_files": [
+    "frontend/src/layouts/AppLayout.vue"
+  ],
+  "file_count": 1,
+  "files": [
+    {
+      "file": "frontend/src/layouts/AppLayout.vue",
+      "kind": "vue"
+    }
+  ],
+  "api_calls": [],
+  "routes": [],
+  "stores": [],
+  "exports": [],
+  "components": [
+    {
+      "name": "AppLayout.vue",
+      "file": "frontend/src/layouts/AppLayout.vue"
+    }
+  ]
+}

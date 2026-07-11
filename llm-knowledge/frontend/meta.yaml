@@ -1,6 +1,15 @@
-schema_version: "1.0"
+schema_version: "2.0"
 area: frontend
 root_path: frontend
+generated_at: "2026-07-06T09:38:23.253Z"
+git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+status: fresh
+baseline_status: fresh
+semantic_status: pending
+index_status: fresh
+source_changed: false
+semantic_model: "gpt-4.1-mini"
+embedding_model: "text-embedding-3-small"
 technology:
   language: TypeScript
   framework: Vue 3
@@ -9,18 +18,129 @@ technology:
   router: Vue Router
   http: Axios
 modules:
-  - name: web-admin
-    path: frontend/src
-    type: vue-admin-frontend
+  - name: api
+    path: frontend/src/api
+    type: vue-source-area
     docs:
-      overview: llm-knowledge/frontend/modules/web-admin/overview.md
-      routes: llm-knowledge/frontend/modules/web-admin/routes.md
-      components: llm-knowledge/frontend/modules/web-admin/components.md
-      api_usage: llm-knowledge/frontend/modules/web-admin/api-usage.md
-      state: llm-knowledge/frontend/modules/web-admin/state.md
-      pitfalls: llm-knowledge/frontend/modules/web-admin/pitfalls.md
-      log: llm-knowledge/frontend/modules/web-admin/log.md
+      overview: llm-knowledge/frontend/modules/api/overview.md
+      routes: llm-knowledge/frontend/modules/api/routes.md
+      components: llm-knowledge/frontend/modules/api/components.md
+      api_usage: llm-knowledge/frontend/modules/api/api-usage.md
+      state: llm-knowledge/frontend/modules/api/state.md
+      pitfalls: llm-knowledge/frontend/modules/api/pitfalls.md
+      semantic: llm-knowledge/frontend/modules/api/semantic.md
+      facts: llm-knowledge/frontend/modules/api/facts.json
     freshness:
-      git_hash: ""
-      generated_at: ""
-      status: scaffold
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:38:23.253Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: components
+    path: frontend/src/components
+    type: vue-source-area
+    docs:
+      overview: llm-knowledge/frontend/modules/components/overview.md
+      routes: llm-knowledge/frontend/modules/components/routes.md
+      components: llm-knowledge/frontend/modules/components/components.md
+      api_usage: llm-knowledge/frontend/modules/components/api-usage.md
+      state: llm-knowledge/frontend/modules/components/state.md
+      pitfalls: llm-knowledge/frontend/modules/components/pitfalls.md
+      semantic: llm-knowledge/frontend/modules/components/semantic.md
+      facts: llm-knowledge/frontend/modules/components/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:38:23.253Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: layouts
+    path: frontend/src/layouts
+    type: vue-source-area
+    docs:
+      overview: llm-knowledge/frontend/modules/layouts/overview.md
+      routes: llm-knowledge/frontend/modules/layouts/routes.md
+      components: llm-knowledge/frontend/modules/layouts/components.md
+      api_usage: llm-knowledge/frontend/modules/layouts/api-usage.md
+      state: llm-knowledge/frontend/modules/layouts/state.md
+      pitfalls: llm-knowledge/frontend/modules/layouts/pitfalls.md
+      semantic: llm-knowledge/frontend/modules/layouts/semantic.md
+      facts: llm-knowledge/frontend/modules/layouts/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:38:23.253Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: router
+    path: frontend/src/router
+    type: vue-source-area
+    docs:
+      overview: llm-knowledge/frontend/modules/router/overview.md
+      routes: llm-knowledge/frontend/modules/router/routes.md
+      components: llm-knowledge/frontend/modules/router/components.md
+      api_usage: llm-knowledge/frontend/modules/router/api-usage.md
+      state: llm-knowledge/frontend/modules/router/state.md
+      pitfalls: llm-knowledge/frontend/modules/router/pitfalls.md
+      semantic: llm-knowledge/frontend/modules/router/semantic.md
+      facts: llm-knowledge/frontend/modules/router/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:38:23.253Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: stores
+    path: frontend/src/stores
+    type: vue-source-area
+    docs:
+      overview: llm-knowledge/frontend/modules/stores/overview.md
+      routes: llm-knowledge/frontend/modules/stores/routes.md
+      components: llm-knowledge/frontend/modules/stores/components.md
+      api_usage: llm-knowledge/frontend/modules/stores/api-usage.md
+      state: llm-knowledge/frontend/modules/stores/state.md
+      pitfalls: llm-knowledge/frontend/modules/stores/pitfalls.md
+      semantic: llm-knowledge/frontend/modules/stores/semantic.md
+      facts: llm-knowledge/frontend/modules/stores/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:38:23.253Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: styles
+    path: frontend/src/styles
+    type: vue-source-area
+    docs:
+      overview: llm-knowledge/frontend/modules/styles/overview.md
+      routes: llm-knowledge/frontend/modules/styles/routes.md
+      components: llm-knowledge/frontend/modules/styles/components.md
+      api_usage: llm-knowledge/frontend/modules/styles/api-usage.md
+      state: llm-knowledge/frontend/modules/styles/state.md
+      pitfalls: llm-knowledge/frontend/modules/styles/pitfalls.md
+      semantic: llm-knowledge/frontend/modules/styles/semantic.md
+      facts: llm-knowledge/frontend/modules/styles/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:38:23.253Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh
+  - name: views
+    path: frontend/src/views
+    type: vue-source-area
+    docs:
+      overview: llm-knowledge/frontend/modules/views/overview.md
+      routes: llm-knowledge/frontend/modules/views/routes.md
+      components: llm-knowledge/frontend/modules/views/components.md
+      api_usage: llm-knowledge/frontend/modules/views/api-usage.md
+      state: llm-knowledge/frontend/modules/views/state.md
+      pitfalls: llm-knowledge/frontend/modules/views/pitfalls.md
+      semantic: llm-knowledge/frontend/modules/views/semantic.md
+      facts: llm-knowledge/frontend/modules/views/facts.json
+    freshness:
+      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+      generated_at: "2026-07-06T09:38:23.253Z"
+      baseline_status: fresh
+      semantic_status: pending
+      index_status: fresh

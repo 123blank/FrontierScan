@@ -1,0 +1,278 @@
+{
+  "area": "backend",
+  "module": "collection",
+  "root_path": "backend/src/main/java/com/frontierscan/collection",
+  "source_files": [
+    "backend/src/main/java/com/frontierscan/collection/ArticleParser.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectResult.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectionFailureClassifier.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectionRun.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectionRunRepository.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectionScheduleProperties.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java",
+    "backend/src/main/java/com/frontierscan/collection/Collector.java",
+    "backend/src/main/java/com/frontierscan/collection/CollectorException.java",
+    "backend/src/main/java/com/frontierscan/collection/ConnectionTimeoutException.java",
+    "backend/src/main/java/com/frontierscan/collection/EmptyResultException.java",
+    "backend/src/main/java/com/frontierscan/collection/HtmlCollector.java",
+    "backend/src/main/java/com/frontierscan/collection/ParseException.java",
+    "backend/src/main/java/com/frontierscan/collection/RssCollector.java",
+    "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
+    "backend/src/main/java/com/frontierscan/collection/package-info.java"
+  ],
+  "file_count": 19,
+  "classes": [
+    {
+      "kind": "class",
+      "name": "ArticleParser",
+      "file": "backend/src/main/java/com/frontierscan/collection/ArticleParser.java"
+    },
+    {
+      "kind": "record",
+      "name": "QueryParam",
+      "file": "backend/src/main/java/com/frontierscan/collection/ArticleParser.java"
+    },
+    {
+      "kind": "record",
+      "name": "CollectResult",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectResult.java"
+    },
+    {
+      "kind": "record",
+      "name": "RawArticle",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectResult.java"
+    },
+    {
+      "kind": "class",
+      "name": "CollectionFailureClassifier",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionFailureClassifier.java"
+    },
+    {
+      "kind": "class",
+      "name": "CollectionOrchestrator",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    },
+    {
+      "kind": "class",
+      "name": "CollectionRun",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRun.java"
+    },
+    {
+      "kind": "class",
+      "name": "CollectionRunController",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
+    },
+    {
+      "kind": "interface",
+      "name": "CollectionRunRepository",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunRepository.java"
+    },
+    {
+      "kind": "class",
+      "name": "CollectionRunService",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "kind": "record",
+      "name": "CollectionScheduleProperties",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduleProperties.java"
+    },
+    {
+      "kind": "class",
+      "name": "CollectionScheduler",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java"
+    },
+    {
+      "kind": "interface",
+      "name": "Collector",
+      "file": "backend/src/main/java/com/frontierscan/collection/Collector.java"
+    },
+    {
+      "kind": "class",
+      "name": "CollectorException",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectorException.java"
+    },
+    {
+      "kind": "class",
+      "name": "ConnectionTimeoutException",
+      "file": "backend/src/main/java/com/frontierscan/collection/ConnectionTimeoutException.java"
+    },
+    {
+      "kind": "class",
+      "name": "EmptyResultException",
+      "file": "backend/src/main/java/com/frontierscan/collection/EmptyResultException.java"
+    },
+    {
+      "kind": "class",
+      "name": "HtmlCollector",
+      "file": "backend/src/main/java/com/frontierscan/collection/HtmlCollector.java"
+    },
+    {
+      "kind": "class",
+      "name": "ParseException",
+      "file": "backend/src/main/java/com/frontierscan/collection/ParseException.java"
+    },
+    {
+      "kind": "class",
+      "name": "RssCollector",
+      "file": "backend/src/main/java/com/frontierscan/collection/RssCollector.java"
+    },
+    {
+      "kind": "class",
+      "name": "TagEvaluationAsyncService",
+      "file": "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java"
+    }
+  ],
+  "controllers": [
+    {
+      "name": "CollectionRunController",
+      "base_path": "/api/collection-runs",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
+    }
+  ],
+  "endpoints": [
+    {
+      "controller": "CollectionRunController",
+      "method": "GET",
+      "path": "/api/collection-runs",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
+    },
+    {
+      "controller": "CollectionRunController",
+      "method": "GET",
+      "path": "/api/collection-runs/{runId}",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
+    },
+    {
+      "controller": "CollectionRunController",
+      "method": "POST",
+      "path": "/api/collection-runs/{runId}/retry",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
+    },
+    {
+      "controller": "CollectionRunController",
+      "method": "POST",
+      "path": "/api/collection-runs/sites/{siteId}",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
+    }
+  ],
+  "entities": [
+    {
+      "name": "CollectionRun",
+      "table": "collection_runs",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRun.java"
+    }
+  ],
+  "repositories": [
+    {
+      "name": "CollectionRunRepository",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunRepository.java"
+    }
+  ],
+  "config_properties": [
+    {
+      "class": "CollectionScheduleProperties",
+      "prefix": "app.collection",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduleProperties.java"
+    }
+  ],
+  "scheduled_jobs": [
+    {
+      "class": "CollectionScheduler",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java"
+    }
+  ],
+  "async_methods": [
+    {
+      "class": "CollectionOrchestrator",
+      "executor": "frontierScanCollectionExecutor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    }
+  ],
+  "imports": [
+    "com.frontierscan.article.Article",
+    "com.frontierscan.article.ArticleService",
+    "com.frontierscan.article.ArticleSummaryService",
+    "com.frontierscan.article.ArticleSummaryStatus",
+    "com.frontierscan.common.api.ApiResponse",
+    "com.frontierscan.common.security.JwtPrincipal",
+    "com.frontierscan.site.Site",
+    "com.frontierscan.site.SiteRepository",
+    "com.frontierscan.site.SiteService",
+    "com.rometools.rome.feed.synd.SyndEntry",
+    "com.rometools.rome.feed.synd.SyndFeed",
+    "com.rometools.rome.io.SyndFeedInput",
+    "com.rometools.rome.io.XmlReader",
+    "jakarta.persistence.Column",
+    "jakarta.persistence.Entity",
+    "jakarta.persistence.GeneratedValue",
+    "jakarta.persistence.GenerationType",
+    "jakarta.persistence.Id",
+    "jakarta.persistence.Table",
+    "java.net.URI",
+    "java.net.URISyntaxException",
+    "java.net.URL",
+    "java.net.URLConnection",
+    "java.net.URLDecoder",
+    "java.net.URLEncoder",
+    "java.nio.charset.StandardCharsets",
+    "java.security.MessageDigest",
+    "java.security.NoSuchAlgorithmException",
+    "java.time.Duration",
+    "java.time.Instant",
+    "java.time.LocalDate",
+    "java.time.LocalDateTime",
+    "java.time.OffsetDateTime",
+    "java.time.ZoneId",
+    "java.time.ZonedDateTime",
+    "java.time.format.DateTimeFormatter",
+    "java.time.format.DateTimeParseException",
+    "java.util.ArrayList",
+    "java.util.Arrays",
+    "java.util.Comparator",
+    "java.util.Date",
+    "java.util.HashSet",
+    "java.util.HexFormat",
+    "java.util.List",
+    "java.util.Locale",
+    "java.util.Map",
+    "java.util.Objects",
+    "java.util.Optional",
+    "java.util.Set",
+    "java.util.UUID",
+    "java.util.concurrent.CompletableFuture",
+    "java.util.concurrent.Executor",
+    "java.util.concurrent.TimeUnit",
+    "java.util.concurrent.atomic.AtomicInteger",
+    "java.util.regex.Pattern",
+    "lombok.AllArgsConstructor",
+    "lombok.Builder",
+    "lombok.Data",
+    "lombok.Getter",
+    "lombok.NoArgsConstructor",
+    "lombok.extern.slf4j.Slf4j",
+    "org.jsoup.Jsoup",
+    "org.jsoup.nodes.Document",
+    "org.jsoup.nodes.Element",
+    "org.jsoup.select.Elements",
+    "org.springframework.beans.factory.ObjectProvider",
+    "org.springframework.beans.factory.annotation.Qualifier",
+    "org.springframework.boot.autoconfigure.condition.ConditionalOnProperty",
+    "org.springframework.boot.context.properties.ConfigurationProperties",
+    "org.springframework.context.annotation.Lazy",
+    "org.springframework.data.jpa.repository.JpaRepository",
+    "org.springframework.data.redis.RedisConnectionFailureException",
+    "org.springframework.data.redis.core.StringRedisTemplate",
+    "org.springframework.http.ResponseEntity",
+    "org.springframework.scheduling.annotation.Async",
+    "org.springframework.scheduling.annotation.Scheduled",
+    "org.springframework.security.core.annotation.AuthenticationPrincipal",
+    "org.springframework.stereotype.Component",
+    "org.springframework.stereotype.Service",
+    "org.springframework.transaction.annotation.Transactional"
+  ],
+  "resources": []
+}

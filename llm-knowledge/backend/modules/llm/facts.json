@@ -1,0 +1,309 @@
+{
+  "area": "backend",
+  "module": "llm",
+  "root_path": "backend/src/main/java/com/frontierscan/llm",
+  "source_files": [
+    "backend/src/main/java/com/frontierscan/llm/DashScopeLlmProvider.java",
+    "backend/src/main/java/com/frontierscan/llm/LlmProperties.java",
+    "backend/src/main/java/com/frontierscan/llm/LlmProvider.java",
+    "backend/src/main/java/com/frontierscan/llm/SummaryMapReduceException.java",
+    "backend/src/main/java/com/frontierscan/llm/SummaryMapReduceService.java",
+    "backend/src/main/java/com/frontierscan/llm/SummaryQualityEvaluator.java",
+    "backend/src/main/java/com/frontierscan/llm/SummaryQualityResult.java",
+    "backend/src/main/java/com/frontierscan/llm/SummaryRequest.java",
+    "backend/src/main/java/com/frontierscan/llm/SummaryResult.java",
+    "backend/src/main/java/com/frontierscan/llm/package-info.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMapping.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMappingRepository.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/DomainClassifier.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/LlmTagScorer.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/ScoredDomain.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/ScoredTag.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/TagController.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/TagDomain.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/TagDomainRepository.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/TagInfo.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/mapper/ArticleTagMappingMapper.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/mapper/TagDomainMapper.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/mp/ArticleTagMappingPo.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
+    "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
+  ],
+  "file_count": 26,
+  "classes": [
+    {
+      "kind": "class",
+      "name": "DashScopeLlmProvider",
+      "file": "backend/src/main/java/com/frontierscan/llm/DashScopeLlmProvider.java"
+    },
+    {
+      "kind": "record",
+      "name": "LlmProperties",
+      "file": "backend/src/main/java/com/frontierscan/llm/LlmProperties.java"
+    },
+    {
+      "kind": "record",
+      "name": "SummaryMapReduceProperties",
+      "file": "backend/src/main/java/com/frontierscan/llm/LlmProperties.java"
+    },
+    {
+      "kind": "record",
+      "name": "TagProperties",
+      "file": "backend/src/main/java/com/frontierscan/llm/LlmProperties.java"
+    },
+    {
+      "kind": "interface",
+      "name": "LlmProvider",
+      "file": "backend/src/main/java/com/frontierscan/llm/LlmProvider.java"
+    },
+    {
+      "kind": "class",
+      "name": "SummaryMapReduceException",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryMapReduceException.java"
+    },
+    {
+      "kind": "class",
+      "name": "SummaryMapReduceService",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryMapReduceService.java"
+    },
+    {
+      "kind": "class",
+      "name": "SummaryQualityEvaluator",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryQualityEvaluator.java"
+    },
+    {
+      "kind": "record",
+      "name": "SummaryQualityResult",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryQualityResult.java"
+    },
+    {
+      "kind": "record",
+      "name": "SummaryRequest",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryRequest.java"
+    },
+    {
+      "kind": "record",
+      "name": "SummaryResult",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryResult.java"
+    },
+    {
+      "kind": "class",
+      "name": "ArticleTagMapping",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMapping.java"
+    },
+    {
+      "kind": "interface",
+      "name": "ArticleTagMappingRepository",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMappingRepository.java"
+    },
+    {
+      "kind": "class",
+      "name": "DomainClassifier",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/DomainClassifier.java"
+    },
+    {
+      "kind": "class",
+      "name": "LlmTagScorer",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/LlmTagScorer.java"
+    },
+    {
+      "kind": "record",
+      "name": "ScoredDomain",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/ScoredDomain.java"
+    },
+    {
+      "kind": "record",
+      "name": "ScoredTag",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/ScoredTag.java"
+    },
+    {
+      "kind": "class",
+      "name": "TagController",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagController.java"
+    },
+    {
+      "kind": "class",
+      "name": "TagDomain",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagDomain.java"
+    },
+    {
+      "kind": "interface",
+      "name": "TagDomainRepository",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagDomainRepository.java"
+    },
+    {
+      "kind": "class",
+      "name": "TagEvaluationAgent",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java"
+    },
+    {
+      "kind": "record",
+      "name": "CandidateTag",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java"
+    },
+    {
+      "kind": "record",
+      "name": "TagInfo",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagInfo.java"
+    },
+    {
+      "kind": "interface",
+      "name": "ArticleTagMappingMapper",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/mapper/ArticleTagMappingMapper.java"
+    },
+    {
+      "kind": "interface",
+      "name": "TagDomainMapper",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/mapper/TagDomainMapper.java"
+    },
+    {
+      "kind": "class",
+      "name": "ArticleTagMappingPo",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/mp/ArticleTagMappingPo.java"
+    },
+    {
+      "kind": "class",
+      "name": "TagDomainPo",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java"
+    }
+  ],
+  "controllers": [
+    {
+      "name": "TagController",
+      "base_path": "/api/tags",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagController.java"
+    }
+  ],
+  "endpoints": [
+    {
+      "controller": "TagController",
+      "method": "GET",
+      "path": "/api/tags/domains",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagController.java"
+    },
+    {
+      "controller": "TagController",
+      "method": "GET",
+      "path": "/api/tags/domains/{domainName}",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagController.java"
+    }
+  ],
+  "entities": [
+    {
+      "name": "ArticleTagMapping",
+      "table": "article_tags",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMapping.java"
+    },
+    {
+      "name": "TagDomain",
+      "table": "tag_domains",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagDomain.java"
+    },
+    {
+      "name": "ArticleTagMappingPo",
+      "table": "article_tags",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/mp/ArticleTagMappingPo.java"
+    },
+    {
+      "name": "TagDomainPo",
+      "table": "tag_domains",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java"
+    }
+  ],
+  "repositories": [
+    {
+      "name": "ArticleTagMappingRepository",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMappingRepository.java"
+    },
+    {
+      "name": "TagDomainRepository",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagDomainRepository.java"
+    },
+    {
+      "name": "ArticleTagMappingMapper",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/mapper/ArticleTagMappingMapper.java"
+    },
+    {
+      "name": "TagDomainMapper",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/mapper/TagDomainMapper.java"
+    }
+  ],
+  "config_properties": [
+    {
+      "class": "LlmProperties",
+      "prefix": "app.llm",
+      "file": "backend/src/main/java/com/frontierscan/llm/LlmProperties.java"
+    }
+  ],
+  "scheduled_jobs": [],
+  "async_methods": [],
+  "imports": [
+    "com.baomidou.mybatisplus.annotation.IdType",
+    "com.baomidou.mybatisplus.annotation.TableId",
+    "com.baomidou.mybatisplus.annotation.TableName",
+    "com.baomidou.mybatisplus.core.conditions.query.QueryWrapper",
+    "com.baomidou.mybatisplus.core.mapper.BaseMapper",
+    "com.fasterxml.jackson.core.JsonProcessingException",
+    "com.fasterxml.jackson.databind.JsonNode",
+    "com.fasterxml.jackson.databind.ObjectMapper",
+    "com.frontierscan.common.api.ApiResponse",
+    "com.frontierscan.llm.LlmProperties",
+    "com.frontierscan.llm.tag.mapper.ArticleTagMappingMapper",
+    "com.frontierscan.llm.tag.mapper.TagDomainMapper",
+    "com.frontierscan.llm.tag.mp.ArticleTagMappingPo",
+    "com.frontierscan.llm.tag.mp.TagDomainPo",
+    "jakarta.persistence.Column",
+    "jakarta.persistence.Entity",
+    "jakarta.persistence.GeneratedValue",
+    "jakarta.persistence.GenerationType",
+    "jakarta.persistence.Id",
+    "jakarta.persistence.Table",
+    "jakarta.persistence.UniqueConstraint",
+    "java.io.IOException",
+    "java.nio.charset.StandardCharsets",
+    "java.time.Duration",
+    "java.time.OffsetDateTime",
+    "java.util.ArrayList",
+    "java.util.Comparator",
+    "java.util.HashMap",
+    "java.util.HashSet",
+    "java.util.LinkedHashMap",
+    "java.util.List",
+    "java.util.Locale",
+    "java.util.Map",
+    "java.util.Set",
+    "java.util.concurrent.CompletableFuture",
+    "java.util.concurrent.CompletionException",
+    "java.util.concurrent.Executor",
+    "java.util.regex.Pattern",
+    "java.util.stream.Collectors",
+    "lombok.AllArgsConstructor",
+    "lombok.Data",
+    "lombok.NoArgsConstructor",
+    "lombok.extern.slf4j.Slf4j",
+    "org.apache.ibatis.annotations.Mapper",
+    "org.apache.ibatis.annotations.Param",
+    "org.apache.ibatis.annotations.Select",
+    "org.springframework.beans.factory.annotation.Qualifier",
+    "org.springframework.boot.context.properties.ConfigurationProperties",
+    "org.springframework.boot.web.client.RestTemplateBuilder",
+    "org.springframework.core.io.ClassPathResource",
+    "org.springframework.data.jpa.repository.JpaRepository",
+    "org.springframework.data.jpa.repository.Modifying",
+    "org.springframework.data.jpa.repository.Query",
+    "org.springframework.data.repository.query.Param",
+    "org.springframework.http.HttpEntity",
+    "org.springframework.http.HttpHeaders",
+    "org.springframework.jdbc.core.JdbcTemplate",
+    "org.springframework.stereotype.Component",
+    "org.springframework.stereotype.Service",
+    "org.springframework.transaction.annotation.Transactional",
+    "org.springframework.web.bind.annotation.GetMapping",
+    "org.springframework.web.bind.annotation.PathVariable",
+    "org.springframework.web.bind.annotation.RequestMapping",
+    "org.springframework.web.bind.annotation.RestController",
+    "org.springframework.web.client.RestTemplate"
+  ],
+  "resources": []
+}

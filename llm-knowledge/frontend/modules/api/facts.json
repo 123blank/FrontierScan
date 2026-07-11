@@ -1,0 +1,70 @@
+{
+  "area": "frontend",
+  "module": "api",
+  "root_path": "frontend/src/api",
+  "source_files": [
+    "frontend/src/api/articles.ts",
+    "frontend/src/api/categories.ts",
+    "frontend/src/api/client.ts",
+    "frontend/src/api/collectionRuns.ts",
+    "frontend/src/api/sites.ts",
+    "frontend/src/api/tags.ts"
+  ],
+  "file_count": 6,
+  "files": [
+    {
+      "file": "frontend/src/api/articles.ts",
+      "kind": "ts"
+    },
+    {
+      "file": "frontend/src/api/categories.ts",
+      "kind": "ts"
+    },
+    {
+      "file": "frontend/src/api/client.ts",
+      "kind": "ts"
+    },
+    {
+      "file": "frontend/src/api/collectionRuns.ts",
+      "kind": "ts"
+    },
+    {
+      "file": "frontend/src/api/sites.ts",
+      "kind": "ts"
+    },
+    {
+      "file": "frontend/src/api/tags.ts",
+      "kind": "ts"
+    }
+  ],
+  "api_calls": [],
+  "routes": [],
+  "stores": [],
+  "exports": [
+    {
+      "name": "articleApi",
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "name": "categoryApi",
+      "file": "frontend/src/api/categories.ts"
+    },
+    {
+      "name": "apiClient",
+      "file": "frontend/src/api/client.ts"
+    },
+    {
+      "name": "collectionRunApi",
+      "file": "frontend/src/api/collectionRuns.ts"
+    },
+    {
+      "name": "siteApi",
+      "file": "frontend/src/api/sites.ts"
+    },
+    {
+      "name": "tagApi",
+      "file": "frontend/src/api/tags.ts"
+    }
+  ],
+  "components": []
+}

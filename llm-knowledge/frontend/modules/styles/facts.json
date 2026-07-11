@@ -1,0 +1,20 @@
+{
+  "area": "frontend",
+  "module": "styles",
+  "root_path": "frontend/src/styles",
+  "source_files": [
+    "frontend/src/styles/main.css"
+  ],
+  "file_count": 1,
+  "files": [
+    {
+      "file": "frontend/src/styles/main.css",
+      "kind": "css"
+    }
+  ],
+  "api_calls": [],
+  "routes": [],
+  "stores": [],
+  "exports": [],
+  "components": []
+}

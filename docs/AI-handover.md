@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-06
+> 最后更新：2026-07-11
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；2026-07-06 已补充 Harness Engineering 风格的项目结构、Skill/Agent 规划、`llm-knowledge` 知识库和只读流程脚本。后续业务开发建议先通过 Harness 流程做需求拆解、知识查询、DAG 规划、测试/评审门禁，再进入具体代码修改。
+> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 侧已完成项目规范入口、13 个项目级 Skill、12 类 Agent 职责、状态/DAG 契约，以及 L1 确定性基线 + L2 OpenAI 可降级语义增强 + L3 本地索引的知识工程首版。当前真正缺口是知识可靠性 V2、确定性状态运行时、正式 Skill/Agent 接入、Worktree 并行和验证/交付适配。下一步以 `docs/harness-skill-customization-plan.md` 的 M0+M1 为准，不应把 Smoke 通过解释为端到端闭环已经完成。
 
 ---
 
@@ -999,52 +999,76 @@ git-committer
 
 ### 16.4 自动文档查询与文档更新现状
 
-知识库根目录：
+知识库已从初始 scaffold 升级为分层混合架构：
 
 ```text
-llm-knowledge/
+L0 source truth
+-> L1 deterministic baseline
+-> L2 OpenAI semantic enrichment
+-> L3 local index / optional embeddings
+-> L4 dynamic consumption
 ```
 
-已建立的知识入口：
+当前实际产物：
 
 ```text
 llm-knowledge/overview.md
 llm-knowledge/backend/meta.yaml
 llm-knowledge/frontend/meta.yaml
-llm-knowledge/common/conventions/harness-workflow.md
-llm-knowledge/common/conventions/quality-gates.md
-llm-knowledge/common/conventions/execution-verification.md
-llm-knowledge/common/conventions/delivery.md
-llm-knowledge/common/conventions/testing.md
-llm-knowledge/common/tech/stack.md
+llm-knowledge/backend/modules/<module>/*.md
+llm-knowledge/backend/modules/<module>/facts.json
+llm-knowledge/frontend/modules/<module>/*.md
+llm-knowledge/frontend/modules/<module>/facts.json
+llm-knowledge/index/chunks.json
+llm-knowledge/index/manifest.json
 ```
 
-自动查询已可用：
+已生成模块：
+
+- 后端 7 个：`article/auth/category/collection/common/llm/site`。
+- 前端 7 个：`api/components/layouts/router/stores/styles/views`。
+- 本地索引共 105 个 Chunk。
+- 每个模块均保留 `custom/` 目录和追加式 `log.md`。
+
+知识生成入口：
 
 ```powershell
-.\.harness\scripts\kb-query.ps1 -Query "Spring Boot" -Mode knowledge-qa -Area backend
-.\.harness\scripts\kb-query.ps1 -Query "quality gate" -Mode knowledge-qa -Area common
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode all
+.\.harness\scripts\generate-kb.ps1 -Area backend -Mode baseline
+.\.harness\scripts\generate-kb.ps1 -Area frontend -Mode semantic
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode all -DryRun -Json
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode all -WithEmbeddings
 ```
 
-当前查询能力是多关键词/行级匹配，能返回相关文件和行号；还不是向量检索、语义检索或完整模块级知识路由。
-
-文档更新目前是“保守半自动”：
+知识查询入口：
 
 ```powershell
-.\.harness\scripts\scan-knowledge-inputs.ps1
-.\.harness\scripts\check-kb-freshness.ps1
+.\.harness\scripts\kb-query.ps1 -Root "D:\ProjectStudy\FrontierScan" -Query "ArticleController" -Mode api-search -Area backend
+.\.harness\scripts\kb-query.ps1 -Root "D:\ProjectStudy\FrontierScan" -Query "dashboard" -Mode frontend-ui-search -Area frontend
 ```
 
-现状：
+当前可确认状态：
 
-- `scan-knowledge-inputs.ps1` 能扫描后端包、前端区域和建议知识任务。
-- `check-kb-freshness.ps1` 能检查 `meta.yaml` 中的 `git_hash`、`generated_at`、`status` 和源码工作区变更。
-- `backend/meta.yaml`、`frontend/meta.yaml` 已有基础 registry，但 freshness 仍是 scaffold。
-- 尚未实现“读取源码 -> 自动改写 llm-knowledge 文档 -> 更新 freshness -> 追加 log.md”的完整自动生成。
+- L1 baseline：backend/frontend 均为 `fresh`。
+- L2 semantic：backend/frontend 均为 `pending`，未完成真实 OpenAI 成功路径验证。
+- L3 index：`fresh`，Embedding 为 `skipped`。
+- `kb-query.ps1` 优先消费本地索引，没有索引命中时回退 Markdown/YAML。
+- `check-kb-freshness.ps1` 检查 Git hash、工作区源码变化、Baseline、Semantic、Index 和 Manifest。
 
-因此，后续业务开发中可以先用知识查询辅助理解，但如果 freshness 报告为 stale 或 scaffold，必须回到源码直接核对。
+当前局限：
 
-### 16.5 当前只读 Harness 脚本
+- 后端首版扫描以 Java 正则事实提取为主，尚未完整解析 Controller 参数、响应类型、事务、配置文件、Flyway migration 和 Prompt 资源。
+- 前端复杂 TypeScript 嵌套泛型会导致 API 调用漏识别；实际 `api-usage.md` 仍可能为空。
+- 索引查询当前是平面关键词频次评分；当 `Area all` 命中业务索引时，可能跳过更相关的 `common/` 知识。
+- `Mode` 主要作用于 Markdown 回退路径，尚未成为索引路由的强约束。
+- Embedding 目前只有生成能力，没有检索消费路径；不应宣称已经具备向量检索。
+- `application`、`web-admin` 两组旧 scaffold 仍待盘点和清理。
+- `llm-knowledge/overview.md` 等旧文档中的 scaffold 描述仍需在 M0 统一修正。
+- 生成器目前支持 Area 级刷新，尚未提供 `-Module` 单模块刷新。
+
+使用要求：后续业务开发可以优先查询 L1/L3，但必须同时查看 `semantic_status`；关键业务流程、权限、事务、迁移和前端 API 契约仍需回到源码核对，直到 M1 Knowledge Reliability V2 验收通过。
+
+### 16.5 当前 Harness 脚本能力边界
 
 脚本目录：
 
@@ -1052,7 +1076,7 @@ llm-knowledge/common/tech/stack.md
 .harness/scripts/
 ```
 
-当前脚本均为只读辅助，不会 publish、push、commit、部署或创建 worktree：
+除 `generate-kb.ps1` 外，当前脚本均为只读校验、查询或计划辅助；所有脚本都不会 publish、push、commit、部署或实际创建 worktree。`generate-kb.ps1` 只允许写入 `llm-knowledge/`：
 
 ```text
 validate-structure.ps1
@@ -1063,11 +1087,15 @@ collect-diff-context.ps1
 select-tests.ps1
 scan-knowledge-inputs.ps1
 check-kb-freshness.ps1
+generate-kb.ps1
 plan-worktrees.ps1
 derive-interface-cases.ps1
 plan-build.ps1
 summarize-delivery.ps1
 smoke-harness-flow.ps1
+lib/generate-kb.mjs
+tests/generate-kb.test.mjs
+tests/kb-query.test.ps1
 ```
 
 最重要的总检命令：
@@ -1076,45 +1104,91 @@ smoke-harness-flow.ps1
 .\.harness\scripts\smoke-harness-flow.ps1
 ```
 
-该脚本串联运行结构校验、状态校验、DAG 校验、知识查询、知识 freshness、worktree 计划、接口用例草案、build plan 和 delivery summary。
+该脚本串联运行结构校验、状态校验、DAG 校验、知识查询、知识 freshness、知识生成 Dry Run、worktree 计划、接口用例草案、build plan 和 delivery summary。
+
+能力边界：
+
+- `plan-worktrees.ps1` 只输出 worktree 建议和命令文本，不创建分支或目录。
+- `derive-interface-cases.ps1` 只生成待补全的用例草稿，不发起 API/UI 请求。
+- `plan-build.ps1` 只输出构建建议，不执行发布或部署。
+- `summarize-delivery.ps1` 只区分 owned/unrelated 文件，不 stage、commit、push 或创建 PR。
+- `smoke-harness-flow.ps1` 验证脚手架和辅助能力，不代表真实业务 E2E 已跑通。
 
 ### 16.6 最近 Harness 验证结果
 
-2026-07-06 已执行：
+2026-07-11 最近一次核验：
 
 ```powershell
-.\.harness\scripts\smoke-harness-flow.ps1
-.\.harness\scripts\validate-structure.ps1
-.\.harness\scripts\validate-state.ps1 -StateFile .\.harness\states\e2e-state.template.json
-.\.harness\scripts\validate-state.ps1 -StateFile .\.harness\states\product-state.template.json
-.\.harness\scripts\validate-task-dag.ps1 -TaskDagFile .\.harness\templates\task-dag.example.json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\validate-structure.ps1 -Root "D:\ProjectStudy\FrontierScan"
+node .\.harness\scripts\tests\generate-kb.test.mjs
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\tests\kb-query.test.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\check-kb-freshness.ps1 -Root "D:\ProjectStudy\FrontierScan"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\generate-kb.ps1 -Root "D:\ProjectStudy\FrontierScan" -Area all -Mode all -DryRun -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\smoke-harness-flow.ps1 -Root "D:\ProjectStudy\FrontierScan" -TaskDagFile "D:\ProjectStudy\FrontierScan\.harness\templates\task-dag.example.json"
 ```
 
 结果：
 
-- Harness smoke flow 已跑通。
-- 结构校验通过：14 个目录、87 个文件、13 个 Skill。
+- Harness 结构校验通过：14 个目录、91 个必需文件、13 个 Skill 文件。
+- `generate-kb` 测试通过。
+- `kb-query` 测试通过。
+- Harness smoke flow 通过。
 - `e2e` 状态模板校验通过。
 - `product` 状态模板校验通过。
 - Task DAG 示例校验通过。
-- KB 查询可命中 `quality gate`、`build publish git delivery`、`worktree interface verification` 等 common 知识。
+- Knowledge Dry Run 识别 14 个模块，计划 137 个写入，实际写入 0。
+- 本地索引包含 105 个 Chunk：backend 56、frontend 49。
+- 未启用 `-WithEmbeddings` 时不会生成 `embeddings.jsonl`。
 
-已知 freshness 结果：
+Freshness：
 
-- backend 知识：`stale-or-incomplete`，原因是 `git_hash`、`generated_at` 为空，`status` 仍为 `scaffold`。
-- frontend 知识：`stale-or-incomplete`，除上述原因外，当前工作区还存在前端文件变更。
+- backend：Baseline `fresh`、Semantic `pending`、Index `fresh`、Source Changed `False`。
+- frontend：Baseline `fresh`、Semantic `pending`、Index `fresh`、Source Changed `False`。
+
+已覆盖的关键回归：
+
+- Dry Run 不写文件。
+- Baseline 生成模块、Facts 和 Index。
+- 缺少 OpenAI Key 时 L2 降级为 `pending`。
+- Embedding 只有显式开启时生成。
+- 仅刷新 backend 时保留 frontend Chunk。
+- Windows PowerShell 能读取 UTF-8 无 BOM 的中文 JSON。
+- 单 Chunk/单匹配结果不会因 PowerShell 自动展开而破坏 `.Count` 或遍历。
+
+未覆盖：
+
+- 真实 OpenAI Semantic 成功路径。
+- 真实 Embedding 调用与检索消费。
+- 真实业务需求从 requirement 到 delivery 的状态推进。
+- 自动 Agent 调度、Worktree 执行、部署和 API/UI 验证。
 
 ### 16.7 当前 Git 工作区注意事项
 
-本次 Harness 结构工作不应覆盖或回滚已有前端脏文件。当前需特别注意的 unrelated dirty files：
+Harness 基础结构已存在于提交：
 
 ```text
-frontend/src/styles/main.css
-frontend/src/views/CollectionRunsView.vue
-frontend/src/views/DashboardView.vue
-frontend/src/views/FavoritesView.vue
-frontend/src/views/SitesView.vue
+dfbb39a reactor: 重构项目架构成harnesss架构
 ```
+
+当前分层知识工程、测试、知识产物和计划文档仍有未提交改动。`git status --short` 主要包含：
+
+```text
+.codex/skills/frontier-kb-generate/SKILL.md
+.harness/scripts/generate-kb.ps1
+.harness/scripts/lib/generate-kb.mjs
+.harness/scripts/tests/*
+.harness/scripts/kb-query.ps1
+.harness/scripts/check-kb-freshness.ps1
+.harness/scripts/smoke-harness-flow.ps1
+.harness/structure-manifest.yaml
+docs/AI-handover.md
+docs/harness-skill-customization-plan.md
+llm-knowledge/backend/modules/*
+llm-knowledge/frontend/modules/*
+llm-knowledge/index/*
+```
+
+当前未发现 backend/frontend 业务源码属于本轮未提交知识工程改动。不要清理、回滚或提交这些 Harness-owned 文件，除非用户明确要求并先审查 owned file 边界。
 
 交付前可运行：
 
@@ -1122,18 +1196,34 @@ frontend/src/views/SitesView.vue
 .\.harness\scripts\summarize-delivery.ps1
 ```
 
-该脚本会把默认 Harness-owned 变更和 unrelated dirty files 分开列出，但不会 stage、commit 或 push。
+该脚本会把默认 Harness-owned 变更和 unrelated dirty files 分开列出，但不会 stage、commit 或 push。注意：生成的 14 个模块知识文件大多仍是 untracked，普通 `git diff --stat` 不会统计这些文件，交付时必须同时检查 `git ls-files --others --exclude-standard`。
 
 ### 16.8 后续建议
 
-优先级建议：
+完整路线以 `docs/harness-skill-customization-plan.md` 的 M0-M7 为准：
 
-1. 实现真正的 `frontier-kb-generate`：从 `backend/src`、`frontend/src` 自动生成或刷新 `llm-knowledge`，并写入 freshness。
-2. 增加从需求拆解输出创建 active state 文件的 helper。
-3. 增加从 Task DAG 规划结果写入 `.harness/outputs/task-dag.json` 的 helper。
-4. 如本地 Codex 需要，在每个 Skill 下补 `agents/openai.yaml` 元数据。
-5. 在用户明确批准后，再实现真正的 worktree 创建/合并能力。
-6. 接口验证、publish、git delivery 仍必须保持审批门禁，不要自动执行外部副作用。
+```text
+M0 baseline consolidation
+  -> M1 knowledge reliability
+  -> M2 deterministic state runtime
+  -> M3 single-story vertical slice
+  -> M4 Skill/Agent runtime integration
+  -> M5 DAG/Worktree/Fork-Join
+  -> M6 verification and delivery adapters
+  -> M7 evaluation and hardening
+```
+
+立即执行顺序是 M0 + M1，不要直接跳到多 Agent 或 Worktree：
+
+1. 统一 `AI-handover`、架构文档、知识 overview、Skill Registry 和 Structure Manifest 的状态描述。
+2. 盘点并处理旧 `application`、`web-admin` scaffold，删除前必须确认没有人工内容。
+3. 修复 Mode/Area/Common 感知的知识检索，避免 `quality gate` 被 LLM 业务类关键词抢占。
+4. 补前端复杂泛型 API、后端 resources/config/migration 的真实提取。
+5. 增加 `-Module` 单模块刷新，避免 Area 级全量重写。
+6. 增加 Semantic mocked success、timeout、malformed response 测试。
+7. 对 Embedding 做明确决策：实现可测试的消费路径，或保持禁用；不要保留只写不读的向量产物。
+
+M1 验收通过后，下一目标是 M2 确定性状态运行时。运行时必须拥有阶段推进权，Agent 只返回结构化结果；在单 Story 纵向闭环稳定前，不实现并行 Worktree。
 
 接手新业务需求时，推荐流程：
 
@@ -1152,7 +1242,11 @@ frontier-common
 -> frontier-git-delivery
 ```
 
+注意：以上只是人工/Codex 执行时的推荐职责链，不代表当前已由运行时自动派发。
+
 ### 16.9 2026-07-06 最新补充：AGENTS 默认入口规范已落地
+
+> 本节保留 2026-07-06 的历史验证记录；当前文件数量、知识状态和下一步以 16.6、16.10、16.11 为准。
 
 本轮已将 FrontierScan 的 Codex 默认入口规范补充到：
 
@@ -1198,3 +1292,121 @@ Select-String -Path 'D:\ProjectStudy\FrontierScan\AGENTS.md' -Pattern 'FrontierS
 1. 将 `frontier-*` Skills 从项目脚手架进一步接入到当前 Codex 可用 Skill runtime，或补充本地 loader 需要的 metadata。
 2. 优先实现真正的 `frontier-kb-generate`，让 `llm-knowledge/` 能从 `backend/src` 和 `frontend/src` 自动刷新。
 3. 在首次真实业务需求开始时，创建 active state 文件和具体 `.harness/outputs/task-dag.json`，不要直接改 template 文件。
+
+### 16.10 2026-07-11 最新补充：分层混合知识工程实现状态
+
+`frontier-kb-generate` 已从“半自动骨架”升级为可运行的分层混合知识工程首版：
+
+```text
+L0 source truth
+-> L1 deterministic baseline
+-> L2 OpenAI semantic enrichment
+-> L3 local index / optional embeddings
+-> L4 dynamic consumption by Skills and Agents
+```
+
+本轮实现入口：
+
+```powershell
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode all
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode baseline
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode all -DryRun -Json
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode all -WithEmbeddings
+```
+
+设计约束：
+
+- PowerShell 保持 Harness 入口风格，Node.js 负责复杂源码扫描、文档生成、OpenAI 调用和 JSON 索引。
+- L1 自动提取源码事实，后端按包拆分，前端按目录区域拆分。
+- L2 使用 OpenAI 官方 API；缺少 `OPENAI_API_KEY` 或调用失败时降级，不阻塞 L1/L3。
+- L3 默认生成本地 `chunks.json` 和 `manifest.json`；只有显式 `-WithEmbeddings` 才生成 `embeddings.jsonl`。
+- `kb-query.ps1` 已优先消费 `llm-knowledge/index/chunks.json`，再回退 Markdown/YAML 搜索。
+- `check-kb-freshness.ps1` 已识别 baseline、semantic、index 三类 freshness。
+
+安全边界：
+
+- 生成脚本只允许写 `llm-knowledge/`。
+- 不读取 `.env`、shell history、私钥或本地私有配置。
+- 不修改业务代码、不 stage、不 commit、不 push、不 publish。
+
+当前验证状态：
+
+- L1 和 L3 已运行并通过测试。
+- L2 降级路径已通过测试，真实 OpenAI 成功路径未验证。
+- 14 个模块和 105 个 Chunk 已生成。
+- Area 局部刷新保留其他 Area 的索引已通过回归测试。
+- 知识工程实现仍在未提交工作区中，交付前必须检查 tracked 与 untracked 文件。
+
+不要把本节理解为“文章架构已全部实现”。当前实现的是知识工程首版；状态运行时、自动 Agent、并行 Worktree、真实接口验证和 DevOps 闭环仍未实现。
+
+### 16.11 2026-07-11 最新交接：文章对照结论与下一阶段计划
+
+对照《从 AI Coding 到 Harness Engineering 的端到端工程开发实践》后的结论：
+
+- 当前项目已经具备“知识优先、规范驱动的半自动 AI Coding”能力。
+- 当前不能实现“输入需求后自动完成拆解、Agent 派发、Worktree 并行、测试、审查、部署、验证和提交”的文章级理想效果。
+- 结构契约相对完整，知识工程已进入可运行首版，端到端执行运行时仍处于早期阶段。
+- `smoke-harness-flow.ps1` 通过只能证明模板、校验器、Dry Run 和计划脚本可执行，不能作为业务 E2E 验收证据。
+
+主要差距：
+
+| 维度 | 当前状态 | 关键缺口 |
+| --- | --- | --- |
+| Knowledge | L1/L3 可运行，L2 pending | 提取准确率、Common 路由、单模块刷新、Semantic 成功测试 |
+| State | Schema、模板、Validator 已有 | Active state、原子更新、合法转换、断点恢复、锁 |
+| Skill | 13 个项目内定义 | 当前 Codex 运行时未确认自动发现/安装 |
+| Agent | 12 类角色注册 | Dispatcher、上下文隔离、模型选择、工具权限执行 |
+| Parallel | DAG 和 Worktree 计划 | 波次强校验、实际创建/合并、冲突停止、Fork-Join |
+| Quality | Test/Review/Build/Verify 辅助脚本 | 真实命令执行、证据落盘、Fix 循环、API/UI 请求 |
+| Delivery | 审批规则和摘要 | 测试环境适配、部署、owned-file commit/PR 门禁 |
+| Evaluation | 暂无 | 流程成功率、恢复率、检索准确率、Token/成本和耗时 |
+
+最新计划文档：
+
+```text
+docs/harness-skill-customization-plan.md
+```
+
+该文档已更新为 M0-M7 路线，并明确：
+
+- 外部确定性运行时拥有状态推进权。
+- Agent 只返回 Schema 校验后的认知结果，不能自行决定下一阶段。
+- PowerShell 继续作为 Windows 入口，复杂编排目标为 Node/TypeScript 核心。
+- Hook 可以做生命周期增强，但 CLI Resume 必须在没有 Hook 时也能工作。
+- 先单 Story 纵向闭环，再做多 Agent/Worktree 并行。
+
+下一批实现范围只做 M0 + M1：
+
+1. 完成剩余状态文档和 Registry 一致性修正。
+2. 处理旧 scaffold，确保不删除人工内容。
+3. 修复真实前端 API 泛型提取和后端 resource/migration 提取。
+4. 修复索引的 Mode/Area/Common 路由。
+5. 增加 `-Module` 刷新。
+6. 增加 Semantic Mock 成功/失败/异常输出测试。
+7. 决定 Embedding 是端到端实现还是保持禁用。
+
+在以下条件满足前，不开始 M2 之后的工作：
+
+- `quality gate` 在 `Area all` 下能优先返回 Common 质量门文档。
+- 实际前端 API 生成结果非空且路径正确。
+- 后端配置与 migration 被知识文档引用。
+- 单模块刷新不改写其他模块。
+- Semantic Mock 成功路径可验证。
+- 旧 scaffold 和所有知识状态文档不再互相矛盾。
+
+进入后续里程碑前需要用户确认的决策：
+
+1. Codex 项目 Skill/Plugin 的正式安装与发现方式。
+2. Active run 定位方式以及是否使用 Codex 生命周期 Hook。
+3. 可用于 API/UI 验证的安全环境、鉴权和测试数据。
+4. 哪些 Git/Worktree 操作允许在逐次批准后自动执行。
+5. 是否启用并消费 Embedding。
+6. 是否提供 OpenAI Key 做真实 Semantic Smoke。
+
+外部项目复盘/SOP 已创建，不属于仓库交付物：
+
+```text
+D:\学习\个人实习\frontierscan-harness-engineering-sop.md
+```
+
+该 SOP 包含项目背景、方案取舍、四个排查案例、验证证据、量化数字、简历 Bullet、STAR 和面试问答。项目交接以本文件和仓库内计划文档为准；SOP 用于个人复盘和求职表达。

@@ -1,0 +1,143 @@
+{
+  "area": "backend",
+  "module": "category",
+  "root_path": "backend/src/main/java/com/frontierscan/category",
+  "source_files": [
+    "backend/src/main/java/com/frontierscan/category/Category.java",
+    "backend/src/main/java/com/frontierscan/category/CategoryController.java",
+    "backend/src/main/java/com/frontierscan/category/CategoryRepository.java",
+    "backend/src/main/java/com/frontierscan/category/CategoryService.java",
+    "backend/src/main/java/com/frontierscan/category/CategoryView.java",
+    "backend/src/main/java/com/frontierscan/category/package-info.java"
+  ],
+  "file_count": 6,
+  "classes": [
+    {
+      "kind": "class",
+      "name": "Category",
+      "file": "backend/src/main/java/com/frontierscan/category/Category.java"
+    },
+    {
+      "kind": "class",
+      "name": "CategoryController",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    },
+    {
+      "kind": "record",
+      "name": "CreateRequest",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    },
+    {
+      "kind": "record",
+      "name": "UpdateRequest",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    },
+    {
+      "kind": "interface",
+      "name": "CategoryRepository",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryRepository.java"
+    },
+    {
+      "kind": "class",
+      "name": "CategoryService",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryService.java"
+    },
+    {
+      "kind": "record",
+      "name": "CategoryView",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryView.java"
+    }
+  ],
+  "controllers": [
+    {
+      "name": "CategoryController",
+      "base_path": "/api/categories",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    }
+  ],
+  "endpoints": [
+    {
+      "controller": "CategoryController",
+      "method": "GET",
+      "path": "/api/categories",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    },
+    {
+      "controller": "CategoryController",
+      "method": "GET",
+      "path": "/api/categories/{id}",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    },
+    {
+      "controller": "CategoryController",
+      "method": "POST",
+      "path": "/api/categories",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    },
+    {
+      "controller": "CategoryController",
+      "method": "PUT",
+      "path": "/api/categories/{id}",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    },
+    {
+      "controller": "CategoryController",
+      "method": "DELETE",
+      "path": "/api/categories/{id}",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Category",
+      "table": "categories",
+      "file": "backend/src/main/java/com/frontierscan/category/Category.java"
+    }
+  ],
+  "repositories": [
+    {
+      "name": "CategoryRepository",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryRepository.java"
+    }
+  ],
+  "config_properties": [],
+  "scheduled_jobs": [],
+  "async_methods": [],
+  "imports": [
+    "com.frontierscan.article.ArticleRepository",
+    "com.frontierscan.common.api.ApiResponse",
+    "com.frontierscan.common.error.BusinessRuleException",
+    "com.frontierscan.common.error.ResourceNotFoundException",
+    "com.frontierscan.common.security.JwtPrincipal",
+    "com.frontierscan.site.SiteRepository",
+    "jakarta.persistence.Column",
+    "jakarta.persistence.Entity",
+    "jakarta.persistence.GeneratedValue",
+    "jakarta.persistence.GenerationType",
+    "jakarta.persistence.Id",
+    "jakarta.persistence.Table",
+    "jakarta.validation.Valid",
+    "jakarta.validation.constraints.NotBlank",
+    "java.time.OffsetDateTime",
+    "java.util.List",
+    "java.util.Map",
+    "java.util.Optional",
+    "lombok.AllArgsConstructor",
+    "lombok.Data",
+    "lombok.NoArgsConstructor",
+    "org.springframework.data.jpa.repository.JpaRepository",
+    "org.springframework.security.core.annotation.AuthenticationPrincipal",
+    "org.springframework.stereotype.Service",
+    "org.springframework.transaction.annotation.Transactional",
+    "org.springframework.web.bind.annotation.DeleteMapping",
+    "org.springframework.web.bind.annotation.GetMapping",
+    "org.springframework.web.bind.annotation.PathVariable",
+    "org.springframework.web.bind.annotation.PostMapping",
+    "org.springframework.web.bind.annotation.PutMapping",
+    "org.springframework.web.bind.annotation.RequestBody",
+    "org.springframework.web.bind.annotation.RequestMapping",
+    "org.springframework.web.bind.annotation.RequestParam",
+    "org.springframework.web.bind.annotation.RestController"
+  ],
+  "resources": []
+}

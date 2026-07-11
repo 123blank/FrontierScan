@@ -1,0 +1,218 @@
+{
+  "area": "backend",
+  "module": "article",
+  "root_path": "backend/src/main/java/com/frontierscan/article",
+  "source_files": [
+    "backend/src/main/java/com/frontierscan/article/Article.java",
+    "backend/src/main/java/com/frontierscan/article/ArticleController.java",
+    "backend/src/main/java/com/frontierscan/article/ArticleRepository.java",
+    "backend/src/main/java/com/frontierscan/article/ArticleService.java",
+    "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryProperties.java",
+    "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryScheduler.java",
+    "backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java",
+    "backend/src/main/java/com/frontierscan/article/ArticleSummaryStatus.java",
+    "backend/src/main/java/com/frontierscan/article/Favorite.java",
+    "backend/src/main/java/com/frontierscan/article/FavoriteArticleView.java",
+    "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
+    "backend/src/main/java/com/frontierscan/article/package-info.java"
+  ],
+  "file_count": 12,
+  "classes": [
+    {
+      "kind": "class",
+      "name": "Article",
+      "file": "backend/src/main/java/com/frontierscan/article/Article.java"
+    },
+    {
+      "kind": "class",
+      "name": "ArticleController",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "kind": "interface",
+      "name": "ArticleRepository",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleRepository.java"
+    },
+    {
+      "kind": "class",
+      "name": "ArticleService",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "kind": "record",
+      "name": "ArticleSummaryRecoveryProperties",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryProperties.java"
+    },
+    {
+      "kind": "class",
+      "name": "ArticleSummaryRecoveryScheduler",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryScheduler.java"
+    },
+    {
+      "kind": "class",
+      "name": "ArticleSummaryService",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java"
+    },
+    {
+      "kind": "class",
+      "name": "ArticleSummaryStatus",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryStatus.java"
+    },
+    {
+      "kind": "class",
+      "name": "Favorite",
+      "file": "backend/src/main/java/com/frontierscan/article/Favorite.java"
+    },
+    {
+      "kind": "record",
+      "name": "FavoriteArticleView",
+      "file": "backend/src/main/java/com/frontierscan/article/FavoriteArticleView.java"
+    },
+    {
+      "kind": "interface",
+      "name": "FavoriteRepository",
+      "file": "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java"
+    }
+  ],
+  "controllers": [
+    {
+      "name": "ArticleController",
+      "base_path": "/api/articles",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    }
+  ],
+  "endpoints": [
+    {
+      "controller": "ArticleController",
+      "method": "GET",
+      "path": "/api/articles",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "controller": "ArticleController",
+      "method": "GET",
+      "path": "/api/articles/{id}",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "controller": "ArticleController",
+      "method": "POST",
+      "path": "/api/articles/{id}/summary/retry",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "controller": "ArticleController",
+      "method": "GET",
+      "path": "/api/articles/favorites",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "controller": "ArticleController",
+      "method": "POST",
+      "path": "/api/articles/{id}/favorite",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "controller": "ArticleController",
+      "method": "DELETE",
+      "path": "/api/articles/{id}/favorite",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "controller": "ArticleController",
+      "method": "GET",
+      "path": "/api/articles/count",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Article",
+      "table": "articles",
+      "file": "backend/src/main/java/com/frontierscan/article/Article.java"
+    },
+    {
+      "name": "Favorite",
+      "table": "favorites",
+      "file": "backend/src/main/java/com/frontierscan/article/Favorite.java"
+    }
+  ],
+  "repositories": [
+    {
+      "name": "ArticleRepository",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleRepository.java"
+    },
+    {
+      "name": "FavoriteRepository",
+      "file": "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java"
+    }
+  ],
+  "config_properties": [
+    {
+      "class": "ArticleSummaryRecoveryProperties",
+      "prefix": "app.summary-recovery",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryProperties.java"
+    }
+  ],
+  "scheduled_jobs": [
+    {
+      "class": "ArticleSummaryRecoveryScheduler",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryScheduler.java"
+    }
+  ],
+  "async_methods": [],
+  "imports": [
+    "com.frontierscan.collection.CollectResult",
+    "com.frontierscan.common.api.ApiResponse",
+    "com.frontierscan.common.error.ResourceNotFoundException",
+    "com.frontierscan.common.security.JwtPrincipal",
+    "com.frontierscan.llm.LlmProperties",
+    "com.frontierscan.llm.SummaryMapReduceException",
+    "com.frontierscan.llm.SummaryMapReduceService",
+    "com.frontierscan.llm.SummaryQualityEvaluator",
+    "com.frontierscan.llm.SummaryQualityResult",
+    "com.frontierscan.llm.SummaryRequest",
+    "com.frontierscan.llm.SummaryResult",
+    "com.frontierscan.llm.tag.TagEvaluationAgent",
+    "com.frontierscan.llm.tag.mapper.ArticleTagMappingMapper",
+    "jakarta.persistence.Column",
+    "jakarta.persistence.Entity",
+    "jakarta.persistence.GeneratedValue",
+    "jakarta.persistence.GenerationType",
+    "jakarta.persistence.Id",
+    "jakarta.persistence.Table",
+    "java.time.LocalDate",
+    "java.time.LocalTime",
+    "java.time.OffsetDateTime",
+    "java.time.ZoneId",
+    "java.util.List",
+    "java.util.Map",
+    "lombok.AllArgsConstructor",
+    "lombok.Data",
+    "lombok.NoArgsConstructor",
+    "lombok.extern.slf4j.Slf4j",
+    "org.slf4j.Logger",
+    "org.slf4j.LoggerFactory",
+    "org.springframework.boot.autoconfigure.condition.ConditionalOnProperty",
+    "org.springframework.boot.context.properties.ConfigurationProperties",
+    "org.springframework.data.domain.Page",
+    "org.springframework.data.domain.PageRequest",
+    "org.springframework.data.domain.Pageable",
+    "org.springframework.data.jpa.repository.JpaRepository",
+    "org.springframework.data.jpa.repository.Query",
+    "org.springframework.data.repository.query.Param",
+    "org.springframework.scheduling.annotation.Scheduled",
+    "org.springframework.security.core.annotation.AuthenticationPrincipal",
+    "org.springframework.stereotype.Component",
+    "org.springframework.stereotype.Service",
+    "org.springframework.transaction.annotation.Transactional",
+    "org.springframework.web.bind.annotation.DeleteMapping",
+    "org.springframework.web.bind.annotation.GetMapping",
+    "org.springframework.web.bind.annotation.PathVariable",
+    "org.springframework.web.bind.annotation.PostMapping",
+    "org.springframework.web.bind.annotation.RequestMapping",
+    "org.springframework.web.bind.annotation.RequestParam",
+    "org.springframework.web.bind.annotation.RestController"
+  ],
+  "resources": []
+}

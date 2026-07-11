@@ -62,6 +62,91 @@ function Get-ModeFileHints {
   }
 }
 
+function Read-JsonFile {
+  param([string]$Path)
+
+  $parsed = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($parsed -is [System.Array]) {
+    return $parsed
+  }
+
+  return @($parsed)
+}
+
+function Select-IndexMatches {
+  param(
+    [string]$KnowledgeRoot,
+    [string]$Needle,
+    [string]$SelectedArea,
+    [int]$Limit
+  )
+
+  $chunksPath = Join-Path $KnowledgeRoot "index\chunks.json"
+  if (-not (Test-Path -LiteralPath $chunksPath)) {
+    return @()
+  }
+
+  $terms = @(
+    $Needle -split "\s+" |
+      ForEach-Object { $_.Trim() } |
+      Where-Object { $_ }
+  )
+
+  if ($terms.Count -eq 0) {
+    return @()
+  }
+
+  try {
+    $chunks = @(Read-JsonFile -Path $chunksPath)
+  } catch {
+    throw "Invalid knowledge index: ${chunksPath} ($($_.Exception.Message))"
+  }
+
+  $matches = @()
+  foreach ($chunk in $chunks) {
+    if ($SelectedArea -ne "all" -and $chunk.area -ne $SelectedArea) {
+      continue
+    }
+
+    $haystack = @(
+      $chunk.text,
+      $chunk.area,
+      $chunk.module,
+      $chunk.doc_type,
+      (@($chunk.keywords) -join " "),
+      (@($chunk.source_files) -join " ")
+    ) -join "`n"
+
+    $score = 0
+    foreach ($term in $terms) {
+      $escaped = [regex]::Escape($term)
+      $score += ([regex]::Matches($haystack, $escaped, "IgnoreCase")).Count
+    }
+
+    if ($score -le 0) {
+      continue
+    }
+
+    $preview = (($chunk.text -replace "\s+", " ").Trim())
+    if ($preview.Length -gt 180) {
+      $preview = $preview.Substring(0, 180) + "..."
+    }
+
+    $matches += [pscustomobject]@{
+      Score = $score
+      Area = $chunk.area
+      Module = $chunk.module
+      DocType = $chunk.doc_type
+      Path = $chunk.path
+      BaselineStatus = $chunk.baseline_status
+      SemanticStatus = $chunk.semantic_status
+      Text = $preview
+    }
+  }
+
+  return @($matches | Sort-Object Score -Descending | Select-Object -First $Limit)
+}
+
 function Get-CandidateFiles {
   param(
     [string[]]$Roots,
@@ -101,7 +186,7 @@ function Select-Matches {
 
   $queryResults = @()
   foreach ($file in $Files) {
-    $content = @(Get-Content -LiteralPath $file.FullName -ErrorAction Stop)
+    $content = @(Get-Content -LiteralPath $file.FullName -Encoding UTF8 -ErrorAction Stop)
     $fullText = ($content -join "`n")
 
     $allTermsFound = $true
@@ -151,9 +236,21 @@ Write-Output "Frontier KB Query"
 Write-Output "Mode: ${Mode}"
 Write-Output "Area: ${Area}"
 Write-Output "Query: ${Query}"
+
+$indexResults = @(Select-IndexMatches -KnowledgeRoot $knowledgeRoot -Needle $Query -SelectedArea $Area -Limit $MaxMatches)
+if ($indexResults.Count -gt 0) {
+  Write-Output "Source: llm-knowledge/index/chunks.json"
+  Write-Output "Matches: $($indexResults.Count)"
+  foreach ($result in $indexResults) {
+    Write-Output "- score=$($result.Score) area=$($result.Area) module=$($result.Module) doc=$($result.DocType) baseline=$($result.BaselineStatus) semantic=$($result.SemanticStatus) path=$($result.Path): $($result.Text)"
+  }
+  exit 0
+}
+
+Write-Output "Source: markdown-fallback"
 Write-Output "Candidate files: $($candidateFiles.Count)"
 
-$results = Select-Matches -Files $candidateFiles -Needle $Query -Limit $MaxMatches
+$results = @(Select-Matches -Files $candidateFiles -Needle $Query -Limit $MaxMatches)
 
 if ($results.Count -eq 0) {
   Write-Output "Matches: 0"

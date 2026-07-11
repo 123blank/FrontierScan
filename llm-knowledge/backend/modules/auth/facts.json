@@ -1,0 +1,110 @@
+{
+  "area": "backend",
+  "module": "auth",
+  "root_path": "backend/src/main/java/com/frontierscan/auth",
+  "source_files": [
+    "backend/src/main/java/com/frontierscan/auth/AuthController.java",
+    "backend/src/main/java/com/frontierscan/auth/AuthService.java",
+    "backend/src/main/java/com/frontierscan/auth/UserAccount.java",
+    "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
+    "backend/src/main/java/com/frontierscan/auth/package-info.java"
+  ],
+  "file_count": 5,
+  "classes": [
+    {
+      "kind": "class",
+      "name": "AuthController",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthController.java"
+    },
+    {
+      "kind": "record",
+      "name": "LoginRequest",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthController.java"
+    },
+    {
+      "kind": "class",
+      "name": "AuthService",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthService.java"
+    },
+    {
+      "kind": "record",
+      "name": "LoginResult",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthService.java"
+    },
+    {
+      "kind": "class",
+      "name": "UserAccount",
+      "file": "backend/src/main/java/com/frontierscan/auth/UserAccount.java"
+    },
+    {
+      "kind": "interface",
+      "name": "UserAccountRepository",
+      "file": "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java"
+    }
+  ],
+  "controllers": [
+    {
+      "name": "AuthController",
+      "base_path": "/api/auth",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthController.java"
+    }
+  ],
+  "endpoints": [
+    {
+      "controller": "AuthController",
+      "method": "POST",
+      "path": "/api/auth/login",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthController.java"
+    },
+    {
+      "controller": "AuthController",
+      "method": "POST",
+      "path": "/api/auth/me",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthController.java"
+    }
+  ],
+  "entities": [
+    {
+      "name": "UserAccount",
+      "table": "app_users",
+      "file": "backend/src/main/java/com/frontierscan/auth/UserAccount.java"
+    }
+  ],
+  "repositories": [
+    {
+      "name": "UserAccountRepository",
+      "file": "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java"
+    }
+  ],
+  "config_properties": [],
+  "scheduled_jobs": [],
+  "async_methods": [],
+  "imports": [
+    "com.frontierscan.common.api.ApiResponse",
+    "com.frontierscan.common.security.JwtPrincipal",
+    "com.frontierscan.common.security.JwtUtil",
+    "jakarta.persistence.Column",
+    "jakarta.persistence.Entity",
+    "jakarta.persistence.GeneratedValue",
+    "jakarta.persistence.GenerationType",
+    "jakarta.persistence.Id",
+    "jakarta.persistence.Table",
+    "jakarta.validation.Valid",
+    "jakarta.validation.constraints.NotBlank",
+    "java.time.OffsetDateTime",
+    "java.util.Map",
+    "java.util.Optional",
+    "lombok.AllArgsConstructor",
+    "lombok.Data",
+    "lombok.NoArgsConstructor",
+    "org.springframework.data.jpa.repository.JpaRepository",
+    "org.springframework.security.core.annotation.AuthenticationPrincipal",
+    "org.springframework.security.crypto.password.PasswordEncoder",
+    "org.springframework.stereotype.Service",
+    "org.springframework.web.bind.annotation.PostMapping",
+    "org.springframework.web.bind.annotation.RequestBody",
+    "org.springframework.web.bind.annotation.RequestMapping",
+    "org.springframework.web.bind.annotation.RestController"
+  ],
+  "resources": []
+}

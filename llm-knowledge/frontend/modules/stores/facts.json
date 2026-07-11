@@ -1,0 +1,36 @@
+{
+  "area": "frontend",
+  "module": "stores",
+  "root_path": "frontend/src/stores",
+  "source_files": [
+    "frontend/src/stores/auth.ts"
+  ],
+  "file_count": 1,
+  "files": [
+    {
+      "file": "frontend/src/stores/auth.ts",
+      "kind": "ts"
+    }
+  ],
+  "api_calls": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "file": "frontend/src/stores/auth.ts"
+    }
+  ],
+  "routes": [],
+  "stores": [
+    {
+      "name": "auth",
+      "file": "frontend/src/stores/auth.ts"
+    }
+  ],
+  "exports": [
+    {
+      "name": "useAuthStore",
+      "file": "frontend/src/stores/auth.ts"
+    }
+  ],
+  "components": []
+}

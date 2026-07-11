@@ -1,0 +1,70 @@
+{
+  "area": "frontend",
+  "module": "views",
+  "root_path": "frontend/src/views",
+  "source_files": [
+    "frontend/src/views/CategoriesView.vue",
+    "frontend/src/views/CollectionRunsView.vue",
+    "frontend/src/views/DashboardView.vue",
+    "frontend/src/views/FavoritesView.vue",
+    "frontend/src/views/LoginView.vue",
+    "frontend/src/views/SitesView.vue"
+  ],
+  "file_count": 6,
+  "files": [
+    {
+      "file": "frontend/src/views/CategoriesView.vue",
+      "kind": "vue"
+    },
+    {
+      "file": "frontend/src/views/CollectionRunsView.vue",
+      "kind": "vue"
+    },
+    {
+      "file": "frontend/src/views/DashboardView.vue",
+      "kind": "vue"
+    },
+    {
+      "file": "frontend/src/views/FavoritesView.vue",
+      "kind": "vue"
+    },
+    {
+      "file": "frontend/src/views/LoginView.vue",
+      "kind": "vue"
+    },
+    {
+      "file": "frontend/src/views/SitesView.vue",
+      "kind": "vue"
+    }
+  ],
+  "api_calls": [],
+  "routes": [],
+  "stores": [],
+  "exports": [],
+  "components": [
+    {
+      "name": "CategoriesView.vue",
+      "file": "frontend/src/views/CategoriesView.vue"
+    },
+    {
+      "name": "CollectionRunsView.vue",
+      "file": "frontend/src/views/CollectionRunsView.vue"
+    },
+    {
+      "name": "DashboardView.vue",
+      "file": "frontend/src/views/DashboardView.vue"
+    },
+    {
+      "name": "FavoritesView.vue",
+      "file": "frontend/src/views/FavoritesView.vue"
+    },
+    {
+      "name": "LoginView.vue",
+      "file": "frontend/src/views/LoginView.vue"
+    },
+    {
+      "name": "SitesView.vue",
+      "file": "frontend/src/views/SitesView.vue"
+    }
+  ]
+}
