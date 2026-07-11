@@ -1,8 +1,8 @@
 # FrontierScan Harness Architecture Adaptation
 
-This document records the first structural adaptation of FrontierScan toward a Harness Engineering workflow.
+This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-The current step creates structure only. It does not implement custom Skills, Agents, runtime hooks, or business-code changes.
+The repository now contains implemented structural contracts, deterministic helpers, 13 project-local Skill definitions, a 12-role Agent registry, and a layered knowledge generator. The knowledge generator and query helpers are implemented at V1. The Agent runtime, deterministic phase runner, lifecycle hooks, Worktree execution, and DevOps loop are not implemented.
 
 ## Added Structure
 
@@ -23,7 +23,9 @@ llm-knowledge/
   frontend/
   common/
 docs/
-  harness-skill-customization-plan.md
+  harness-m0-m1/
+    PLAN.md
+    REPORT.md
   harness-architecture-adaptation.md
 ```
 
@@ -34,10 +36,10 @@ docs/
 | `.harness/` | Runtime state, schemas, and generated workflow outputs |
 | `.harness/workflows/` | Phase definitions for single-story E2E and product-level Fork-Join workflows |
 | `.harness/templates/` | Standard output templates for requirements, design, review, testing, verification, and delivery |
-| `.harness/scripts/` | Placeholder location for deterministic workflow scripts |
-| `.codex/agents/` | Planned expert Agent role registry |
-| `.codex/skills/` | Project-local custom Skills |
-| `llm-knowledge/` | Structured knowledge base consumed by future Skills/Agents |
+| `.harness/scripts/` | Deterministic validators, planners, knowledge generator/query, freshness checks, smoke flow, and tests |
+| `.codex/agents/` | Expert Agent role and responsibility registry; not an active runtime |
+| `.codex/skills/` | 13 project-local Skill definitions with mixed implementation readiness |
+| `llm-knowledge/` | Generated and curated structured knowledge consumed by current Codex work and future runtime workers |
 | `docs/` | Human-facing architecture and planning docs |
 
 ## Current FrontierScan Adaptation
@@ -46,8 +48,8 @@ The Tencent article describes a Go/tRPC/internal-platform environment. FrontierS
 
 | Article concept | FrontierScan equivalent |
 | --- | --- |
-| Service knowledge documents | `llm-knowledge/backend/modules/application/*.md` |
-| Frontend/admin knowledge | `llm-knowledge/frontend/modules/web-admin/*.md` |
+| Service knowledge documents | `llm-knowledge/backend/modules/<module>/*.md` for 7 backend modules |
+| Frontend/admin knowledge | `llm-knowledge/frontend/modules/<module>/*.md` for 7 frontend modules |
 | `meta.yaml` registry | `llm-knowledge/backend/meta.yaml`, `llm-knowledge/frontend/meta.yaml` |
 | E2E state file | `.harness/states/e2e-state.template.json` |
 | Product state file | `.harness/states/product-state.template.json` |
@@ -56,7 +58,7 @@ The Tencent article describes a Go/tRPC/internal-platform environment. FrontierS
 | Expert Agent registry | `.codex/agents/agents.yaml` |
 | Project Skills | `.codex/skills/`, starting with `.codex/skills/frontier-common/` |
 
-## Current Workflow Skeleton
+## Current Workflow Contracts
 
 The single-story E2E workflow is defined in `.harness/workflows/e2e-development.yaml`:
 
@@ -81,7 +83,7 @@ breakdown -> forking -> joining -> done
 
 These workflow files are structural contracts only. They do not execute automation yet.
 
-## Current Agent Skeleton
+## Current Agent Registry
 
 `.codex/agents/agents.yaml` defines planned expert roles:
 
@@ -102,9 +104,9 @@ git-committer
 
 The registry records responsibilities and file-modification boundaries. It is not an active Agent runtime yet.
 
-## Current Skill Skeleton
+## Current Skill System
 
-`.codex/skills/frontier-common/` is the first project-local Skill scaffold. It centralizes:
+`.codex/skills/frontier-common/` is the shared project-local Skill definition. It centralizes:
 
 - repository map
 - Harness runtime conventions
@@ -112,7 +114,7 @@ The registry records responsibilities and file-modification boundaries. It is no
 - frontend conventions
 - review and test gates
 
-The full project-local Skill scaffold now covers the planned MVP and extended workflow Skills:
+The project-local Skill registry covers the planned MVP and extended workflow Skills:
 
 ```text
 frontier-common
@@ -130,7 +132,7 @@ frontier-build-publish
 frontier-git-delivery
 ```
 
-These Skills are structural scaffolds. Most implementation logic is still deferred.
+Knowledge generation, query, freshness, structural validation, and planning helpers have executable V1 implementations. Requirement, state, DAG, review, test, verification, build, and delivery Skills primarily remain guidance contracts around read-only helpers. Automatic Skill discovery and Agent dispatch are not implemented.
 
 `frontier-state-runner` now includes basic workflow guidance and references for:
 
@@ -139,29 +141,30 @@ These Skills are structural scaffolds. Most implementation logic is still deferr
 - state validation usage
 - blocked-state rules
 
-`frontier-kb-query` now includes basic progressive query guidance and a read-only keyword query script:
+`frontier-kb-query` includes progressive query guidance and an index-first, Markdown-fallback query script:
 
 ```powershell
 .\.harness\scripts\kb-query.ps1 -Query "<keywords>" -Mode knowledge-qa -Area all
 ```
 
-The current query capability is intentionally simple. It finds relevant knowledge files and line snippets, while future work can add richer module-aware retrieval.
+The V1 query returns source path and freshness metadata. M1 must make index ranking mode-aware and include common/manual/Harness knowledge so broad queries cannot bypass higher-value conventions.
 
-`frontier-kb-generate` now includes basic knowledge generation guidance and a read-only source structure scan:
+`frontier-kb-generate` now implements layered generation:
 
 ```powershell
-.\.harness\scripts\scan-knowledge-inputs.ps1
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode all
+.\.harness\scripts\generate-kb.ps1 -Area all -Mode all -DryRun -Json
 ```
 
-The scan reports backend package candidates, frontend area candidates, and suggested knowledge tasks without overwriting existing knowledge files.
+The generator produces L1 Markdown/facts, L2 OpenAI semantic documents with graceful degradation, and an L3 local index. Current output covers 7 backend and 7 frontend modules with 105 chunks.
 
-`frontier-kb-refresh-check` now includes basic freshness guidance and a read-only metadata/source check:
+`frontier-kb-refresh-check` includes freshness guidance and a read-only metadata/source/index check:
 
 ```powershell
 .\.harness\scripts\check-kb-freshness.ps1
 ```
 
-The check reports missing metadata, scaffold freshness status, hash mismatches, and source working-tree changes so stale knowledge is not trusted silently.
+The check reports baseline, semantic, and index status, hash mismatches, missing manifests, and source working-tree changes so stale knowledge is not trusted silently.
 
 `frontier-requirement-breakdown` now includes basic decomposition guidance and references for:
 
@@ -225,7 +228,7 @@ The helper recommends backend/frontend/Docker build commands from changed paths,
 
 The helper separates default Harness-owned changes from unrelated dirty files, but does not stage, commit, push, or create PRs.
 
-The scaffold also includes a read-only smoke flow that exercises the core Harness helpers in sequence:
+The Harness includes a non-destructive smoke flow that exercises the core helpers in sequence:
 
 ```powershell
 .\.harness\scripts\smoke-harness-flow.ps1
@@ -252,12 +255,18 @@ These templates make future Skill and Agent outputs stable and parseable.
 
 ## Next Implementation Steps
 
-1. Expand `frontier-common` with validated `agents/openai.yaml` metadata.
-2. Create the remaining MVP project-local Skills listed in `docs/harness-skill-customization-plan.md`.
-3. Implement deterministic scripts for knowledge generation and richer workflow artifact generation.
-4. Generate real code-derived knowledge into `llm-knowledge/`.
-5. Introduce active state files only when a concrete request starts.
-6. Add workflow validation gates before enabling publish or git delivery automation.
+The authoritative roadmap is `docs/harness-m0-m1/PLAN.md`.
+
+Immediate M0 + M1 scope:
+
+1. Reconcile status documents and registries and remove obsolete empty scaffolds.
+2. Make retrieval mode/area/common/manual aware and surface freshness before trust.
+3. Improve extraction for real frontend API generics and backend resources/config/migrations.
+4. Add module-scoped refresh without rewriting unrelated module artifacts.
+5. Add mocked semantic success/failure/timeout/malformed-output coverage.
+6. Either implement tested embedding retrieval or keep embedding generation disabled.
+
+Only after M1 acceptance should the project implement the deterministic state runtime, single-story vertical slice, runtime Skill/Agent integration, and Worktree parallelism.
 
 ## Safety Boundaries
 

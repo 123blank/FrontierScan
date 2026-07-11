@@ -17,4 +17,4 @@ frontier-test-gate
 
 Do not add runtime workflow state here. Runtime state belongs in `.harness/`.
 
-See `docs/harness-skill-customization-plan.md` for the Skill creation plan.
+See `docs/harness-m0-m1/PLAN.md` for the Skill creation plan and roadmap.

@@ -12,10 +12,31 @@ import { fileURLToPath } from "node:url";
 
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
 const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
+const DEFAULT_SEMANTIC_TIMEOUT_MS = 30_000;
+
+const SEMANTIC_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    responsibility: { type: "string", minLength: 1 },
+    business_flows: { type: "array", items: { type: "string", minLength: 1 } },
+    cross_module_dependencies: { type: "array", items: { type: "string", minLength: 1 } },
+    risks: { type: "array", items: { type: "string", minLength: 1 } },
+    consumption_hints: { type: "array", items: { type: "string", minLength: 1 } },
+  },
+  required: [
+    "responsibility",
+    "business_flows",
+    "cross_module_dependencies",
+    "risks",
+    "consumption_hints",
+  ],
+};
 
 const BACKEND_DOC_TYPES = ["overview", "interfaces", "architecture", "dependencies", "storage", "config", "pitfalls"];
 const FRONTEND_DOC_TYPES = ["overview", "routes", "components", "api-usage", "state", "pitfalls"];
 const BACKEND_SOURCE_ROOT = "backend/src/main/java/com/frontierscan";
+const BACKEND_RESOURCE_ROOT = "backend/src/main/resources";
 const FRONTEND_SOURCE_ROOT = "frontend/src";
 
 function normalizePath(filePath) {
@@ -34,6 +55,24 @@ async function readText(filePath) {
   return readFile(filePath, "utf8");
 }
 
+function createReadFailure(root, filePath, stage, error) {
+  const rawCode = typeof error?.code === "string" ? error.code : "UNKNOWN";
+  const errorCode = /^[A-Za-z0-9_-]+$/.test(rawCode) ? rawCode : "UNKNOWN";
+  return {
+    file: relativePath(root, filePath),
+    stage,
+    error: `Read failed (${errorCode}).`,
+  };
+}
+
+async function tryReadSource(root, filePath, stage, readTextImpl) {
+  try {
+    return { content: await readTextImpl(filePath), failure: null };
+  } catch (error) {
+    return { content: null, failure: createReadFailure(root, filePath, stage, error) };
+  }
+}
+
 async function listFiles(root, extensions) {
   if (!existsSync(root)) {
     return [];
@@ -50,6 +89,10 @@ async function listFiles(root, extensions) {
     }
   }
   return files.sort();
+}
+
+async function listAllFiles(root) {
+  return listFiles(root, [""]);
 }
 
 async function childProcess(command, args, options = {}) {
@@ -100,28 +143,299 @@ function joinEndpoint(basePath, methodPath) {
   return combined.length > 1 ? combined.replace(/\/$/, "") : combined;
 }
 
+function skipWhitespace(content, start) {
+  let cursor = start;
+  while (/\s/.test(content[cursor] ?? "")) {
+    cursor += 1;
+  }
+  return cursor;
+}
+
+function findBalancedEnd(content, start, openCharacter, closeCharacter) {
+  let depth = 0;
+  let quote = "";
+  for (let cursor = start; cursor < content.length; cursor += 1) {
+    const character = content[cursor];
+    if (quote) {
+      if (character === "\\") {
+        cursor += 1;
+      } else if (character === quote) {
+        quote = "";
+      }
+      continue;
+    }
+    if (['"', "'"].includes(character)) {
+      quote = character;
+      continue;
+    }
+    if (character === openCharacter) depth += 1;
+    if (character === closeCharacter) depth -= 1;
+    if (depth === 0) return cursor + 1;
+  }
+  return -1;
+}
+
+function readLeadingAnnotations(content, start) {
+  const annotations = [];
+  let cursor = skipWhitespace(content, start);
+  while (content[cursor] === "@") {
+    const nameMatch = content.slice(cursor + 1).match(/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/);
+    if (!nameMatch) break;
+    let end = cursor + 1 + nameMatch[0].length;
+    end = skipWhitespace(content, end);
+    if (content[end] === "(") {
+      end = findBalancedEnd(content, end, "(", ")");
+      if (end < 0) break;
+    }
+    annotations.push(content.slice(cursor, end).trim());
+    cursor = skipWhitespace(content, end);
+  }
+  return { annotations, cursor };
+}
+
+function splitTopLevel(value) {
+  const values = [];
+  let start = 0;
+  let angleDepth = 0;
+  let parenthesisDepth = 0;
+  let braceDepth = 0;
+  let bracketDepth = 0;
+  for (let cursor = 0; cursor < value.length; cursor += 1) {
+    const character = value[cursor];
+    if (character === "<") angleDepth += 1;
+    if (character === ">") angleDepth = Math.max(0, angleDepth - 1);
+    if (character === "(") parenthesisDepth += 1;
+    if (character === ")") parenthesisDepth = Math.max(0, parenthesisDepth - 1);
+    if (character === "{") braceDepth += 1;
+    if (character === "}") braceDepth = Math.max(0, braceDepth - 1);
+    if (character === "[") bracketDepth += 1;
+    if (character === "]") bracketDepth = Math.max(0, bracketDepth - 1);
+    if (character === "," && angleDepth === 0 && parenthesisDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
+      values.push(value.slice(start, cursor));
+      start = cursor + 1;
+    }
+  }
+  values.push(value.slice(start));
+  return values.map((item) => item.trim()).filter(Boolean);
+}
+
+function findBalancedStart(content, closeIndex, openCharacter, closeCharacter) {
+  let depth = 0;
+  for (let cursor = closeIndex; cursor >= 0; cursor -= 1) {
+    if (content[cursor] === closeCharacter) depth += 1;
+    if (content[cursor] === openCharacter) depth -= 1;
+    if (depth === 0) return cursor;
+  }
+  return -1;
+}
+
+function enclosingFrontendParameters(content, callIndex) {
+  let braceDepth = 0;
+  let bodyStart = -1;
+  for (let cursor = callIndex - 1; cursor >= 0; cursor -= 1) {
+    if (content[cursor] === "}") braceDepth += 1;
+    if (content[cursor] === "{") {
+      if (braceDepth === 0) {
+        bodyStart = cursor;
+        break;
+      }
+      braceDepth -= 1;
+    }
+  }
+  if (bodyStart < 0) return [];
+
+  let closeParenthesis = bodyStart - 1;
+  while (/\s/.test(content[closeParenthesis] ?? "")) closeParenthesis -= 1;
+  if (content[closeParenthesis] !== ")") return [];
+  const openParenthesis = findBalancedStart(content, closeParenthesis, "(", ")");
+  if (openParenthesis < 0) return [];
+
+  return splitTopLevel(content.slice(openParenthesis + 1, closeParenthesis)).map((parameter) => {
+    const match = parameter.match(/^(?:\.\.\.)?([A-Za-z_$][\w$]*)\??\s*:\s*([\s\S]+)$/);
+    return match ? { name: match[1], type: match[2].trim() } : null;
+  }).filter(Boolean);
+}
+
+function parseJavaParameters(parametersText) {
+  return splitTopLevel(parametersText).map((parameter) => {
+    const annotations = [];
+    let remaining = parameter.trim();
+    while (remaining.startsWith("@")) {
+      const parsed = readLeadingAnnotations(remaining, 0);
+      if (!parsed.annotations.length) break;
+      annotations.push(...parsed.annotations);
+      remaining = remaining.slice(parsed.cursor).trim();
+    }
+    remaining = remaining.replace(/\bfinal\s+/g, "").trim();
+    const name = remaining.match(/([A-Za-z_$][\w$]*)\s*$/)?.[1] ?? "";
+    const type = name ? remaining.slice(0, remaining.lastIndexOf(name)).trim() : remaining;
+    const binding = annotations
+      .map((annotation) => annotation.match(/^@(?:[\w$]+\.)*([A-Za-z_$][\w$]*)/)?.[1] ?? "")
+      .find((name) => ["PathVariable", "RequestParam", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart"].includes(name))
+      ?? "";
+    return { name, type, binding, annotations };
+  });
+}
+
+function parseMethodAfterAnnotation(content, annotationEnd) {
+  const leading = readLeadingAnnotations(content, annotationEnd);
+  const signatureStart = skipWhitespace(content, leading.cursor);
+  const openParenthesis = content.indexOf("(", signatureStart);
+  const bodyStart = content.indexOf("{", signatureStart);
+  const declarationEnd = content.indexOf(";", signatureStart);
+  const nearestEnd = [bodyStart, declarationEnd].filter((index) => index >= 0).sort((a, b) => a - b)[0] ?? -1;
+  if (openParenthesis < 0 || (nearestEnd >= 0 && openParenthesis > nearestEnd)) {
+    return null;
+  }
+  const closeParenthesis = findBalancedEnd(content, openParenthesis, "(", ")");
+  if (closeParenthesis < 0) return null;
+
+  const prefix = content.slice(signatureStart, openParenthesis).trim();
+  const handler = prefix.match(/([A-Za-z_$][\w$]*)\s*$/)?.[1] ?? "";
+  const beforeHandler = handler ? prefix.slice(0, prefix.lastIndexOf(handler)).trim() : "";
+  const returnType = beforeHandler
+    .replace(/^(?:(?:public|protected|private|static|final|synchronized|abstract|default|native|strictfp)\s+)+/, "")
+    .replace(/^<[^>]+>\s*/, "")
+    .trim();
+  if (!handler || !returnType) return null;
+
+  return {
+    handler,
+    return_type: returnType,
+    parameters: parseJavaParameters(content.slice(openParenthesis + 1, closeParenthesis - 1)),
+    annotations: leading.annotations,
+  };
+}
+
+function parseConstructorDependencies(content, className, file) {
+  if (!/@(?:Service|Component)\b/.test(content)) return [];
+  const dependencies = [];
+  const constructorRegex = new RegExp(`\\b${className}\\s*\\(`, "g");
+  for (const match of content.matchAll(constructorRegex)) {
+    const lineStart = content.lastIndexOf("\n", match.index) + 1;
+    const prefix = content.slice(lineStart, match.index).trim();
+    if (!/^(?:public|protected|private)?$/.test(prefix)) continue;
+    const openParenthesis = content.indexOf("(", match.index);
+    const closeParenthesis = findBalancedEnd(content, openParenthesis, "(", ")");
+    if (closeParenthesis < 0) continue;
+    for (const parameter of parseJavaParameters(content.slice(openParenthesis + 1, closeParenthesis - 1))) {
+      dependencies.push({
+        class: className,
+        dependency: parameter.type,
+        parameter: parameter.name,
+        injection: "constructor",
+        file,
+      });
+    }
+  }
+  return dependencies;
+}
+
+function extractFrontendApiCalls(content, file) {
+  const calls = [];
+  const callRegex = /apiClient\.(get|post|put|delete|patch)\b/g;
+  for (const match of content.matchAll(callRegex)) {
+    let cursor = match.index + match[0].length;
+    let responseType = "";
+    while (/\s/.test(content[cursor] ?? "")) {
+      cursor += 1;
+    }
+
+    if (content[cursor] === "<") {
+      const genericStart = cursor;
+      let depth = 0;
+      do {
+        if (content[cursor] === "<") depth += 1;
+        if (content[cursor] === ">") depth -= 1;
+        cursor += 1;
+      } while (cursor < content.length && depth > 0);
+      if (depth !== 0) {
+        continue;
+      }
+      responseType = content.slice(genericStart + 1, cursor - 1).trim();
+      while (/\s/.test(content[cursor] ?? "")) {
+        cursor += 1;
+      }
+    }
+
+    if (content[cursor] !== "(") {
+      continue;
+    }
+    const callOpenParenthesis = cursor;
+    cursor += 1;
+    while (/\s/.test(content[cursor] ?? "")) {
+      cursor += 1;
+    }
+
+    const quote = content[cursor];
+    if (!['"', "'", "`"].includes(quote)) {
+      continue;
+    }
+    cursor += 1;
+    let value = "";
+    while (cursor < content.length) {
+      const character = content[cursor];
+      if (character === "\\" && cursor + 1 < content.length) {
+        value += character + content[cursor + 1];
+        cursor += 2;
+        continue;
+      }
+      if (character === quote) {
+        const method = match[1].toUpperCase();
+        const callEnd = findBalancedEnd(content, callOpenParenthesis, "(", ")");
+        const argumentsList = callEnd > 0
+          ? splitTopLevel(content.slice(callOpenParenthesis + 1, callEnd - 1))
+          : [];
+        const parameters = enclosingFrontendParameters(content, match.index);
+        const bodyArguments = ["POST", "PUT", "PATCH"].includes(method) ? argumentsList.slice(1) : [];
+        const requestTypes = unique(parameters
+          .filter((parameter) => bodyArguments.some((argument) => new RegExp(`\\b${parameter.name}\\b`).test(argument)))
+          .map((parameter) => parameter.type));
+        calls.push({
+          method,
+          path: value,
+          response_type: responseType,
+          request_types: requestTypes,
+          file,
+        });
+        break;
+      }
+      value += character;
+      cursor += 1;
+    }
+  }
+  return calls;
+}
+
 function parseBackendFile(root, filePath, moduleName, content) {
   const file = relativePath(root, filePath);
   const className = firstClassName(content, path.basename(filePath, ".java"));
   const classes = parseClassNames(content).map((item) => ({ ...item, file }));
   const imports = parseImports(content);
   const isController = /@RestController|@Controller/.test(content) || /Controller\.java$/.test(filePath);
-  const baseMapping = isController
-    ? parseAnnotationValue(content.match(/@RequestMapping\s*(?:\([^)]*\))?/)?.[0] ?? "")
-    : "";
+  const classDeclarationIndex = content.search(/\b(?:class|interface|record)\s+[A-Za-z_$][\w$]*/);
+  const classMapping = [...content.matchAll(/@RequestMapping\s*(?:\([^)]*\))?/g)]
+    .find((match) => classDeclarationIndex >= 0 && match.index < classDeclarationIndex);
+  const baseMapping = isController ? parseAnnotationValue(classMapping?.[0] ?? "") : "";
   const mappingRegex = /@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*(?:\([^)]*\))?/g;
   const endpoints = [];
   if (isController) {
     for (const match of content.matchAll(mappingRegex)) {
       const annotation = match[1];
-      if (annotation === "RequestMapping" && match.index === content.indexOf("@RequestMapping")) {
+      if (classMapping && match.index === classMapping.index) {
         continue;
       }
+      const parsedMethod = parseMethodAfterAnnotation(content, match.index + match[0].length);
+      if (!parsedMethod) continue;
       const method = annotation.replace("Mapping", "").toUpperCase();
       endpoints.push({
         controller: className,
         method: method === "REQUEST" ? "ANY" : method,
         path: joinEndpoint(baseMapping, parseAnnotationValue(match[0])),
+        handler: parsedMethod.handler,
+        return_type: parsedMethod.return_type,
+        parameters: parsedMethod.parameters,
+        security: parsedMethod.annotations.filter((item) => /@(PreAuthorize|PostAuthorize|Secured|RolesAllowed)\b/.test(item)),
         file,
       });
     }
@@ -146,6 +460,17 @@ function parseBackendFile(root, filePath, moduleName, content) {
   const scheduled = /@Scheduled\s*\(/.test(content) ? [{ class: className, file }] : [];
   const asyncMethods = [...content.matchAll(/@Async\s*(?:\(\s*"([^"]+)"\s*\))?/g)]
     .map((match) => ({ class: className, executor: match[1] ?? "", file }));
+  const transactionalMethods = [...content.matchAll(/@Transactional\b(?:\s*\([^)]*\))?/g)]
+    .map((match) => parseMethodAfterAnnotation(content, match.index + match[0].length))
+    .filter(Boolean)
+    .map((method) => ({
+      class: className,
+      name: method.handler,
+      return_type: method.return_type,
+      parameters: method.parameters,
+      file,
+    }));
+  const serviceDependencies = parseConstructorDependencies(content, className, file);
 
   return {
     classes,
@@ -157,16 +482,70 @@ function parseBackendFile(root, filePath, moduleName, content) {
     configProperties,
     scheduled,
     asyncMethods,
+    transactionalMethods,
+    serviceDependencies,
   };
 }
 
-async function discoverBackendModules(root) {
+async function discoverBackendResources(root, readTextImpl = readText) {
+  const resourcesRoot = path.join(root, BACKEND_RESOURCE_ROOT);
+  const files = await listFiles(resourcesRoot, [".yml", ".yaml", ".properties", ".sql", ".md", ".txt", ".json", ".mustache", ".hbs", ".stg"]);
+  const resources = [];
+  const failedFiles = [];
+  for (const filePath of files) {
+    const file = relativePath(root, filePath);
+    const normalized = file.toLowerCase();
+    const baseName = path.basename(filePath).toLowerCase();
+    let kind = "";
+    if (/^application(?:-[^.]+)?\.(?:ya?ml|properties)$/.test(baseName)) {
+      kind = "configuration";
+    } else if (normalized.includes("/db/migration/") && baseName.endsWith(".sql")) {
+      kind = "migration";
+    } else if (/\/(?:prompts?|prompt[_-]?templates?|templates?)\//.test(normalized) || baseName.includes("prompt")) {
+      kind = "prompt-template";
+    }
+    if (kind) {
+      const readResult = await tryReadSource(root, filePath, "backend-resource-read", readTextImpl);
+      if (readResult.failure) {
+        failedFiles.push(readResult.failure);
+        continue;
+      }
+      resources.push({ kind, file, content: readResult.content });
+    }
+  }
+  return { resources, failedFiles };
+}
+
+function resourcesForBackendModule(moduleName, facts, sourceText, resources) {
+  const tableNames = facts.entities.map((entity) => entity.table).filter(Boolean);
+  const searchTerms = unique([moduleName, `${moduleName}s`, ...tableNames]).map((term) => term.toLowerCase());
+  return resources
+    .filter((resource) => {
+      if (resource.kind === "configuration") return true;
+      if (resource.kind === "migration") {
+        const searchable = `${resource.file}\n${resource.content}`.toLowerCase();
+        return searchTerms.some((term) => searchable.includes(term));
+      }
+      if (resource.kind === "prompt-template") {
+        const resourcePath = resource.file.replace(/^backend\/src\/main\/resources\//, "");
+        return [resourcePath, path.basename(resourcePath)]
+          .some((reference) => sourceText.includes(reference));
+      }
+      return false;
+    })
+    .map(({ kind, file }) => ({ kind, file }));
+}
+
+async function discoverBackendModules(root, readTextImpl = readText) {
   const backendRoot = path.join(root, BACKEND_SOURCE_ROOT);
   if (!existsSync(backendRoot)) {
-    return [];
+    return { modules: [], resourceFiles: [], failedFiles: [] };
   }
 
   const entries = await readdir(backendRoot, { withFileTypes: true });
+  const resourceDiscovery = await discoverBackendResources(root, readTextImpl);
+  const resources = resourceDiscovery.resources;
+  const failedFiles = [...resourceDiscovery.failedFiles];
   const modules = [];
   for (const entry of entries.filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
     const modulePath = path.join(backendRoot, entry.name);
@@ -175,8 +554,8 @@ async function discoverBackendModules(root) {
       area: "backend",
       module: entry.name,
       root_path: normalizePath(path.relative(root, modulePath)),
-      source_files: files.map((file) => relativePath(root, file)),
-      file_count: files.length,
+      source_files: [],
+      file_count: 0,
       classes: [],
       controllers: [],
       endpoints: [],
@@ -185,12 +564,24 @@ async function discoverBackendModules(root) {
       config_properties: [],
       scheduled_jobs: [],
       async_methods: [],
+      transactional_methods: [],
+      service_dependencies: [],
       imports: [],
       resources: [],
     };
 
+    const sourceContents = [];
     for (const file of files) {
-      const parsed = parseBackendFile(root, file, entry.name, await readText(file));
+      const readResult = await tryReadSource(root, file, "backend-source-read", readTextImpl);
+      if (readResult.failure) {
+        failedFiles.push(readResult.failure);
+        continue;
+      }
+      const content = readResult.content;
+      facts.source_files.push(relativePath(root, file));
+      facts.file_count += 1;
+      sourceContents.push(content);
+      const parsed = parseBackendFile(root, file, entry.name, content);
       facts.classes.push(...parsed.classes);
       facts.controllers.push(...parsed.controllers);
       facts.endpoints.push(...parsed.endpoints);
@@ -199,8 +590,11 @@ async function discoverBackendModules(root) {
       facts.config_properties.push(...parsed.configProperties);
       facts.scheduled_jobs.push(...parsed.scheduled);
       facts.async_methods.push(...parsed.asyncMethods);
+      facts.transactional_methods.push(...parsed.transactionalMethods);
+      facts.service_dependencies.push(...parsed.serviceDependencies);
       facts.imports.push(...parsed.imports);
     }
+    facts.resources = resourcesForBackendModule(entry.name, facts, sourceContents.join("\n"), resources);
 
     modules.push({
       area: "backend",
@@ -210,38 +604,68 @@ async function discoverBackendModules(root) {
       facts: { ...facts, imports: unique(facts.imports).slice(0, 80) },
     });
   }
-  return modules;
+  return {
+    modules,
+    resourceFiles: resources.map((resource) => resource.file),
+    failedFiles,
+  };
 }
 
 function parseFrontendFile(root, filePath, areaName, content) {
   const file = relativePath(root, filePath);
-  const apiCalls = [...content.matchAll(/apiClient\.(get|post|put|delete|patch)\s*(?:<[^>]+>)?\s*\(\s*(?:`([^`]+)`|'([^']+)'|"([^"]+)")/g)]
-    .map((match) => ({ method: match[1].toUpperCase(), path: match[2] ?? match[3] ?? match[4], file }));
+  const apiCalls = extractFrontendApiCalls(content, file);
   const routes = [...content.matchAll(/path:\s*['"]([^'"]+)['"][\s\S]*?name:\s*['"]([^'"]+)['"]/g)]
     .map((match) => ({ path: match[1], name: match[2], file }));
+  const routeGuards = [...content.matchAll(/\b(?:router\.)?beforeEach\s*\(/g)]
+    .map(() => ({ kind: "beforeEach", file }));
+  for (const metaMatch of content.matchAll(/\bmeta\s*:\s*\{([^}]*)\}/g)) {
+    for (const property of metaMatch[1].matchAll(/([A-Za-z_$][\w$]*)\s*:\s*(true|false|['"][^'"]*['"]|\d+)/g)) {
+      routeGuards.push({
+        kind: "route-meta",
+        key: property[1],
+        value: property[2].replace(/^['"]|['"]$/g, ""),
+        file,
+      });
+    }
+  }
   const stores = [...content.matchAll(/defineStore\s*\(\s*['"]([^'"]+)['"]/g)]
     .map((match) => ({ name: match[1], file }));
   const exports = [...content.matchAll(/export\s+(?:const|function|class|interface|type)\s+([A-Za-z0-9_]+)/g)]
     .map((match) => ({ name: match[1], file }));
+  const apiDependencies = [];
+  for (const match of content.matchAll(/import\s*\{([^}]+)\}\s*from\s*['"]([^'"]*\/api\/([^'"/]+))['"]/g)) {
+    const importedSymbols = match[1].split(",")
+      .map((item) => item.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[1] ?? item.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0])
+      .filter(Boolean);
+    const contentAfterImport = content.slice(match.index + match[0].length);
+    for (const symbol of importedSymbols) {
+      if (new RegExp(`\\b${symbol}\\b`).test(contentAfterImport)) {
+        apiDependencies.push({ api_module: match[3], symbol, file });
+      }
+    }
+  }
   return {
     file,
     kind: path.extname(filePath).replace(".", "") || "unknown",
     apiCalls,
     routes,
+    routeGuards,
     stores,
     exports,
+    apiDependencies,
     component: file.endsWith(".vue") ? path.basename(filePath) : "",
   };
 }
 
-async function discoverFrontendModules(root) {
+async function discoverFrontendModules(root, readTextImpl = readText) {
   const frontendRoot = path.join(root, FRONTEND_SOURCE_ROOT);
   if (!existsSync(frontendRoot)) {
-    return [];
+    return { modules: [], resourceFiles: [], failedFiles: [] };
   }
 
   const entries = await readdir(frontendRoot, { withFileTypes: true });
   const modules = [];
+  const failedFiles = [];
   for (const entry of entries.filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
     const modulePath = path.join(frontendRoot, entry.name);
     const files = await listFiles(modulePath, [".ts", ".tsx", ".js", ".vue", ".css"]);
@@ -250,23 +674,34 @@ async function discoverFrontendModules(root) {
       area: "frontend",
       module: entry.name,
       root_path: normalizePath(path.relative(root, modulePath)),
-      source_files: files.map((file) => relativePath(root, file)),
-      file_count: files.length,
+      source_files: [],
+      file_count: 0,
       files: parsedFiles,
       api_calls: [],
       routes: [],
+      route_guards: [],
       stores: [],
       exports: [],
+      api_dependencies: [],
       components: [],
     };
 
     for (const file of files) {
-      const parsed = parseFrontendFile(root, file, entry.name, await readText(file));
+      const readResult = await tryReadSource(root, file, "frontend-source-read", readTextImpl);
+      if (readResult.failure) {
+        failedFiles.push(readResult.failure);
+        continue;
+      }
+      const parsed = parseFrontendFile(root, file, entry.name, readResult.content);
+      facts.source_files.push(parsed.file);
+      facts.file_count += 1;
       parsedFiles.push({ file: parsed.file, kind: parsed.kind });
       facts.api_calls.push(...parsed.apiCalls);
       facts.routes.push(...parsed.routes);
+      facts.route_guards.push(...parsed.routeGuards);
       facts.stores.push(...parsed.stores);
       facts.exports.push(...parsed.exports);
+      facts.api_dependencies.push(...parsed.apiDependencies);
       if (parsed.component) {
         facts.components.push({ name: parsed.component, file: parsed.file });
       }
@@ -280,7 +715,7 @@ async function discoverFrontendModules(root) {
       facts,
     });
   }
-  return modules;
+  return { modules, resourceFiles: [], failedFiles };
 }
 
 function yamlList(items, indent = 2) {
@@ -290,8 +725,8 @@ function yamlList(items, indent = 2) {
   return items.map((item) => `${" ".repeat(indent)}- ${item}`).join("\n");
 }
 
-function docHeader({ area, moduleName, docType, generatedAt, gitHash, sourceFiles, layer, semanticStatus }) {
-  return `---\ngenerated_by: frontier-kb-generate\nlayer: ${layer}\narea: ${area}\nmodule: ${moduleName}\ndoc_type: ${docType}\ngit_hash: ${gitHash}\ngenerated_at: ${generatedAt}\nbaseline_status: fresh\nsemantic_status: ${semanticStatus}\nsource_files:\n${yamlList(sourceFiles.slice(0, 30), 2)}\n---\n\n`;
+function docHeader({ area, moduleName, docType, generatedAt, gitHash, sourceFiles, layer, semanticStatus, generatedBy = "frontier-kb-generate" }) {
+  return `---\ngenerated_by: ${generatedBy}\nlayer: ${layer}\narea: ${area}\nmodule: ${moduleName}\ndoc_type: ${docType}\ngit_hash: ${gitHash}\ngenerated_at: ${generatedAt}\nbaseline_status: fresh\nsemantic_status: ${semanticStatus}\nsource_files:\n${yamlList(sourceFiles.slice(0, 30), 2)}\n---\n\n`;
 }
 
 function bullet(items, emptyText = "暂无自动识别结果。") {
@@ -344,9 +779,9 @@ function frontendDoc(module, docType, context) {
     case "overview":
       return `${header}# ${module.name} 前端区域概览\n\n## 自动识别职责\n\n- 区域路径：\`${module.path}\`\n- 文件数：${facts.file_count}\n- Vue 组件数：${facts.components.length}\n- API 调用数：${facts.api_calls.length}\n- 路由数：${facts.routes.length}\n- Store 数：${facts.stores.length}\n\n## 文件清单\n\n${bullet(facts.files.map((item) => `${item.file} (${item.kind})`))}\n\n## 语义说明\n\nNeeds AI Review: 请结合页面流程、B2B 后台交互规范和用户任务补充语义。\n`;
     case "routes":
-      return `${header}# ${module.name} 路由基线\n\n${bullet(facts.routes.map((item) => `${item.path} -> ${item.name} (${item.file})`))}\n\nNeeds AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。\n`;
+      return `${header}# ${module.name} 路由基线\n\n${bullet(facts.routes.map((item) => `${item.path} -> ${item.name} (${item.file})`))}\n\n## 路由守卫\n\n${bullet(facts.route_guards.map((item) => item.kind === "route-meta" ? `${item.key}=${item.value} (${item.file})` : `${item.kind} (${item.file})`))}\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。\n`;
     case "components":
-      return `${header}# ${module.name} 组件基线\n\n${bullet(facts.components.map((item) => `${item.name} (${item.file})`))}\n\n## Exports\n\n${bullet(facts.exports.map((item) => `${item.name} (${item.file})`))}\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。\n`;
+      return `${header}# ${module.name} 组件基线\n\n${bullet(facts.components.map((item) => `${item.name} (${item.file})`))}\n\n## Exports\n\n${bullet(facts.exports.map((item) => `${item.name} (${item.file})`))}\n\n## 页面到 API 依赖\n\n${bullet(facts.api_dependencies.map((item) => `${item.symbol} -> api/${item.api_module} (${item.file})`))}\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。\n`;
     case "api-usage":
       return `${header}# ${module.name} API 使用基线\n\n${bullet(facts.api_calls.map((item) => `${item.method} ${item.path} (${item.file})`))}\n\nNeeds AI Review: 请求参数、错误处理、加载状态和后端契约兼容性需补充。\n`;
     case "state":
@@ -376,7 +811,44 @@ function buildPendingSemanticDoc(module, context, reason) {
   return `${header}# ${module.name} 语义增强\n\nsemantic_status: ${reason.status}\nsemantic_model: ${reason.model}\n\n## 当前状态\n\n- ${reason.message}\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词\n`;
 }
 
-async function callOpenAIForSemantic(module, context, env) {
+function validateSemanticOutput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Semantic output must be a JSON object.");
+  }
+  if (typeof value.responsibility !== "string" || !value.responsibility.trim()) {
+    throw new Error("Semantic output field 'responsibility' must be a non-empty string.");
+  }
+  for (const field of ["business_flows", "cross_module_dependencies", "risks", "consumption_hints"]) {
+    if (!Array.isArray(value[field]) || value[field].some((item) => typeof item !== "string" || !item.trim())) {
+      throw new Error(`Semantic output field '${field}' must be an array of non-empty strings.`);
+    }
+  }
+  return value;
+}
+
+function responseOutputText(payload) {
+  if (typeof payload?.output_text === "string") return payload.output_text;
+  return (payload?.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .map((item) => item.text ?? "")
+    .join("\n");
+}
+
+function renderSemanticDoc(module, context, model, semantic) {
+  const header = docHeader({
+    ...context,
+    area: module.area,
+    moduleName: module.name,
+    docType: "semantic",
+    sourceFiles: module.facts.source_files,
+    layer: "L2-semantic",
+    semanticStatus: "fresh",
+    generatedBy: "openai",
+  });
+  return `${header}# ${module.name} 语义增强\n\nsemantic_status: fresh\nsemantic_model: ${model}\n\n## 模块职责\n\n${semantic.responsibility.trim()}\n\n## 核心业务流程\n\n${bullet(semantic.business_flows)}\n\n## 跨模块依赖\n\n${bullet(semantic.cross_module_dependencies)}\n\n## 风险点\n\n${bullet(semantic.risks)}\n\n## 动态消费提示\n\n${bullet(semantic.consumption_hints)}\n\n## 来源文件\n\n${bullet(module.facts.source_files)}\n`;
+}
+
+async function callOpenAIForSemantic(module, context, env, requestOptions = {}) {
   const apiKey = env.OPENAI_API_KEY;
   const model = env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
   if (!apiKey) {
@@ -395,55 +867,66 @@ async function callOpenAIForSemantic(module, context, env) {
   const prompt = [
     "你是 FrontierScan 项目的知识工程助手。",
     "请基于给定 facts 生成中文语义增强文档，必须保持可追溯，不要编造源码中没有的信息。",
-    "输出 Markdown，包含：模块职责、核心流程、跨模块依赖、风险点、动态消费提示、来源文件。",
+    "只输出符合给定 JSON Schema 的数据。来源文件由生成器从 facts 注入，不要自行生成来源。",
     JSON.stringify({ area: module.area, module: module.name, facts: module.facts }, null, 2).slice(0, 24000),
   ].join("\n\n");
 
+  const fetchImpl = requestOptions.fetchImpl ?? globalThis.fetch;
+  const timeoutMs = requestOptions.timeoutMs ?? DEFAULT_SEMANTIC_TIMEOUT_MS;
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), timeoutMs);
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const response = await fetchImpl("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model, input: prompt }),
+      body: JSON.stringify({
+        model,
+        input: prompt,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "frontier_kb_semantic",
+            strict: true,
+            schema: SEMANTIC_OUTPUT_SCHEMA,
+          },
+        },
+      }),
+      signal: abortController.signal,
     });
     if (!response.ok) {
       throw new Error(`OpenAI response status ${response.status}`);
     }
     const payload = await response.json();
-    const text = payload.output_text
-      ?? payload.output?.flatMap((item) => item.content ?? []).map((item) => item.text ?? "").join("\n")
-      ?? "";
+    const text = responseOutputText(payload);
     if (!text.trim()) {
       throw new Error("OpenAI response did not include text output.");
     }
-    const header = docHeader({
-      ...context,
-      area: module.area,
-      moduleName: module.name,
-      docType: "semantic",
-      sourceFiles: module.facts.source_files,
-      layer: "L2-semantic",
-      semanticStatus: "fresh",
-    });
+    const semantic = validateSemanticOutput(JSON.parse(text));
     return {
       status: "fresh",
       model,
       message: "OpenAI semantic enrichment completed.",
-      content: `${header}# ${module.name} 语义增强\n\nsemantic_status: fresh\nsemantic_model: ${model}\ngenerated_by: openai\n\n${text.trim()}\n`,
+      content: renderSemanticDoc(module, context, model, semantic),
     };
   } catch (error) {
+    const message = abortController.signal.aborted
+      ? `OpenAI semantic request timed out after ${timeoutMs}ms.`
+      : error.message;
     return {
       status: "failed",
       model,
-      message: `OpenAI 语义增强失败：${error.message}`,
+      message: `OpenAI 语义增强失败：${message}`,
       content: buildPendingSemanticDoc(module, context, {
         status: "failed",
         model,
-        message: `OpenAI 语义增强失败：${error.message}`,
+        message: `OpenAI 语义增强失败：${message}`,
       }),
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -495,6 +978,132 @@ function createChunk(entry, module, context) {
   };
 }
 
+function splitTextIntoChunks(content, maxLength = 3500) {
+  const lines = content.replace(/\r/g, "").split("\n");
+  const chunks = [];
+  let current = [];
+  let currentLength = 0;
+
+  const flush = () => {
+    const text = current.join("\n").trim();
+    if (text) {
+      chunks.push(text);
+    }
+    current = [];
+    currentLength = 0;
+  };
+
+  for (const line of lines) {
+    const startsSection = /^#{1,4}\s+/.test(line);
+    if (startsSection && currentLength > 0) {
+      flush();
+    }
+    if (currentLength > 0 && currentLength + line.length + 1 > maxLength) {
+      flush();
+    }
+    current.push(line);
+    currentLength += line.length + 1;
+  }
+  flush();
+  return chunks;
+}
+
+function curatedKeywords(relativeFile, text, extraKeywords = []) {
+  const headings = [...text.matchAll(/^#{1,4}\s+(.+)$/gm)].map((match) => match[1]);
+  return unique([
+    ...normalizePath(relativeFile).split("/"),
+    path.basename(relativeFile, path.extname(relativeFile)),
+    ...headings,
+    ...extraKeywords,
+  ]).slice(0, 40);
+}
+
+async function createCuratedFileChunks(root, filePath, metadata, context) {
+  const relativeFile = relativePath(root, filePath);
+  const content = await readText(filePath);
+  const sections = splitTextIntoChunks(content.replace(/^---[\s\S]*?---\s*/m, ""));
+  return sections.map((text, index) => ({
+    id: `${metadata.area}:${metadata.module}:${metadata.docType}:${relativeFile}:${index + 1}`,
+    area: metadata.area,
+    module: metadata.module,
+    doc_type: metadata.docType,
+    path: relativeFile,
+    text,
+    source_files: [relativeFile],
+    git_hash: context.gitHash,
+    generated_at: context.generatedAt,
+    baseline_status: "curated",
+    semantic_status: "not-applicable",
+    keywords: curatedKeywords(relativeFile, text, metadata.keywords),
+  }));
+}
+
+async function discoverCuratedChunks(root, area, context) {
+  const chunks = [];
+  const addFiles = async (files, metadataFactory) => {
+    for (const file of files) {
+      chunks.push(...await createCuratedFileChunks(root, file, metadataFactory(file), context));
+    }
+  };
+
+  const commonRoot = path.join(root, "llm-knowledge", "common");
+  const commonFiles = await listFiles(commonRoot, [".md", ".yaml", ".yml"]);
+  await addFiles(commonFiles, (file) => ({
+    area: "common",
+    module: normalizePath(path.relative(commonRoot, path.dirname(file))).split("/")[0] || "common",
+    docType: "conventions",
+    keywords: ["common", "project knowledge"],
+  }));
+
+  for (const selectedArea of area === "all" ? ["backend", "frontend"] : [area]) {
+    if (!['backend', 'frontend'].includes(selectedArea)) {
+      continue;
+    }
+    const modulesRoot = path.join(root, "llm-knowledge", selectedArea, "modules");
+    const customFiles = (await listFiles(modulesRoot, [".md", ".yaml", ".yml", ".json"]))
+      .filter((file) => normalizePath(file).includes("/custom/"));
+    await addFiles(customFiles, (file) => {
+      const relative = normalizePath(path.relative(modulesRoot, file));
+      return {
+        area: selectedArea,
+        module: relative.split("/")[0],
+        docType: "custom",
+        keywords: ["manual", "custom"],
+      };
+    });
+  }
+
+  const workflowRoot = path.join(root, ".harness", "workflows");
+  await addFiles(await listFiles(workflowRoot, [".yaml", ".yml", ".md"]), () => ({
+    area: "common",
+    module: "harness-workflows",
+    docType: "workflow",
+    keywords: ["harness", "workflow", "state"],
+  }));
+
+  const skillRoot = path.join(root, ".codex", "skills");
+  const skillFiles = (await listFiles(skillRoot, [".md"]))
+    .filter((file) => path.basename(file).toLowerCase() === "skill.md");
+  await addFiles(skillFiles, () => ({
+    area: "common",
+    module: "project-skills",
+    docType: "skill",
+    keywords: ["skill", "codex"],
+  }));
+
+  const agentsFile = path.join(root, "AGENTS.md");
+  if (existsSync(agentsFile)) {
+    await addFiles([agentsFile], () => ({
+      area: "common",
+      module: "project-rules",
+      docType: "conventions",
+      keywords: ["agents", "rules", "quality gate"],
+    }));
+  }
+
+  return chunks;
+}
+
 async function writePlanned(result, filePath, content, dryRun) {
   const normalized = normalizePath(filePath);
   result.plannedWrites.push(normalized);
@@ -526,7 +1135,78 @@ async function appendModuleLog(root, area, moduleName, generatedAt, mode, semant
   result.writtenFiles.push(normalizePath(logPath));
 }
 
-function buildAreaMeta({ area, modules, generatedAt, gitHash, changedPaths, semanticStatus, indexStatus, model, embeddingModel }) {
+function parseGeneratedDocumentMeta(content) {
+  const frontmatter = content.match(/^---\s*\n([\s\S]*?)\n---/)?.[1] ?? "";
+  const value = (name) => frontmatter.match(new RegExp(`^${name}:\\s*(.+)$`, "m"))?.[1]?.trim().replace(/^"|"$/g, "") ?? "";
+  return {
+    gitHash: value("git_hash"),
+    generatedAt: value("generated_at"),
+    baselineStatus: value("baseline_status"),
+    semanticStatus: value("semantic_status"),
+  };
+}
+
+async function readGeneratedDocumentMeta(filePath) {
+  if (!existsSync(filePath)) return null;
+  return parseGeneratedDocumentMeta(await readText(filePath));
+}
+
+function normalizedDocumentStatus(status, documentHash, currentHash, sourceChanged, missingStatus) {
+  if (!status) return missingStatus;
+  if (sourceChanged) return "stale";
+  if (status === "fresh" && documentHash && currentHash !== "unknown" && documentHash !== currentHash) return "stale";
+  return status;
+}
+
+async function collectModuleFreshness(root, module, currentHash, changedPaths) {
+  const baseline = await readGeneratedDocumentMeta(moduleDocPath(root, module.area, module.name, "overview.md"));
+  const semantic = await readGeneratedDocumentMeta(moduleDocPath(root, module.area, module.name, "semantic.md"));
+  const trackedSources = [
+    ...module.facts.source_files,
+    ...(module.facts.resources ?? []).map((resource) => resource.file),
+  ];
+  const sourceChanged = trackedSources.some((sourceFile) => changedPaths.includes(sourceFile));
+  const baselineStatus = normalizedDocumentStatus(
+    baseline?.baselineStatus,
+    baseline?.gitHash,
+    currentHash,
+    sourceChanged,
+    "missing"
+  );
+  const semanticStatus = normalizedDocumentStatus(
+    semantic?.semanticStatus,
+    semantic?.gitHash,
+    currentHash,
+    sourceChanged,
+    "pending"
+  );
+  return {
+    baselineGitHash: baseline?.gitHash ?? "",
+    baselineGeneratedAt: baseline?.generatedAt ?? "",
+    baselineStatus,
+    semanticGitHash: semantic?.gitHash ?? "",
+    semanticGeneratedAt: semantic?.generatedAt ?? "",
+    semanticStatus,
+    indexStatus: baselineStatus === "fresh" ? "fresh" : "partial",
+  };
+}
+
+function aggregateBaselineStatus(moduleFreshness) {
+  const statuses = moduleFreshness.map((item) => item.baselineStatus);
+  if (statuses.length && statuses.every((status) => status === "fresh")) return "fresh";
+  if (statuses.length && statuses.every((status) => status === "missing")) return "missing";
+  return "partial";
+}
+
+function aggregateDocumentSemanticStatus(moduleFreshness) {
+  const statuses = moduleFreshness.map((item) => item.semanticStatus);
+  if (statuses.some((status) => status === "failed")) return "failed";
+  if (statuses.some((status) => status === "stale")) return "stale";
+  if (statuses.length && statuses.every((status) => status === "fresh")) return "fresh";
+  return "pending";
+}
+
+function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, changedPaths, baselineStatus, semanticStatus, indexStatus, model, embeddingModel }) {
   const sourcePrefix = area === "backend" ? "backend/" : "frontend/";
   const sourceChanged = changedPaths.some((item) => item.startsWith(sourcePrefix));
   const technology = area === "backend"
@@ -552,8 +1232,8 @@ function buildAreaMeta({ area, modules, generatedAt, gitHash, changedPaths, sema
     `root_path: ${area}`,
     `generated_at: "${generatedAt}"`,
     `git_hash: "${gitHash}"`,
-    `status: ${sourceChanged ? "partial" : "fresh"}`,
-    "baseline_status: fresh",
+    `status: ${sourceChanged || baselineStatus !== "fresh" || indexStatus !== "fresh" ? "partial" : "fresh"}`,
+    `baseline_status: ${baselineStatus}`,
     `semantic_status: ${semanticStatus}`,
     `index_status: ${indexStatus}`,
     `source_changed: ${sourceChanged}`,
@@ -563,7 +1243,9 @@ function buildAreaMeta({ area, modules, generatedAt, gitHash, changedPaths, sema
     ...technology,
     "modules:",
   ];
-  for (const module of modules) {
+  for (let index = 0; index < modules.length; index += 1) {
+    const module = modules[index];
+    const freshness = moduleFreshness[index];
     const docTypes = module.area === "backend" ? BACKEND_DOC_TYPES : FRONTEND_DOC_TYPES;
     lines.push(`  - name: ${module.name}`);
     lines.push(`    path: ${module.path}`);
@@ -574,11 +1256,13 @@ function buildAreaMeta({ area, modules, generatedAt, gitHash, changedPaths, sema
     }
     lines.push(`      facts: llm-knowledge/${area}/modules/${module.name}/facts.json`);
     lines.push("    freshness:");
-    lines.push(`      git_hash: "${gitHash}"`);
-    lines.push(`      generated_at: "${generatedAt}"`);
-    lines.push("      baseline_status: fresh");
-    lines.push(`      semantic_status: ${semanticStatus}`);
-    lines.push(`      index_status: ${indexStatus}`);
+    lines.push(`      git_hash: "${freshness.baselineGitHash}"`);
+    lines.push(`      generated_at: "${freshness.baselineGeneratedAt}"`);
+    lines.push(`      baseline_status: ${freshness.baselineStatus}`);
+    lines.push(`      semantic_git_hash: "${freshness.semanticGitHash}"`);
+    lines.push(`      semantic_generated_at: "${freshness.semanticGeneratedAt}"`);
+    lines.push(`      semantic_status: ${freshness.semanticStatus}`);
+    lines.push(`      index_status: ${freshness.indexStatus}`);
   }
   return `${lines.join("\n")}\n`;
 }
@@ -601,6 +1285,30 @@ function buildIndexManifest({ root, chunks, generatedAt, gitHash, areas, semanti
   };
 }
 
+async function buildSourceCoverage(root, area, modules, generatedAt, gitHash, scanResult = {}) {
+  const parsedFiles = unique(modules.flatMap((module) => module.facts.source_files));
+  const resourceFiles = unique(scanResult.resourceFiles ?? []);
+  const failedFiles = scanResult.failedFiles ?? [];
+  const candidateRoots = area === "backend"
+    ? [path.join(root, BACKEND_SOURCE_ROOT), path.join(root, BACKEND_RESOURCE_ROOT)]
+    : [path.join(root, FRONTEND_SOURCE_ROOT)];
+  const candidateFiles = unique((await Promise.all(candidateRoots.map((candidateRoot) => listAllFiles(candidateRoot))))
+    .flat()
+    .map((file) => relativePath(root, file)));
+  const handledFiles = new Set([...parsedFiles, ...resourceFiles, ...failedFiles.map((failure) => failure.file)]);
+  return {
+    schema_version: "1.0",
+    generated_by: "frontier-kb-generate",
+    generated_at: generatedAt,
+    git_hash: gitHash,
+    area,
+    parsed_files: parsedFiles,
+    resource_files: resourceFiles,
+    skipped_files: candidateFiles.filter((file) => !handledFiles.has(file)),
+    failed_files: failedFiles,
+  };
+}
+
 async function readExistingIndexChunks(indexRoot) {
   const chunksPath = path.join(indexRoot, "chunks.json");
   if (!existsSync(chunksPath)) {
@@ -615,51 +1323,40 @@ async function readExistingIndexChunks(indexRoot) {
   }
 }
 
-async function callOpenAIEmbeddings(chunks, env) {
-  const apiKey = env.OPENAI_API_KEY;
-  const model = env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL;
-  if (!apiKey) {
-    return { status: "pending", model, lines: [], message: "OPENAI_API_KEY is not configured." };
-  }
-
-  try {
-    const response = await fetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model, input: chunks.map((chunk) => chunk.text.slice(0, 8000)) }),
-    });
-    if (!response.ok) {
-      throw new Error(`OpenAI embeddings status ${response.status}`);
-    }
-    const payload = await response.json();
-    const lines = payload.data.map((item, index) => JSON.stringify({
-      chunk_id: chunks[index].id,
-      model,
-      embedding: item.embedding,
-    }));
-    return { status: "fresh", model, lines, message: "Embeddings generated." };
-  } catch (error) {
-    return { status: "failed", model, lines: [], message: error.message };
-  }
-}
-
-async function discoverModules(root, area) {
+async function discoverModules(root, area, readTextImpl = readText) {
   const modules = [];
+  const scanResults = {};
   if (area === "backend" || area === "all") {
-    modules.push(...await discoverBackendModules(root));
+    const backend = await discoverBackendModules(root, readTextImpl);
+    modules.push(...backend.modules);
+    scanResults.backend = backend;
   }
   if (area === "frontend" || area === "all") {
-    modules.push(...await discoverFrontendModules(root));
+    const frontend = await discoverFrontendModules(root, readTextImpl);
+    modules.push(...frontend.modules);
+    scanResults.frontend = frontend;
   }
-  return modules;
+  return { modules, scanResults };
+}
+
+function aggregateSemanticStatus(moduleResults, includeSemantic) {
+  if (!includeSemantic || !moduleResults.length) return "pending";
+  if (moduleResults.some((item) => item.status === "failed")) return "failed";
+  if (moduleResults.some((item) => item.status !== "fresh")) return "pending";
+  return "fresh";
+}
+
+async function readAreaSemanticStatus(root, area) {
+  const metaPath = path.join(root, "llm-knowledge", area, "meta.yaml");
+  if (!existsSync(metaPath)) return "pending";
+  const content = await readText(metaPath);
+  return content.match(/^semantic_status:\s*([^\s]+)\s*$/m)?.[1] ?? "pending";
 }
 
 export async function runGenerateKnowledge(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   const area = options.area ?? "all";
+  const moduleName = options.module ?? "";
   const mode = options.mode ?? "all";
   const dryRun = Boolean(options.dryRun);
   const withEmbeddings = Boolean(options.withEmbeddings);
@@ -667,10 +1364,18 @@ export async function runGenerateKnowledge(options = {}) {
   const generatedAt = new Date().toISOString();
   const gitHash = await getGitHash(root);
   const changedPaths = await getChangedPaths(root);
-  const modules = await discoverModules(root, area);
+  const discovery = await discoverModules(root, area, options.readTextImpl ?? readText);
+  const discoveredModules = discovery.modules;
+  const modules = moduleName
+    ? discoveredModules.filter((module) => module.name === moduleName)
+    : discoveredModules;
+  if (moduleName && !modules.length) {
+    throw new Error(`Module '${moduleName}' was not found in area '${area}'.`);
+  }
   const result = {
     root,
     area,
+    module: moduleName || null,
     mode,
     dryRun,
     withEmbeddings,
@@ -685,7 +1390,7 @@ export async function runGenerateKnowledge(options = {}) {
   const includeSemantic = mode === "semantic" || mode === "all";
   const docs = [];
   const chunks = [];
-  let semanticStatus = includeSemantic ? "pending" : "pending";
+  const semanticModules = [];
 
   for (const module of modules) {
     const context = {
@@ -707,28 +1412,58 @@ export async function runGenerateKnowledge(options = {}) {
               message: "Dry run skips OpenAI semantic enrichment.",
             }),
           }
-        : await callOpenAIForSemantic(module, context, env);
-      semanticStatus = semantic.status === "fresh" ? "fresh" : semanticStatus;
-      result.semantic = { status: semantic.status, model: semantic.model, message: semantic.message };
+        : await callOpenAIForSemantic(module, context, env, {
+            fetchImpl: options.fetchImpl,
+            timeoutMs: options.semanticTimeoutMs,
+          });
+      semanticModules.push({
+        area: module.area,
+        module: module.name,
+        status: semantic.status,
+        message: semantic.message,
+      });
       semanticContent = semantic.content;
       context.semanticStatus = semantic.status;
     } else {
-      semanticContent = buildPendingSemanticDoc(module, context, {
-        status: "pending",
-        model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
-        message: "本次未运行 L2 语义增强。",
-      });
+      const semanticPath = moduleDocPath(root, module.area, module.name, "semantic.md");
+      if (existsSync(semanticPath)) {
+        context.semanticStatus = (await readText(semanticPath)).match(/semantic_status:\s*(\w+)/)?.[1] ?? "pending";
+      } else {
+        semanticContent = buildPendingSemanticDoc(module, context, {
+          status: "pending",
+          model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+          message: "本次未运行 L2 语义增强。",
+        });
+      }
     }
 
     await ensureCustomDirectory(root, module.area, module.name, result, dryRun);
     await writePlanned(result, moduleDocPath(root, module.area, module.name, "facts.json"), `${JSON.stringify(module.facts, null, 2)}\n`, dryRun);
-    const moduleDocs = docsForModule(module, { ...context, semanticStatus: context.semanticStatus }, includeBaseline || mode === "semantic", semanticContent);
+    const moduleDocs = docsForModule(module, { ...context, semanticStatus: context.semanticStatus }, includeBaseline, semanticContent);
     for (const entry of moduleDocs) {
       docs.push({ ...entry, moduleObject: module });
       await writePlanned(result, moduleDocPath(root, entry.area, entry.module, `${entry.docType}.md`), entry.content, dryRun);
     }
     await appendModuleLog(root, module.area, module.name, generatedAt, mode, context.semanticStatus, result, dryRun);
   }
+
+  const selectedAreas = unique(modules.map((module) => module.area));
+  const semanticStatus = includeSemantic
+    ? aggregateSemanticStatus(semanticModules, true)
+    : aggregateSemanticStatus(
+        await Promise.all(selectedAreas.map(async (selectedArea) => ({ status: await readAreaSemanticStatus(root, selectedArea) }))),
+        true
+      );
+  result.semantic = {
+    status: semanticStatus,
+    model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+    message: includeSemantic
+      ? semanticModules.length === 1
+        ? semanticModules[0].message
+        : `${semanticModules.filter((item) => item.status === "fresh").length}/${semanticModules.length} modules enriched successfully.`
+      : "Semantic enrichment was not requested.",
+    modules: semanticModules,
+  };
 
   for (const entry of docs) {
     chunks.push(createChunk(entry, entry.moduleObject, {
@@ -739,46 +1474,75 @@ export async function runGenerateKnowledge(options = {}) {
     }));
   }
 
-  const selectedAreas = unique(modules.map((module) => module.area));
+  const curatedChunks = await discoverCuratedChunks(root, area, { gitHash, generatedAt });
+
   const indexRoot = path.join(root, "llm-knowledge", "index");
-  const preservedChunks = area === "all"
-    ? []
-    : (await readExistingIndexChunks(indexRoot)).filter((chunk) => chunk.area && !selectedAreas.includes(chunk.area));
-  const indexChunks = [...preservedChunks, ...chunks].sort((left, right) => (
+  const existingChunks = await readExistingIndexChunks(indexRoot);
+  const preservedChunks = existingChunks.filter((chunk) => {
+    if (!selectedAreas.includes(chunk.area)) return true;
+    if (moduleName && chunk.module !== moduleName) return true;
+    if (chunk.doc_type === "semantic") return !includeSemantic;
+    return !includeBaseline;
+  });
+  const chunkById = new Map();
+  for (const chunk of [...preservedChunks, ...chunks, ...curatedChunks]) {
+    chunkById.set(chunk.id, chunk);
+  }
+  const indexChunks = [...chunkById.values()].sort((left, right) => (
     `${left.area}:${left.module}:${left.doc_type}`.localeCompare(`${right.area}:${right.module}:${right.doc_type}`)
   ));
   const indexAreas = unique(indexChunks.map((chunk) => chunk.area));
 
+  const embeddingModel = env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL;
   let embeddingsStatus = "skipped";
-  let embeddingLines = [];
-  let embeddingModel = env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL;
   if (withEmbeddings) {
-    const embeddings = dryRun
-      ? { status: "pending", model: embeddingModel, lines: [], message: "Dry run skips OpenAI embeddings." }
-      : await callOpenAIEmbeddings(indexChunks, env);
-    result.embeddings = { status: embeddings.status, model: embeddings.model, message: embeddings.message };
-    embeddingsStatus = embeddings.status;
-    embeddingModel = embeddings.model;
-    embeddingLines = embeddings.lines;
+    embeddingsStatus = "disabled";
+    result.embeddings = {
+      status: "disabled",
+      model: embeddingModel,
+      message: "Embedding generation is disabled until a tested retrieval consumer is implemented.",
+    };
   }
 
   const manifest = buildIndexManifest({ root, chunks: indexChunks, generatedAt, gitHash, areas: indexAreas, semanticStatus, embeddingsStatus, embeddingModel });
   await writePlanned(result, path.join(indexRoot, "chunks.json"), `${JSON.stringify(indexChunks, null, 2)}\n`, dryRun);
   await writePlanned(result, path.join(indexRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, dryRun);
-  if (embeddingLines.length) {
-    await writePlanned(result, path.join(indexRoot, "embeddings.jsonl"), `${embeddingLines.join("\n")}\n`, dryRun);
-  }
 
   for (const selectedArea of selectedAreas) {
-    const areaModules = modules.filter((module) => module.area === selectedArea);
+    const areaModules = (moduleName ? discoveredModules : modules)
+      .filter((module) => module.area === selectedArea);
+    const moduleFreshness = await Promise.all(
+      areaModules.map((module) => collectModuleFreshness(root, module, gitHash, changedPaths))
+    );
+    const areaBaselineStatus = aggregateBaselineStatus(moduleFreshness);
+    const areaSemanticStatus = aggregateDocumentSemanticStatus(moduleFreshness);
+    const areaIndexStatus = moduleFreshness.every((freshness) => freshness.indexStatus === "fresh")
+      ? "fresh"
+      : "partial";
+    const sourceCoverage = await buildSourceCoverage(
+      root,
+      selectedArea,
+      areaModules,
+      generatedAt,
+      gitHash,
+      discovery.scanResults[selectedArea]
+    );
+    await writePlanned(
+      result,
+      path.join(root, "llm-knowledge", selectedArea, "source-coverage.json"),
+      `${JSON.stringify(sourceCoverage, null, 2)}\n`,
+      dryRun
+    );
     const meta = buildAreaMeta({
       area: selectedArea,
       modules: areaModules,
+      moduleFreshness,
       generatedAt,
       gitHash,
       changedPaths,
-      semanticStatus,
-      indexStatus: "fresh",
+      baselineStatus: areaBaselineStatus,
+      semanticStatus: areaSemanticStatus,
+      indexStatus: areaIndexStatus,
       model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
       embeddingModel,
     });
@@ -801,6 +1565,9 @@ function parseCliArgs(argv) {
         break;
       case "--mode":
         options.mode = argv[++index];
+        break;
+      case "--module":
+        options.module = argv[++index];
         break;
       case "--with-embeddings":
         options.withEmbeddings = true;
@@ -829,6 +1596,7 @@ async function main() {
   console.log(`Root: ${result.root}`);
   console.log(`Area: ${result.area}`);
   console.log(`Mode: ${result.mode}`);
+  console.log(`Module: ${result.module ?? "all"}`);
   console.log(`Dry run: ${result.dryRun}`);
   console.log(`Modules: ${result.modules.length}`);
   console.log(`Semantic: ${result.semantic.status}`);

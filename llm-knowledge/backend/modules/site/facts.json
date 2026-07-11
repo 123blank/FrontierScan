@@ -54,30 +54,145 @@
       "controller": "SiteController",
       "method": "GET",
       "path": "/api/sites",
+      "handler": "list",
+      "return_type": "ApiResponse<List<Site>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "categoryId",
+          "type": "Long",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
     },
     {
       "controller": "SiteController",
       "method": "GET",
       "path": "/api/sites/{id}",
+      "handler": "get",
+      "return_type": "ApiResponse<Site>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
     },
     {
       "controller": "SiteController",
       "method": "POST",
       "path": "/api/sites",
+      "handler": "create",
+      "return_type": "ApiResponse<Site>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "request",
+          "type": "CreateRequest",
+          "binding": "RequestBody",
+          "annotations": [
+            "@Valid",
+            "@RequestBody"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
     },
     {
       "controller": "SiteController",
       "method": "PUT",
       "path": "/api/sites/{id}",
+      "handler": "update",
+      "return_type": "ApiResponse<Site>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        },
+        {
+          "name": "request",
+          "type": "UpdateRequest",
+          "binding": "RequestBody",
+          "annotations": [
+            "@Valid",
+            "@RequestBody"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
     },
     {
       "controller": "SiteController",
       "method": "DELETE",
       "path": "/api/sites/{id}",
+      "handler": "delete",
+      "return_type": "ApiResponse<Map<String, String>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/site/SiteController.java"
     }
   ],
@@ -97,6 +212,98 @@
   "config_properties": [],
   "scheduled_jobs": [],
   "async_methods": [],
+  "transactional_methods": [
+    {
+      "class": "SiteService",
+      "name": "recordFailure",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "nextRetryAt",
+          "type": "OffsetDateTime",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/site/SiteService.java"
+    },
+    {
+      "class": "SiteService",
+      "name": "recordFailure",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/site/SiteService.java"
+    },
+    {
+      "class": "SiteService",
+      "name": "recordSuccess",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/site/SiteService.java"
+    },
+    {
+      "class": "SiteService",
+      "name": "resetFailureCount",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/site/SiteService.java"
+    }
+  ],
+  "service_dependencies": [
+    {
+      "class": "SiteService",
+      "dependency": "SiteRepository",
+      "parameter": "siteRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteService.java"
+    },
+    {
+      "class": "SiteService",
+      "dependency": "CategoryRepository",
+      "parameter": "categoryRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/site/SiteService.java"
+    }
+  ],
   "imports": [
     "com.frontierscan.category.CategoryRepository",
     "com.frontierscan.common.api.ApiResponse",
@@ -131,5 +338,26 @@
     "org.springframework.web.bind.annotation.RequestParam",
     "org.springframework.web.bind.annotation.RestController"
   ],
-  "resources": []
+  "resources": [
+    {
+      "kind": "configuration",
+      "file": "backend/src/main/resources/application.yml"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V1__initial_schema.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V3__add_schema_comments.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V5__add_collection_reliability.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V6__extend_collection_reliability.sql"
+    }
+  ]
 }

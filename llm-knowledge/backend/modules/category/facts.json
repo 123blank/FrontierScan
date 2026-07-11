@@ -60,30 +60,145 @@
       "controller": "CategoryController",
       "method": "GET",
       "path": "/api/categories",
+      "handler": "list",
+      "return_type": "ApiResponse<List<CategoryView>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "includeArchived",
+          "type": "boolean",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(defaultValue = \"false\")"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
     },
     {
       "controller": "CategoryController",
       "method": "GET",
       "path": "/api/categories/{id}",
+      "handler": "get",
+      "return_type": "ApiResponse<CategoryView>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
     },
     {
       "controller": "CategoryController",
       "method": "POST",
       "path": "/api/categories",
+      "handler": "create",
+      "return_type": "ApiResponse<CategoryView>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "request",
+          "type": "CreateRequest",
+          "binding": "RequestBody",
+          "annotations": [
+            "@Valid",
+            "@RequestBody"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
     },
     {
       "controller": "CategoryController",
       "method": "PUT",
       "path": "/api/categories/{id}",
+      "handler": "update",
+      "return_type": "ApiResponse<CategoryView>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        },
+        {
+          "name": "request",
+          "type": "UpdateRequest",
+          "binding": "RequestBody",
+          "annotations": [
+            "@Valid",
+            "@RequestBody"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
     },
     {
       "controller": "CategoryController",
       "method": "DELETE",
       "path": "/api/categories/{id}",
+      "handler": "delete",
+      "return_type": "ApiResponse<Map<String, String>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/category/CategoryController.java"
     }
   ],
@@ -103,6 +218,127 @@
   "config_properties": [],
   "scheduled_jobs": [],
   "async_methods": [],
+  "transactional_methods": [
+    {
+      "class": "CategoryService",
+      "name": "create",
+      "return_type": "Category",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "sortOrder",
+          "type": "Integer",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryService.java"
+    },
+    {
+      "class": "CategoryService",
+      "name": "update",
+      "return_type": "Category",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "sortOrder",
+          "type": "Integer",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "archived",
+          "type": "Boolean",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryService.java"
+    },
+    {
+      "class": "CategoryService",
+      "name": "delete",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryService.java"
+    }
+  ],
+  "service_dependencies": [
+    {
+      "class": "CategoryService",
+      "dependency": "CategoryRepository",
+      "parameter": "categoryRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryService.java"
+    },
+    {
+      "class": "CategoryService",
+      "dependency": "SiteRepository",
+      "parameter": "siteRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryService.java"
+    },
+    {
+      "class": "CategoryService",
+      "dependency": "ArticleRepository",
+      "parameter": "articleRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/category/CategoryService.java"
+    }
+  ],
   "imports": [
     "com.frontierscan.article.ArticleRepository",
     "com.frontierscan.common.api.ApiResponse",
@@ -139,5 +375,18 @@
     "org.springframework.web.bind.annotation.RequestParam",
     "org.springframework.web.bind.annotation.RestController"
   ],
-  "resources": []
+  "resources": [
+    {
+      "kind": "configuration",
+      "file": "backend/src/main/resources/application.yml"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V1__initial_schema.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V3__add_schema_comments.sql"
+    }
+  ]
 }

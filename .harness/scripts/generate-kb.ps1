@@ -5,6 +5,8 @@ param(
   [ValidateSet("all", "baseline", "semantic")]
   [string]$Mode = "all",
 
+  [string]$Module,
+
   [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
 
   [switch]$WithEmbeddings,
@@ -27,6 +29,10 @@ $arguments = @(
   "--area", $Area,
   "--mode", $Mode
 )
+
+if ($Module) {
+  $arguments += @("--module", $Module)
+}
 
 if ($WithEmbeddings) {
   $arguments += "--with-embeddings"

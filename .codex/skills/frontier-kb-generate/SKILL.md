@@ -1,6 +1,6 @@
 ---
 name: frontier-kb-generate
-description: Use when generating, refreshing, semantically enriching, indexing, or checking FrontierScan llm-knowledge from source code, docs, APIs, storage, frontend routes, OpenAI enrichment, local chunks, or optional embeddings.
+description: Use when generating, refreshing, semantically enriching, indexing, or checking FrontierScan llm-knowledge from source code, docs, APIs, storage, frontend routes, OpenAI enrichment, or local chunks.
 ---
 
 # Frontier KB Generate
@@ -10,7 +10,7 @@ Use this Skill when building or refreshing `llm-knowledge/` before planning, des
 Core model:
 
 ```text
-L0 source truth -> L1 deterministic baseline -> L2 OpenAI semantic enrichment -> L3 local index / optional embeddings -> L4 dynamic consumption
+L0 source truth -> L1 deterministic baseline -> L2 OpenAI semantic enrichment -> L3 local keyword/metadata index -> L4 dynamic consumption
 ```
 
 ## Quick Workflow
@@ -24,9 +24,10 @@ L0 source truth -> L1 deterministic baseline -> L2 OpenAI semantic enrichment ->
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode all -DryRun
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode baseline
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode all
+.\.harness\scripts\generate-kb.ps1 -Area backend -Module article -Mode baseline
 ```
 
-5. Use `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OPENAI_EMBEDDING_MODEL` only for L2 semantic enrichment and optional L3 embeddings.
+5. Use `OPENAI_API_KEY` and `OPENAI_MODEL` only for L2 semantic enrichment. The response must pass the generator's strict semantic schema.
 6. Preserve all `custom/` notes and append generation notes to `log.md`.
 7. Run freshness and query checks:
 
@@ -41,9 +42,9 @@ L0 source truth -> L1 deterministic baseline -> L2 OpenAI semantic enrichment ->
 - `llm-knowledge/frontend/meta.yaml`
 - Module-level knowledge documents
 - Module-level `facts.json`
+- Area-level `source-coverage.json`
 - `llm-knowledge/index/chunks.json`
 - `llm-knowledge/index/manifest.json`
-- Optional `llm-knowledge/index/embeddings.jsonl`
 - Append-only `log.md`
 - Optional `.harness/reports/knowledge-input-scan.md`
 
@@ -52,8 +53,10 @@ L0 source truth -> L1 deterministic baseline -> L2 OpenAI semantic enrichment ->
 | Layer | Source | Output | Failure behavior |
 | --- | --- | --- | --- |
 | L1 baseline | Source code, config, migrations, routes | Markdown + `facts.json` | Must be deterministic |
-| L2 semantic | OpenAI Responses API over bounded facts | `semantic.md` | Missing/failed API marks `semantic_status: pending/failed` |
-| L3 index | Generated docs and facts | `chunks.json`, `manifest.json`, optional embeddings | Missing embeddings must not block local index |
+| L2 semantic | OpenAI Responses API with strict JSON Schema over bounded facts | `semantic.md` | Missing key, HTTP failure, timeout, malformed JSON, or invalid schema marks `semantic_status: pending/failed` |
+| L3 index | Generated, Common, Harness, Skill, and manual Custom knowledge | `chunks.json`, `manifest.json` | Keyword/metadata index remains available without external services |
+
+`-WithEmbeddings` is intentionally reported as `disabled` until a tested query-vector and cosine retrieval consumer exists. Do not generate write-only vectors.
 
 ## Safety Rules
 

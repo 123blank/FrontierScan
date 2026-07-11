@@ -14,7 +14,9 @@
   ],
   "api_calls": [],
   "routes": [],
+  "route_guards": [],
   "stores": [],
   "exports": [],
+  "api_dependencies": [],
   "components": []
 }

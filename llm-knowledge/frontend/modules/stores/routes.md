@@ -4,8 +4,8 @@ layer: L1-baseline
 area: frontend
 module: stores
 doc_type: routes
-git_hash: dfbb39a87e15c337796a7f2fb38cf48430fe769e
-generated_at: 2026-07-06T09:38:23.253Z
+git_hash: 4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4
+generated_at: 2026-07-11T10:45:43.312Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -16,4 +16,8 @@ source_files:
 
 - 暂无自动识别结果。
 
-Needs AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。
+## 路由守卫
+
+- 暂无自动识别结果。
+
+Needs AI Review: 权限跳转和布局关系需结合源码进一步确认。

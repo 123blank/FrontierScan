@@ -1,7 +1,7 @@
 ﻿# FrontierScan Harness Skill Customization Plan
 
-> Status: next-phase implementation plan
-> Last verified: 2026-07-10
+> Status: M0 + M1 completed; this business package is closed and M2 is next
+> Last verified: 2026-07-11
 > Scope: Harness, knowledge, Skill, Agent, workflow, and verification infrastructure only
 
 ## 1. Objective
@@ -16,11 +16,11 @@ Current implementation status:
 | --- | --- |
 | Project-local Skills | 13 folders exist under `.codex/skills/`; they are guidance files and are not installed in the active Codex Skill runtime |
 | Harness contracts | Workflows, state schemas, templates, and structural validators exist under `.harness/` |
-| L1 knowledge baseline | Implemented for 7 backend and 7 frontend modules |
-| L2 semantic knowledge | Implemented with graceful degradation, but current generated status is `pending` and the success path is not verified |
-| L3 local index | Implemented with 105 keyword/metadata chunks; optional embeddings can be generated but are not consumed by query |
-| Knowledge query | Implemented, but index routing is flat and can bypass relevant `common/` knowledge |
-| Knowledge freshness | Git/hash and dirty-source reporting works; refresh task creation and automatic regeneration do not |
+| L1 knowledge baseline | Knowledge Reliability V2 implemented for 7 backend and 7 frontend modules, including module refresh and source coverage |
+| L2 semantic knowledge | Strict schema plus mocked success/failure/timeout/malformed/schema-invalid paths verified; current generated status remains `pending` because no live call was requested |
+| L3 local index | Implemented with 186 generated and curated keyword/metadata chunks; write-only Embeddings are explicitly disabled |
+| Knowledge query | Mode/Area/Common-aware ranking, freshness output, and default-root entry are regression tested |
+| Knowledge freshness | Git/hash and dirty-source reporting plus explicit refresh-task JSON generation are implemented; automatic regeneration remains disabled |
 | State and DAG | Templates and validators exist; no active state, transition engine, or workflow resumption runtime exists |
 | Agents | Role registry exists; no dispatcher, context isolation, model selection, or tool permission enforcement exists |
 | Worktree, test, review, interface, build, delivery | Read-only planning or evidence helpers exist; execution and closed-loop orchestration do not |
@@ -917,7 +917,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\gener
 
 Verified results:
 
-- Structure validation passes for 14 directories, 91 required files, and 13 Skill files.
+- Structure validation passes for 14 directories, 92 required files, and 13 Skill files.
 - Knowledge generator tests pass.
 - Knowledge query tests pass.
 - The smoke flow passes.
@@ -991,7 +991,7 @@ The existing `.harness/scripts/lib/generate-kb.mjs` can remain in place while th
 
 ## 14. Next Implementation Milestones
 
-### M0: Baseline Consolidation
+### M0: Baseline Consolidation - Completed 2026-07-11
 
 Goal: establish one truthful description of the current architecture before adding runtime behavior.
 
@@ -1009,7 +1009,9 @@ Acceptance criteria:
 - `validate-structure.ps1` and `smoke-harness-flow.ps1` pass.
 - No backend or frontend business source file changes are introduced.
 
-### M1: Knowledge Reliability V2
+Completion evidence: status regression test, obsolete scaffold removal, 98-file structure manifest, structure validation, and the owned-file audit in `docs/harness-m0-m1/REPORT.md`.
+
+### M1: Knowledge Reliability V2 - Completed 2026-07-11
 
 Goal: make knowledge accurate enough to drive planning instead of only listing source structure.
 
@@ -1036,6 +1038,8 @@ Acceptance criteria:
 - Unregistered or obsolete generated documents are detected.
 - Semantic success is verified with a mock; a real API call is optional and requires a configured key.
 - Generator and query regression suites cover the real FrontierScan source patterns that previously failed.
+
+Completion evidence: generator fixtures cover nested TypeScript generics, template URLs, request/response types, Controller signatures, security, transactions, service dependencies, resources, migrations, `.stg` prompts, route guards, page-to-API relations, module preservation, semantic failure modes, and disabled Embeddings. Real baseline generation produced 186 chunks and query ranking returned Common quality-gate knowledge first.
 
 ### M2: Deterministic State Runtime
 
@@ -1227,7 +1231,8 @@ Resolved decisions:
 | Knowledge format | Markdown + YAML + JSON |
 | Knowledge architecture | Deterministic L1 + optional OpenAI L2 + local L3 index |
 | Entry/core split | PowerShell entry points plus Node core |
-| Failure behavior | External semantic/embedding failure must not block deterministic baseline generation |
+| Failure behavior | External semantic failure must not block deterministic baseline generation |
+| Embeddings | Disabled until query-vector generation and tested vector retrieval are implemented end to end |
 | External writes | Publish, deploy, commit, push, PR, branch deletion, and worktree cleanup require approval |
 
 Decisions required before the relevant milestone starts:
@@ -1236,24 +1241,24 @@ Decisions required before the relevant milestone starts:
 2. Select the active-run discovery convention and any Codex lifecycle hooks for M2.
 3. Identify the safe API/UI verification environment, authentication method, and allowed test data for M6.
 4. Define which git operations may be automated after approval: worktree create, branch create, merge, commit, push, and PR creation.
-5. Decide whether embeddings will be consumed by a tested retriever or remain disabled.
-6. Provide and approve OpenAI credentials/model configuration only when a live semantic test is desired.
+5. Provide and approve OpenAI credentials/model configuration only when a live semantic test is desired.
 
-## 18. Immediate Next Implementation Batch
+## 18. Completed M0 + M1 Batch And Next Step
 
-The next code change should implement M0 and the highest-risk part of M1. It should not start Agent dispatch, Worktree execution, deployment, or git automation.
+M0 and M1 were completed without starting Agent dispatch, Worktree execution, deployment, or git automation.
 
-Scope:
+Completed scope:
 
 1. Reconcile stale status documents and registries.
 2. Detect and resolve obsolete knowledge scaffold modules without deleting manual content.
 3. Fix mode-aware/common-aware knowledge retrieval.
 4. Add parser coverage for the actual frontend API generic patterns and backend resources/migrations.
 5. Add module-scoped refresh.
-6. Add semantic mocked-success and malformed-output tests.
-7. Decide and document whether embeddings are implemented end-to-end or disabled.
+6. Add semantic mocked success, HTTP failure, timeout, malformed JSON, invalid schema, and aggregate-status tests.
+7. Disable Embedding generation until a tested retrieval consumer exists.
+8. Add source coverage and explicit stale-module refresh-task JSON.
 
-Expected files are limited to Harness, project Skill, knowledge, and documentation areas. Backend/frontend business behavior must remain unchanged.
+Changed files are limited to Harness, project Skill, generated knowledge, and documentation areas. Backend/frontend business source was not modified.
 
 Exit criteria:
 
@@ -1265,4 +1270,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\valid
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\smoke-harness-flow.ps1 -Root "D:\ProjectStudy\FrontierScan" -TaskDagFile "D:\ProjectStudy\FrontierScan\.harness\templates\task-dag.example.json"
 ```
 
-After this batch passes, M2 deterministic state runtime becomes the next implementation target.
+The next implementation target is M2 deterministic state runtime. It must begin with active-run discovery, atomic state writes, legal transition guards, locks, evidence gates, and resume tests before any Agent dispatcher or parallel Worktree execution is added.

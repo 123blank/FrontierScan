@@ -86,42 +86,261 @@
       "controller": "ArticleController",
       "method": "GET",
       "path": "/api/articles",
+      "handler": "list",
+      "return_type": "ApiResponse<Page<Article>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "categoryId",
+          "type": "Long",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "keyword",
+          "type": "String",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "tagId",
+          "type": "Long",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "startDate",
+          "type": "String",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "endDate",
+          "type": "String",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "page",
+          "type": "int",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(defaultValue = \"0\")"
+          ]
+        },
+        {
+          "name": "size",
+          "type": "int",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(defaultValue = \"20\")"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
     },
     {
       "controller": "ArticleController",
       "method": "GET",
       "path": "/api/articles/{id}",
+      "handler": "get",
+      "return_type": "ApiResponse<Article>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
     },
     {
       "controller": "ArticleController",
       "method": "POST",
       "path": "/api/articles/{id}/summary/retry",
+      "handler": "retrySummary",
+      "return_type": "ApiResponse<Article>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
     },
     {
       "controller": "ArticleController",
       "method": "GET",
       "path": "/api/articles/favorites",
+      "handler": "favorites",
+      "return_type": "ApiResponse<List<FavoriteArticleView>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "keyword",
+          "type": "String",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "tagId",
+          "type": "Long",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "startDate",
+          "type": "String",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        },
+        {
+          "name": "endDate",
+          "type": "String",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(required = false)"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
     },
     {
       "controller": "ArticleController",
       "method": "POST",
       "path": "/api/articles/{id}/favorite",
+      "handler": "toggleFavorite",
+      "return_type": "ApiResponse<Map<String, Object>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
     },
     {
       "controller": "ArticleController",
       "method": "DELETE",
       "path": "/api/articles/{id}/favorite",
+      "handler": "removeFavorite",
+      "return_type": "ApiResponse<Map<String, Object>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
     },
     {
       "controller": "ArticleController",
       "method": "GET",
       "path": "/api/articles/count",
+      "handler": "count",
+      "return_type": "ApiResponse<Map<String, Object>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
     }
   ],
@@ -161,6 +380,265 @@
     }
   ],
   "async_methods": [],
+  "transactional_methods": [
+    {
+      "class": "ArticleService",
+      "name": "batchSaveArticles",
+      "return_type": "} 保证批量操作的原子性。\n     * </p>\r\n     *\r\n     * @param userId        当前用户 ID\r\n     * @param siteId        来源网站 ID\r\n     * @param categoryId    所属分类 ID\r\n     * @param rawArticles   原始文章列表（采集器输出）\r\n     * @return 实际新增保存的文章列表\r\n     */\r\n    @Transactional\r\n    public List<Article>",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "categoryId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "rawArticles",
+          "type": "List<CollectResult.RawArticle>",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "name": "batchSaveArticles",
+      "return_type": "List<Article>",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "categoryId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "rawArticles",
+          "type": "List<CollectResult.RawArticle>",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "name": "toggleFavorite",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "articleId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "name": "removeFavorite",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "articleId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "name": "updateLlmSummary",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "articleId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "summary",
+          "type": "com.frontierscan.llm.SummaryResult",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleSummaryService",
+      "name": "applySummaryResult",
+      "return_type": "Article",
+      "parameters": [
+        {
+          "name": "article",
+          "type": "Article",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "result",
+          "type": "SummaryResult",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java"
+    },
+    {
+      "class": "ArticleSummaryService",
+      "name": "markFailed",
+      "return_type": "Article",
+      "parameters": [
+        {
+          "name": "article",
+          "type": "Article",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java"
+    }
+  ],
+  "service_dependencies": [
+    {
+      "class": "ArticleService",
+      "dependency": "ArticleRepository",
+      "parameter": "articleRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "dependency": "FavoriteRepository",
+      "parameter": "favoriteRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "dependency": "TagEvaluationAgent",
+      "parameter": "tagEvaluationAgent",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "dependency": "ArticleTagMappingMapper",
+      "parameter": "articleTagMappingMapper",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "dependency": "LlmProperties",
+      "parameter": "llmProperties",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleSummaryRecoveryScheduler",
+      "dependency": "ArticleRepository",
+      "parameter": "articleRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryScheduler.java"
+    },
+    {
+      "class": "ArticleSummaryRecoveryScheduler",
+      "dependency": "ArticleSummaryService",
+      "parameter": "articleSummaryService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryScheduler.java"
+    },
+    {
+      "class": "ArticleSummaryRecoveryScheduler",
+      "dependency": "ArticleService",
+      "parameter": "articleService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryScheduler.java"
+    },
+    {
+      "class": "ArticleSummaryRecoveryScheduler",
+      "dependency": "ArticleSummaryRecoveryProperties",
+      "parameter": "properties",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryScheduler.java"
+    },
+    {
+      "class": "ArticleSummaryService",
+      "dependency": "ArticleRepository",
+      "parameter": "articleRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java"
+    },
+    {
+      "class": "ArticleSummaryService",
+      "dependency": "ArticleService",
+      "parameter": "articleService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java"
+    },
+    {
+      "class": "ArticleSummaryService",
+      "dependency": "SummaryMapReduceService",
+      "parameter": "summaryMapReduceService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java"
+    },
+    {
+      "class": "ArticleSummaryService",
+      "dependency": "SummaryQualityEvaluator",
+      "parameter": "qualityEvaluator",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleSummaryService.java"
+    }
+  ],
   "imports": [
     "com.frontierscan.collection.CollectResult",
     "com.frontierscan.common.api.ApiResponse",
@@ -214,5 +692,38 @@
     "org.springframework.web.bind.annotation.RequestParam",
     "org.springframework.web.bind.annotation.RestController"
   ],
-  "resources": []
+  "resources": [
+    {
+      "kind": "configuration",
+      "file": "backend/src/main/resources/application.yml"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V10__make_article_source_hash_global_unique.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V1__initial_schema.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V3__add_schema_comments.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V4__create_tag_system.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V7__add_article_summary_governance.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V8__backfill_article_summary_status.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V9__add_article_full_content.sql"
+    }
+  ]
 }

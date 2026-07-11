@@ -4,7 +4,7 @@
 >
 > 最后更新：2026-07-11
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 侧已完成项目规范入口、13 个项目级 Skill、12 类 Agent 职责、状态/DAG 契约，以及 L1 确定性基线 + L2 OpenAI 可降级语义增强 + L3 本地索引的知识工程首版。当前真正缺口是知识可靠性 V2、确定性状态运行时、正式 Skill/Agent 接入、Worktree 并行和验证/交付适配。下一步以 `docs/harness-skill-customization-plan.md` 的 M0+M1 为准，不应把 Smoke 通过解释为端到端闭环已经完成。
+> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 的 M0 基线统一和 M1 Knowledge Reliability V2 已完成。当前具备 14 模块 L1 基线、mock 验证的可降级 L2、186 块本地索引、模块刷新、模式感知查询和 refresh-task 输出。下一步是 M2 确定性状态运行时；正式 Skill/Agent 自动接入、Worktree 并行和验证/交付适配仍未实现。
 
 ---
 
@@ -917,7 +917,7 @@ docs/harness-*.md
 关键文档：
 
 ```text
-docs/harness-skill-customization-plan.md
+docs/harness-m0-m1/PLAN.md
 docs/harness-architecture-adaptation.md
 docs/harness-structure-checklist.md
 ```
@@ -1129,7 +1129,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\smoke
 
 结果：
 
-- Harness 结构校验通过：14 个目录、91 个必需文件、13 个 Skill 文件。
+- Harness 结构校验通过：14 个目录、92 个必需文件、13 个 Skill 文件。
 - `generate-kb` 测试通过。
 - `kb-query` 测试通过。
 - Harness smoke flow 通过。
@@ -1182,7 +1182,7 @@ dfbb39a reactor: 重构项目架构成harnesss架构
 .harness/scripts/smoke-harness-flow.ps1
 .harness/structure-manifest.yaml
 docs/AI-handover.md
-docs/harness-skill-customization-plan.md
+docs/harness-m0-m1/PLAN.md
 llm-knowledge/backend/modules/*
 llm-knowledge/frontend/modules/*
 llm-knowledge/index/*
@@ -1200,7 +1200,7 @@ llm-knowledge/index/*
 
 ### 16.8 后续建议
 
-完整路线以 `docs/harness-skill-customization-plan.md` 的 M0-M7 为准：
+完整路线以 `docs/harness-m0-m1/PLAN.md` 的 M0-M7 为准：
 
 ```text
 M0 baseline consolidation
@@ -1213,15 +1213,13 @@ M0 baseline consolidation
   -> M7 evaluation and hardening
 ```
 
-立即执行顺序是 M0 + M1，不要直接跳到多 Agent 或 Worktree：
+M0 + M1 已完成。立即执行顺序改为 M2，不要直接跳到多 Agent 或 Worktree：
 
-1. 统一 `AI-handover`、架构文档、知识 overview、Skill Registry 和 Structure Manifest 的状态描述。
-2. 盘点并处理旧 `application`、`web-admin` scaffold，删除前必须确认没有人工内容。
-3. 修复 Mode/Area/Common 感知的知识检索，避免 `quality gate` 被 LLM 业务类关键词抢占。
-4. 补前端复杂泛型 API、后端 resources/config/migration 的真实提取。
-5. 增加 `-Module` 单模块刷新，避免 Area 级全量重写。
-6. 增加 Semantic mocked success、timeout、malformed response 测试。
-7. 对 Embedding 做明确决策：实现可测试的消费路径，或保持禁用；不要保留只写不读的向量产物。
+1. 定义 active-run 定位规则和运行实例目录。
+2. 实现 `init/status/validate/record/next/block/resume/complete` 状态命令。
+3. 使用临时文件 + 原子替换写状态，并增加进程锁和并发冲突测试。
+4. 从 workflow YAML 校验合法阶段转换和必需证据。
+5. 先完成单 Story 的中断恢复测试，再考虑 Agent dispatcher。
 
 M1 验收通过后，下一目标是 M2 确定性状态运行时。运行时必须拥有阶段推进权，Agent 只返回结构化结果；在单 Story 纵向闭环稳定前，不实现并行 Worktree。
 
@@ -1301,7 +1299,7 @@ Select-String -Path 'D:\ProjectStudy\FrontierScan\AGENTS.md' -Pattern 'FrontierS
 L0 source truth
 -> L1 deterministic baseline
 -> L2 OpenAI semantic enrichment
--> L3 local index / optional embeddings
+-> L3 local keyword/metadata index
 -> L4 dynamic consumption by Skills and Agents
 ```
 
@@ -1311,7 +1309,7 @@ L0 source truth
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode all
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode baseline
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode all -DryRun -Json
-.\.harness\scripts\generate-kb.ps1 -Area all -Mode all -WithEmbeddings
+.\.harness\scripts\generate-kb.ps1 -Area backend -Module article -Mode baseline
 ```
 
 设计约束：
@@ -1319,7 +1317,8 @@ L0 source truth
 - PowerShell 保持 Harness 入口风格，Node.js 负责复杂源码扫描、文档生成、OpenAI 调用和 JSON 索引。
 - L1 自动提取源码事实，后端按包拆分，前端按目录区域拆分。
 - L2 使用 OpenAI 官方 API；缺少 `OPENAI_API_KEY` 或调用失败时降级，不阻塞 L1/L3。
-- L3 默认生成本地 `chunks.json` 和 `manifest.json`；只有显式 `-WithEmbeddings` 才生成 `embeddings.jsonl`。
+- L3 默认生成本地 `chunks.json` 和 `manifest.json`，同时索引 Common、Harness、Skill 和人工 Custom 内容。
+- `-WithEmbeddings` 当前明确返回 `disabled`；在向量查询消费者完成前不生成只写不读的 `embeddings.jsonl`。
 - `kb-query.ps1` 已优先消费 `llm-knowledge/index/chunks.json`，再回退 Markdown/YAML 搜索。
 - `check-kb-freshness.ps1` 已识别 baseline、semantic、index 三类 freshness。
 
@@ -1332,9 +1331,9 @@ L0 source truth
 当前验证状态：
 
 - L1 和 L3 已运行并通过测试。
-- L2 降级路径已通过测试，真实 OpenAI 成功路径未验证。
-- 14 个模块和 105 个 Chunk 已生成。
-- Area 局部刷新保留其他 Area 的索引已通过回归测试。
+- L2 mock 成功、HTTP 失败、timeout、malformed JSON、schema-invalid 和混合模块状态均已通过测试；真实 OpenAI 调用未执行。
+- 14 个模块和 186 个 Chunk 已生成。
+- Area 和 Module 局部刷新保留无关文档、日志、meta 和索引已通过回归测试。
 - 知识工程实现仍在未提交工作区中，交付前必须检查 tracked 与 untracked 文件。
 
 不要把本节理解为“文章架构已全部实现”。当前实现的是知识工程首版；状态运行时、自动 Agent、并行 Worktree、真实接口验证和 DevOps 闭环仍未实现。
@@ -1352,7 +1351,7 @@ L0 source truth
 
 | 维度 | 当前状态 | 关键缺口 |
 | --- | --- | --- |
-| Knowledge | L1/L3 可运行，L2 pending | 提取准确率、Common 路由、单模块刷新、Semantic 成功测试 |
+| Knowledge | M1 已验收；L1/L3 fresh，L2 当前 pending 但 mock 路径已验证 | 真实 OpenAI Smoke 可选；Embedding 需等向量检索消费者 |
 | State | Schema、模板、Validator 已有 | Active state、原子更新、合法转换、断点恢复、锁 |
 | Skill | 13 个项目内定义 | 当前 Codex 运行时未确认自动发现/安装 |
 | Agent | 12 类角色注册 | Dispatcher、上下文隔离、模型选择、工具权限执行 |
@@ -1364,7 +1363,7 @@ L0 source truth
 最新计划文档：
 
 ```text
-docs/harness-skill-customization-plan.md
+docs/harness-m0-m1/PLAN.md
 ```
 
 该文档已更新为 M0-M7 路线，并明确：
@@ -1375,17 +1374,15 @@ docs/harness-skill-customization-plan.md
 - Hook 可以做生命周期增强，但 CLI Resume 必须在没有 Hook 时也能工作。
 - 先单 Story 纵向闭环，再做多 Agent/Worktree 并行。
 
-下一批实现范围只做 M0 + M1：
+M0 + M1 已完成，下一批实现范围只做 M2：
 
-1. 完成剩余状态文档和 Registry 一致性修正。
-2. 处理旧 scaffold，确保不删除人工内容。
-3. 修复真实前端 API 泛型提取和后端 resource/migration 提取。
-4. 修复索引的 Mode/Area/Common 路由。
-5. 增加 `-Module` 刷新。
-6. 增加 Semantic Mock 成功/失败/异常输出测试。
-7. 决定 Embedding 是端到端实现还是保持禁用。
+1. Active run 定位与初始化。
+2. 原子状态更新、锁和并发冲突处理。
+3. 合法阶段转换和 evidence gate。
+4. Block/Resume/Complete 的确定性恢复。
+5. CLI 无 Hook 条件下的单 Story 重启恢复测试。
 
-在以下条件满足前，不开始 M2 之后的工作：
+以下 M1 条件已经满足；在 M2 状态运行时验收前，不开始 M3 之后的工作：
 
 - `quality gate` 在 `Area all` 下能优先返回 Common 质量门文档。
 - 实际前端 API 生成结果非空且路径正确。
@@ -1410,3 +1407,24 @@ D:\学习\个人实习\frontierscan-harness-engineering-sop.md
 ```
 
 该 SOP 包含项目背景、方案取舍、四个排查案例、验证证据、量化数字、简历 Bullet、STAR 和面试问答。项目交接以本文件和仓库内计划文档为准；SOP 用于个人复盘和求职表达。
+
+### 16.12 2026-07-11 M0 + M1 最终交接
+
+M0 基线统一和 M1 Knowledge Reliability V2 已实现。权威实施报告：
+
+```text
+docs/harness-m0-m1/REPORT.md
+```
+
+当前可依赖能力：
+
+- 7 个后端模块 + 7 个前端模块的 L1 基线、`facts.json` 和 `source-coverage.json`。
+- Controller 签名/绑定/安全、事务、服务依赖、配置、Flyway、`.stg` 提示模板抽取。
+- 前端嵌套泛型 API、模板 URL、请求/响应类型、路由守卫和页面到 API 关系抽取。
+- `-Area <area> -Module <module>` 精确刷新，保留无关模块、人工 Custom、日志、meta 和索引。
+- 186 个生成/精选 Chunk；`quality gate` 在 `Area all` 下优先返回 Common 规范。
+- OpenAI Semantic 使用严格 schema、超时和降级，mock 成功及异常路径已验证；当前文档仍为 `pending`。
+- Embedding 明确 `disabled`，不产生只写不读的向量文件。
+- freshness 可通过 `-WriteRefreshTask` 生成刷新任务，但不会自动执行。
+
+下一步只进入 M2 确定性状态运行时。不要在 M2 完成前实现 Agent 自动派发或并行 Worktree，也不要把当前 Smoke 结果解释为文章级端到端自动交付已经完成。

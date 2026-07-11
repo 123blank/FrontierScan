@@ -180,12 +180,29 @@
       "controller": "TagController",
       "method": "GET",
       "path": "/api/tags/domains",
+      "handler": "listDomains",
+      "return_type": "ApiResponse<List<Map<String, Object>>>",
+      "parameters": [],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/llm/tag/TagController.java"
     },
     {
       "controller": "TagController",
       "method": "GET",
       "path": "/api/tags/domains/{domainName}",
+      "handler": "listTagsByDomain",
+      "return_type": "ApiResponse<List<Map<String, Object>>>",
+      "parameters": [
+        {
+          "name": "domainName",
+          "type": "String",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/llm/tag/TagController.java"
     }
   ],
@@ -238,6 +255,155 @@
   ],
   "scheduled_jobs": [],
   "async_methods": [],
+  "transactional_methods": [
+    {
+      "class": "TagEvaluationAgent",
+      "name": "evaluate",
+      "return_type": "List<ScoredTag>",
+      "parameters": [
+        {
+          "name": "articleId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "content",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java"
+    }
+  ],
+  "service_dependencies": [
+    {
+      "class": "DashScopeLlmProvider",
+      "dependency": "RestTemplateBuilder",
+      "parameter": "builder",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/DashScopeLlmProvider.java"
+    },
+    {
+      "class": "DashScopeLlmProvider",
+      "dependency": "LlmProperties",
+      "parameter": "properties",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/DashScopeLlmProvider.java"
+    },
+    {
+      "class": "DashScopeLlmProvider",
+      "dependency": "ObjectMapper",
+      "parameter": "mapper",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/DashScopeLlmProvider.java"
+    },
+    {
+      "class": "SummaryMapReduceService",
+      "dependency": "LlmProvider",
+      "parameter": "llmProvider",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryMapReduceService.java"
+    },
+    {
+      "class": "SummaryMapReduceService",
+      "dependency": "LlmProperties",
+      "parameter": "properties",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryMapReduceService.java"
+    },
+    {
+      "class": "SummaryMapReduceService",
+      "dependency": "Executor",
+      "parameter": "mapReduceExecutor",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/SummaryMapReduceService.java"
+    },
+    {
+      "class": "DomainClassifier",
+      "dependency": "RestTemplateBuilder",
+      "parameter": "builder",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/DomainClassifier.java"
+    },
+    {
+      "class": "DomainClassifier",
+      "dependency": "LlmProperties",
+      "parameter": "llmProperties",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/DomainClassifier.java"
+    },
+    {
+      "class": "DomainClassifier",
+      "dependency": "ObjectMapper",
+      "parameter": "objectMapper",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/DomainClassifier.java"
+    },
+    {
+      "class": "LlmTagScorer",
+      "dependency": "RestTemplateBuilder",
+      "parameter": "builder",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/LlmTagScorer.java"
+    },
+    {
+      "class": "LlmTagScorer",
+      "dependency": "LlmProperties",
+      "parameter": "llmProperties",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/LlmTagScorer.java"
+    },
+    {
+      "class": "LlmTagScorer",
+      "dependency": "ObjectMapper",
+      "parameter": "objectMapper",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/LlmTagScorer.java"
+    },
+    {
+      "class": "TagEvaluationAgent",
+      "dependency": "TagDomainMapper",
+      "parameter": "tagDomainMapper",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java"
+    },
+    {
+      "class": "TagEvaluationAgent",
+      "dependency": "ArticleTagMappingMapper",
+      "parameter": "articleTagMappingMapper",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java"
+    },
+    {
+      "class": "TagEvaluationAgent",
+      "dependency": "DomainClassifier",
+      "parameter": "domainClassifier",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java"
+    },
+    {
+      "class": "TagEvaluationAgent",
+      "dependency": "LlmTagScorer",
+      "parameter": "llmTagScorer",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java"
+    },
+    {
+      "class": "TagEvaluationAgent",
+      "dependency": "JdbcTemplate",
+      "parameter": "jdbcTemplate",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/llm/tag/TagEvaluationAgent.java"
+    }
+  ],
   "imports": [
     "com.baomidou.mybatisplus.annotation.IdType",
     "com.baomidou.mybatisplus.annotation.TableId",
@@ -305,5 +471,46 @@
     "org.springframework.web.bind.annotation.RestController",
     "org.springframework.web.client.RestTemplate"
   ],
-  "resources": []
+  "resources": [
+    {
+      "kind": "configuration",
+      "file": "backend/src/main/resources/application.yml"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V10__make_article_source_hash_global_unique.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V3__add_schema_comments.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V4__create_tag_system.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V6__extend_collection_reliability.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V7__add_article_summary_governance.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V9__add_article_full_content.sql"
+    },
+    {
+      "kind": "prompt-template",
+      "file": "backend/src/main/resources/prompt_template/article-zh-llm-summary-prompt.stg"
+    },
+    {
+      "kind": "prompt-template",
+      "file": "backend/src/main/resources/prompt_template/domain-classifier.stg"
+    },
+    {
+      "kind": "prompt-template",
+      "file": "backend/src/main/resources/prompt_template/tag-scorer.stg"
+    }
+  ]
 }

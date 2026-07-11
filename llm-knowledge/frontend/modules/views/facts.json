@@ -39,8 +39,56 @@
   ],
   "api_calls": [],
   "routes": [],
+  "route_guards": [],
   "stores": [],
   "exports": [],
+  "api_dependencies": [
+    {
+      "api_module": "categories",
+      "symbol": "categoryApi",
+      "file": "frontend/src/views/CategoriesView.vue"
+    },
+    {
+      "api_module": "collectionRuns",
+      "symbol": "collectionRunApi",
+      "file": "frontend/src/views/CollectionRunsView.vue"
+    },
+    {
+      "api_module": "articles",
+      "symbol": "articleApi",
+      "file": "frontend/src/views/DashboardView.vue"
+    },
+    {
+      "api_module": "categories",
+      "symbol": "categoryApi",
+      "file": "frontend/src/views/DashboardView.vue"
+    },
+    {
+      "api_module": "sites",
+      "symbol": "siteApi",
+      "file": "frontend/src/views/DashboardView.vue"
+    },
+    {
+      "api_module": "articles",
+      "symbol": "articleApi",
+      "file": "frontend/src/views/FavoritesView.vue"
+    },
+    {
+      "api_module": "sites",
+      "symbol": "siteApi",
+      "file": "frontend/src/views/SitesView.vue"
+    },
+    {
+      "api_module": "categories",
+      "symbol": "categoryApi",
+      "file": "frontend/src/views/SitesView.vue"
+    },
+    {
+      "api_module": "collectionRuns",
+      "symbol": "collectionRunApi",
+      "file": "frontend/src/views/SitesView.vue"
+    }
+  ],
   "components": [
     {
       "name": "CategoriesView.vue",

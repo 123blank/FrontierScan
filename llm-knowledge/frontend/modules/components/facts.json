@@ -19,11 +19,19 @@
   ],
   "api_calls": [],
   "routes": [],
+  "route_guards": [],
   "stores": [],
   "exports": [
     {
       "name": "ToastType",
       "file": "frontend/src/components/ToastMessage.vue"
+    }
+  ],
+  "api_dependencies": [
+    {
+      "api_module": "tags",
+      "symbol": "tagApi",
+      "file": "frontend/src/components/ArticleFilterBar.vue"
     }
   ],
   "components": [

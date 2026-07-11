@@ -15,6 +15,7 @@ required_directories:
   - llm-knowledge/backend
   - llm-knowledge/frontend
   - llm-knowledge/common
+  - docs/harness-m0-m1
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -39,6 +40,8 @@ required_files:
   - .harness/scripts/lib/generate-kb.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
+  - .harness/scripts/tests/kb-freshness.test.ps1
+  - .harness/scripts/tests/harness-status.test.mjs
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
   - .harness/scripts/scan-knowledge-inputs.ps1
@@ -101,15 +104,23 @@ required_files:
   - llm-knowledge/README.md
   - llm-knowledge/overview.md
   - llm-knowledge/backend/meta.yaml
+  - llm-knowledge/backend/source-coverage.json
   - llm-knowledge/frontend/meta.yaml
+  - llm-knowledge/frontend/source-coverage.json
+  - llm-knowledge/index/chunks.json
+  - llm-knowledge/index/manifest.json
   - llm-knowledge/common/conventions/delivery.md
   - llm-knowledge/common/conventions/execution-verification.md
   - llm-knowledge/common/conventions/quality-gates.md
-  - docs/harness-skill-customization-plan.md
+  - docs/harness-m0-m1/PLAN.md
   - docs/harness-architecture-adaptation.md
+  - docs/harness-m0-m1/REPORT.md
 status_notes:
-  structure: scaffolded
-  skill_logic: basic-guidance-for-core-planning-and-quality-gates
+  structure: implemented
+  skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
+  knowledge_generation: implemented-v1
+  knowledge_query: implemented-v1
+  knowledge_semantic: mock-verified-current-pending
   agent_runtime: deferred
-  deterministic_scripts: basic-read-only-helpers
-  business_code_changes: none-required-for-structure
+  deterministic_scripts: mixed-read-only-helpers-and-knowledge-writer
+  business_code_changes: none-required-for-m0-m1

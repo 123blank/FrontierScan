@@ -54,12 +54,39 @@
       "controller": "AuthController",
       "method": "POST",
       "path": "/api/auth/login",
+      "handler": "login",
+      "return_type": "ApiResponse<Map<String, String>>",
+      "parameters": [
+        {
+          "name": "request",
+          "type": "LoginRequest",
+          "binding": "RequestBody",
+          "annotations": [
+            "@Valid",
+            "@RequestBody"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/auth/AuthController.java"
     },
     {
       "controller": "AuthController",
       "method": "POST",
       "path": "/api/auth/me",
+      "handler": "me",
+      "return_type": "ApiResponse<Map<String, Object>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/auth/AuthController.java"
     }
   ],
@@ -79,6 +106,30 @@
   "config_properties": [],
   "scheduled_jobs": [],
   "async_methods": [],
+  "transactional_methods": [],
+  "service_dependencies": [
+    {
+      "class": "AuthService",
+      "dependency": "UserAccountRepository",
+      "parameter": "userRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthService.java"
+    },
+    {
+      "class": "AuthService",
+      "dependency": "PasswordEncoder",
+      "parameter": "passwordEncoder",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthService.java"
+    },
+    {
+      "class": "AuthService",
+      "dependency": "JwtUtil",
+      "parameter": "jwtUtil",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/auth/AuthService.java"
+    }
+  ],
   "imports": [
     "com.frontierscan.common.api.ApiResponse",
     "com.frontierscan.common.security.JwtPrincipal",
@@ -106,5 +157,22 @@
     "org.springframework.web.bind.annotation.RequestMapping",
     "org.springframework.web.bind.annotation.RestController"
   ],
-  "resources": []
+  "resources": [
+    {
+      "kind": "configuration",
+      "file": "backend/src/main/resources/application.yml"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V1__initial_schema.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V2__seed_default_admin.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V3__add_schema_comments.sql"
+    }
+  ]
 }

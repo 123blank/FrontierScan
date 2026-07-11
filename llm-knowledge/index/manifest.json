@@ -1,13 +1,14 @@
 {
   "schema_version": "1.0",
   "generated_by": "frontier-kb-generate",
-  "generated_at": "2026-07-06T09:39:30.103Z",
-  "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
+  "generated_at": "2026-07-11T10:45:43.312Z",
+  "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
   "areas": [
     "backend",
+    "common",
     "frontend"
   ],
-  "chunk_count": 105,
+  "chunk_count": 186,
   "semantic_status": "pending",
   "embeddings_status": "skipped",
   "embedding_model": "text-embedding-3-small",

@@ -19,7 +19,8 @@ Use this Skill when a task needs FrontierScan project knowledge.
 
 4. Load only the matched files that are relevant to the task.
 5. Prefer `custom/` notes if present.
-6. Report stale, missing, or scaffold-only knowledge before relying on it.
+6. Verify the printed `Index freshness` line before relying on results.
+7. Report stale, missing, or scaffold-only knowledge before relying on it.
 
 ## Query Modes
 
@@ -28,6 +29,8 @@ Read `references/query-modes.md` for mode selection.
 ## Loading Rules
 
 Read `references/progressive-loading.md` before loading broad context.
+
+The query ranker applies Mode-specific document weights, exact/all-term bonuses, Area filtering, and Common knowledge priority. `api-search` should favor `interfaces`; `frontend-ui-search` should favor frontend UI facts.
 
 ## Safety Rules
 

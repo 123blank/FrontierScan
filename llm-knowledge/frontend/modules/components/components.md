@@ -4,8 +4,8 @@ layer: L1-baseline
 area: frontend
 module: components
 doc_type: components
-git_hash: dfbb39a87e15c337796a7f2fb38cf48430fe769e
-generated_at: 2026-07-06T09:38:23.253Z
+git_hash: 4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4
+generated_at: 2026-07-11T10:45:43.312Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -21,5 +21,9 @@ source_files:
 ## Exports
 
 - ToastType (frontend/src/components/ToastMessage.vue)
+
+## 页面到 API 依赖
+
+- tagApi -> api/tags (frontend/src/components/ArticleFilterBar.vue)
 
 Needs AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。

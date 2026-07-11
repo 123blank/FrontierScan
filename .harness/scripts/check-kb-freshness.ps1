@@ -1,6 +1,8 @@
 param(
   [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
-  [switch]$Json
+  [switch]$Json,
+  [switch]$WriteRefreshTask,
+  [string]$RefreshTaskPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,6 +55,46 @@ function Test-AnyChangedPath {
   }
 
   return $false
+}
+
+function Get-ChangedModules {
+  param(
+    [string[]]$Paths,
+    [string]$Area
+  )
+
+  $pattern = if ($Area -eq "backend") {
+    '^backend/src/main/java/com/frontierscan/([^/]+)/'
+  } else {
+    '^frontend/src/([^/]+)/'
+  }
+  return @(
+    $Paths |
+      ForEach-Object { if ($_ -match $pattern) { $Matches[1] } } |
+      Where-Object { $_ } |
+      Sort-Object -Unique
+  )
+}
+
+function Get-RefreshMode {
+  param([pscustomobject]$Finding)
+
+  $semanticNeedsRefresh = $Finding.semantic_status -and $Finding.semantic_status -notin @("fresh", "pending")
+  $baselineOrIndexNeedsRefresh = $Finding.status -eq "missing-meta" -or
+    $Finding.source_changed -or
+    [string]::IsNullOrWhiteSpace($Finding.recorded_git_hash) -or
+    $Finding.recorded_git_hash -ne $Finding.current_git_hash -or
+    ($Finding.baseline_status -and $Finding.baseline_status -ne "fresh") -or
+    ($Finding.index_status -and $Finding.index_status -ne "fresh") -or
+    $Finding.reason -match "generated_at|knowledge index manifest|index\.git_hash"
+
+  if ($semanticNeedsRefresh -and $baselineOrIndexNeedsRefresh) {
+    return "all"
+  }
+  if ($semanticNeedsRefresh) {
+    return "semantic"
+  }
+  return "baseline"
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $Root ".git"))) {
@@ -159,12 +201,55 @@ foreach ($area in $areas) {
   }
 }
 
+$refreshTargets = @(
+  foreach ($finding in $findings | Where-Object { $_.status -ne "fresh" }) {
+    $modules = @(Get-ChangedModules -Paths $changedPaths -Area $finding.area)
+    $mode = Get-RefreshMode -Finding $finding
+    $command = if ($mode -ne "semantic" -and $modules.Count -eq 1) {
+      ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Module $($modules[0]) -Mode $mode"
+    } else {
+      ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Mode $mode"
+    }
+    [pscustomobject]@{
+      area = $finding.area
+      modules = $modules
+      mode = $mode
+      reason = $finding.reason
+      command = $command
+    }
+  }
+)
+
+$refreshTask = [pscustomobject]@{
+  schema_version = "1.0"
+  generated_by = "frontier-kb-refresh-check"
+  generated_at = [DateTime]::UtcNow.ToString("o")
+  root = $Root
+  current_git_hash = $headHash
+  status = if ($refreshTargets.Count -gt 0) { "pending" } else { "not-required" }
+  changed_paths = $changedPaths
+  targets = $refreshTargets
+}
+
+if ($WriteRefreshTask) {
+  if ([string]::IsNullOrWhiteSpace($RefreshTaskPath)) {
+    $RefreshTaskPath = Join-Path $Root ".harness\outputs\kb-refresh-task.json"
+  }
+  $refreshTaskDirectory = Split-Path -Parent $RefreshTaskPath
+  if ($refreshTaskDirectory) {
+    New-Item -ItemType Directory -Path $refreshTaskDirectory -Force | Out-Null
+  }
+  $refreshTask | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $RefreshTaskPath -Encoding UTF8
+}
+
 if ($Json) {
   [pscustomobject]@{
     root = $Root
     current_git_hash = $headHash
     changed_paths = $changedPaths
     findings = $findings
+    refresh_task = $refreshTask
+    refresh_task_path = if ($WriteRefreshTask) { $RefreshTaskPath } else { $null }
   } | ConvertTo-Json -Depth 6
   exit 0
 }

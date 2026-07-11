@@ -16,10 +16,15 @@
     {
       "method": "POST",
       "path": "/auth/login",
+      "response_type": "{ data: LoginResponse }",
+      "request_types": [
+        "string"
+      ],
       "file": "frontend/src/stores/auth.ts"
     }
   ],
   "routes": [],
+  "route_guards": [],
   "stores": [
     {
       "name": "auth",
@@ -29,6 +34,13 @@
   "exports": [
     {
       "name": "useAuthStore",
+      "file": "frontend/src/stores/auth.ts"
+    }
+  ],
+  "api_dependencies": [
+    {
+      "api_module": "client",
+      "symbol": "apiClient",
       "file": "frontend/src/stores/auth.ts"
     }
   ],

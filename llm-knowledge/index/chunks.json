@@ -20,8 +20,8 @@
       "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
       "backend/src/main/java/com/frontierscan/article/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -63,8 +63,8 @@
       "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
       "backend/src/main/java/com/frontierscan/article/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -106,8 +106,8 @@
       "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
       "backend/src/main/java/com/frontierscan/article/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -149,8 +149,8 @@
       "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
       "backend/src/main/java/com/frontierscan/article/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -192,8 +192,8 @@
       "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
       "backend/src/main/java/com/frontierscan/article/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -235,8 +235,8 @@
       "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
       "backend/src/main/java/com/frontierscan/article/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -263,7 +263,7 @@
     "module": "article",
     "doc_type": "semantic",
     "path": "llm-knowledge/backend/modules/article/semantic.md",
-    "text": "# article 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 未配置 OPENAI_API_KEY，已降级为 L1 基线文档，L2 语义增强待补充。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
+    "text": "# article 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 本次未运行 L2 语义增强。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
     "source_files": [
       "backend/src/main/java/com/frontierscan/article/Article.java",
       "backend/src/main/java/com/frontierscan/article/ArticleController.java",
@@ -278,8 +278,8 @@
       "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
       "backend/src/main/java/com/frontierscan/article/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -321,8 +321,8 @@
       "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java",
       "backend/src/main/java/com/frontierscan/article/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -357,8 +357,8 @@
       "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
       "backend/src/main/java/com/frontierscan/auth/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -386,8 +386,8 @@
       "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
       "backend/src/main/java/com/frontierscan/auth/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -415,8 +415,8 @@
       "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
       "backend/src/main/java/com/frontierscan/auth/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -444,8 +444,8 @@
       "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
       "backend/src/main/java/com/frontierscan/auth/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -473,8 +473,8 @@
       "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
       "backend/src/main/java/com/frontierscan/auth/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -502,8 +502,8 @@
       "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
       "backend/src/main/java/com/frontierscan/auth/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -523,7 +523,7 @@
     "module": "auth",
     "doc_type": "semantic",
     "path": "llm-knowledge/backend/modules/auth/semantic.md",
-    "text": "# auth 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 未配置 OPENAI_API_KEY，已降级为 L1 基线文档，L2 语义增强待补充。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
+    "text": "# auth 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 本次未运行 L2 语义增强。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
     "source_files": [
       "backend/src/main/java/com/frontierscan/auth/AuthController.java",
       "backend/src/main/java/com/frontierscan/auth/AuthService.java",
@@ -531,8 +531,8 @@
       "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
       "backend/src/main/java/com/frontierscan/auth/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -560,8 +560,8 @@
       "backend/src/main/java/com/frontierscan/auth/UserAccountRepository.java",
       "backend/src/main/java/com/frontierscan/auth/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -590,8 +590,8 @@
       "backend/src/main/java/com/frontierscan/category/CategoryView.java",
       "backend/src/main/java/com/frontierscan/category/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -621,8 +621,8 @@
       "backend/src/main/java/com/frontierscan/category/CategoryView.java",
       "backend/src/main/java/com/frontierscan/category/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -652,8 +652,8 @@
       "backend/src/main/java/com/frontierscan/category/CategoryView.java",
       "backend/src/main/java/com/frontierscan/category/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -683,8 +683,8 @@
       "backend/src/main/java/com/frontierscan/category/CategoryView.java",
       "backend/src/main/java/com/frontierscan/category/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -714,8 +714,8 @@
       "backend/src/main/java/com/frontierscan/category/CategoryView.java",
       "backend/src/main/java/com/frontierscan/category/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -745,8 +745,8 @@
       "backend/src/main/java/com/frontierscan/category/CategoryView.java",
       "backend/src/main/java/com/frontierscan/category/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -767,7 +767,7 @@
     "module": "category",
     "doc_type": "semantic",
     "path": "llm-knowledge/backend/modules/category/semantic.md",
-    "text": "# category 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 未配置 OPENAI_API_KEY，已降级为 L1 基线文档，L2 语义增强待补充。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
+    "text": "# category 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 本次未运行 L2 语义增强。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
     "source_files": [
       "backend/src/main/java/com/frontierscan/category/Category.java",
       "backend/src/main/java/com/frontierscan/category/CategoryController.java",
@@ -776,8 +776,8 @@
       "backend/src/main/java/com/frontierscan/category/CategoryView.java",
       "backend/src/main/java/com/frontierscan/category/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -807,8 +807,8 @@
       "backend/src/main/java/com/frontierscan/category/CategoryView.java",
       "backend/src/main/java/com/frontierscan/category/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -851,8 +851,8 @@
       "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
       "backend/src/main/java/com/frontierscan/collection/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -908,8 +908,8 @@
       "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
       "backend/src/main/java/com/frontierscan/collection/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -965,8 +965,8 @@
       "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
       "backend/src/main/java/com/frontierscan/collection/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1022,8 +1022,8 @@
       "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
       "backend/src/main/java/com/frontierscan/collection/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1079,8 +1079,8 @@
       "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
       "backend/src/main/java/com/frontierscan/collection/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1136,8 +1136,8 @@
       "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
       "backend/src/main/java/com/frontierscan/collection/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1171,7 +1171,7 @@
     "module": "collection",
     "doc_type": "semantic",
     "path": "llm-knowledge/backend/modules/collection/semantic.md",
-    "text": "# collection 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 未配置 OPENAI_API_KEY，已降级为 L1 基线文档，L2 语义增强待补充。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
+    "text": "# collection 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 本次未运行 L2 语义增强。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
     "source_files": [
       "backend/src/main/java/com/frontierscan/collection/ArticleParser.java",
       "backend/src/main/java/com/frontierscan/collection/CollectResult.java",
@@ -1193,8 +1193,8 @@
       "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
       "backend/src/main/java/com/frontierscan/collection/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1250,8 +1250,8 @@
       "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java",
       "backend/src/main/java/com/frontierscan/collection/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1304,8 +1304,8 @@
       "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java",
       "backend/src/main/java/com/frontierscan/common/security/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1351,8 +1351,8 @@
       "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java",
       "backend/src/main/java/com/frontierscan/common/security/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1398,8 +1398,8 @@
       "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java",
       "backend/src/main/java/com/frontierscan/common/security/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1445,8 +1445,8 @@
       "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java",
       "backend/src/main/java/com/frontierscan/common/security/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1492,8 +1492,8 @@
       "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java",
       "backend/src/main/java/com/frontierscan/common/security/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1539,8 +1539,8 @@
       "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java",
       "backend/src/main/java/com/frontierscan/common/security/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1567,7 +1567,7 @@
     "module": "common",
     "doc_type": "semantic",
     "path": "llm-knowledge/backend/modules/common/semantic.md",
-    "text": "# common 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 未配置 OPENAI_API_KEY，已降级为 L1 基线文档，L2 语义增强待补充。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
+    "text": "# common 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 本次未运行 L2 语义增强。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
     "source_files": [
       "backend/src/main/java/com/frontierscan/common/api/ApiResponse.java",
       "backend/src/main/java/com/frontierscan/common/api/PingController.java",
@@ -1586,8 +1586,8 @@
       "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java",
       "backend/src/main/java/com/frontierscan/common/security/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1633,8 +1633,8 @@
       "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java",
       "backend/src/main/java/com/frontierscan/common/security/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1690,8 +1690,8 @@
       "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
       "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1760,8 +1760,8 @@
       "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
       "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1830,8 +1830,8 @@
       "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
       "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1900,8 +1900,8 @@
       "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
       "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -1970,8 +1970,8 @@
       "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
       "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2040,8 +2040,8 @@
       "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
       "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2081,7 +2081,7 @@
     "module": "llm",
     "doc_type": "semantic",
     "path": "llm-knowledge/backend/modules/llm/semantic.md",
-    "text": "# llm 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 未配置 OPENAI_API_KEY，已降级为 L1 基线文档，L2 语义增强待补充。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
+    "text": "# llm 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 本次未运行 L2 语义增强。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
     "source_files": [
       "backend/src/main/java/com/frontierscan/llm/DashScopeLlmProvider.java",
       "backend/src/main/java/com/frontierscan/llm/LlmProperties.java",
@@ -2110,8 +2110,8 @@
       "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
       "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2180,8 +2180,8 @@
       "backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java",
       "backend/src/main/java/com/frontierscan/llm/tag/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2229,8 +2229,8 @@
       "backend/src/main/java/com/frontierscan/site/SiteService.java",
       "backend/src/main/java/com/frontierscan/site/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2258,8 +2258,8 @@
       "backend/src/main/java/com/frontierscan/site/SiteService.java",
       "backend/src/main/java/com/frontierscan/site/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2287,8 +2287,8 @@
       "backend/src/main/java/com/frontierscan/site/SiteService.java",
       "backend/src/main/java/com/frontierscan/site/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2316,8 +2316,8 @@
       "backend/src/main/java/com/frontierscan/site/SiteService.java",
       "backend/src/main/java/com/frontierscan/site/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2345,8 +2345,8 @@
       "backend/src/main/java/com/frontierscan/site/SiteService.java",
       "backend/src/main/java/com/frontierscan/site/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2374,8 +2374,8 @@
       "backend/src/main/java/com/frontierscan/site/SiteService.java",
       "backend/src/main/java/com/frontierscan/site/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2395,7 +2395,7 @@
     "module": "site",
     "doc_type": "semantic",
     "path": "llm-knowledge/backend/modules/site/semantic.md",
-    "text": "# site 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 未配置 OPENAI_API_KEY，已降级为 L1 基线文档，L2 语义增强待补充。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
+    "text": "# site 语义增强\n\nsemantic_status: pending\nsemantic_model: gpt-4.1-mini\n\n## 当前状态\n\n- 本次未运行 L2 语义增强。\n\n## 待增强内容\n\n- 模块职责和边界\n- 核心业务流程\n- 跨模块依赖和调用链\n- 主要风险点和测试关注点\n- 动态消费提示词和查询关键词",
     "source_files": [
       "backend/src/main/java/com/frontierscan/site/Site.java",
       "backend/src/main/java/com/frontierscan/site/SiteController.java",
@@ -2403,8 +2403,8 @@
       "backend/src/main/java/com/frontierscan/site/SiteService.java",
       "backend/src/main/java/com/frontierscan/site/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2432,8 +2432,8 @@
       "backend/src/main/java/com/frontierscan/site/SiteService.java",
       "backend/src/main/java/com/frontierscan/site/package-info.java"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:39:30.103Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2448,12 +2448,1996 @@
     ]
   },
   {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/delivery.md:1",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/delivery.md",
+    "text": "# Build Publish And Git Delivery Conventions\n\nFrontierScan Harness delivery is approval-gated.",
+    "source_files": [
+      "llm-knowledge/common/conventions/delivery.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Build Publish And Git Delivery Conventions",
+      "common",
+      "conventions",
+      "delivery",
+      "delivery.md",
+      "llm-knowledge",
+      "project knowledge"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/delivery.md:2",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/delivery.md",
+    "text": "## Build Plan\n\nUse `frontier-build-publish` after tests and review pass.\n\nSupporting helper:\n\n```powershell\n.\\.harness\\scripts\\plan-build.ps1\n```\n\nThe helper recommends backend, frontend, Docker, or no-build gates from changed paths. It does not publish or deploy.\n\nRules:\n\n- Failed builds block interface verification and delivery.\n- Docker build or publish/deploy commands require explicit approval unless already requested.\n- Record exact command output before claiming a build passed.",
+    "source_files": [
+      "llm-knowledge/common/conventions/delivery.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Build Plan",
+      "common",
+      "conventions",
+      "delivery",
+      "delivery.md",
+      "llm-knowledge",
+      "project knowledge"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/delivery.md:3",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/delivery.md",
+    "text": "## Git Delivery\n\nUse `frontier-git-delivery` only at the end of a Harness workflow.\n\nSupporting helper:\n\n```powershell\n.\\.harness\\scripts\\summarize-delivery.ps1\n```\n\nThe helper separates default Harness-owned changes from unrelated dirty files. It does not stage, commit, push, create PRs, or rewrite history.\n\nRules:\n\n- Stage only task-owned files after approval.\n- Report unrelated dirty files.\n- Do not hide failed, skipped, or blocked gates.\n- Commit, push, and PR/MR creation require explicit approval.",
+    "source_files": [
+      "llm-knowledge/common/conventions/delivery.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Git Delivery",
+      "common",
+      "conventions",
+      "delivery",
+      "delivery.md",
+      "llm-knowledge",
+      "project knowledge"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/execution-verification.md:1",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/execution-verification.md",
+    "text": "# Execution And Verification Conventions\n\nFrontierScan Harness execution separates task planning, isolated implementation, quality gates, and interface verification.",
+    "source_files": [
+      "llm-knowledge/common/conventions/execution-verification.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Execution And Verification Conventions",
+      "common",
+      "conventions",
+      "execution-verification",
+      "execution-verification.md",
+      "llm-knowledge",
+      "project knowledge"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/execution-verification.md:2",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/execution-verification.md",
+    "text": "## Worktree Planning\n\nUse `frontier-worktree-orchestrator` after a valid task DAG exists.\n\nSupporting helper:\n\n```powershell\n.\\.harness\\scripts\\plan-worktrees.ps1 -TaskDagFile .\\.harness\\outputs\\task-dag.json\n```\n\nThe helper emits suggested branches, worktree paths, waves, owner agents, and create commands. It does not create worktrees.\n\nSafety rules:\n\n- Do not create, merge, delete, or clean worktrees without explicit approval.\n- Do not parallelize tasks that touch the same predicted files.\n- Stop and report merge conflicts.\n- Do not discard unrelated dirty files.",
+    "source_files": [
+      "llm-knowledge/common/conventions/execution-verification.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Worktree Planning",
+      "common",
+      "conventions",
+      "execution-verification",
+      "execution-verification.md",
+      "llm-knowledge",
+      "project knowledge"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/execution-verification.md:3",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/execution-verification.md",
+    "text": "## Interface Verification\n\nUse `frontier-interface-verifier` after build/publish or local startup when an environment is available.\n\nSupporting helper:\n\n```powershell\n.\\.harness\\scripts\\derive-interface-cases.ps1 -TaskDagFile .\\.harness\\outputs\\task-dag.json\n```\n\nThe helper turns task acceptance criteria into verification case drafts. Before execution, fill in concrete URLs, request bodies, UI action steps, auth context, seed data, and expected observable results.\n\nSafety rules:\n\n- Do not fabricate verification when the environment is unavailable.\n- Record request/action, expected result, actual result, evidence, and diagnosis.\n- Failed verification blocks delivery unless fixed or explicitly accepted.",
+    "source_files": [
+      "llm-knowledge/common/conventions/execution-verification.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Interface Verification",
+      "common",
+      "conventions",
+      "execution-verification",
+      "execution-verification.md",
+      "llm-knowledge",
+      "project knowledge"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/harness-workflow.md:1",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/harness-workflow.md",
+    "text": "# Harness Workflow Conventions\n\nUse this workflow for non-trivial FrontierScan changes:\n\n1. Understand the request and load only relevant knowledge.\n2. Create or update a state file under `.harness/states/`.\n3. Break work into tasks with dependencies and predicted file touches.\n4. Implement only task-owned changes.\n5. Run targeted tests and builds.\n6. Review the diff for correctness, missing tests, and UI guideline alignment.\n7. Verify APIs or UI flows when the environment is available.\n8. Deliver only owned files.\n\nRules:\n\n- State files are the source of truth, not conversation history.\n- Do not silently trust stale knowledge.\n- Do not overwrite unrelated dirty changes.\n- Publish, push, and commit require explicit confirmation.",
+    "source_files": [
+      "llm-knowledge/common/conventions/harness-workflow.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Harness Workflow Conventions",
+      "common",
+      "conventions",
+      "harness-workflow",
+      "harness-workflow.md",
+      "llm-knowledge",
+      "project knowledge"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/quality-gates.md:1",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/quality-gates.md",
+    "text": "# Quality Gate Conventions\n\nFrontierScan Harness quality gates separate implementation from verification.",
+    "source_files": [
+      "llm-knowledge/common/conventions/quality-gates.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Quality Gate Conventions",
+      "common",
+      "conventions",
+      "llm-knowledge",
+      "project knowledge",
+      "quality-gates",
+      "quality-gates.md"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/quality-gates.md:2",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/quality-gates.md",
+    "text": "## Review Gate\n\nUse `frontier-code-review-gate` after implementation and before build, publish, interface verification, merge, or delivery.\n\nCore checks:\n\n- Review task-owned diffs first.\n- Separate unrelated dirty files from the current task.\n- Report BLOCKER, WARNING, and NOTE findings with file, line, evidence, impact, and required action.\n- Treat BLOCKER findings as delivery-stopping.\n- Check frontend UI changes against local B2B admin UI guidelines when present.\n\nSupporting helper:\n\n```powershell\n.\\.harness\\scripts\\collect-diff-context.ps1\n```",
+    "source_files": [
+      "llm-knowledge/common/conventions/quality-gates.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Review Gate",
+      "common",
+      "conventions",
+      "llm-knowledge",
+      "project knowledge",
+      "quality-gates",
+      "quality-gates.md"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/quality-gates.md:3",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/quality-gates.md",
+    "text": "## Test Gate\n\nUse `frontier-test-gate` after implementation or fixes.\n\nCore checks:\n\n- Backend or data changes require backend tests.\n- Frontend changes require frontend build.\n- Harness, Skill, Agent, schema, or state changes require Harness validation.\n- Skipped or blocked gates require a reason and risk.\n\nSupporting helper:\n\n```powershell\n.\\.harness\\scripts\\select-tests.ps1\n```\n\nDefault commands:\n\n```powershell\nSet-Location D:\\ProjectStudy\\FrontierScan\\backend\nmvn test\n```\n\n```powershell\nSet-Location D:\\ProjectStudy\\FrontierScan\\frontend\nnpm run build\n```\n\n```powershell\n.\\.harness\\scripts\\validate-structure.ps1\n```",
+    "source_files": [
+      "llm-knowledge/common/conventions/quality-gates.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Test Gate",
+      "common",
+      "conventions",
+      "llm-knowledge",
+      "project knowledge",
+      "quality-gates",
+      "quality-gates.md"
+    ]
+  },
+  {
+    "id": "common:conventions:conventions:llm-knowledge/common/conventions/testing.md:1",
+    "area": "common",
+    "module": "conventions",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/conventions/testing.md",
+    "text": "# Testing Conventions\n\nBackend:\n\n```powershell\nSet-Location D:\\ProjectStudy\\FrontierScan\\backend\nmvn test\n```\n\nFrontend:\n\n```powershell\nSet-Location D:\\ProjectStudy\\FrontierScan\\frontend\nnpm run build\n```\n\nSelection policy:\n\n- Backend or data changes require relevant backend tests.\n- Frontend changes require `npm run build`.\n- UI changes must also be checked against B2B admin UI guidelines.\n- Skipped tests must be recorded with a reason in `.harness/states/`.\n\nHarness:\n\n```powershell\n.\\.harness\\scripts\\validate-structure.ps1\n```\n\n```powershell\n.\\.harness\\scripts\\validate-state.ps1 -StateFile .\\.harness\\states\\e2e-state.template.json\n```\n\n```powershell\n.\\.harness\\scripts\\validate-task-dag.ps1 -TaskDagFile .\\.harness\\templates\\task-dag.example.json\n```",
+    "source_files": [
+      "llm-knowledge/common/conventions/testing.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "Testing Conventions",
+      "common",
+      "conventions",
+      "llm-knowledge",
+      "project knowledge",
+      "testing",
+      "testing.md"
+    ]
+  },
+  {
+    "id": "common:harness-workflows:workflow:.harness/workflows/e2e-development.yaml:1",
+    "area": "common",
+    "module": "harness-workflows",
+    "doc_type": "workflow",
+    "path": ".harness/workflows/e2e-development.yaml",
+    "text": "schema_version: \"1.0\"\nname: frontier-e2e-development\ndescription: Harness-style single-story development workflow for FrontierScan.\nstate_file: .harness/states/e2e-state.template.json\nphases:\n  - id: requirement\n    order: 0\n    owner_agent: requirement-analyst\n    purpose: Clarify the story, acceptance criteria, affected modules, and blocking questions.\n    required_outputs:\n      - .harness/outputs/requirement-breakdown.md\n    next:\n      - technical-design\n  - id: technical-design\n    order: 1\n    owner_agent: requirement-analyst\n    purpose: Produce a technical design using only relevant knowledge files.\n    required_outputs:\n      - .harness/outputs/technical-design.md\n    next:\n      - task-dag\n  - id: task-dag\n    order: 2\n    owner_agent: task-planner\n    purpose: Split work into tasks, dependencies, waves, predicted file touches, and global changes.\n    required_outputs:\n      - .harness/outputs/task-dag.json\n    next:\n      - implementation\n  - id: implementation\n    order: 3\n    owner_agent: backend-developer\n    purpose: Implement task-owned changes only.\n    required_outputs:\n      - .harness/outputs/implementation-notes.md\n    next:\n      - unit-test\n  - id: unit-test\n    order: 4\n    owner_agent: unit-tester\n    purpose: Run selected backend/frontend tests and record results.\n    required_outputs:\n      - .harness/reports/test-report.md\n    next:\n      - code-review\n  - id: code-review\n    order: 5\n    owner_agent: code-reviewer\n    purpose: Review code changes and emit findings without modifying files.\n    required_outputs:\n      - .harness/reports/code-review-report.md\n    next:\n      - build-publish\n  - id: build-publish\n    order: 6\n    owner_agent: publisher\n    purpose: Build and optionally publish after explicit confirmation.\n    required_outputs:\n      - .harness/reports/build-report.md\n    next:\n      - interface-verification\n  - id: interface-verification\n    order: 7\n    owner_agent: interface-verifier\n    purpose: Verify API/UI behavior against acceptance criteria where an environment is available.\n    required_outputs:\n      - .harness/reports/interface-verification-report.md\n    next:\n      - git-delivery\n  - id: git-delivery\n    order: 8\n    owner_agent: git-committer\n    purpose: Summarize owned changes and prepare commit/PR only after explicit confirmation.\n    required_outputs:\n      - .harness/reports/delivery-report.md\n    next:\n      - done\nquality_gates:\n  - phase: task-dag\n    rule: DAG must be acyclic and global changes must be explicit.\n  - phase: unit-test\n    rule: Failed required tests block the workflow.\n  - phase: code-review\n    rule: BLOCKER findings block build, publish, and delivery.\n  - phase: build-publish\n    rule: Publish requires explicit user approval.\n  - phase: git-delivery\n    rule: Commit, push, and PR creation require explicit user approval.",
+    "source_files": [
+      ".harness/workflows/e2e-development.yaml"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".harness",
+      "e2e-development",
+      "e2e-development.yaml",
+      "harness",
+      "state",
+      "workflow",
+      "workflows"
+    ]
+  },
+  {
+    "id": "common:harness-workflows:workflow:.harness/workflows/product-fork-join.yaml:1",
+    "area": "common",
+    "module": "harness-workflows",
+    "doc_type": "workflow",
+    "path": ".harness/workflows/product-fork-join.yaml",
+    "text": "schema_version: \"1.0\"\nname: frontier-product-fork-join\ndescription: Product-level workflow that splits one request into multiple stories and joins them after review.\nstate_file: .harness/states/product-state.template.json\nphases:\n  - id: breakdown\n    owner_agent: product-analyst\n    purpose: Split a product request into stories and initialize story state files.\n  - id: forking\n    owner_agent: task-planner\n    purpose: Run each story through the single-story workflow until code review.\n  - id: joining\n    owner_agent: backend-developer\n    purpose: Merge reviewed story work into an integration branch, then build and verify.\n  - id: done\n    owner_agent: git-committer\n    purpose: Prepare final delivery after validation and user approval.\nfork_policy:\n  parallel_until_phase: code-review\n  join_after_phase: code-review\n  shared_file_policy: serial\n  global_change_policy: confirm-before-implementation\nconflict_policy:\n  predicted_same_file_touch: do-not-parallelize\n  merge_conflict: stop-and-diagnose\n  destructive_resolution: forbidden",
+    "source_files": [
+      ".harness/workflows/product-fork-join.yaml"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".harness",
+      "harness",
+      "product-fork-join",
+      "product-fork-join.yaml",
+      "state",
+      "workflow",
+      "workflows"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:1",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:2",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 1. Think Before Coding\n\n**Don't assume. Don't hide confusion. Surface tradeoffs.**\n\nBefore implementing:\n\n- State your assumptions explicitly. If uncertain, ask.\n- If multiple interpretations exist, present them - don't pick silently.\n- If a simpler approach exists, say so. Push back when warranted.\n- If something is unclear, stop. Name what's confusing. Ask.\n- Adopt TDD as the primary approach for business development; use alternative suitable development methods only when you determine TDD is unnecessary.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "1. Think Before Coding",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:3",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 2. Simplicity First\n\n**Minimum code that solves the problem. Nothing speculative.**\n\n- No features beyond what was asked.\n- No abstractions for single-use code.\n- No \"flexibility\" or \"configurability\" that wasn't requested.\n- No error handling for impossible scenarios.\n- If you write 200 lines and it could be 50, rewrite it.\n\nAsk yourself: \"Would a senior engineer say this is overcomplicated?\" If yes, simplify.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "2. Simplicity First",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:4",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 3. Surgical Changes\n\n**Touch only what you must. Clean up only your own mess.**\n\nWhen editing existing code:\n\n- Don't \"improve\" adjacent code, comments, or formatting.\n- Don't refactor things that aren't broken.\n- Match existing style, even if you'd do it differently.\n- If you notice unrelated dead code, mention it - don't delete it.\n\nWhen your changes create orphans:\n\n- Remove imports/variables/functions that YOUR changes made unused.\n- Don't remove pre-existing dead code unless asked.\n\nThe test: Every changed line should trace directly to the user's request.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "3. Surgical Changes",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:5",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 4. Goal-Driven Execution\n\n**Define success criteria. Loop until verified.**\n\nTransform tasks into verifiable goals:\n\n- \"Add validation\" → \"Write tests for invalid inputs, then make them pass\"\n- \"Fix the bug\" → \"Write a test that reproduces it, then make it pass\"\n- \"Refactor X\" → \"Ensure tests pass before and after\"\n\nFor multi-step tasks, state a brief plan:\n\n```\n1. [Step] → verify: [check]\n2. [Step] → verify: [check]\n3. [Step] → verify: [check]\n```\n\nStrong success criteria let you loop independently. Weak criteria (\"make it work\") require constant clarification.\n\n---\n\n**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "4. Goal-Driven Execution",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:6",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 5. Harness Structure Guidelines\n\nFrontierScan is being adapted toward a Harness Engineering workflow inspired by the Tencent article.\n\nCurrent structural areas:\n\n- `.harness/`: workflow state, schemas, workflow definitions, reports, templates, and deterministic scripts.\n- `.codex/agents/`: planned expert Agent registry.\n- `.codex/skills/`: project-local Skill scaffolds.\n- `llm-knowledge/`: AI-consumable structured project knowledge.\n- `docs/harness-*.md`: human-facing Harness plans and checklists.\n\nWhen working on Harness structure:\n\n- Treat `.harness/states/` as workflow state, not source code.\n- Treat `llm-knowledge/` as generated or manually curated AI knowledge.\n- Keep Skill and Agent scaffolds separate from runtime state.\n- Do not implement publish, push, commit, or destructive git automation without explicit user approval.\n- Do not touch unrelated dirty business files.\n- Run `.\\.harness\\scripts\\validate-structure.ps1` after changing Harness structure.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "5. Harness Structure Guidelines",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:7",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 6. FrontierScan Harness Default Entry Rules\n\nWhen Codex is working inside `D:\\ProjectStudy\\FrontierScan`, treat this file as the default operating entry point for Harness-style AI coding.\n\nAt the start of each task, classify the request before acting:\n\n- `question`: answer from local docs, `.harness/`, `.codex/skills/`, `llm-knowledge/`, and source files as needed. Do not modify files.\n- `harness-structure`: update Harness, Skill, Agent, state, workflow, template, docs, or knowledge scaffolding only.\n- `business-implementation`: modify backend/frontend/product code only after checking relevant knowledge and current workflow state.\n- `review`: inspect diffs and report findings first; do not modify files unless explicitly asked to fix.\n- `test-or-verification`: select and run the narrowest useful tests or verification commands, then report evidence.\n- `delivery`: summarize owned changes and ask for explicit approval before staging, committing, pushing, publishing, or opening PRs.\n\nFor non-trivial implementation work, state the assumed workflow phase and success criteria before editing files.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "6. FrontierScan Harness Default Entry Rules",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:8",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 7. Knowledge-First Development\n\nUse `llm-knowledge/` as the first project knowledge source before broad source-code exploration.\n\nBefore requirement analysis, design, implementation, review, or verification:\n\n- Check knowledge freshness with `.harness\\scripts\\check-kb-freshness.ps1` when the task depends on existing project knowledge.\n- Query relevant knowledge with `.harness\\scripts\\kb-query.ps1`.\n- If knowledge is missing or stale, say so explicitly and verify against source files before making decisions.\n- Prefer targeted source reads after knowledge lookup instead of loading unrelated modules.\n- Preserve manual notes under `llm-knowledge/**/custom/` when updating generated knowledge.\n\nRecommended query modes:\n\n- Requirement breakdown: `-Mode requirement-breakdown`\n- Technical design: `-Mode technical-design`\n- API discovery: `-Mode api-search`\n- Frontend UI/component lookup: `-Mode frontend-ui-search`\n- Data flow tracing: `-Mode data-flow-trace`\n- General project questions: `-Mode knowledge-qa`",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "7. Knowledge-First Development",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:9",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 8. Project Skill Routing\n\nProject-local Skills live under `.codex/skills/`.\n\nIf a matching `frontier-*` Skill is available in the active Codex runtime, invoke it normally. If it is not available in the active runtime, manually read the matching project-local `SKILL.md` and only the directly relevant references before acting.\n\nUse this routing map:\n\n- General project conventions: `frontier-common`\n- Generate or refresh structured knowledge: `frontier-kb-generate`\n- Query structured knowledge: `frontier-kb-query`\n- Check stale knowledge: `frontier-kb-refresh-check`\n- Break down product or engineering requests: `frontier-requirement-breakdown`\n- Plan tasks, dependencies, and parallel waves: `frontier-task-dag-planner`\n- Read, validate, resume, or update workflow state: `frontier-state-runner`\n- Plan isolated worktrees: `frontier-worktree-orchestrator`\n- Select or run tests: `frontier-test-gate`\n- Review code changes: `frontier-code-review-gate`\n- Derive or run API/UI verification cases: `frontier-interface-verifier`\n- Plan builds or publish steps: `frontier-build-publish`\n- Prepare delivery, commits, or PR summaries: `frontier-git-delivery`\n\nCurrent project-local Skills are guidance scaffolds unless the active Codex runtime exposes them as installed Skills. Do not claim they are automatically triggered by runtime unless they appear in the current available Skill list.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "8. Project Skill Routing",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:10",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 9. Agent Registry Usage\n\n`.codex/agents/agents.yaml` is a role and responsibility registry, not an active Agent runtime.\n\nUse it to decide which responsibility lens applies to the task:\n\n- `product-analyst` and `requirement-analyst` for request breakdown and acceptance criteria.\n- `task-planner` for DAG and dependency planning.\n- `backend-developer` and `frontend-developer` for implementation.\n- `unit-tester`, `test-case-designer`, and `interface-verifier` for verification.\n- `code-reviewer` for review-only work.\n- `publisher` and `git-committer` for approval-gated delivery.\n\nDo not pretend that Agents have been automatically dispatched unless an actual runtime dispatch mechanism is present.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "9. Agent Registry Usage",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:11",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 10. Harness Workflow Triggers\n\nUse the single-story workflow in `.harness/workflows/e2e-development.yaml` for ordinary feature or bugfix work:\n\n```text\nrequirement -> technical-design -> task-dag -> implementation -> unit-test -> code-review -> build-publish -> interface-verification -> git-delivery -> done\n```\n\nUse `.harness/workflows/product-fork-join.yaml` when one user request naturally splits into multiple independent stories:\n\n```text\nbreakdown -> forking -> joining -> done\n```\n\nTrigger expectations:\n\n- New ambiguous product request: create or update requirement breakdown before implementation.\n- Multi-module change: create or update a task DAG before implementation.\n- Existing active state file: read and respect it before continuing work.\n- Frontend UI change: follow existing frontend patterns and any B2B admin UI guideline document present in the repo.\n- Backend/data change: use narrow backend tests where possible before broader builds.\n- Review/test/build/delivery phase: write evidence into `.harness/reports/` or summarize it clearly to the user when not writing files.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "10. Harness Workflow Triggers",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:12",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 11. Required Harness Checks\n\nRun the relevant deterministic checks after changing Harness assets:\n\n- Structure, Skill, Agent, docs, or knowledge scaffolding changed:\n  `.\\.harness\\scripts\\validate-structure.ps1`\n- State files changed:\n  `.\\.harness\\scripts\\validate-state.ps1 -StateFile <state-file>`\n- Task DAG changed:\n  `.\\.harness\\scripts\\validate-task-dag.ps1 -TaskDagFile <dag-file>`\n- Need knowledge lookup:\n  `.\\.harness\\scripts\\kb-query.ps1 -Query \"<keywords>\" -Mode <mode> -Area <area>`\n- Need stale knowledge detection:\n  `.\\.harness\\scripts\\check-kb-freshness.ps1`\n- Need test recommendation:\n  `.\\.harness\\scripts\\select-tests.ps1`\n- Need build recommendation:\n  `.\\.harness\\scripts\\plan-build.ps1`\n- Need delivery summary:\n  `.\\.harness\\scripts\\summarize-delivery.ps1`\n- Need non-destructive smoke validation:\n  `.\\.harness\\scripts\\smoke-harness-flow.ps1`\n\nThese scripts are helpers. They do not replace source review, real tests, or user approval for external-state-changing actions.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "11. Required Harness Checks",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-rules:conventions:AGENTS.md:13",
+    "area": "common",
+    "module": "project-rules",
+    "doc_type": "conventions",
+    "path": "AGENTS.md",
+    "text": "## 12. Approval and Safety Boundaries\n\nNever perform these actions without explicit user approval:\n\n- `git add`, `git commit`, `git push`, PR creation, tagging, release, publish, or deploy.\n- Destructive git or filesystem cleanup.\n- Worktree deletion or branch deletion.\n- Any command that modifies external services, production data, or deployment environments.\n\nBefore delivery, always separate owned task changes from unrelated dirty files. Do not revert or overwrite unrelated changes.",
+    "source_files": [
+      "AGENTS.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "12. Approval and Safety Boundaries",
+      "AGENTS",
+      "AGENTS.md",
+      "agents",
+      "quality gate",
+      "rules"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-build-publish/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-build-publish/SKILL.md",
+    "text": "# Frontier Build Publish\n\nUse this Skill after test and review gates pass, before interface verification or delivery.",
+    "source_files": [
+      ".codex/skills/frontier-build-publish/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Build Publish",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-build-publish",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-build-publish/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-build-publish/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Read `references/build-policy.md`.\n2. Produce a read-only build plan:\n\n```powershell\n.\\.harness\\scripts\\plan-build.ps1\n```\n\n3. Run only the non-publishing build commands that apply.\n4. Read `references/artifact-policy.md` before recording artifacts.\n5. Read `references/publish-policy.md` before any publish/deploy discussion.\n6. Ask for explicit approval before publishing, deploying, pushing images, or modifying infrastructure.",
+    "source_files": [
+      ".codex/skills/frontier-build-publish/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-build-publish",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-build-publish/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-build-publish/SKILL.md",
+    "text": "## Outputs\n\n- `.harness/reports/build-report.md`\n- Build command records in E2E state files",
+    "source_files": [
+      ".codex/skills/frontier-build-publish/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Outputs",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-build-publish",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-build-publish/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-build-publish/SKILL.md",
+    "text": "## Safety Rules\n\n- Do not publish without explicit user approval.\n- Do not deploy to production from this scaffold.\n- Failed builds block interface verification and delivery.\n- Local Docker image creation is approval-required unless the user explicitly requested it.",
+    "source_files": [
+      ".codex/skills/frontier-build-publish/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "SKILL",
+      "SKILL.md",
+      "Safety Rules",
+      "codex",
+      "frontier-build-publish",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-code-review-gate/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-code-review-gate/SKILL.md",
+    "text": "# Frontier Code Review Gate\n\nUse this Skill after an implementation task has produced a diff and before build, publish, interface verification, merge, or delivery.",
+    "source_files": [
+      ".codex/skills/frontier-code-review-gate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Code Review Gate",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-code-review-gate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-code-review-gate/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-code-review-gate/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Load `frontier-common` first for project boundaries.\n2. Collect current diff context:\n\n```powershell\n.\\.harness\\scripts\\collect-diff-context.ps1\n```\n\n3. Read `references/review-checklist.md`.\n4. Read `references/severity-policy.md`.\n5. Read `references/ui-review-rules.md` only when frontend UI files changed.\n6. Inspect task-owned diffs and the minimum surrounding source needed to verify behavior.\n7. Produce `.harness/reports/code-review-report.md` using `.harness/templates/code-review-report.md`.",
+    "source_files": [
+      ".codex/skills/frontier-code-review-gate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-code-review-gate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-code-review-gate/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-code-review-gate/SKILL.md",
+    "text": "## Output\n\n- `.harness/reports/code-review-report.md`",
+    "source_files": [
+      ".codex/skills/frontier-code-review-gate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Output",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-code-review-gate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-code-review-gate/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-code-review-gate/SKILL.md",
+    "text": "## Rules\n\n- Do not modify files while performing review.\n- Findings must lead with risks and bugs.\n- Every finding needs severity, file, line, evidence, impact, and required action.\n- BLOCKER findings prevent build, publish, interface verification, and delivery.\n- If no findings are found, state that explicitly and list residual test gaps.\n- Call out unrelated dirty files without reviewing or reverting them.\n- UI changes must be checked against local UI guidelines when present.",
+    "source_files": [
+      ".codex/skills/frontier-code-review-gate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Rules",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-code-review-gate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-common/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-common/SKILL.md",
+    "text": "# Frontier Common\n\nUse this project-local Skill as the first context layer for FrontierScan work.",
+    "source_files": [
+      ".codex/skills/frontier-common/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Common",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-common",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-common/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-common/SKILL.md",
+    "text": "## Load Order\n\n1. Read `references/project-map.md`.\n2. Read `references/harness-runtime.md` when state files, workflows, or Harness outputs are involved.\n3. Read `references/backend-conventions.md` for backend changes.\n4. Read `references/frontend-conventions.md` for frontend changes.\n5. Read `references/review-and-test-gates.md` before final verification.",
+    "source_files": [
+      ".codex/skills/frontier-common/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Load Order",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-common",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-common/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-common/SKILL.md",
+    "text": "## Rules\n\n- Treat `.harness/states/` as workflow state, not source code.\n- Treat `llm-knowledge/` as AI-consumable project knowledge.\n- Do not edit unrelated dirty files.\n- Do not publish, push, commit, or stage files without explicit user approval.\n- For frontend UI work, follow `docs/B2B_ADMIN_UI_GUIDELINES.md` if present.",
+    "source_files": [
+      ".codex/skills/frontier-common/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Rules",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-common",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-git-delivery/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-git-delivery/SKILL.md",
+    "text": "# Frontier Git Delivery\n\nUse this Skill only after tests, review, build, and required interface verification are complete or explicitly accepted.",
+    "source_files": [
+      ".codex/skills/frontier-git-delivery/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Git Delivery",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-git-delivery",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-git-delivery/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-git-delivery/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Read `references/git-delivery-policy.md`.\n2. Read `references/owned-changes-policy.md`.\n3. Produce a read-only delivery summary:\n\n```powershell\n.\\.harness\\scripts\\summarize-delivery.ps1\n```\n\n4. Read `references/pr-summary-template.md` before drafting commit or PR text.\n5. Ask for explicit approval before staging, committing, pushing, or creating a PR/MR.",
+    "source_files": [
+      ".codex/skills/frontier-git-delivery/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-git-delivery",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-git-delivery/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-git-delivery/SKILL.md",
+    "text": "## Outputs\n\n- `.harness/reports/delivery-report.md`\n- Commit and PR plan records in E2E state files",
+    "source_files": [
+      ".codex/skills/frontier-git-delivery/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Outputs",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-git-delivery",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-git-delivery/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-git-delivery/SKILL.md",
+    "text": "## Safety Rules\n\n- Do not stage, commit, push, or create PRs without explicit user approval.\n- Stage only task-owned files.\n- Report unrelated dirty files.\n- Do not rewrite history.\n- Do not use delivery to hide failed, skipped, or blocked gates.",
+    "source_files": [
+      ".codex/skills/frontier-git-delivery/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "SKILL",
+      "SKILL.md",
+      "Safety Rules",
+      "codex",
+      "frontier-git-delivery",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-interface-verifier/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-interface-verifier/SKILL.md",
+    "text": "# Frontier Interface Verifier\n\nUse this Skill after build/publish or local startup, when an environment is available or must be marked unavailable.",
+    "source_files": [
+      ".codex/skills/frontier-interface-verifier/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Interface Verifier",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-interface-verifier",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-interface-verifier/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-interface-verifier/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Read `references/verification-case-schema.md`.\n2. Draft cases from the task DAG:\n\n```powershell\n.\\.harness\\scripts\\derive-interface-cases.ps1 -TaskDagFile <task-dag-file>\n```\n\n3. Read `references/environment-policy.md`.\n4. Fill concrete API requests, UI actions, auth/data setup, and expected observable results.\n5. Execute only when the environment is available and safe.\n6. Read `references/failure-diagnosis-policy.md` for failures.\n7. Write `.harness/reports/interface-verification-report.md` using `.harness/templates/interface-verification-report.md`.",
+    "source_files": [
+      ".codex/skills/frontier-interface-verifier/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-interface-verifier",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-interface-verifier/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-interface-verifier/SKILL.md",
+    "text": "## Outputs\n\n- `.harness/reports/interface-verification-report.md`\n- Verification case records in E2E state files",
+    "source_files": [
+      ".codex/skills/frontier-interface-verifier/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Outputs",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-interface-verifier",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-interface-verifier/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-interface-verifier/SKILL.md",
+    "text": "## Safety Rules\n\n- Do not modify code while verifying.\n- Record unavailable environments instead of fabricating verification.\n- Include request/action, expected result, actual result, and diagnosis for failures.\n- Failed verification blocks delivery unless fixed or explicitly accepted.",
+    "source_files": [
+      ".codex/skills/frontier-interface-verifier/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "SKILL",
+      "SKILL.md",
+      "Safety Rules",
+      "codex",
+      "frontier-interface-verifier",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-generate/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-generate/SKILL.md",
+    "text": "# Frontier KB Generate\n\nUse this Skill when building or refreshing `llm-knowledge/` before planning, design, review, or verification.\n\nCore model:\n\n```text\nL0 source truth -> L1 deterministic baseline -> L2 OpenAI semantic enrichment -> L3 local keyword/metadata index -> L4 dynamic consumption\n```",
+    "source_files": [
+      ".codex/skills/frontier-kb-generate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier KB Generate",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-generate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-generate/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-generate/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Read `references/kb-document-types.md`.\n2. Read `references/manual-note-preservation.md`.\n3. Read `references/module-detection.md`.\n4. Generate or dry-run the layered knowledge artifacts:\n\n```powershell\n.\\.harness\\scripts\\generate-kb.ps1 -Area all -Mode all -DryRun\n.\\.harness\\scripts\\generate-kb.ps1 -Area all -Mode baseline\n.\\.harness\\scripts\\generate-kb.ps1 -Area all -Mode all\n.\\.harness\\scripts\\generate-kb.ps1 -Area backend -Module article -Mode baseline\n```\n\n5. Use `OPENAI_API_KEY` and `OPENAI_MODEL` only for L2 semantic enrichment. The response must pass the generator's strict semantic schema.\n6. Preserve all `custom/` notes and append generation notes to `log.md`.\n7. Run freshness and query checks:\n\n```powershell\n.\\.harness\\scripts\\check-kb-freshness.ps1\n.\\.harness\\scripts\\kb-query.ps1 -Query \"ArticleController\" -Mode api-search -Area backend\n```",
+    "source_files": [
+      ".codex/skills/frontier-kb-generate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-generate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-generate/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-generate/SKILL.md",
+    "text": "## Outputs\n\n- `llm-knowledge/backend/meta.yaml`\n- `llm-knowledge/frontend/meta.yaml`\n- Module-level knowledge documents\n- Module-level `facts.json`\n- Area-level `source-coverage.json`\n- `llm-knowledge/index/chunks.json`\n- `llm-knowledge/index/manifest.json`\n- Append-only `log.md`\n- Optional `.harness/reports/knowledge-input-scan.md`",
+    "source_files": [
+      ".codex/skills/frontier-kb-generate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Outputs",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-generate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-generate/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-generate/SKILL.md",
+    "text": "## Layer Rules\n\n| Layer | Source | Output | Failure behavior |\n| --- | --- | --- | --- |\n| L1 baseline | Source code, config, migrations, routes | Markdown + `facts.json` | Must be deterministic |\n| L2 semantic | OpenAI Responses API with strict JSON Schema over bounded facts | `semantic.md` | Missing key, HTTP failure, timeout, malformed JSON, or invalid schema marks `semantic_status: pending/failed` |\n| L3 index | Generated, Common, Harness, Skill, and manual Custom knowledge | `chunks.json`, `manifest.json` | Keyword/metadata index remains available without external services |\n\n`-WithEmbeddings` is intentionally reported as `disabled` until a tested query-vector and cosine retrieval consumer exists. Do not generate write-only vectors.",
+    "source_files": [
+      ".codex/skills/frontier-kb-generate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Layer Rules",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-generate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-generate/SKILL.md:5",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-generate/SKILL.md",
+    "text": "## Safety Rules\n\n- Do not overwrite manual `custom/` notes.\n- Do not copy secrets.\n- Do not read `.env`, shell history, private local config, or untracked secret files.\n- Do not regenerate broad knowledge when the current task needs only one module unless asked.\n- Mark generated docs as stale, partial, pending, or failed when source files changed or OpenAI enrichment is incomplete.\n- OpenAI semantic enrichment is for knowledge generation only; it must not modify business code or perform delivery actions.",
+    "source_files": [
+      ".codex/skills/frontier-kb-generate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "SKILL",
+      "SKILL.md",
+      "Safety Rules",
+      "codex",
+      "frontier-kb-generate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-query/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-query/SKILL.md",
+    "text": "# Frontier KB Query\n\nUse this Skill when a task needs FrontierScan project knowledge.",
+    "source_files": [
+      ".codex/skills/frontier-kb-query/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier KB Query",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-query",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-query/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-query/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Read `llm-knowledge/overview.md`.\n2. Choose the narrowest `Mode` and `Area`.\n3. Run the read-only query script:\n\n```powershell\n.\\.harness\\scripts\\kb-query.ps1 -Query \"<keywords>\" -Mode knowledge-qa -Area all\n```\n\n4. Load only the matched files that are relevant to the task.\n5. Prefer `custom/` notes if present.\n6. Verify the printed `Index freshness` line before relying on results.\n7. Report stale, missing, or scaffold-only knowledge before relying on it.",
+    "source_files": [
+      ".codex/skills/frontier-kb-query/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-query",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-query/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-query/SKILL.md",
+    "text": "## Query Modes\n\nRead `references/query-modes.md` for mode selection.",
+    "source_files": [
+      ".codex/skills/frontier-kb-query/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Query Modes",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-query",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-query/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-query/SKILL.md",
+    "text": "## Loading Rules\n\nRead `references/progressive-loading.md` before loading broad context.\n\nThe query ranker applies Mode-specific document weights, exact/all-term bonuses, Area filtering, and Common knowledge priority. `api-search` should favor `interfaces`; `frontend-ui-search` should favor frontend UI facts.",
+    "source_files": [
+      ".codex/skills/frontier-kb-query/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Loading Rules",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-query",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-query/SKILL.md:5",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-query/SKILL.md",
+    "text": "## Safety Rules\n\n- Do not treat scaffold knowledge as complete implementation evidence.\n- Do not load the whole repository when a knowledge file is enough.\n- Do not silently ignore missing or stale knowledge.\n- Do not copy secrets from configuration files into outputs.",
+    "source_files": [
+      ".codex/skills/frontier-kb-query/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "SKILL",
+      "SKILL.md",
+      "Safety Rules",
+      "codex",
+      "frontier-kb-query",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-refresh-check/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-refresh-check/SKILL.md",
+    "text": "# Frontier KB Refresh Check\n\nUse this Skill before relying on `llm-knowledge/` for any non-trivial decision.",
+    "source_files": [
+      ".codex/skills/frontier-kb-refresh-check/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier KB Refresh Check",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-refresh-check",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-refresh-check/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-refresh-check/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Read `references/freshness-policy.md`.\n2. Run:\n\n```powershell\n.\\.harness\\scripts\\check-kb-freshness.ps1\n```\n\n3. If stale knowledge affects the current task, read source files directly.\n4. Read `references/refresh-task-policy.md` when creating refresh work.\n5. Report stale/missing knowledge in the current state, plan, or `.harness/reports/`.",
+    "source_files": [
+      ".codex/skills/frontier-kb-refresh-check/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-refresh-check",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-refresh-check/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-refresh-check/SKILL.md",
+    "text": "## Outputs\n\n- Freshness findings in `.harness/reports/`\n- Refresh task records for `frontier-kb-generate`",
+    "source_files": [
+      ".codex/skills/frontier-kb-refresh-check/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Outputs",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-kb-refresh-check",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-kb-refresh-check/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-kb-refresh-check/SKILL.md",
+    "text": "## Safety Rules\n\n- Do not silently trust stale knowledge.\n- Prefer explicit stale/missing reports over broad regeneration.\n- Preserve manual `custom/` notes.\n- Freshness failures do not block work if source files are verified directly and the risk is recorded.",
+    "source_files": [
+      ".codex/skills/frontier-kb-refresh-check/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "SKILL",
+      "SKILL.md",
+      "Safety Rules",
+      "codex",
+      "frontier-kb-refresh-check",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-requirement-breakdown/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-requirement-breakdown/SKILL.md",
+    "text": "# Frontier Requirement Breakdown\n\nUse this Skill at the beginning of non-trivial FrontierScan work.",
+    "source_files": [
+      ".codex/skills/frontier-requirement-breakdown/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Requirement Breakdown",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-requirement-breakdown",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-requirement-breakdown/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-requirement-breakdown/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Read `frontier-common` project conventions if not already loaded.\n2. Query knowledge before decomposing:\n\n```powershell\n.\\.harness\\scripts\\kb-query.ps1 -Query \"<request keywords>\" -Mode requirement-breakdown -Area all\n```\n\n3. Read `references/clarification-policy.md` before asking questions.\n4. Write the breakdown using `.harness/templates/requirement-breakdown.md`.\n5. Shape stories with `references/story-template.md`.\n6. Check acceptance criteria with `references/acceptance-criteria.md`.\n7. Use `references/state-initialization.md` to map breakdown output to state initialization fields.",
+    "source_files": [
+      ".codex/skills/frontier-requirement-breakdown/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-requirement-breakdown",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-requirement-breakdown/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-requirement-breakdown/SKILL.md",
+    "text": "## Outputs\n\n- `.harness/outputs/requirement-breakdown.md`\n- Suggested product/e2e state initialization values",
+    "source_files": [
+      ".codex/skills/frontier-requirement-breakdown/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Outputs",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-requirement-breakdown",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-requirement-breakdown/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-requirement-breakdown/SKILL.md",
+    "text": "## Rules\n\n- Do not implement during breakdown.\n- Ask only blocking clarification questions.\n- Every story must include acceptance criteria or an explicit discovery task.\n- Surface stale or missing knowledge instead of hiding uncertainty.\n- Call out likely backend, frontend, data, config, and test impact.",
+    "source_files": [
+      ".codex/skills/frontier-requirement-breakdown/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Rules",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-requirement-breakdown",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-state-runner/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-state-runner/SKILL.md",
+    "text": "# Frontier State Runner\n\nUse this Skill whenever workflow progress must survive beyond a single conversation.",
+    "source_files": [
+      ".codex/skills/frontier-state-runner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier State Runner",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-state-runner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-state-runner/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-state-runner/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Identify whether the task is product-level or single-story.\n2. Create an active state file from the relevant template if none exists.\n3. Validate the state file before reading or updating it:\n\n```powershell\n.\\.harness\\scripts\\validate-state.ps1 -StateFile <state-file>\n```\n\n4. Read the current `phase` and required outputs for that phase.\n5. Perform only the work allowed for the current phase.\n6. Record outputs, decisions, skipped gates, and evidence in the state file.\n7. Validate again before moving to the next phase.",
+    "source_files": [
+      ".codex/skills/frontier-state-runner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-state-runner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-state-runner/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-state-runner/SKILL.md",
+    "text": "## State Files\n\n- `.harness/states/e2e-state.template.json`\n- `.harness/states/product-state.template.json`\n\nActive state files should use task-specific names, for example:\n\n- `.harness/states/e2e-S1.json`\n- `.harness/states/product-YYYYMMDD-HHMM-short-name.json`\n\nDo not edit templates as active state.",
+    "source_files": [
+      ".codex/skills/frontier-state-runner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "SKILL",
+      "SKILL.md",
+      "State Files",
+      "codex",
+      "frontier-state-runner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-state-runner/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-state-runner/SKILL.md",
+    "text": "## References\n\n- Read `references/phase-model.md` when deciding the current or next phase.\n- Read `references/state-update-rules.md` before creating or editing active state files.",
+    "source_files": [
+      ".codex/skills/frontier-state-runner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "References",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-state-runner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-state-runner/SKILL.md:5",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-state-runner/SKILL.md",
+    "text": "## Rules\n\n- Treat state files as the source of truth, not conversation history.\n- Validate state before and after updates.\n- Record skipped tests and unavailable environments.\n- Do not advance past a failed quality gate.\n- Do not mark publish, commit, push, or PR phases complete without explicit user approval and evidence.",
+    "source_files": [
+      ".codex/skills/frontier-state-runner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Rules",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-state-runner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-task-dag-planner/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-task-dag-planner/SKILL.md",
+    "text": "# Frontier Task DAG Planner\n\nUse this Skill after requirement breakdown and technical design, before implementation.",
+    "source_files": [
+      ".codex/skills/frontier-task-dag-planner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Task DAG Planner",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-task-dag-planner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-task-dag-planner/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-task-dag-planner/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Load the story, acceptance criteria, and technical design.\n2. Query relevant knowledge if affected modules are unclear:\n\n```powershell\n.\\.harness\\scripts\\kb-query.ps1 -Query \"<module or feature>\" -Mode technical-design -Area all\n```\n\n3. Read `references/task-schema.md`.\n4. Read `references/parallelization-policy.md`.\n5. Read `references/conflict-policy.md`.\n6. Produce a DAG JSON using `.harness/templates/task-dag.example.json` as the shape reference.\n7. Validate the DAG:\n\n```powershell\n.\\.harness\\scripts\\validate-task-dag.ps1 -TaskDagFile <task-dag-file>\n```",
+    "source_files": [
+      ".codex/skills/frontier-task-dag-planner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-task-dag-planner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-task-dag-planner/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-task-dag-planner/SKILL.md",
+    "text": "## Outputs\n\n- `.harness/outputs/task-dag.json`\n- E2E state updates for `tasks` and `dag`",
+    "source_files": [
+      ".codex/skills/frontier-task-dag-planner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Outputs",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-task-dag-planner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-task-dag-planner/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-task-dag-planner/SKILL.md",
+    "text": "## Rules\n\n- Do not implement while planning the DAG.\n- DAG must be acyclic.\n- Every task must include predicted touched files and acceptance criteria.\n- Tasks predicted to touch the same file should not run in the same wave.\n- Database, config, auth, publish, and shared-entry changes must be surfaced as global changes.",
+    "source_files": [
+      ".codex/skills/frontier-task-dag-planner/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Rules",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-task-dag-planner",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-test-gate/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-test-gate/SKILL.md",
+    "text": "# Frontier Test Gate\n\nUse this Skill after a task changes files or fixes a defect, before code review, build/publish, interface verification, or git delivery.",
+    "source_files": [
+      ".codex/skills/frontier-test-gate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Test Gate",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-test-gate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-test-gate/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-test-gate/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Collect diff context:\n\n```powershell\n.\\.harness\\scripts\\collect-diff-context.ps1\n```\n\n2. Ask the deterministic selector for recommended gates:\n\n```powershell\n.\\.harness\\scripts\\select-tests.ps1\n```\n\n3. Read `references/test-selection-policy.md`.\n4. Read `references/command-policy.md` before running commands.\n5. Run the recommended commands that apply to the change.\n6. Record command results in `.harness/reports/test-report.md` using `.harness/templates/test-report.md`.",
+    "source_files": [
+      ".codex/skills/frontier-test-gate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-test-gate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-test-gate/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-test-gate/SKILL.md",
+    "text": "## Default Commands\n\n```powershell\nSet-Location D:\\ProjectStudy\\FrontierScan\\backend\nmvn test\n```\n\n```powershell\nSet-Location D:\\ProjectStudy\\FrontierScan\\frontend\nnpm run build\n```",
+    "source_files": [
+      ".codex/skills/frontier-test-gate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Default Commands",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-test-gate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-test-gate/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-test-gate/SKILL.md",
+    "text": "## Rules\n\n- Do not claim a gate passed without command output from the current worktree.\n- Backend/data changes require backend tests.\n- Frontend changes require frontend build.\n- Harness/Skill/state changes require Harness structure validation.\n- Skipped tests require a recorded reason and risk.\n- A failed required command blocks review, publish, interface verification, and delivery until fixed or explicitly accepted by the user.",
+    "source_files": [
+      ".codex/skills/frontier-test-gate/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Rules",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-test-gate",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-worktree-orchestrator/SKILL.md:1",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-worktree-orchestrator/SKILL.md",
+    "text": "# Frontier Worktree Orchestrator\n\nUse this Skill after task DAG planning and before isolated or parallel implementation.",
+    "source_files": [
+      ".codex/skills/frontier-worktree-orchestrator/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Frontier Worktree Orchestrator",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-worktree-orchestrator",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-worktree-orchestrator/SKILL.md:2",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-worktree-orchestrator/SKILL.md",
+    "text": "## Quick Workflow\n\n1. Validate the task DAG:\n\n```powershell\n.\\.harness\\scripts\\validate-task-dag.ps1 -TaskDagFile <task-dag-file>\n```\n\n2. Read `references/worktree-policy.md`.\n3. Read `references/assignment-policy.md`.\n4. Produce a read-only worktree plan:\n\n```powershell\n.\\.harness\\scripts\\plan-worktrees.ps1 -TaskDagFile <task-dag-file>\n```\n\n5. Ask for explicit approval before creating, merging, deleting, or cleaning worktrees.\n6. Read `references/merge-conflict-policy.md` before any merge collection.",
+    "source_files": [
+      ".codex/skills/frontier-worktree-orchestrator/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Quick Workflow",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-worktree-orchestrator",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-worktree-orchestrator/SKILL.md:3",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-worktree-orchestrator/SKILL.md",
+    "text": "## Outputs\n\n- Worktree assignment records in `.harness/states/`\n- Merge and conflict reports in `.harness/reports/`",
+    "source_files": [
+      ".codex/skills/frontier-worktree-orchestrator/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "Outputs",
+      "SKILL",
+      "SKILL.md",
+      "codex",
+      "frontier-worktree-orchestrator",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:project-skills:skill:.codex/skills/frontier-worktree-orchestrator/SKILL.md:4",
+    "area": "common",
+    "module": "project-skills",
+    "doc_type": "skill",
+    "path": ".codex/skills/frontier-worktree-orchestrator/SKILL.md",
+    "text": "## Safety Rules\n\n- Never discard user changes.\n- Never run destructive git commands automatically.\n- Do not create, merge, delete, or clean worktrees without explicit approval.\n- Do not parallelize tasks predicted to touch the same file unless explicitly approved.\n- Stop and report merge conflicts instead of hiding them.",
+    "source_files": [
+      ".codex/skills/frontier-worktree-orchestrator/SKILL.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      ".codex",
+      "SKILL",
+      "SKILL.md",
+      "Safety Rules",
+      "codex",
+      "frontier-worktree-orchestrator",
+      "skill",
+      "skills"
+    ]
+  },
+  {
+    "id": "common:tech:conventions:llm-knowledge/common/tech/stack.md:1",
+    "area": "common",
+    "module": "tech",
+    "doc_type": "conventions",
+    "path": "llm-knowledge/common/tech/stack.md",
+    "text": "# FrontierScan Technology Stack\n\nBackend:\n\n- Spring Boot 3.3.5\n- Java 17\n- Maven\n- PostgreSQL\n- Redis\n- Flyway\n- Spring Security\n- JPA and MyBatis-Plus\n- Rome and Jsoup for feed/page parsing\n\nFrontend:\n\n- Vue 3\n- TypeScript\n- Vite\n- Pinia\n- Vue Router\n- Axios\n\nDeployment:\n\n- Docker Compose\n- Backend and frontend Dockerfiles",
+    "source_files": [
+      "llm-knowledge/common/tech/stack.md"
+    ],
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
+    "baseline_status": "curated",
+    "semantic_status": "not-applicable",
+    "keywords": [
+      "FrontierScan Technology Stack",
+      "common",
+      "llm-knowledge",
+      "project knowledge",
+      "stack",
+      "stack.md",
+      "tech"
+    ]
+  },
+  {
     "id": "frontend:api:api-usage",
     "area": "frontend",
     "module": "api",
     "doc_type": "api-usage",
     "path": "llm-knowledge/frontend/modules/api/api-usage.md",
-    "text": "# api API 使用基线\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 请求参数、错误处理、加载状态和后端契约兼容性需补充。",
+    "text": "# api API 使用基线\n\n- GET /articles (frontend/src/api/articles.ts)\n- GET /articles/${id} (frontend/src/api/articles.ts)\n- POST /articles/${id}/summary/retry (frontend/src/api/articles.ts)\n- POST /articles/${id}/favorite (frontend/src/api/articles.ts)\n- DELETE /articles/${id}/favorite (frontend/src/api/articles.ts)\n- GET /articles/favorites (frontend/src/api/articles.ts)\n- GET /articles/count (frontend/src/api/articles.ts)\n- GET /categories (frontend/src/api/categories.ts)\n- GET /categories/${id} (frontend/src/api/categories.ts)\n- POST /categories (frontend/src/api/categories.ts)\n- PUT /categories/${id} (frontend/src/api/categories.ts)\n- DELETE /categories/${id} (frontend/src/api/categories.ts)\n- GET /collection-runs (frontend/src/api/collectionRuns.ts)\n- GET /collection-runs/${runId} (frontend/src/api/collectionRuns.ts)\n- POST /collection-runs/${runId}/retry (frontend/src/api/collectionRuns.ts)\n- POST /collection-runs/sites/${siteId} (frontend/src/api/collectionRuns.ts)\n- GET /sites (frontend/src/api/sites.ts)\n- GET /sites/${id} (frontend/src/api/sites.ts)\n- POST /sites (frontend/src/api/sites.ts)\n- PUT /sites/${id} (frontend/src/api/sites.ts)\n- DELETE /sites/${id} (frontend/src/api/sites.ts)\n- GET /tags/domains (frontend/src/api/tags.ts)\n- GET /tags/domains/${domainName} (frontend/src/api/tags.ts)\n\nNeeds AI Review: 请求参数、错误处理、加载状态和后端契约兼容性需补充。",
     "source_files": [
       "frontend/src/api/articles.ts",
       "frontend/src/api/categories.ts",
@@ -2462,8 +4446,8 @@
       "frontend/src/api/sites.ts",
       "frontend/src/api/tags.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2484,7 +4468,7 @@
     "module": "api",
     "doc_type": "components",
     "path": "llm-knowledge/frontend/modules/api/components.md",
-    "text": "# api 组件基线\n\n- 暂无自动识别结果。\n\n## Exports\n\n- articleApi (frontend/src/api/articles.ts)\n- categoryApi (frontend/src/api/categories.ts)\n- apiClient (frontend/src/api/client.ts)\n- collectionRunApi (frontend/src/api/collectionRuns.ts)\n- siteApi (frontend/src/api/sites.ts)\n- tagApi (frontend/src/api/tags.ts)\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
+    "text": "# api 组件基线\n\n- 暂无自动识别结果。\n\n## Exports\n\n- articleApi (frontend/src/api/articles.ts)\n- categoryApi (frontend/src/api/categories.ts)\n- apiClient (frontend/src/api/client.ts)\n- collectionRunApi (frontend/src/api/collectionRuns.ts)\n- siteApi (frontend/src/api/sites.ts)\n- tagApi (frontend/src/api/tags.ts)\n\n## 页面到 API 依赖\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
     "source_files": [
       "frontend/src/api/articles.ts",
       "frontend/src/api/categories.ts",
@@ -2493,8 +4477,8 @@
       "frontend/src/api/sites.ts",
       "frontend/src/api/tags.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2515,7 +4499,7 @@
     "module": "api",
     "doc_type": "overview",
     "path": "llm-knowledge/frontend/modules/api/overview.md",
-    "text": "# api 前端区域概览\n\n## 自动识别职责\n\n- 区域路径：`frontend/src/api`\n- 文件数：6\n- Vue 组件数：0\n- API 调用数：0\n- 路由数：0\n- Store 数：0\n\n## 文件清单\n\n- frontend/src/api/articles.ts (ts)\n- frontend/src/api/categories.ts (ts)\n- frontend/src/api/client.ts (ts)\n- frontend/src/api/collectionRuns.ts (ts)\n- frontend/src/api/sites.ts (ts)\n- frontend/src/api/tags.ts (ts)\n\n## 语义说明\n\nNeeds AI Review: 请结合页面流程、B2B 后台交互规范和用户任务补充语义。",
+    "text": "# api 前端区域概览\n\n## 自动识别职责\n\n- 区域路径：`frontend/src/api`\n- 文件数：6\n- Vue 组件数：0\n- API 调用数：23\n- 路由数：0\n- Store 数：0\n\n## 文件清单\n\n- frontend/src/api/articles.ts (ts)\n- frontend/src/api/categories.ts (ts)\n- frontend/src/api/client.ts (ts)\n- frontend/src/api/collectionRuns.ts (ts)\n- frontend/src/api/sites.ts (ts)\n- frontend/src/api/tags.ts (ts)\n\n## 语义说明\n\nNeeds AI Review: 请结合页面流程、B2B 后台交互规范和用户任务补充语义。",
     "source_files": [
       "frontend/src/api/articles.ts",
       "frontend/src/api/categories.ts",
@@ -2524,8 +4508,8 @@
       "frontend/src/api/sites.ts",
       "frontend/src/api/tags.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2546,7 +4530,7 @@
     "module": "api",
     "doc_type": "pitfalls",
     "path": "llm-knowledge/frontend/modules/api/pitfalls.md",
-    "text": "# api 风险与注意事项\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 请补充页面级业务风险、测试缺口和已知 UI 陷阱。",
+    "text": "# api 风险与注意事项\n\n- 存在后端 API 依赖，需关注空态、错误态、鉴权过期和契约变化。\n\nNeeds AI Review: 请补充页面级业务风险、测试缺口和已知 UI 陷阱。",
     "source_files": [
       "frontend/src/api/articles.ts",
       "frontend/src/api/categories.ts",
@@ -2555,8 +4539,8 @@
       "frontend/src/api/sites.ts",
       "frontend/src/api/tags.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2577,7 +4561,7 @@
     "module": "api",
     "doc_type": "routes",
     "path": "llm-knowledge/frontend/modules/api/routes.md",
-    "text": "# api 路由基线\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。",
+    "text": "# api 路由基线\n\n- 暂无自动识别结果。\n\n## 路由守卫\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。",
     "source_files": [
       "frontend/src/api/articles.ts",
       "frontend/src/api/categories.ts",
@@ -2586,8 +4570,8 @@
       "frontend/src/api/sites.ts",
       "frontend/src/api/tags.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2617,8 +4601,8 @@
       "frontend/src/api/sites.ts",
       "frontend/src/api/tags.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2648,8 +4632,8 @@
       "frontend/src/api/sites.ts",
       "frontend/src/api/tags.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2675,8 +4659,8 @@
       "frontend/src/components/ArticleFilterBar.vue",
       "frontend/src/components/ToastMessage.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2693,13 +4677,13 @@
     "module": "components",
     "doc_type": "components",
     "path": "llm-knowledge/frontend/modules/components/components.md",
-    "text": "# components 组件基线\n\n- ArticleFilterBar.vue (frontend/src/components/ArticleFilterBar.vue)\n- ToastMessage.vue (frontend/src/components/ToastMessage.vue)\n\n## Exports\n\n- ToastType (frontend/src/components/ToastMessage.vue)\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
+    "text": "# components 组件基线\n\n- ArticleFilterBar.vue (frontend/src/components/ArticleFilterBar.vue)\n- ToastMessage.vue (frontend/src/components/ToastMessage.vue)\n\n## Exports\n\n- ToastType (frontend/src/components/ToastMessage.vue)\n\n## 页面到 API 依赖\n\n- tagApi -> api/tags (frontend/src/components/ArticleFilterBar.vue)\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
     "source_files": [
       "frontend/src/components/ArticleFilterBar.vue",
       "frontend/src/components/ToastMessage.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2720,8 +4704,8 @@
       "frontend/src/components/ArticleFilterBar.vue",
       "frontend/src/components/ToastMessage.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2743,8 +4727,8 @@
       "frontend/src/components/ArticleFilterBar.vue",
       "frontend/src/components/ToastMessage.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2761,13 +4745,13 @@
     "module": "components",
     "doc_type": "routes",
     "path": "llm-knowledge/frontend/modules/components/routes.md",
-    "text": "# components 路由基线\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。",
+    "text": "# components 路由基线\n\n- 暂无自动识别结果。\n\n## 路由守卫\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。",
     "source_files": [
       "frontend/src/components/ArticleFilterBar.vue",
       "frontend/src/components/ToastMessage.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2789,8 +4773,8 @@
       "frontend/src/components/ArticleFilterBar.vue",
       "frontend/src/components/ToastMessage.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2812,8 +4796,8 @@
       "frontend/src/components/ArticleFilterBar.vue",
       "frontend/src/components/ToastMessage.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2834,8 +4818,8 @@
     "source_files": [
       "frontend/src/layouts/AppLayout.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2851,12 +4835,12 @@
     "module": "layouts",
     "doc_type": "components",
     "path": "llm-knowledge/frontend/modules/layouts/components.md",
-    "text": "# layouts 组件基线\n\n- AppLayout.vue (frontend/src/layouts/AppLayout.vue)\n\n## Exports\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
+    "text": "# layouts 组件基线\n\n- AppLayout.vue (frontend/src/layouts/AppLayout.vue)\n\n## Exports\n\n- 暂无自动识别结果。\n\n## 页面到 API 依赖\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
     "source_files": [
       "frontend/src/layouts/AppLayout.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2876,8 +4860,8 @@
     "source_files": [
       "frontend/src/layouts/AppLayout.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2897,8 +4881,8 @@
     "source_files": [
       "frontend/src/layouts/AppLayout.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2914,12 +4898,12 @@
     "module": "layouts",
     "doc_type": "routes",
     "path": "llm-knowledge/frontend/modules/layouts/routes.md",
-    "text": "# layouts 路由基线\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。",
+    "text": "# layouts 路由基线\n\n- 暂无自动识别结果。\n\n## 路由守卫\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。",
     "source_files": [
       "frontend/src/layouts/AppLayout.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2939,8 +4923,8 @@
     "source_files": [
       "frontend/src/layouts/AppLayout.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2960,8 +4944,8 @@
     "source_files": [
       "frontend/src/layouts/AppLayout.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2981,8 +4965,8 @@
     "source_files": [
       "frontend/src/router/index.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -2998,12 +4982,12 @@
     "module": "router",
     "doc_type": "components",
     "path": "llm-knowledge/frontend/modules/router/components.md",
-    "text": "# router 组件基线\n\n- 暂无自动识别结果。\n\n## Exports\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
+    "text": "# router 组件基线\n\n- 暂无自动识别结果。\n\n## Exports\n\n- 暂无自动识别结果。\n\n## 页面到 API 依赖\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
     "source_files": [
       "frontend/src/router/index.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3023,8 +5007,8 @@
     "source_files": [
       "frontend/src/router/index.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3044,8 +5028,8 @@
     "source_files": [
       "frontend/src/router/index.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3061,12 +5045,12 @@
     "module": "router",
     "doc_type": "routes",
     "path": "llm-knowledge/frontend/modules/router/routes.md",
-    "text": "# router 路由基线\n\n- /login -> login (frontend/src/router/index.ts)\n- / -> dashboard (frontend/src/router/index.ts)\n- categories -> categories (frontend/src/router/index.ts)\n- sites -> sites (frontend/src/router/index.ts)\n- favorites -> favorites (frontend/src/router/index.ts)\n- collection-runs -> collectionRuns (frontend/src/router/index.ts)\n\nNeeds AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。",
+    "text": "# router 路由基线\n\n- /login -> login (frontend/src/router/index.ts)\n- / -> dashboard (frontend/src/router/index.ts)\n- categories -> categories (frontend/src/router/index.ts)\n- sites -> sites (frontend/src/router/index.ts)\n- favorites -> favorites (frontend/src/router/index.ts)\n- collection-runs -> collectionRuns (frontend/src/router/index.ts)\n\n## 路由守卫\n\n- beforeEach (frontend/src/router/index.ts)\n- requiresAuth=true (frontend/src/router/index.ts)\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。",
     "source_files": [
       "frontend/src/router/index.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3086,8 +5070,8 @@
     "source_files": [
       "frontend/src/router/index.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3107,8 +5091,8 @@
     "source_files": [
       "frontend/src/router/index.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3128,8 +5112,8 @@
     "source_files": [
       "frontend/src/stores/auth.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3145,12 +5129,12 @@
     "module": "stores",
     "doc_type": "components",
     "path": "llm-knowledge/frontend/modules/stores/components.md",
-    "text": "# stores 组件基线\n\n- 暂无自动识别结果。\n\n## Exports\n\n- useAuthStore (frontend/src/stores/auth.ts)\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
+    "text": "# stores 组件基线\n\n- 暂无自动识别结果。\n\n## Exports\n\n- useAuthStore (frontend/src/stores/auth.ts)\n\n## 页面到 API 依赖\n\n- apiClient -> api/client (frontend/src/stores/auth.ts)\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
     "source_files": [
       "frontend/src/stores/auth.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3170,8 +5154,8 @@
     "source_files": [
       "frontend/src/stores/auth.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3191,8 +5175,8 @@
     "source_files": [
       "frontend/src/stores/auth.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3208,12 +5192,12 @@
     "module": "stores",
     "doc_type": "routes",
     "path": "llm-knowledge/frontend/modules/stores/routes.md",
-    "text": "# stores 路由基线\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。",
+    "text": "# stores 路由基线\n\n- 暂无自动识别结果。\n\n## 路由守卫\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。",
     "source_files": [
       "frontend/src/stores/auth.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3233,8 +5217,8 @@
     "source_files": [
       "frontend/src/stores/auth.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3254,8 +5238,8 @@
     "source_files": [
       "frontend/src/stores/auth.ts"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3275,8 +5259,8 @@
     "source_files": [
       "frontend/src/styles/main.css"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3292,12 +5276,12 @@
     "module": "styles",
     "doc_type": "components",
     "path": "llm-knowledge/frontend/modules/styles/components.md",
-    "text": "# styles 组件基线\n\n- 暂无自动识别结果。\n\n## Exports\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
+    "text": "# styles 组件基线\n\n- 暂无自动识别结果。\n\n## Exports\n\n- 暂无自动识别结果。\n\n## 页面到 API 依赖\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
     "source_files": [
       "frontend/src/styles/main.css"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3317,8 +5301,8 @@
     "source_files": [
       "frontend/src/styles/main.css"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3338,8 +5322,8 @@
     "source_files": [
       "frontend/src/styles/main.css"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3355,12 +5339,12 @@
     "module": "styles",
     "doc_type": "routes",
     "path": "llm-knowledge/frontend/modules/styles/routes.md",
-    "text": "# styles 路由基线\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。",
+    "text": "# styles 路由基线\n\n- 暂无自动识别结果。\n\n## 路由守卫\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。",
     "source_files": [
       "frontend/src/styles/main.css"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3380,8 +5364,8 @@
     "source_files": [
       "frontend/src/styles/main.css"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3401,8 +5385,8 @@
     "source_files": [
       "frontend/src/styles/main.css"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3427,8 +5411,8 @@
       "frontend/src/views/LoginView.vue",
       "frontend/src/views/SitesView.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3449,7 +5433,7 @@
     "module": "views",
     "doc_type": "components",
     "path": "llm-knowledge/frontend/modules/views/components.md",
-    "text": "# views 组件基线\n\n- CategoriesView.vue (frontend/src/views/CategoriesView.vue)\n- CollectionRunsView.vue (frontend/src/views/CollectionRunsView.vue)\n- DashboardView.vue (frontend/src/views/DashboardView.vue)\n- FavoritesView.vue (frontend/src/views/FavoritesView.vue)\n- LoginView.vue (frontend/src/views/LoginView.vue)\n- SitesView.vue (frontend/src/views/SitesView.vue)\n\n## Exports\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
+    "text": "# views 组件基线\n\n- CategoriesView.vue (frontend/src/views/CategoriesView.vue)\n- CollectionRunsView.vue (frontend/src/views/CollectionRunsView.vue)\n- DashboardView.vue (frontend/src/views/DashboardView.vue)\n- FavoritesView.vue (frontend/src/views/FavoritesView.vue)\n- LoginView.vue (frontend/src/views/LoginView.vue)\n- SitesView.vue (frontend/src/views/SitesView.vue)\n\n## Exports\n\n- 暂无自动识别结果。\n\n## 页面到 API 依赖\n\n- categoryApi -> api/categories (frontend/src/views/CategoriesView.vue)\n- collectionRunApi -> api/collectionRuns (frontend/src/views/CollectionRunsView.vue)\n- articleApi -> api/articles (frontend/src/views/DashboardView.vue)\n- categoryApi -> api/categories (frontend/src/views/DashboardView.vue)\n- siteApi -> api/sites (frontend/src/views/DashboardView.vue)\n- articleApi -> api/articles (frontend/src/views/FavoritesView.vue)\n- siteApi -> api/sites (frontend/src/views/SitesView.vue)\n- categoryApi -> api/categories (frontend/src/views/SitesView.vue)\n- collectionRunApi -> api/collectionRuns (frontend/src/views/SitesView.vue)\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。",
     "source_files": [
       "frontend/src/views/CategoriesView.vue",
       "frontend/src/views/CollectionRunsView.vue",
@@ -3458,8 +5442,8 @@
       "frontend/src/views/LoginView.vue",
       "frontend/src/views/SitesView.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3489,8 +5473,8 @@
       "frontend/src/views/LoginView.vue",
       "frontend/src/views/SitesView.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3520,8 +5504,8 @@
       "frontend/src/views/LoginView.vue",
       "frontend/src/views/SitesView.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3542,7 +5526,7 @@
     "module": "views",
     "doc_type": "routes",
     "path": "llm-knowledge/frontend/modules/views/routes.md",
-    "text": "# views 路由基线\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 路由守卫、权限跳转和布局关系需结合源码进一步确认。",
+    "text": "# views 路由基线\n\n- 暂无自动识别结果。\n\n## 路由守卫\n\n- 暂无自动识别结果。\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。",
     "source_files": [
       "frontend/src/views/CategoriesView.vue",
       "frontend/src/views/CollectionRunsView.vue",
@@ -3551,8 +5535,8 @@
       "frontend/src/views/LoginView.vue",
       "frontend/src/views/SitesView.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3582,8 +5566,8 @@
       "frontend/src/views/LoginView.vue",
       "frontend/src/views/SitesView.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T06:36:15.029Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [
@@ -3613,8 +5597,8 @@
       "frontend/src/views/LoginView.vue",
       "frontend/src/views/SitesView.vue"
     ],
-    "git_hash": "dfbb39a87e15c337796a7f2fb38cf48430fe769e",
-    "generated_at": "2026-07-06T09:38:23.253Z",
+    "git_hash": "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4",
+    "generated_at": "2026-07-11T10:45:43.312Z",
     "baseline_status": "fresh",
     "semantic_status": "pending",
     "keywords": [

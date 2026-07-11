@@ -23,5 +23,9 @@ Current status:
 
 - `validate-state.ps1`, `validate-task-dag.ps1`, `validate-structure.ps1`, `kb-query.ps1`, `select-tests.ps1`, `collect-diff-context.ps1`, `scan-knowledge-inputs.ps1`, `check-kb-freshness.ps1`, `plan-worktrees.ps1`, `derive-interface-cases.ps1`, `plan-build.ps1`, `summarize-delivery.ps1`, and `smoke-harness-flow.ps1` are implemented as read-only helpers.
 - `generate-kb.ps1` is a write-capable knowledge generator. It writes only under `llm-knowledge/`, supports dry-run, preserves `custom/` notes, and degrades OpenAI semantic enrichment when `OPENAI_API_KEY` is absent.
+- `generate-kb.ps1 -Area backend -Module article -Mode baseline` refreshes one module while preserving unrelated documents, metadata, logs, and index chunks.
+- `check-kb-freshness.ps1 -WriteRefreshTask` explicitly writes `.harness/outputs/kb-refresh-task.json` for stale areas/modules; it never executes the task.
+- `-WithEmbeddings` is accepted but returns `disabled` until vector retrieval is implemented and tested.
+- Regression coverage lives in `tests/harness-status.test.mjs`, `tests/generate-kb.test.mjs`, `tests/kb-query.test.ps1`, and `tests/kb-freshness.test.ps1`.
 - Do not place business logic here.
 - Scripts should read from the repository and write only `.harness/` artifacts when explicitly documented.

@@ -9,8 +9,8 @@ Top-level areas:
 | Backend service | `backend/` | Spring Boot 3, Java 17, Maven, PostgreSQL, Redis, Flyway, Spring Security, JPA/MyBatis-Plus |
 | Frontend admin | `frontend/` | Vue 3, TypeScript, Vite, Pinia, Vue Router, Axios |
 | Operations docs | `docs/` | Architecture, local development, AI handover, Harness planning |
-| Harness runtime | `.harness/` | State schemas, state templates, workflow outputs |
-| Project Skills | `.codex/skills/` | Planned project-local Skills |
+| Harness runtime | `.harness/` | State/DAG schemas, workflow contracts, templates, deterministic helpers, and tests |
+| Project Skills | `.codex/skills/` | 13 project-local Skill definitions with mixed runtime readiness |
 
 Progressive query entry points:
 
@@ -21,8 +21,23 @@ Progressive query entry points:
 5. Execution and verification work: load `common/conventions/execution-verification.md`, then the relevant Skill references.
 6. Build/publish/git delivery work: load `common/conventions/delivery.md`, then the relevant Skill references.
 
-Known gaps:
+Current knowledge status:
 
-- Detailed backend module docs are only scaffolded.
-- Detailed frontend module docs are only scaffolded.
-- Automated freshness checks are not implemented yet.
+| Layer | Status | Evidence |
+| --- | --- | --- |
+| L1 deterministic baseline | `fresh` | 7 backend modules and 7 frontend modules with Markdown + `facts.json` |
+| L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call was requested |
+| L3 local index | `fresh` | 186 generated and curated keyword/metadata chunks in `index/chunks.json` |
+| Optional embeddings | `disabled` | Write-only vectors are blocked until a tested retrieval consumer exists |
+
+Current limitations:
+
+- Static extraction is intentionally bounded and reports unsupported root-level files in `source-coverage.json` instead of claiming full parser coverage.
+- Semantic content remains `pending` until explicitly generated with an approved `OPENAI_API_KEY`.
+- Project-local Skills and Agent roles are not an automatically dispatched runtime.
+- State schemas and workflow contracts exist, but deterministic phase advancement and resume are not implemented.
+
+Trust rule:
+
+- Always inspect `baseline_status`, `semantic_status`, `index_status`, and source references.
+- Treat L1 as traceable static facts and L2 as optional interpretation; verify security and business semantics against cited source files.

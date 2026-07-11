@@ -95,6 +95,10 @@
       "controller": "PingController",
       "method": "GET",
       "path": "/api/ping",
+      "handler": "ping",
+      "return_type": "ApiResponse<Map<String, String>>",
+      "parameters": [],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/common/api/PingController.java"
     }
   ],
@@ -107,6 +111,37 @@
       "class": "AsyncConfig",
       "executor": "frontierScanCollectionExecutor",
       "file": "backend/src/main/java/com/frontierscan/common/config/AsyncConfig.java"
+    }
+  ],
+  "transactional_methods": [],
+  "service_dependencies": [
+    {
+      "class": "DataInitializer",
+      "dependency": "AuthService",
+      "parameter": "authService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/common/config/DataInitializer.java"
+    },
+    {
+      "class": "JwtAuthenticationFilter",
+      "dependency": "JwtUtil",
+      "parameter": "jwtUtil",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/common/security/JwtAuthenticationFilter.java"
+    },
+    {
+      "class": "JwtUtil",
+      "dependency": "String",
+      "parameter": "jwtSecret",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java"
+    },
+    {
+      "class": "JwtUtil",
+      "dependency": "long",
+      "parameter": "expiresInSeconds",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/common/security/JwtUtil.java"
     }
   ],
   "imports": [
@@ -164,5 +199,10 @@
     "org.springframework.web.bind.annotation.RestControllerAdvice",
     "org.springframework.web.filter.OncePerRequestFilter"
   ],
-  "resources": []
+  "resources": [
+    {
+      "kind": "configuration",
+      "file": "backend/src/main/resources/application.yml"
+    }
+  ]
 }

@@ -138,24 +138,100 @@
       "controller": "CollectionRunController",
       "method": "GET",
       "path": "/api/collection-runs",
+      "handler": "list",
+      "return_type": "ApiResponse<List<CollectionRun>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
     },
     {
       "controller": "CollectionRunController",
       "method": "GET",
       "path": "/api/collection-runs/{runId}",
+      "handler": "get",
+      "return_type": "ApiResponse<CollectionRun>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "runId",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
     },
     {
       "controller": "CollectionRunController",
       "method": "POST",
       "path": "/api/collection-runs/{runId}/retry",
+      "handler": "retry",
+      "return_type": "ResponseEntity<ApiResponse<Map<String, Object>>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "runId",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
     },
     {
       "controller": "CollectionRunController",
       "method": "POST",
       "path": "/api/collection-runs/sites/{siteId}",
+      "handler": "trigger",
+      "return_type": "ResponseEntity<ApiResponse<Map<String, Object>>>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
       "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunController.java"
     }
   ],
@@ -190,6 +266,286 @@
       "class": "CollectionOrchestrator",
       "executor": "frontierScanCollectionExecutor",
       "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    }
+  ],
+  "transactional_methods": [
+    {
+      "class": "CollectionRunService",
+      "name": "create",
+      "return_type": "CollectionRun",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "siteId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "runType",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "retryCount",
+          "type": "int",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "retryOfRunId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "class": "CollectionRunService",
+      "name": "complete",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "runId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "collectedCount",
+          "type": "int",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "class": "CollectionRunService",
+      "name": "complete",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "runId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "collectedCount",
+          "type": "int",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "warningMessage",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "class": "CollectionRunService",
+      "name": "fail",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "runId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "errorMessage",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "class": "CollectionRunService",
+      "name": "fail",
+      "return_type": "OffsetDateTime",
+      "parameters": [
+        {
+          "name": "runId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "failureType",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "failureStage",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "errorMessage",
+          "type": "String",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "class": "CollectionRunService",
+      "name": "createScheduledRetry",
+      "return_type": "CollectionRun",
+      "parameters": [
+        {
+          "name": "failedRun",
+          "type": "CollectionRun",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    }
+  ],
+  "service_dependencies": [
+    {
+      "class": "CollectionOrchestrator",
+      "dependency": "List<Collector>",
+      "parameter": "collectors",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    },
+    {
+      "class": "CollectionOrchestrator",
+      "dependency": "SiteService",
+      "parameter": "siteService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    },
+    {
+      "class": "CollectionOrchestrator",
+      "dependency": "ArticleService",
+      "parameter": "articleService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    },
+    {
+      "class": "CollectionOrchestrator",
+      "dependency": "CollectionRunService",
+      "parameter": "collectionRunService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    },
+    {
+      "class": "CollectionOrchestrator",
+      "dependency": "ArticleSummaryService",
+      "parameter": "articleSummaryService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    },
+    {
+      "class": "CollectionOrchestrator",
+      "dependency": "TagEvaluationAsyncService",
+      "parameter": "tagEvaluationAsyncService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    },
+    {
+      "class": "CollectionOrchestrator",
+      "dependency": "Executor",
+      "parameter": "summaryExecutor",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java"
+    },
+    {
+      "class": "CollectionRunService",
+      "dependency": "CollectionRunRepository",
+      "parameter": "collectionRunRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "class": "CollectionRunService",
+      "dependency": "SiteService",
+      "parameter": "siteService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "class": "CollectionRunService",
+      "dependency": "CollectionOrchestrator",
+      "parameter": "collectionOrchestrator",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionRunService.java"
+    },
+    {
+      "class": "CollectionScheduler",
+      "dependency": "SiteRepository",
+      "parameter": "siteRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java"
+    },
+    {
+      "class": "CollectionScheduler",
+      "dependency": "CollectionRunRepository",
+      "parameter": "collectionRunRepository",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java"
+    },
+    {
+      "class": "CollectionScheduler",
+      "dependency": "CollectionRunService",
+      "parameter": "collectionRunService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java"
+    },
+    {
+      "class": "CollectionScheduler",
+      "dependency": "CollectionOrchestrator",
+      "parameter": "collectionOrchestrator",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java"
+    },
+    {
+      "class": "CollectionScheduler",
+      "dependency": "CollectionScheduleProperties",
+      "parameter": "properties",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java"
+    },
+    {
+      "class": "CollectionScheduler",
+      "dependency": "ObjectProvider<StringRedisTemplate>",
+      "parameter": "redisTemplateProvider",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java"
+    },
+    {
+      "class": "TagEvaluationAsyncService",
+      "dependency": "ArticleService",
+      "parameter": "articleService",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java"
+    },
+    {
+      "class": "TagEvaluationAsyncService",
+      "dependency": "Executor",
+      "parameter": "tagExecutor",
+      "injection": "constructor",
+      "file": "backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java"
     }
   ],
   "imports": [
@@ -274,5 +630,30 @@
     "org.springframework.stereotype.Service",
     "org.springframework.transaction.annotation.Transactional"
   ],
-  "resources": []
+  "resources": [
+    {
+      "kind": "configuration",
+      "file": "backend/src/main/resources/application.yml"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V1__initial_schema.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V3__add_schema_comments.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V5__add_collection_reliability.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V6__extend_collection_reliability.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V7__add_article_summary_governance.sql"
+    }
+  ]
 }

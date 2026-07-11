@@ -4,8 +4,8 @@ layer: L1-baseline
 area: frontend
 module: views
 doc_type: components
-git_hash: dfbb39a87e15c337796a7f2fb38cf48430fe769e
-generated_at: 2026-07-06T09:38:23.253Z
+git_hash: 4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4
+generated_at: 2026-07-11T10:45:43.312Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -29,5 +29,17 @@ source_files:
 ## Exports
 
 - 暂无自动识别结果。
+
+## 页面到 API 依赖
+
+- categoryApi -> api/categories (frontend/src/views/CategoriesView.vue)
+- collectionRunApi -> api/collectionRuns (frontend/src/views/CollectionRunsView.vue)
+- articleApi -> api/articles (frontend/src/views/DashboardView.vue)
+- categoryApi -> api/categories (frontend/src/views/DashboardView.vue)
+- siteApi -> api/sites (frontend/src/views/DashboardView.vue)
+- articleApi -> api/articles (frontend/src/views/FavoritesView.vue)
+- siteApi -> api/sites (frontend/src/views/SitesView.vue)
+- categoryApi -> api/categories (frontend/src/views/SitesView.vue)
+- collectionRunApi -> api/collectionRuns (frontend/src/views/SitesView.vue)
 
 Needs AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。

@@ -37,8 +37,179 @@
       "kind": "ts"
     }
   ],
-  "api_calls": [],
+  "api_calls": [
+    {
+      "method": "GET",
+      "path": "/articles",
+      "response_type": "ApiResponse<Page<Article>>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/articles/${id}",
+      "response_type": "ApiResponse<Article>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/articles/${id}/summary/retry",
+      "response_type": "ApiResponse<Article>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/articles/${id}/favorite",
+      "response_type": "ApiResponse<{ favorited: boolean }>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/articles/${id}/favorite",
+      "response_type": "ApiResponse<{ favorited: boolean }>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/articles/favorites",
+      "response_type": "ApiResponse<FavoriteArticle[]>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/articles/count",
+      "response_type": "ApiResponse<{ total: number; today: number }>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/categories",
+      "response_type": "ApiResponse<Category[]>",
+      "request_types": [],
+      "file": "frontend/src/api/categories.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/categories/${id}",
+      "response_type": "ApiResponse<Category>",
+      "request_types": [],
+      "file": "frontend/src/api/categories.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/categories",
+      "response_type": "ApiResponse<Category>",
+      "request_types": [
+        "{ name: string; description?: string; sortOrder?: number }"
+      ],
+      "file": "frontend/src/api/categories.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/categories/${id}",
+      "response_type": "ApiResponse<Category>",
+      "request_types": [
+        "{ name?: string; description?: string; sortOrder?: number; archived?: boolean }"
+      ],
+      "file": "frontend/src/api/categories.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/categories/${id}",
+      "response_type": "ApiResponse<{ message: string }>",
+      "request_types": [],
+      "file": "frontend/src/api/categories.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/collection-runs",
+      "response_type": "ApiResponse<CollectionRun[]>",
+      "request_types": [],
+      "file": "frontend/src/api/collectionRuns.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/collection-runs/${runId}",
+      "response_type": "ApiResponse<CollectionRun>",
+      "request_types": [],
+      "file": "frontend/src/api/collectionRuns.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/collection-runs/${runId}/retry",
+      "response_type": "ApiResponse<{ message: string; runId: number }>",
+      "request_types": [],
+      "file": "frontend/src/api/collectionRuns.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/collection-runs/sites/${siteId}",
+      "response_type": "ApiResponse<{ message: string; runId: number }>",
+      "request_types": [],
+      "file": "frontend/src/api/collectionRuns.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/sites",
+      "response_type": "ApiResponse<Site[]>",
+      "request_types": [],
+      "file": "frontend/src/api/sites.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/sites/${id}",
+      "response_type": "ApiResponse<Site>",
+      "request_types": [],
+      "file": "frontend/src/api/sites.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/sites",
+      "response_type": "ApiResponse<Site>",
+      "request_types": [
+        "{ name: string; url: string; categoryId: number; rssUrl?: string; collectionIntervalMinutes?: number; enabled?: boolean }"
+      ],
+      "file": "frontend/src/api/sites.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/sites/${id}",
+      "response_type": "ApiResponse<Site>",
+      "request_types": [
+        "{ name?: string; url?: string; categoryId?: number; rssUrl?: string; collectionIntervalMinutes?: number; enabled?: boolean }"
+      ],
+      "file": "frontend/src/api/sites.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/sites/${id}",
+      "response_type": "ApiResponse<{ message: string }>",
+      "request_types": [],
+      "file": "frontend/src/api/sites.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/tags/domains",
+      "response_type": "ApiResponse<TagDomain[]>",
+      "request_types": [],
+      "file": "frontend/src/api/tags.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/tags/domains/${domainName}",
+      "response_type": "ApiResponse<TagItem[]>",
+      "request_types": [],
+      "file": "frontend/src/api/tags.ts"
+    }
+  ],
   "routes": [],
+  "route_guards": [],
   "stores": [],
   "exports": [
     {
@@ -66,5 +237,6 @@
       "file": "frontend/src/api/tags.ts"
     }
   ],
+  "api_dependencies": [],
   "components": []
 }

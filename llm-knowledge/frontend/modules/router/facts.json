@@ -45,7 +45,20 @@
       "file": "frontend/src/router/index.ts"
     }
   ],
+  "route_guards": [
+    {
+      "kind": "beforeEach",
+      "file": "frontend/src/router/index.ts"
+    },
+    {
+      "kind": "route-meta",
+      "key": "requiresAuth",
+      "value": "true",
+      "file": "frontend/src/router/index.ts"
+    }
+  ],
   "stores": [],
   "exports": [],
+  "api_dependencies": [],
   "components": []
 }

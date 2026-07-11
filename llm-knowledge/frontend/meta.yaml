@@ -1,8 +1,8 @@
 schema_version: "2.0"
 area: frontend
 root_path: frontend
-generated_at: "2026-07-06T09:38:23.253Z"
-git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
+generated_at: "2026-07-11T10:45:43.312Z"
+git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
 status: fresh
 baseline_status: fresh
 semantic_status: pending
@@ -31,9 +31,11 @@ modules:
       semantic: llm-knowledge/frontend/modules/api/semantic.md
       facts: llm-knowledge/frontend/modules/api/facts.json
     freshness:
-      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
-      generated_at: "2026-07-06T09:38:23.253Z"
+      git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      generated_at: "2026-07-11T10:45:43.312Z"
       baseline_status: fresh
+      semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      semantic_generated_at: "2026-07-11T06:36:15.029Z"
       semantic_status: pending
       index_status: fresh
   - name: components
@@ -49,9 +51,11 @@ modules:
       semantic: llm-knowledge/frontend/modules/components/semantic.md
       facts: llm-knowledge/frontend/modules/components/facts.json
     freshness:
-      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
-      generated_at: "2026-07-06T09:38:23.253Z"
+      git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      generated_at: "2026-07-11T10:45:43.312Z"
       baseline_status: fresh
+      semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      semantic_generated_at: "2026-07-11T06:36:15.029Z"
       semantic_status: pending
       index_status: fresh
   - name: layouts
@@ -67,9 +71,11 @@ modules:
       semantic: llm-knowledge/frontend/modules/layouts/semantic.md
       facts: llm-knowledge/frontend/modules/layouts/facts.json
     freshness:
-      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
-      generated_at: "2026-07-06T09:38:23.253Z"
+      git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      generated_at: "2026-07-11T10:45:43.312Z"
       baseline_status: fresh
+      semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      semantic_generated_at: "2026-07-11T06:36:15.029Z"
       semantic_status: pending
       index_status: fresh
   - name: router
@@ -85,9 +91,11 @@ modules:
       semantic: llm-knowledge/frontend/modules/router/semantic.md
       facts: llm-knowledge/frontend/modules/router/facts.json
     freshness:
-      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
-      generated_at: "2026-07-06T09:38:23.253Z"
+      git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      generated_at: "2026-07-11T10:45:43.312Z"
       baseline_status: fresh
+      semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      semantic_generated_at: "2026-07-11T06:36:15.029Z"
       semantic_status: pending
       index_status: fresh
   - name: stores
@@ -103,9 +111,11 @@ modules:
       semantic: llm-knowledge/frontend/modules/stores/semantic.md
       facts: llm-knowledge/frontend/modules/stores/facts.json
     freshness:
-      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
-      generated_at: "2026-07-06T09:38:23.253Z"
+      git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      generated_at: "2026-07-11T10:45:43.312Z"
       baseline_status: fresh
+      semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      semantic_generated_at: "2026-07-11T06:36:15.029Z"
       semantic_status: pending
       index_status: fresh
   - name: styles
@@ -121,9 +131,11 @@ modules:
       semantic: llm-knowledge/frontend/modules/styles/semantic.md
       facts: llm-knowledge/frontend/modules/styles/facts.json
     freshness:
-      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
-      generated_at: "2026-07-06T09:38:23.253Z"
+      git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      generated_at: "2026-07-11T10:45:43.312Z"
       baseline_status: fresh
+      semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      semantic_generated_at: "2026-07-11T06:36:15.029Z"
       semantic_status: pending
       index_status: fresh
   - name: views
@@ -139,8 +151,10 @@ modules:
       semantic: llm-knowledge/frontend/modules/views/semantic.md
       facts: llm-knowledge/frontend/modules/views/facts.json
     freshness:
-      git_hash: "dfbb39a87e15c337796a7f2fb38cf48430fe769e"
-      generated_at: "2026-07-06T09:38:23.253Z"
+      git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      generated_at: "2026-07-11T10:45:43.312Z"
       baseline_status: fresh
+      semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
+      semantic_generated_at: "2026-07-11T06:36:15.029Z"
       semantic_status: pending
       index_status: fresh
