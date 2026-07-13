@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-11
+> 最后更新：2026-07-13
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 的 M0 基线统一和 M1 Knowledge Reliability V2 已完成。当前具备 14 模块 L1 基线、mock 验证的可降级 L2、186 块本地索引、模块刷新、模式感知查询和 refresh-task 输出。下一步是 M2 确定性状态运行时；正式 Skill/Agent 自动接入、Worktree 并行和验证/交付适配仍未实现。
+> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 的 M0、M1 与 M1.1 内容指纹新鲜度已完成。当前具备 14 模块 L1 基线、mock 验证的可降级 L2、324 块本地索引、模块刷新、模式感知查询和可修复 refresh-task 输出；backend、frontend、common 的 L1/L3 均为 fresh，L2 均为 pending。下一独立能力是受控的真实 L2 语义增强验收，之后再进入 M2 确定性状态运行时；正式 Skill/Agent 自动接入、Worktree 并行和验证/交付适配仍未实现。
 
 ---
 
@@ -1428,3 +1428,24 @@ docs/harness-m0-m1/REPORT.md
 - freshness 可通过 `-WriteRefreshTask` 生成刷新任务，但不会自动执行。
 
 下一步只进入 M2 确定性状态运行时。不要在 M2 完成前实现 Agent 自动派发或并行 Worktree，也不要把当前 Smoke 结果解释为文章级端到端自动交付已经完成。
+
+### 16.13 2026-07-13 M1.1 内容指纹新鲜度交接
+
+权威计划和报告：
+
+```text
+docs/harness-m1-1-source-fingerprint/PLAN.md
+docs/harness-m1-1-source-fingerprint/REPORT.md
+```
+
+M1.1 已将知识新鲜度的判定权从 Git 提交或工作区状态切换为可复现的 SHA-256 源内容指纹：
+
+- backend 计算 `backend/src/**`，frontend 计算 `frontend/src/**`；common 计算 `AGENTS.md`、`llm-knowledge/common/**`、`.harness/workflows/**` 与 `.codex/skills/**`。
+- 生成的 backend/frontend/index 文档、`docs/**`、环境与凭据文件、Git 内部和构建产物均不参与指纹；`.gitkeep` 不参与 Common 指纹。
+- `source_fingerprint` 是 L1、L2 和 L3 的权威 freshness 依据；`git_hash` 只保留审计价值，不再决定 fresh/stale。
+- Area 指纹用于 backend、frontend、common 索引新鲜度；Module 指纹用于单模块 L1/L2 文档的新鲜度与局部刷新隔离。
+- 缺少指纹的旧产物按 fail-closed 处理为 stale，并提示一次 `-Mode baseline` 迁移；新鲜度检查只写可选 refresh task，绝不自动刷新。
+
+已验证的真实项目状态：14 个模块、125 个知识产物、324 个 chunk；backend、frontend、common 均为 Baseline `fresh`、Semantic `pending`、Index `fresh`，且后端与前端 coverage 的 `failed_files` 均为 0。`ArticleController`、`dashboard` 和 `quality gate` 查询均走本地索引并报告 fresh。
+
+本批未读取、输出或调用现有 `OPENAI_API_KEY`，未修改 `backend/src` 或 `frontend/src`，也没有 stage、commit、push、发布、部署或 Worktree 操作。后续应先以受控方式完成真实 L2 语义增强验收，确认模型输出的来源、模型元数据与降级路径；验收后再启动 M2 状态运行时。

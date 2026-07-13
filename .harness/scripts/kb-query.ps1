@@ -90,50 +90,22 @@ function Get-ModePreferredDocTypes {
   }
 }
 
-function Test-IsKnowledgeSourcePath {
-  param(
-    [string]$Path,
-    [string]$SelectedArea
-  )
-
-  $normalizedPath = $Path.Replace("\\", "/").Trim('"')
-  $isBackend = $normalizedPath.StartsWith("backend/", [System.StringComparison]::OrdinalIgnoreCase)
-  $isFrontend = $normalizedPath.StartsWith("frontend/", [System.StringComparison]::OrdinalIgnoreCase)
-  $isCommon = $normalizedPath.Equals("AGENTS.md", [System.StringComparison]::OrdinalIgnoreCase) -or
-    $normalizedPath.StartsWith("llm-knowledge/common/", [System.StringComparison]::OrdinalIgnoreCase) -or
-    $normalizedPath.StartsWith(".harness/workflows/", [System.StringComparison]::OrdinalIgnoreCase) -or
-    $normalizedPath.StartsWith(".codex/skills/", [System.StringComparison]::OrdinalIgnoreCase)
-
-  switch ($SelectedArea) {
-    "backend" { return $isBackend }
-    "frontend" { return $isFrontend }
-    "common" { return $isCommon }
-    default { return $isBackend -or $isFrontend -or $isCommon }
-  }
-}
-
-function Get-WorkingTreeSourceChanges {
+function Get-CurrentSourceFingerprints {
   param(
     [string]$RepoRoot,
     [string]$SelectedArea
   )
 
-  $statusLines = @(& git -C $RepoRoot -c core.quotepath=false status --short --untracked-files=all 2>$null)
-  $relevantPaths = @()
-  foreach ($line in $statusLines) {
-    if ([string]::IsNullOrWhiteSpace($line) -or $line.Length -lt 4) {
-      continue
-    }
-
-    $statusPath = $line.Substring(3)
-    foreach ($candidatePath in @($statusPath -split " -> ")) {
-      if (Test-IsKnowledgeSourcePath -Path $candidatePath -SelectedArea $SelectedArea) {
-        $relevantPaths += $candidatePath.Replace("\\", "/").Trim('"')
-      }
-    }
+  $fingerprintScript = Join-Path $PSScriptRoot "lib\source-fingerprint.mjs"
+  if (-not (Test-Path -LiteralPath $fingerprintScript)) {
+    throw "Source fingerprint engine not found: ${fingerprintScript}"
   }
-
-  return @($relevantPaths | Select-Object -Unique)
+  $fingerprintArea = if ($SelectedArea -eq "all") { "all" } else { $SelectedArea }
+  $output = & node $fingerprintScript --root $RepoRoot --area $fingerprintArea --json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Source fingerprint engine failed: $($output -join ' ')"
+  }
+  return ($output -join "`n") | ConvertFrom-Json
 }
 
 function Get-IndexFreshness {
@@ -161,16 +133,27 @@ function Get-IndexFreshness {
     $reasons += "manifest chunk_count differs from chunks.json"
   }
 
-  if (Test-Path -LiteralPath (Join-Path $RepoRoot ".git")) {
-    $head = (& git -C $RepoRoot rev-parse HEAD 2>$null).Trim()
-    if ($head -and $manifest.git_hash -and $manifest.git_hash -ne $head) {
-      $reasons += "manifest git_hash differs from current HEAD"
-    }
+  try {
+    $currentFingerprints = Get-CurrentSourceFingerprints -RepoRoot $RepoRoot -SelectedArea $SelectedArea
+    $areas = if ($SelectedArea -eq "all") { @("backend", "frontend", "common") } else { @($SelectedArea) }
+    foreach ($areaName in $areas) {
+      $recordedProperty = $manifest.source_fingerprints.PSObject.Properties[$areaName]
+      $recordedStatusProperty = $manifest.source_fingerprint_status.PSObject.Properties[$areaName]
+      $currentProperty = $currentFingerprints.PSObject.Properties[$areaName]
+      $recordedFingerprint = if ($recordedProperty) { [string]$recordedProperty.Value } else { "" }
+      $recordedStatus = if ($recordedStatusProperty) { [string]$recordedStatusProperty.Value } else { "missing" }
+      $current = if ($currentProperty) { $currentProperty.Value } else { $null }
 
-    $workingTreeSourceChanges = @(Get-WorkingTreeSourceChanges -RepoRoot $RepoRoot -SelectedArea $SelectedArea)
-    if ($workingTreeSourceChanges.Count -gt 0) {
-      $reasons += "working-tree source changes: $($workingTreeSourceChanges -join ', ')"
+      if ([string]::IsNullOrWhiteSpace($recordedFingerprint)) {
+        $reasons += "source fingerprint missing for ${areaName}"
+      } elseif (-not $current -or $current.status -ne "complete" -or $recordedStatus -ne "complete") {
+        $reasons += "source fingerprint incomplete for ${areaName}"
+      } elseif ($recordedFingerprint -ne $current.fingerprint) {
+        $reasons += "source fingerprint mismatch for ${areaName}"
+      }
     }
+  } catch {
+    $reasons += "source fingerprint incomplete: $($_.Exception.Message)"
   }
 
   return [pscustomobject]@{

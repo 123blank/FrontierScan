@@ -15,7 +15,7 @@ const overview = await read("llm-knowledge/overview.md");
 assert.doesNotMatch(overview, /only scaffolded|not implemented yet/i);
 assert.match(overview, /L1.*fresh/i);
 assert.match(overview, /L2.*pending/i);
-assert.match(overview, /186/);
+assert.match(overview, /324/);
 
 const adaptation = await read("docs/harness-architecture-adaptation.md");
 assert.doesNotMatch(adaptation, /current step creates structure only/i);
@@ -24,7 +24,7 @@ assert.match(adaptation, /agent runtime.*not implemented/i);
 
 const checklist = await read("docs/harness-structure-checklist.md");
 assert.doesNotMatch(checklist, /freshness still scaffold/i);
-assert.match(checklist, /15.*98.*13/);
+assert.match(checklist, /16.*102.*13/);
 
 const registry = await read(".codex/skills/skill-registry.yaml");
 assert.match(registry, /status: mixed-runtime-readiness/);

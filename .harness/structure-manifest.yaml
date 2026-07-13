@@ -16,6 +16,7 @@ required_directories:
   - llm-knowledge/frontend
   - llm-knowledge/common
   - docs/harness-m0-m1
+  - docs/harness-m1-1-source-fingerprint
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -38,7 +39,9 @@ required_files:
   - .harness/scripts/kb-query.ps1
   - .harness/scripts/generate-kb.ps1
   - .harness/scripts/lib/generate-kb.mjs
+  - .harness/scripts/lib/source-fingerprint.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
+  - .harness/scripts/tests/source-fingerprint.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
   - .harness/scripts/tests/kb-freshness.test.ps1
   - .harness/scripts/tests/harness-status.test.mjs
@@ -115,6 +118,8 @@ required_files:
   - docs/harness-m0-m1/PLAN.md
   - docs/harness-architecture-adaptation.md
   - docs/harness-m0-m1/REPORT.md
+  - docs/harness-m1-1-source-fingerprint/PLAN.md
+  - docs/harness-m1-1-source-fingerprint/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows

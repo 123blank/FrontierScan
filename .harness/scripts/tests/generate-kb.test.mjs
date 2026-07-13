@@ -7,6 +7,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { runGenerateKnowledge } from "../lib/generate-kb.mjs";
+import { computeFileSetFingerprint } from "../lib/source-fingerprint.mjs";
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -183,6 +184,16 @@ async function testBaselineGeneratesModulesAndIndex() {
       ".codex/skills/frontier-test-gate/SKILL.md",
       "---\nname: frontier-test-gate\ndescription: Fixture test gate.\n---\n\n# Test Gate\n"
     );
+    await write(
+      root,
+      ".codex/skills/frontier-test-gate/references/policy.md",
+      "# Fixture Policy\n\nRun focused tests before delivery.\n"
+    );
+    await write(
+      root,
+      ".codex/skills/skill-registry.yaml",
+      "skills:\n  - frontier-test-gate\n"
+    );
 
     const result = await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
     assert.equal(result.area, "all");
@@ -195,6 +206,8 @@ async function testBaselineGeneratesModulesAndIndex() {
     const backendMeta = await readFile(path.join(root, "llm-knowledge/backend/meta.yaml"), "utf8");
     assert.match(backendMeta, /baseline_status: fresh/);
     assert.match(backendMeta, /semantic_status: pending/);
+    assert.match(backendMeta, /^source_fingerprint: "sha256:[a-f0-9]{64}"$/m);
+    assert.match(backendMeta, /^source_fingerprint_status: complete$/m);
 
     const articleFacts = JSON.parse(await readFile(path.join(root, "llm-knowledge/backend/modules/article/facts.json"), "utf8"));
     assert.equal(articleFacts.module, "article");
@@ -238,6 +251,17 @@ async function testBaselineGeneratesModulesAndIndex() {
     assert.ok(chunks.some((chunk) => chunk.area === "backend" && chunk.module === "article" && chunk.doc_type === "custom"));
     assert.ok(chunks.some((chunk) => chunk.area === "common" && chunk.module === "harness-workflows"));
     assert.ok(chunks.some((chunk) => chunk.area === "common" && chunk.module === "project-skills"));
+    assert.ok(chunks.some((chunk) => chunk.path.endsWith("frontier-test-gate/references/policy.md")));
+    assert.ok(chunks.some((chunk) => chunk.path.endsWith(".codex/skills/skill-registry.yaml")));
+    assert.ok(chunks.every((chunk) => /^sha256:[a-f0-9]{64}$/.test(chunk.source_fingerprint)));
+
+    const articleOverview = await readFile(path.join(root, "llm-knowledge/backend/modules/article/overview.md"), "utf8");
+    assert.match(articleOverview, /^source_fingerprint: sha256:[a-f0-9]{64}$/m);
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.match(manifest.source_fingerprints.backend, /^sha256:[a-f0-9]{64}$/);
+    assert.match(manifest.source_fingerprints.frontend, /^sha256:[a-f0-9]{64}$/);
+    assert.match(manifest.source_fingerprints.common, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(manifest.source_fingerprint_status.backend, "complete");
 
     const manualNote = await readFile(
       path.join(root, "llm-knowledge/backend/modules/article/custom/business-rules.md"),
@@ -329,6 +353,21 @@ async function testModuleScopedRefreshPreservesUnrelatedArtifacts() {
     assert.match(authMeta, new RegExp(`git_hash: "${oldHash}"`));
     assert.match(authMeta, /baseline_status: stale/);
     assert.match(backendMeta, /^baseline_status: partial$/m);
+    const articleFacts = JSON.parse(await readFile(path.join(root, "llm-knowledge/backend/modules/article/facts.json"), "utf8"));
+    const currentArticleFingerprint = await computeFileSetFingerprint(root, [
+      ...articleFacts.source_files,
+      ...articleFacts.resources.map((resource) => resource.file),
+    ]);
+    const articleFingerprint = articleMeta.match(/baseline_source_fingerprint: "([^"]+)"/)?.[1];
+    const authFingerprint = authMeta.match(/baseline_source_fingerprint: "([^"]+)"/)?.[1];
+    const authDocumentFingerprint = authBefore.match(/^source_fingerprint:\s*([^\s]+)$/m)?.[1];
+    assert.equal(articleFingerprint, currentArticleFingerprint.fingerprint);
+    assert.equal(authFingerprint, authDocumentFingerprint);
+    assert.notEqual(articleFingerprint, authFingerprint);
+
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.source_fingerprints.backend, null);
+    assert.equal(manifest.source_fingerprint_status.backend, "partial");
 
     const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
     assert.ok(chunks.some((chunk) => chunk.area === "backend" && chunk.module === "auth"));

@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
 $freshnessScript = Join-Path $repoRoot ".harness\scripts\check-kb-freshness.ps1"
+$fingerprintScript = Join-Path $repoRoot ".harness\scripts\lib\source-fingerprint.mjs"
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("frontier-kb-freshness-test-" + [System.Guid]::NewGuid().ToString("N"))
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
@@ -14,34 +15,68 @@ function Write-Utf8File {
   [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
 }
 
+function Get-SourceFingerprints {
+  param([string]$Root)
+  $output = & node $fingerprintScript --root $Root --area all --json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "source-fingerprint exited with code ${LASTEXITCODE}: $($output -join "`n")"
+  }
+  return ($output -join "`n") | ConvertFrom-Json
+}
+
+function New-MetaContent {
+  param(
+    [string]$GitHash,
+    [string]$SourceFingerprint,
+    [string]$SemanticStatus = "pending"
+  )
+  return @"
+schema_version: "2.0"
+generated_at: "2026-07-11T00:00:00.000Z"
+git_hash: "$GitHash"
+source_fingerprint: "$SourceFingerprint"
+source_fingerprint_status: complete
+status: fresh
+baseline_status: fresh
+semantic_status: $SemanticStatus
+index_status: fresh
+"@
+}
+
 try {
   New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
   Write-Utf8File -Path (Join-Path $tempRoot "backend\src\main\java\com\frontierscan\article\Article.java") -Content "class Article {}"
   Write-Utf8File -Path (Join-Path $tempRoot "frontend\src\views\Dashboard.vue") -Content "<template />"
+  Write-Utf8File -Path (Join-Path $tempRoot "AGENTS.md") -Content "# Fixture rules"
+  $skillFile = Join-Path $tempRoot ".codex\skills\frontier-test\SKILL.md"
+  Write-Utf8File -Path $skillFile -Content "# Fixture skill"
 
   & git -C $tempRoot init --quiet
   & git -C $tempRoot config user.email "fixture@example.com"
   & git -C $tempRoot config user.name "Fixture"
-  & git -C $tempRoot add backend frontend
+  & git -C $tempRoot add backend frontend AGENTS.md .codex
   & git -C $tempRoot commit --quiet -m "fixture"
   $headHash = (& git -C $tempRoot rev-parse HEAD).Trim()
-
-  $metaTemplate = @"
-schema_version: "2.0"
-generated_at: "2026-07-11T00:00:00.000Z"
-git_hash: "$headHash"
-status: fresh
-baseline_status: fresh
-semantic_status: pending
-index_status: fresh
-"@
-  Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\backend\meta.yaml") -Content $metaTemplate
-  Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\frontend\meta.yaml") -Content $metaTemplate
+  $initialFingerprints = Get-SourceFingerprints -Root $tempRoot
+  $backendMeta = New-MetaContent -GitHash $headHash -SourceFingerprint $initialFingerprints.backend.fingerprint
+  $frontendMeta = New-MetaContent -GitHash $headHash -SourceFingerprint $initialFingerprints.frontend.fingerprint
+  Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\backend\meta.yaml") -Content $backendMeta
+  Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\frontend\meta.yaml") -Content $frontendMeta
   Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\index\manifest.json") -Content (@{
       git_hash = $headHash
+      source_fingerprints = @{
+        backend = $initialFingerprints.backend.fingerprint
+        frontend = $initialFingerprints.frontend.fingerprint
+        common = $initialFingerprints.common.fingerprint
+      }
+      source_fingerprint_status = @{
+        backend = "complete"
+        frontend = "complete"
+        common = "complete"
+      }
       semantic_status = "pending"
       embeddings_status = "skipped"
-    } | ConvertTo-Json)
+    } | ConvertTo-Json -Depth 8)
 
   Add-Content -LiteralPath (Join-Path $tempRoot "backend\src\main\java\com\frontierscan\article\Article.java") -Value "`n// changed"
   $taskPath = Join-Path $tempRoot ".harness\outputs\kb-refresh-task.json"
@@ -67,12 +102,15 @@ index_status: fresh
   if ($backendTask.command -notmatch '-Area backend -Module article -Mode baseline') {
     throw "Backend refresh command is not module scoped: $($backendTask.command)"
   }
+  if ($backendTask.reason -notmatch 'source fingerprint mismatch') {
+    throw "Backend refresh task did not explain the fingerprint mismatch: $($backendTask.reason)"
+  }
   if (@($task.targets | Where-Object { $_.area -eq "frontend" }).Count -ne 0) {
     throw "Fresh frontend area must not receive a refresh target."
   }
 
   & git -C $tempRoot restore backend
-  $semanticFailureMeta = $metaTemplate.Replace("semantic_status: pending", "semantic_status: failed")
+  $semanticFailureMeta = New-MetaContent -GitHash $headHash -SourceFingerprint $initialFingerprints.backend.fingerprint -SemanticStatus "failed"
   Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\backend\meta.yaml") -Content $semanticFailureMeta
   $semanticTaskPath = Join-Path $tempRoot ".harness\outputs\kb-semantic-refresh-task.json"
   $semanticOutput = & $freshnessScript -Root $tempRoot -Json -WriteRefreshTask -RefreshTaskPath $semanticTaskPath 2>&1
@@ -93,6 +131,53 @@ index_status: fresh
   }
   if ($semanticBackendTask.command -match '-Mode baseline') {
     throw "Semantic failure cannot be repaired by a baseline-only refresh: $($semanticBackendTask.command)"
+  }
+
+  Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\backend\meta.yaml") -Content $backendMeta
+  Add-Content -LiteralPath (Join-Path $tempRoot "backend\src\main\java\com\frontierscan\article\Article.java") -Value "`n// indexed dirty change"
+  $dirtyFingerprints = Get-SourceFingerprints -Root $tempRoot
+  $dirtyBackendMeta = New-MetaContent -GitHash $headHash -SourceFingerprint $dirtyFingerprints.backend.fingerprint
+  Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\backend\meta.yaml") -Content $dirtyBackendMeta
+  $manifestPath = Join-Path $tempRoot "llm-knowledge\index\manifest.json"
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $manifest.source_fingerprints.backend = $dirtyFingerprints.backend.fingerprint
+  Write-Utf8File -Path $manifestPath -Content ($manifest | ConvertTo-Json -Depth 8)
+
+  $dirtyIndexedOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  $dirtyIndexed = ($dirtyIndexedOutput -join "`n") | ConvertFrom-Json
+  if (@($dirtyIndexed.refresh_task.targets | Where-Object { $_.area -eq "backend" }).Count -ne 0) {
+    throw "Regenerated dirty backend incorrectly requires refresh: $($dirtyIndexedOutput -join "`n")"
+  }
+
+  & git -C $tempRoot add backend
+  & git -C $tempRoot commit --quiet -m "commit indexed source"
+  $committedOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  $committed = ($committedOutput -join "`n") | ConvertFrom-Json
+  if (@($committed.refresh_task.targets | Where-Object { $_.area -eq "backend" }).Count -ne 0) {
+    throw "Committing identical indexed source changed freshness: $($committedOutput -join "`n")"
+  }
+
+  Add-Content -LiteralPath $skillFile -Value "`nchanged"
+  $commonOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  $commonResult = ($commonOutput -join "`n") | ConvertFrom-Json
+  $commonTask = @($commonResult.refresh_task.targets | Where-Object { $_.area -eq "common" })[0]
+  if (-not $commonTask) {
+    throw "Common Skill change did not generate a refresh target: $($commonOutput -join "`n")"
+  }
+  if ($commonTask.command -notmatch '-Area all -Mode baseline') {
+    throw "Common refresh command is not repairable: $($commonTask.command)"
+  }
+  if (@($commonResult.refresh_task.targets | Where-Object { $_.area -eq "backend" }).Count -ne 0) {
+    throw "Common Skill change incorrectly affected backend freshness."
+  }
+
+  $legacyBackendMeta = $dirtyBackendMeta -replace '(?m)^source_fingerprint:.*\r?\n', ''
+  Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\backend\meta.yaml") -Content $legacyBackendMeta
+  $legacyOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  $legacyResult = ($legacyOutput -join "`n") | ConvertFrom-Json
+  $legacyBackendTask = @($legacyResult.refresh_task.targets | Where-Object { $_.area -eq "backend" })[0]
+  if (-not $legacyBackendTask -or $legacyBackendTask.mode -ne "baseline") {
+    throw "Legacy metadata without fingerprint did not produce a baseline migration task."
   }
 
   Write-Output "kb-freshness tests passed"

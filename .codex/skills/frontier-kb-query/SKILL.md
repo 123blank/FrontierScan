@@ -22,6 +22,8 @@ Use this Skill when a task needs FrontierScan project knowledge.
 6. Verify the printed `Index freshness` line before relying on results.
 7. Report stale, missing, or scaffold-only knowledge before relying on it.
 
+`Index freshness` compares manifest area fingerprints with current scoped source contents. A Git commit alone does not make knowledge stale. Missing legacy fingerprints, incomplete reads, or content mismatches are stale until baseline regeneration.
+
 ## Query Modes
 
 Read `references/query-modes.md` for mode selection.

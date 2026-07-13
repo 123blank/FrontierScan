@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-The repository now contains implemented structural contracts, deterministic helpers, 13 project-local Skill definitions, a 12-role Agent registry, and a layered knowledge generator. The knowledge generator and query helpers are implemented at V1. The Agent runtime, deterministic phase runner, lifecycle hooks, Worktree execution, and DevOps loop are not implemented.
+The repository now contains implemented structural contracts, deterministic helpers, 13 project-local Skill definitions, a 12-role Agent registry, and a layered knowledge generator. The knowledge generator and query helpers are implemented at V1 with M1.1 content-fingerprint freshness. The Agent runtime, deterministic phase runner, lifecycle hooks, Worktree execution, and DevOps loop are not implemented.
 
 ## Added Structure
 
@@ -147,7 +147,7 @@ Knowledge generation, query, freshness, structural validation, and planning help
 .\.harness\scripts\kb-query.ps1 -Query "<keywords>" -Mode knowledge-qa -Area all
 ```
 
-The V1 query returns source path and freshness metadata. M1 must make index ranking mode-aware and include common/manual/Harness knowledge so broad queries cannot bypass higher-value conventions.
+The query is index-first with Markdown fallback, mode/area-aware ranking, Common/Harness/Skill knowledge ingestion, and source/freshness metadata.
 
 `frontier-kb-generate` now implements layered generation:
 
@@ -156,7 +156,7 @@ The V1 query returns source path and freshness metadata. M1 must make index rank
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode all -DryRun -Json
 ```
 
-The generator produces L1 Markdown/facts, L2 OpenAI semantic documents with graceful degradation, and an L3 local index. Current output covers 7 backend and 7 frontend modules with 105 chunks.
+The generator produces L1 Markdown/facts, L2 OpenAI semantic documents with graceful degradation, and an L3 local index. Current output covers 7 backend and 7 frontend modules plus Common knowledge, with 324 chunks. M1.1 records SHA-256 content fingerprints for area, module, document, chunk, metadata, and manifest isolation.
 
 `frontier-kb-refresh-check` includes freshness guidance and a read-only metadata/source/index check:
 
@@ -164,7 +164,7 @@ The generator produces L1 Markdown/facts, L2 OpenAI semantic documents with grac
 .\.harness\scripts\check-kb-freshness.ps1
 ```
 
-The check reports baseline, semantic, and index status, hash mismatches, missing manifests, and source working-tree changes so stale knowledge is not trusted silently.
+The check reports backend, frontend, and Common baseline/semantic/index status, missing manifests, and source-fingerprint mismatches so stale knowledge is not trusted silently. `git_hash` remains audit metadata; Git or working-tree state is not the freshness authority.
 
 `frontier-requirement-breakdown` now includes basic decomposition guidance and references for:
 
@@ -255,18 +255,11 @@ These templates make future Skill and Agent outputs stable and parseable.
 
 ## Next Implementation Steps
 
-The authoritative roadmap is `docs/harness-m0-m1/PLAN.md`.
+M0, M1, and M1.1 are complete. The authoritative records are `docs/harness-m0-m1/REPORT.md` and `docs/harness-m1-1-source-fingerprint/REPORT.md`.
 
-Immediate M0 + M1 scope:
+The next independent capability is a controlled live L2 semantic-enrichment acceptance using the configured OpenAI environment key. It must verify source-file traceability, model metadata, success output, and graceful degradation without reading or printing credentials or changing business code.
 
-1. Reconcile status documents and registries and remove obsolete empty scaffolds.
-2. Make retrieval mode/area/common/manual aware and surface freshness before trust.
-3. Improve extraction for real frontend API generics and backend resources/config/migrations.
-4. Add module-scoped refresh without rewriting unrelated module artifacts.
-5. Add mocked semantic success/failure/timeout/malformed-output coverage.
-6. Either implement tested embedding retrieval or keep embedding generation disabled.
-
-Only after M1 acceptance should the project implement the deterministic state runtime, single-story vertical slice, runtime Skill/Agent integration, and Worktree parallelism.
+After that acceptance, implement M2 deterministic state runtime: active-run initialization, atomic transitions, evidence gates, locking, blocking/resume, and a single-story recovery test. Do not implement automatic Agent dispatch or parallel Worktree execution before M2 and the single-story vertical slice are stable.
 
 ## Safety Boundaries
 

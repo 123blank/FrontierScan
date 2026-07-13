@@ -9,6 +9,10 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  computeFileSetFingerprint,
+  computeSourceFingerprints,
+} from "./source-fingerprint.mjs";
 
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
 const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
@@ -106,16 +110,6 @@ async function childProcess(command, args, options = {}) {
 async function getGitHash(root) {
   const hash = await childProcess("git", ["-C", root, "rev-parse", "HEAD"]);
   return hash || "unknown";
-}
-
-async function getChangedPaths(root) {
-  const output = await childProcess("git", ["-C", root, "status", "--short", "--untracked-files=all"]);
-  return output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.replace(/^\S{1,2}\s+/, "").replaceAll("\\", "/"))
-    .sort();
 }
 
 function parseClassNames(content) {
@@ -725,8 +719,8 @@ function yamlList(items, indent = 2) {
   return items.map((item) => `${" ".repeat(indent)}- ${item}`).join("\n");
 }
 
-function docHeader({ area, moduleName, docType, generatedAt, gitHash, sourceFiles, layer, semanticStatus, generatedBy = "frontier-kb-generate" }) {
-  return `---\ngenerated_by: ${generatedBy}\nlayer: ${layer}\narea: ${area}\nmodule: ${moduleName}\ndoc_type: ${docType}\ngit_hash: ${gitHash}\ngenerated_at: ${generatedAt}\nbaseline_status: fresh\nsemantic_status: ${semanticStatus}\nsource_files:\n${yamlList(sourceFiles.slice(0, 30), 2)}\n---\n\n`;
+function docHeader({ area, moduleName, docType, generatedAt, gitHash, sourceFingerprint, sourceFiles, layer, semanticStatus, generatedBy = "frontier-kb-generate" }) {
+  return `---\ngenerated_by: ${generatedBy}\nlayer: ${layer}\narea: ${area}\nmodule: ${moduleName}\ndoc_type: ${docType}\ngit_hash: ${gitHash}\nsource_fingerprint: ${sourceFingerprint}\ngenerated_at: ${generatedAt}\nbaseline_status: fresh\nsemantic_status: ${semanticStatus}\nsource_files:\n${yamlList(sourceFiles.slice(0, 30), 2)}\n---\n\n`;
 }
 
 function bullet(items, emptyText = "暂无自动识别结果。") {
@@ -966,6 +960,7 @@ function createChunk(entry, module, context) {
     text: compact,
     source_files: module.facts.source_files,
     git_hash: context.gitHash,
+    source_fingerprint: module.sourceFingerprint,
     generated_at: context.generatedAt,
     baseline_status: "fresh",
     semantic_status: context.semanticStatus,
@@ -1031,6 +1026,7 @@ async function createCuratedFileChunks(root, filePath, metadata, context) {
     text,
     source_files: [relativeFile],
     git_hash: context.gitHash,
+    source_fingerprint: context.areaFingerprints[metadata.area]?.fingerprint ?? "",
     generated_at: context.generatedAt,
     baseline_status: "curated",
     semantic_status: "not-applicable",
@@ -1082,8 +1078,7 @@ async function discoverCuratedChunks(root, area, context) {
   }));
 
   const skillRoot = path.join(root, ".codex", "skills");
-  const skillFiles = (await listFiles(skillRoot, [".md"]))
-    .filter((file) => path.basename(file).toLowerCase() === "skill.md");
+  const skillFiles = await listFiles(skillRoot, [".md", ".yaml", ".yml"]);
   await addFiles(skillFiles, () => ({
     area: "common",
     module: "project-skills",
@@ -1140,6 +1135,7 @@ function parseGeneratedDocumentMeta(content) {
   const value = (name) => frontmatter.match(new RegExp(`^${name}:\\s*(.+)$`, "m"))?.[1]?.trim().replace(/^"|"$/g, "") ?? "";
   return {
     gitHash: value("git_hash"),
+    sourceFingerprint: value("source_fingerprint"),
     generatedAt: value("generated_at"),
     baselineStatus: value("baseline_status"),
     semanticStatus: value("semantic_status"),
@@ -1151,40 +1147,38 @@ async function readGeneratedDocumentMeta(filePath) {
   return parseGeneratedDocumentMeta(await readText(filePath));
 }
 
-function normalizedDocumentStatus(status, documentHash, currentHash, sourceChanged, missingStatus) {
+function normalizedDocumentStatus(status, documentFingerprint, currentFingerprint, missingStatus) {
   if (!status) return missingStatus;
-  if (sourceChanged) return "stale";
-  if (status === "fresh" && documentHash && currentHash !== "unknown" && documentHash !== currentHash) return "stale";
+  if (status === "fresh" && (
+    !documentFingerprint
+    || currentFingerprint.status !== "complete"
+    || documentFingerprint !== currentFingerprint.fingerprint
+  )) return "stale";
   return status;
 }
 
-async function collectModuleFreshness(root, module, currentHash, changedPaths) {
+async function collectModuleFreshness(root, module) {
   const baseline = await readGeneratedDocumentMeta(moduleDocPath(root, module.area, module.name, "overview.md"));
   const semantic = await readGeneratedDocumentMeta(moduleDocPath(root, module.area, module.name, "semantic.md"));
-  const trackedSources = [
-    ...module.facts.source_files,
-    ...(module.facts.resources ?? []).map((resource) => resource.file),
-  ];
-  const sourceChanged = trackedSources.some((sourceFile) => changedPaths.includes(sourceFile));
   const baselineStatus = normalizedDocumentStatus(
     baseline?.baselineStatus,
-    baseline?.gitHash,
-    currentHash,
-    sourceChanged,
+    baseline?.sourceFingerprint,
+    module.sourceFingerprintResult,
     "missing"
   );
   const semanticStatus = normalizedDocumentStatus(
     semantic?.semanticStatus,
-    semantic?.gitHash,
-    currentHash,
-    sourceChanged,
+    semantic?.sourceFingerprint,
+    module.sourceFingerprintResult,
     "pending"
   );
   return {
     baselineGitHash: baseline?.gitHash ?? "",
+    baselineSourceFingerprint: baseline?.sourceFingerprint ?? "",
     baselineGeneratedAt: baseline?.generatedAt ?? "",
     baselineStatus,
     semanticGitHash: semantic?.gitHash ?? "",
+    semanticSourceFingerprint: semantic?.sourceFingerprint ?? "",
     semanticGeneratedAt: semantic?.generatedAt ?? "",
     semanticStatus,
     indexStatus: baselineStatus === "fresh" ? "fresh" : "partial",
@@ -1206,9 +1200,7 @@ function aggregateDocumentSemanticStatus(moduleFreshness) {
   return "pending";
 }
 
-function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, changedPaths, baselineStatus, semanticStatus, indexStatus, model, embeddingModel }) {
-  const sourcePrefix = area === "backend" ? "backend/" : "frontend/";
-  const sourceChanged = changedPaths.some((item) => item.startsWith(sourcePrefix));
+function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, sourceFingerprint, baselineStatus, semanticStatus, indexStatus, model, embeddingModel }) {
   const technology = area === "backend"
     ? [
         "  language: Java 17",
@@ -1232,11 +1224,13 @@ function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, c
     `root_path: ${area}`,
     `generated_at: "${generatedAt}"`,
     `git_hash: "${gitHash}"`,
-    `status: ${sourceChanged || baselineStatus !== "fresh" || indexStatus !== "fresh" ? "partial" : "fresh"}`,
+    `source_fingerprint: "${sourceFingerprint.fingerprint}"`,
+    `source_fingerprint_status: ${sourceFingerprint.status}`,
+    `status: ${sourceFingerprint.status !== "complete" || baselineStatus !== "fresh" || indexStatus !== "fresh" ? "partial" : "fresh"}`,
     `baseline_status: ${baselineStatus}`,
     `semantic_status: ${semanticStatus}`,
     `index_status: ${indexStatus}`,
-    `source_changed: ${sourceChanged}`,
+    `source_changed: ${baselineStatus !== "fresh"}`,
     `semantic_model: "${model}"`,
     `embedding_model: "${embeddingModel}"`,
     "technology:",
@@ -1257,9 +1251,11 @@ function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, c
     lines.push(`      facts: llm-knowledge/${area}/modules/${module.name}/facts.json`);
     lines.push("    freshness:");
     lines.push(`      git_hash: "${freshness.baselineGitHash}"`);
+    lines.push(`      baseline_source_fingerprint: "${freshness.baselineSourceFingerprint}"`);
     lines.push(`      generated_at: "${freshness.baselineGeneratedAt}"`);
     lines.push(`      baseline_status: ${freshness.baselineStatus}`);
     lines.push(`      semantic_git_hash: "${freshness.semanticGitHash}"`);
+    lines.push(`      semantic_source_fingerprint: "${freshness.semanticSourceFingerprint}"`);
     lines.push(`      semantic_generated_at: "${freshness.semanticGeneratedAt}"`);
     lines.push(`      semantic_status: ${freshness.semanticStatus}`);
     lines.push(`      index_status: ${freshness.indexStatus}`);
@@ -1267,12 +1263,14 @@ function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, c
   return `${lines.join("\n")}\n`;
 }
 
-function buildIndexManifest({ root, chunks, generatedAt, gitHash, areas, semanticStatus, embeddingsStatus, embeddingModel }) {
+function buildIndexManifest({ chunks, generatedAt, gitHash, areas, semanticStatus, embeddingsStatus, embeddingModel, indexedFingerprints }) {
   return {
     schema_version: "1.0",
     generated_by: "frontier-kb-generate",
     generated_at: generatedAt,
     git_hash: gitHash,
+    source_fingerprints: indexedFingerprints.values,
+    source_fingerprint_status: indexedFingerprints.statuses,
     areas,
     chunk_count: chunks.length,
     semantic_status: semanticStatus,
@@ -1323,6 +1321,49 @@ async function readExistingIndexChunks(indexRoot) {
   }
 }
 
+async function readExistingIndexManifest(indexRoot) {
+  const manifestPath = path.join(indexRoot, "manifest.json");
+  if (!existsSync(manifestPath)) return {};
+  try {
+    return JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function buildIndexedFingerprints({ modules, chunks, currentFingerprints, existingManifest }) {
+  const values = {};
+  const statuses = {};
+  for (const area of ["backend", "frontend"]) {
+    const areaModules = modules.filter((module) => module.area === area);
+    if (!areaModules.length) {
+      values[area] = existingManifest.source_fingerprints?.[area] ?? null;
+      statuses[area] = existingManifest.source_fingerprint_status?.[area] ?? "missing";
+      continue;
+    }
+    const allModulesCurrent = areaModules.every((module) => {
+      const baselineChunks = chunks.filter((chunk) => (
+        chunk.area === area
+        && chunk.module === module.name
+        && chunk.baseline_status === "fresh"
+        && chunk.doc_type !== "semantic"
+      ));
+      return baselineChunks.length > 0
+        && baselineChunks.every((chunk) => chunk.source_fingerprint === module.sourceFingerprint);
+    });
+    const complete = currentFingerprints[area].status === "complete" && allModulesCurrent;
+    values[area] = complete ? currentFingerprints[area].fingerprint : null;
+    statuses[area] = complete ? "complete" : "partial";
+  }
+
+  const commonChunks = chunks.filter((chunk) => chunk.area === "common");
+  const commonComplete = currentFingerprints.common.status === "complete"
+    && commonChunks.every((chunk) => chunk.source_fingerprint === currentFingerprints.common.fingerprint);
+  values.common = commonComplete ? currentFingerprints.common.fingerprint : null;
+  statuses.common = commonComplete ? "complete" : "partial";
+  return { values, statuses };
+}
+
 async function discoverModules(root, area, readTextImpl = readText) {
   const modules = [];
   const scanResults = {};
@@ -1363,9 +1404,16 @@ export async function runGenerateKnowledge(options = {}) {
   const env = options.env ?? process.env;
   const generatedAt = new Date().toISOString();
   const gitHash = await getGitHash(root);
-  const changedPaths = await getChangedPaths(root);
   const discovery = await discoverModules(root, area, options.readTextImpl ?? readText);
   const discoveredModules = discovery.modules;
+  const currentFingerprints = await computeSourceFingerprints(root, ["backend", "frontend", "common"]);
+  for (const module of discoveredModules) {
+    module.sourceFingerprintResult = await computeFileSetFingerprint(root, [
+      ...module.facts.source_files,
+      ...(module.facts.resources ?? []).map((resource) => resource.file),
+    ]);
+    module.sourceFingerprint = module.sourceFingerprintResult.fingerprint;
+  }
   const modules = moduleName
     ? discoveredModules.filter((module) => module.name === moduleName)
     : discoveredModules;
@@ -1397,6 +1445,7 @@ export async function runGenerateKnowledge(options = {}) {
       root,
       generatedAt,
       gitHash,
+      sourceFingerprint: module.sourceFingerprint,
       semanticStatus: "pending",
     };
     let semanticContent = null;
@@ -1470,14 +1519,20 @@ export async function runGenerateKnowledge(options = {}) {
       root,
       gitHash,
       generatedAt,
+      sourceFingerprint: entry.moduleObject.sourceFingerprint,
       semanticStatus: entry.docType === "semantic" ? (entry.content.match(/semantic_status:\s*(\w+)/)?.[1] ?? "pending") : "pending",
     }));
   }
 
-  const curatedChunks = await discoverCuratedChunks(root, area, { gitHash, generatedAt });
+  const curatedChunks = await discoverCuratedChunks(root, area, {
+    gitHash,
+    generatedAt,
+    areaFingerprints: currentFingerprints,
+  });
 
   const indexRoot = path.join(root, "llm-knowledge", "index");
   const existingChunks = await readExistingIndexChunks(indexRoot);
+  const existingManifest = await readExistingIndexManifest(indexRoot);
   const preservedChunks = existingChunks.filter((chunk) => {
     if (!selectedAreas.includes(chunk.area)) return true;
     if (moduleName && chunk.module !== moduleName) return true;
@@ -1504,7 +1559,22 @@ export async function runGenerateKnowledge(options = {}) {
     };
   }
 
-  const manifest = buildIndexManifest({ root, chunks: indexChunks, generatedAt, gitHash, areas: indexAreas, semanticStatus, embeddingsStatus, embeddingModel });
+  const indexedFingerprints = buildIndexedFingerprints({
+    modules: discoveredModules,
+    chunks: indexChunks,
+    currentFingerprints,
+    existingManifest,
+  });
+  const manifest = buildIndexManifest({
+    chunks: indexChunks,
+    generatedAt,
+    gitHash,
+    areas: indexAreas,
+    semanticStatus,
+    embeddingsStatus,
+    embeddingModel,
+    indexedFingerprints,
+  });
   await writePlanned(result, path.join(indexRoot, "chunks.json"), `${JSON.stringify(indexChunks, null, 2)}\n`, dryRun);
   await writePlanned(result, path.join(indexRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, dryRun);
 
@@ -1512,13 +1582,11 @@ export async function runGenerateKnowledge(options = {}) {
     const areaModules = (moduleName ? discoveredModules : modules)
       .filter((module) => module.area === selectedArea);
     const moduleFreshness = await Promise.all(
-      areaModules.map((module) => collectModuleFreshness(root, module, gitHash, changedPaths))
+      areaModules.map((module) => collectModuleFreshness(root, module))
     );
     const areaBaselineStatus = aggregateBaselineStatus(moduleFreshness);
     const areaSemanticStatus = aggregateDocumentSemanticStatus(moduleFreshness);
-    const areaIndexStatus = moduleFreshness.every((freshness) => freshness.indexStatus === "fresh")
-      ? "fresh"
-      : "partial";
+    const areaIndexStatus = indexedFingerprints.statuses[selectedArea] === "complete" ? "fresh" : "partial";
     const sourceCoverage = await buildSourceCoverage(
       root,
       selectedArea,
@@ -1539,7 +1607,7 @@ export async function runGenerateKnowledge(options = {}) {
       moduleFreshness,
       generatedAt,
       gitHash,
-      changedPaths,
+      sourceFingerprint: currentFingerprints[selectedArea],
       baselineStatus: areaBaselineStatus,
       semanticStatus: areaSemanticStatus,
       indexStatus: areaIndexStatus,

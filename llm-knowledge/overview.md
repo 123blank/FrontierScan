@@ -25,9 +25,9 @@ Current knowledge status:
 
 | Layer | Status | Evidence |
 | --- | --- | --- |
-| L1 deterministic baseline | `fresh` | 7 backend modules and 7 frontend modules with Markdown + `facts.json` |
-| L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call was requested |
-| L3 local index | `fresh` | 186 generated and curated keyword/metadata chunks in `index/chunks.json` |
+| L1 deterministic baseline | `fresh` | 7 backend modules, 7 frontend modules, and Common knowledge with Markdown + `facts.json` |
+| L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call has completed controlled acceptance |
+| L3 local index | `fresh` | 324 generated and curated keyword/metadata chunks in `index/chunks.json` |
 | Optional embeddings | `disabled` | Write-only vectors are blocked until a tested retrieval consumer exists |
 
 Current limitations:
@@ -39,5 +39,5 @@ Current limitations:
 
 Trust rule:
 
-- Always inspect `baseline_status`, `semantic_status`, `index_status`, and source references.
+- Always inspect `baseline_status`, `semantic_status`, `index_status`, `source_fingerprint`, and source references.
 - Treat L1 as traceable static facts and L2 as optional interpretation; verify security and business semantics against cited source files.

@@ -143,3 +143,9 @@ Post-review real-project evidence:
 | Business source audit | No changes under `backend/src` or `frontend/src` |
 
 The Common query correctly reports stale while the current `.codex/skills` changes remain uncommitted. This is an explicit working-tree freshness signal, not a smoke-test failure.
+
+## 10. M1.1 Supersession Note
+
+This report preserves the M0/M1 implementation evidence as recorded on 2026-07-11. Its Git-hash and working-tree freshness wording is superseded by the completed M1.1 source-fingerprint capability; the current authority is [`docs/harness-m1-1-source-fingerprint/REPORT.md`](../harness-m1-1-source-fingerprint/REPORT.md).
+
+The current freshness authority is deterministic SHA-256 source content for backend, frontend, and Common. `git_hash` is audit-only, and Git/working-tree status no longer decides fresh or stale. M1.1 also adds Common knowledge/index freshness, module-level fingerprints, legacy fail-closed migration behavior, and 324 current index chunks. This report's 186-chunk count and its final Common working-tree-stale observation are historical evidence, not current project status.

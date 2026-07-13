@@ -2,7 +2,17 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
 $queryScript = Join-Path $repoRoot ".harness\scripts\kb-query.ps1"
+$fingerprintScript = Join-Path $repoRoot ".harness\scripts\lib\source-fingerprint.mjs"
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("frontier-kb-query-test-" + [System.Guid]::NewGuid().ToString("N"))
+
+function Get-SourceFingerprints {
+  param([string]$Root)
+  $output = & node $fingerprintScript --root $Root --area all --json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "source-fingerprint exited with code ${LASTEXITCODE}: $($output -join "`n")"
+  }
+  return ($output -join "`n") | ConvertFrom-Json
+}
 
 try {
   $defaultRootOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $queryScript -Query "quality gate" -Mode knowledge-qa -Area all -MaxMatches 1 2>&1
@@ -16,16 +26,22 @@ try {
   $indexRoot = Join-Path $tempRoot "llm-knowledge\index"
   New-Item -ItemType Directory -Path $indexRoot -Force | Out-Null
   New-Item -ItemType Directory -Path (Join-Path $tempRoot "llm-knowledge\backend") -Force | Out-Null
+  New-Item -ItemType Directory -Path (Join-Path $tempRoot "llm-knowledge\common") -Force | Out-Null
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   $sourceFile = Join-Path $tempRoot "backend\src\main\java\com\frontierscan\article\ArticleController.java"
+  $skillFile = Join-Path $tempRoot ".codex\skills\frontier-test\SKILL.md"
   New-Item -ItemType Directory -Path (Split-Path -Parent $sourceFile) -Force | Out-Null
+  New-Item -ItemType Directory -Path (Split-Path -Parent $skillFile) -Force | Out-Null
   [System.IO.File]::WriteAllText($sourceFile, "class ArticleController {}", $utf8NoBom)
+  [System.IO.File]::WriteAllText((Join-Path $tempRoot "AGENTS.md"), "# Fixture rules", $utf8NoBom)
+  [System.IO.File]::WriteAllText($skillFile, "# Fixture skill", $utf8NoBom)
   & git -C $tempRoot init --quiet
   & git -C $tempRoot config user.email "fixture@example.com"
   & git -C $tempRoot config user.name "Fixture"
-  & git -C $tempRoot add backend
+  & git -C $tempRoot add backend AGENTS.md .codex
   & git -C $tempRoot commit --quiet -m "fixture"
   $headHash = (& git -C $tempRoot rev-parse HEAD).Trim()
+  $initialFingerprints = Get-SourceFingerprints -Root $tempRoot
 
   $chunkObjects = @(
     [pscustomobject]@{
@@ -84,10 +100,20 @@ try {
   $manifest = [pscustomobject]@{
     schema_version = "1.0"
     git_hash = $headHash
+    source_fingerprints = [pscustomobject]@{
+      backend = $initialFingerprints.backend.fingerprint
+      frontend = $initialFingerprints.frontend.fingerprint
+      common = $initialFingerprints.common.fingerprint
+    }
+    source_fingerprint_status = [pscustomobject]@{
+      backend = "complete"
+      frontend = "complete"
+      common = "complete"
+    }
     chunk_count = $chunkObjects.Count
     semantic_status = "pending"
     embeddings_status = "disabled"
-  } | ConvertTo-Json -Depth 4
+  } | ConvertTo-Json -Depth 8
   [System.IO.File]::WriteAllText((Join-Path $indexRoot "manifest.json"), $manifest, $utf8NoBom)
 
   $output = & $queryScript -Root $tempRoot -Query "ArticleController" -Mode api-search -Area backend 2>&1
@@ -103,7 +129,7 @@ try {
     throw "kb-query did not return expected match. Output:`n${joined}"
   }
 
-  $qualityOutput = & $queryScript -Root $tempRoot -Query "quality gate" -Mode knowledge-qa -Area all 2>&1
+  $qualityOutput = & $queryScript -Root $tempRoot -Query "quality gate" -Mode knowledge-qa -Area common 2>&1
   $qualityJoined = $qualityOutput -join "`n"
   if ($qualityJoined -notmatch "Index freshness: fresh") {
     throw "kb-query did not surface index freshness. Output:`n${qualityJoined}"
@@ -119,8 +145,46 @@ try {
   if ($dirtyJoined -notmatch "Index freshness: stale") {
     throw "kb-query treated dirty backend source as fresh. Output:`n${dirtyJoined}"
   }
-  if ($dirtyJoined -notmatch "working-tree source changes") {
-    throw "kb-query did not explain the dirty-source freshness failure. Output:`n${dirtyJoined}"
+  if ($dirtyJoined -notmatch "source fingerprint mismatch") {
+    throw "kb-query did not explain the source fingerprint mismatch. Output:`n${dirtyJoined}"
+  }
+
+  $dirtyFingerprints = Get-SourceFingerprints -Root $tempRoot
+  $manifestObject = Get-Content -LiteralPath (Join-Path $indexRoot "manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+  $manifestObject.source_fingerprints.backend = $dirtyFingerprints.backend.fingerprint
+  [System.IO.File]::WriteAllText(
+    (Join-Path $indexRoot "manifest.json"),
+    ($manifestObject | ConvertTo-Json -Depth 8),
+    $utf8NoBom
+  )
+  $regeneratedDirtyOutput = & $queryScript -Root $tempRoot -Query "ArticleController" -Mode api-search -Area backend 2>&1
+  if (($regeneratedDirtyOutput -join "`n") -notmatch "Index freshness: fresh") {
+    throw "Regenerated dirty source did not become fresh. Output:`n$($regeneratedDirtyOutput -join "`n")"
+  }
+
+  & git -C $tempRoot add backend
+  & git -C $tempRoot commit --quiet -m "commit indexed source"
+  $committedOutput = & $queryScript -Root $tempRoot -Query "ArticleController" -Mode api-search -Area backend 2>&1
+  if (($committedOutput -join "`n") -notmatch "Index freshness: fresh") {
+    throw "Committing identical indexed content changed freshness. Output:`n$($committedOutput -join "`n")"
+  }
+
+  New-Item -ItemType Directory -Path (Join-Path $tempRoot "docs") -Force | Out-Null
+  [System.IO.File]::WriteAllText((Join-Path $tempRoot "docs\note.md"), "ignored docs change", $utf8NoBom)
+  $docsOutput = & $queryScript -Root $tempRoot -Query "ArticleController" -Mode api-search -Area backend 2>&1
+  if (($docsOutput -join "`n") -notmatch "Index freshness: fresh") {
+    throw "Out-of-scope docs change affected backend freshness. Output:`n$($docsOutput -join "`n")"
+  }
+
+  Add-Content -LiteralPath $skillFile -Value "`nchanged"
+  $commonDirtyOutput = & $queryScript -Root $tempRoot -Query "quality gate" -Mode knowledge-qa -Area common 2>&1
+  $commonDirtyJoined = $commonDirtyOutput -join "`n"
+  if ($commonDirtyJoined -notmatch "Index freshness: stale" -or $commonDirtyJoined -notmatch "source fingerprint mismatch") {
+    throw "Skill change did not make Common stale. Output:`n${commonDirtyJoined}"
+  }
+  $backendAfterSkillOutput = & $queryScript -Root $tempRoot -Query "ArticleController" -Mode api-search -Area backend 2>&1
+  if (($backendAfterSkillOutput -join "`n") -notmatch "Index freshness: fresh") {
+    throw "Skill change incorrectly affected backend freshness. Output:`n$($backendAfterSkillOutput -join "`n")"
   }
 
   $apiOutput = & $queryScript -Root $tempRoot -Query "articles" -Mode api-search -Area backend 2>&1

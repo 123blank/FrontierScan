@@ -12,6 +12,30 @@ function Invoke-RepoGit {
   & git -C $Root @Arguments
 }
 
+function Get-CurrentSourceFingerprints {
+  $fingerprintScript = Join-Path $PSScriptRoot "lib\source-fingerprint.mjs"
+  if (-not (Test-Path -LiteralPath $fingerprintScript)) {
+    throw "Source fingerprint engine not found: ${fingerprintScript}"
+  }
+  $output = & node $fingerprintScript --root $Root --area all --json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Source fingerprint engine failed: $($output -join ' ')"
+  }
+  return ($output -join "`n") | ConvertFrom-Json
+}
+
+function Get-ObjectPropertyValue {
+  param(
+    [object]$Object,
+    [string]$Name,
+    [object]$DefaultValue = $null
+  )
+  if (-not $Object) { return $DefaultValue }
+  $property = $Object.PSObject.Properties[$Name]
+  if ($property) { return $property.Value }
+  return $DefaultValue
+}
+
 function Get-MetaValue {
   param(
     [string[]]$Lines,
@@ -42,21 +66,6 @@ function Get-PathFromStatusLine {
   return $path.Trim('"').Replace("\", "/")
 }
 
-function Test-AnyChangedPath {
-  param(
-    [string[]]$Paths,
-    [string]$Prefix
-  )
-
-  foreach ($path in $Paths) {
-    if ($path.StartsWith($Prefix)) {
-      return $true
-    }
-  }
-
-  return $false
-}
-
 function Get-ChangedModules {
   param(
     [string[]]$Paths,
@@ -82,11 +91,9 @@ function Get-RefreshMode {
   $semanticNeedsRefresh = $Finding.semantic_status -and $Finding.semantic_status -notin @("fresh", "pending")
   $baselineOrIndexNeedsRefresh = $Finding.status -eq "missing-meta" -or
     $Finding.source_changed -or
-    [string]::IsNullOrWhiteSpace($Finding.recorded_git_hash) -or
-    $Finding.recorded_git_hash -ne $Finding.current_git_hash -or
     ($Finding.baseline_status -and $Finding.baseline_status -ne "fresh") -or
     ($Finding.index_status -and $Finding.index_status -ne "fresh") -or
-    $Finding.reason -match "generated_at|knowledge index manifest|index\.git_hash"
+    $Finding.reason -match "generated_at|knowledge index manifest|source fingerprint"
 
   if ($semanticNeedsRefresh -and $baselineOrIndexNeedsRefresh) {
     return "all"
@@ -106,6 +113,19 @@ $changedPaths = @(
   Invoke-RepoGit -Arguments @("status", "--short", "--untracked-files=all") |
     ForEach-Object { Get-PathFromStatusLine -Line $_ }
 ) | Where-Object { $_ } | Sort-Object -Unique
+$currentFingerprints = Get-CurrentSourceFingerprints
+$indexManifestPath = Join-Path $Root "llm-knowledge\index\manifest.json"
+$manifest = $null
+$manifestError = ""
+if (-not (Test-Path -LiteralPath $indexManifestPath)) {
+  $manifestError = "knowledge index manifest is missing"
+} else {
+  try {
+    $manifest = Get-Content -LiteralPath $indexManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  } catch {
+    $manifestError = "knowledge index manifest is invalid"
+  }
+}
 
 $areas = @(
   [pscustomobject]@{
@@ -129,25 +149,38 @@ foreach ($area in $areas) {
       reason = "Meta file is missing."
       recorded_git_hash = ""
       current_git_hash = $headHash
-      source_changed = Test-AnyChangedPath -Paths $changedPaths -Prefix $area.source_prefix
+      recorded_source_fingerprint = ""
+      current_source_fingerprint = (Get-ObjectPropertyValue -Object $currentFingerprints -Name $area.name).fingerprint
+      source_changed = $true
+      baseline_status = "missing"
+      semantic_status = "pending"
+      index_status = "missing"
     }
     continue
   }
 
   $lines = @(Get-Content -LiteralPath $area.meta -Encoding UTF8)
   $recordedHash = Get-MetaValue -Lines $lines -Name "git_hash"
+  $recordedSourceFingerprint = Get-MetaValue -Lines $lines -Name "source_fingerprint"
+  $recordedSourceFingerprintStatus = Get-MetaValue -Lines $lines -Name "source_fingerprint_status"
   $generatedAt = Get-MetaValue -Lines $lines -Name "generated_at"
   $status = Get-MetaValue -Lines $lines -Name "status"
   $baselineStatus = Get-MetaValue -Lines $lines -Name "baseline_status"
   $semanticStatus = Get-MetaValue -Lines $lines -Name "semantic_status"
   $indexStatus = Get-MetaValue -Lines $lines -Name "index_status"
-  $sourceChanged = Test-AnyChangedPath -Paths $changedPaths -Prefix $area.source_prefix
+  $currentSourceFingerprint = Get-ObjectPropertyValue -Object $currentFingerprints -Name $area.name
+  $sourceChanged = [string]::IsNullOrWhiteSpace($recordedSourceFingerprint) -or
+    $recordedSourceFingerprintStatus -ne "complete" -or
+    $currentSourceFingerprint.status -ne "complete" -or
+    $recordedSourceFingerprint -ne $currentSourceFingerprint.fingerprint
 
   $reasons = @()
-  if ([string]::IsNullOrWhiteSpace($recordedHash)) {
-    $reasons += "freshness.git_hash is empty"
-  } elseif ($recordedHash -ne $headHash) {
-    $reasons += "freshness.git_hash differs from current HEAD"
+  if ([string]::IsNullOrWhiteSpace($recordedSourceFingerprint)) {
+    $reasons += "source fingerprint missing for $($area.name)"
+  } elseif ($recordedSourceFingerprintStatus -ne "complete" -or $currentSourceFingerprint.status -ne "complete") {
+    $reasons += "source fingerprint incomplete for $($area.name)"
+  } elseif ($recordedSourceFingerprint -ne $currentSourceFingerprint.fingerprint) {
+    $reasons += "source fingerprint mismatch for $($area.name)"
   }
 
   if ([string]::IsNullOrWhiteSpace($generatedAt)) {
@@ -170,21 +203,17 @@ foreach ($area in $areas) {
     $reasons += "index_status is '${indexStatus}'"
   }
 
-  if ($sourceChanged) {
-    $reasons += "source files have working-tree changes"
-  }
-
-  $indexManifest = Join-Path $Root "llm-knowledge\index\manifest.json"
-  if (-not (Test-Path -LiteralPath $indexManifest)) {
-    $reasons += "knowledge index manifest is missing"
+  if ($manifestError) {
+    $reasons += $manifestError
   } else {
-    try {
-      $manifest = Get-Content -LiteralPath $indexManifest -Raw -Encoding UTF8 | ConvertFrom-Json
-      if ($manifest.git_hash -ne $headHash) {
-        $reasons += "index.git_hash differs from current HEAD"
-      }
-    } catch {
-      $reasons += "knowledge index manifest is invalid"
+    $indexedFingerprint = [string](Get-ObjectPropertyValue -Object $manifest.source_fingerprints -Name $area.name -DefaultValue "")
+    $indexedStatus = [string](Get-ObjectPropertyValue -Object $manifest.source_fingerprint_status -Name $area.name -DefaultValue "missing")
+    if ([string]::IsNullOrWhiteSpace($indexedFingerprint)) {
+      $reasons += "index source fingerprint missing for $($area.name)"
+    } elseif ($indexedStatus -ne "complete") {
+      $reasons += "index source fingerprint incomplete for $($area.name)"
+    } elseif ($indexedFingerprint -ne $currentSourceFingerprint.fingerprint) {
+      $reasons += "index source fingerprint mismatch for $($area.name)"
     }
   }
 
@@ -194,6 +223,8 @@ foreach ($area in $areas) {
     reason = if ($reasons.Count -eq 0) { "Freshness metadata matches current repository state." } else { $reasons -join "; " }
     recorded_git_hash = $recordedHash
     current_git_hash = $headHash
+    recorded_source_fingerprint = $recordedSourceFingerprint
+    current_source_fingerprint = $currentSourceFingerprint.fingerprint
     source_changed = $sourceChanged
     baseline_status = $baselineStatus
     semantic_status = $semanticStatus
@@ -201,11 +232,43 @@ foreach ($area in $areas) {
   }
 }
 
+$commonCurrent = Get-ObjectPropertyValue -Object $currentFingerprints -Name "common"
+$commonRecorded = if ($manifest) { [string](Get-ObjectPropertyValue -Object $manifest.source_fingerprints -Name "common" -DefaultValue "") } else { "" }
+$commonRecordedStatus = if ($manifest) { [string](Get-ObjectPropertyValue -Object $manifest.source_fingerprint_status -Name "common" -DefaultValue "missing") } else { "missing" }
+$commonReasons = @()
+if ($manifestError) {
+  $commonReasons += $manifestError
+} elseif ([string]::IsNullOrWhiteSpace($commonRecorded)) {
+  $commonReasons += "source fingerprint missing for common"
+} elseif ($commonRecordedStatus -ne "complete" -or $commonCurrent.status -ne "complete") {
+  $commonReasons += "source fingerprint incomplete for common"
+} elseif ($commonRecorded -ne $commonCurrent.fingerprint) {
+  $commonReasons += "source fingerprint mismatch for common"
+}
+$findings += [pscustomobject]@{
+  area = "common"
+  status = if ($commonReasons.Count -eq 0) { "fresh" } else { "stale-or-incomplete" }
+  reason = if ($commonReasons.Count -eq 0) { "Freshness metadata matches current repository state." } else { $commonReasons -join "; " }
+  recorded_git_hash = if ($manifest) { [string]$manifest.git_hash } else { "" }
+  current_git_hash = $headHash
+  recorded_source_fingerprint = $commonRecorded
+  current_source_fingerprint = $commonCurrent.fingerprint
+  source_changed = $commonReasons.Count -gt 0
+  baseline_status = if ($commonReasons.Count -eq 0) { "fresh" } else { "stale" }
+  semantic_status = "pending"
+  index_status = if ($commonReasons.Count -eq 0) { "fresh" } else { "partial" }
+}
+
 $refreshTargets = @(
   foreach ($finding in $findings | Where-Object { $_.status -ne "fresh" }) {
-    $modules = @(Get-ChangedModules -Paths $changedPaths -Area $finding.area)
+    $modules = @()
+    if ($finding.area -ne "common") {
+      $modules = @(Get-ChangedModules -Paths $changedPaths -Area $finding.area)
+    }
     $mode = Get-RefreshMode -Finding $finding
-    $command = if ($mode -ne "semantic" -and $modules.Count -eq 1) {
+    $command = if ($finding.area -eq "common") {
+      ".\.harness\scripts\generate-kb.ps1 -Area all -Mode baseline"
+    } elseif ($mode -ne "semantic" -and $modules.Count -eq 1) {
       ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Module $($modules[0]) -Mode $mode"
     } else {
       ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Mode $mode"

@@ -29,7 +29,8 @@ L0 source truth -> L1 deterministic baseline -> L2 OpenAI semantic enrichment ->
 
 5. Use `OPENAI_API_KEY` and `OPENAI_MODEL` only for L2 semantic enrichment. The response must pass the generator's strict semantic schema.
 6. Preserve all `custom/` notes and append generation notes to `log.md`.
-7. Run freshness and query checks:
+7. Record deterministic area/module `source_fingerprint` values. Treat `git_hash` as audit metadata, not the freshness authority.
+8. Run freshness and query checks:
 
 ```powershell
 .\.harness\scripts\check-kb-freshness.ps1
@@ -65,4 +66,5 @@ L0 source truth -> L1 deterministic baseline -> L2 OpenAI semantic enrichment ->
 - Do not read `.env`, shell history, private local config, or untracked secret files.
 - Do not regenerate broad knowledge when the current task needs only one module unless asked.
 - Mark generated docs as stale, partial, pending, or failed when source files changed or OpenAI enrichment is incomplete.
+- A module refresh must not advance the area index fingerprint until every module baseline chunk matches current source fingerprints.
 - OpenAI semantic enrichment is for knowledge generation only; it must not modify business code or perform delivery actions.

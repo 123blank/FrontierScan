@@ -17,12 +17,12 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | State validation script | `.harness/scripts/validate-state.ps1` | Basic read-only validation done |
 | Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | Basic read-only validation done |
 | KB query script | `.harness/scripts/kb-query.ps1` | Index-first query with Markdown fallback implemented V1 |
-| KB generate script | `.harness/scripts/generate-kb.ps1` + `lib/generate-kb.mjs` | Knowledge Reliability V2: module refresh, deep facts, semantic schema, curated index |
-| KB regression tests | `.harness/scripts/tests/` | Generator, query, freshness, and status tests implemented |
+| KB generate script | `.harness/scripts/generate-kb.ps1` + `lib/generate-kb.mjs` + `lib/source-fingerprint.mjs` | Knowledge Reliability V2 plus M1.1 deterministic content fingerprints |
+| KB regression tests | `.harness/scripts/tests/` | Source-fingerprint, generator, query, freshness, and status tests implemented |
 | Diff context script | `.harness/scripts/collect-diff-context.ps1` | Basic read-only diff summary done |
 | Test selection script | `.harness/scripts/select-tests.ps1` | Basic read-only path-based gate selection done |
 | Knowledge input scan script | `.harness/scripts/scan-knowledge-inputs.ps1` | Basic read-only source structure scan done |
-| Knowledge freshness script | `.harness/scripts/check-kb-freshness.ps1` | Baseline/Semantic/Index/source/manifest freshness check implemented V1 |
+| Knowledge freshness script | `.harness/scripts/check-kb-freshness.ps1` | Backend/frontend/Common baseline, semantic, index, and content-fingerprint freshness check implemented |
 | Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | Basic read-only DAG-to-worktree plan done |
 | Interface case derivation script | `.harness/scripts/derive-interface-cases.ps1` | Basic read-only acceptance-case draft done |
 | Build plan script | `.harness/scripts/plan-build.ps1` | Basic read-only build/publish plan done |
@@ -32,9 +32,9 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Project Skill area | `.codex/skills/` | Done |
 | MVP Skill placeholders | `.codex/skills/frontier-*` | Replaced by basic guidance |
 | State runner Skill | `.codex/skills/frontier-state-runner/` | Basic workflow guidance done |
-| KB generate Skill | `.codex/skills/frontier-kb-generate/` | Implemented V1 workflow and generator |
-| KB query Skill | `.codex/skills/frontier-kb-query/` | Implemented V1 query workflow |
-| KB freshness Skill | `.codex/skills/frontier-kb-refresh-check/` | Implemented V1 freshness workflow |
+| KB generate Skill | `.codex/skills/frontier-kb-generate/` | Implemented V1 workflow, generator, and M1.1 fingerprint contract |
+| KB query Skill | `.codex/skills/frontier-kb-query/` | Implemented V1 index-first query with fingerprint freshness reporting |
+| KB freshness Skill | `.codex/skills/frontier-kb-refresh-check/` | Implemented M1.1 content-fingerprint freshness workflow |
 | Requirement breakdown Skill | `.codex/skills/frontier-requirement-breakdown/` | Basic breakdown guidance done |
 | Task DAG planner Skill | `.codex/skills/frontier-task-dag-planner/` | Basic DAG planning guidance done |
 | Code review gate Skill | `.codex/skills/frontier-code-review-gate/` | Basic review gate guidance done |
@@ -46,18 +46,21 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Extended Skill placeholders | None | Done |
 | Skill registry | `.codex/skills/skill-registry.yaml` | Done |
 | Knowledge base root | `llm-knowledge/` | Done |
-| Backend knowledge registry | `llm-knowledge/backend/meta.yaml` | 7 modules; baseline/index fresh, semantic pending; source coverage recorded |
-| Frontend knowledge registry | `llm-knowledge/frontend/meta.yaml` | 7 modules; baseline/index fresh, semantic pending; source coverage recorded |
-| Local knowledge index | `llm-knowledge/index/` | 186 generated/curated chunks and manifest generated |
+| Backend knowledge registry | `llm-knowledge/backend/meta.yaml` | 7 modules; baseline/index fresh, semantic pending; complete `source_fingerprint` and source coverage recorded |
+| Frontend knowledge registry | `llm-knowledge/frontend/meta.yaml` | 7 modules; baseline/index fresh, semantic pending; complete `source_fingerprint` and source coverage recorded |
+| Common knowledge registry | `llm-knowledge/common/` + `llm-knowledge/index/manifest.json` | Common knowledge is indexed and has complete `source_fingerprint`; baseline/index fresh, semantic pending |
+| Local knowledge index | `llm-knowledge/index/` | 324 generated/curated chunks and fingerprint manifest generated |
 | Quality gate knowledge | `llm-knowledge/common/conventions/quality-gates.md` | Basic guidance done |
 | Execution/verification knowledge | `llm-knowledge/common/conventions/execution-verification.md` | Basic guidance done |
 | Delivery knowledge | `llm-knowledge/common/conventions/delivery.md` | Basic guidance done |
 | Human architecture doc | `docs/harness-architecture-adaptation.md` | Done |
 | M0 + M1 business plan/report | `docs/harness-m0-m1/PLAN.md`, `docs/harness-m0-m1/REPORT.md` | Done |
+| M1.1 business plan/report | `docs/harness-m1-1-source-fingerprint/PLAN.md`, `docs/harness-m1-1-source-fingerprint/REPORT.md` | Done |
 
 ## Deferred Functional Work
 
 - Implement M2 deterministic active state runtime with atomic transitions, evidence gates, locking, and resume.
+- Before M2, perform a controlled live L2 semantic-enrichment acceptance using the configured environment key; never print credentials or alter business source.
 - Verify and package project Skills through a supported Codex runtime integration mechanism.
 - Implement deterministic active state creation, legal transitions, atomic updates, locks, and resume.
 - Strengthen DAG validation for wave topology, file collisions, shared files, and global changes.
@@ -69,7 +72,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 
 ## Safety Notes
 
-- Preserve unrelated working-tree files; current untracked `docs/prompt_template.md` is outside the M0/M1 scope.
+- Preserve unrelated working-tree files; do not delete or stage them as part of Harness work.
 - Current helpers do not execute publish, push, commit, deployment, or Worktree creation.
 - Publish, commit, push, deployment, and destructive git scripts are not implemented.
 
@@ -83,7 +86,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 15 directories, 98 required files, and 13 Skill files.
+Current verified structure: 16 directories, 102 required files, and 13 Skill files.
 
 ## Knowledge Query
 

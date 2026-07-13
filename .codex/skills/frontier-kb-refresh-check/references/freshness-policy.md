@@ -4,19 +4,16 @@ Knowledge is advisory unless freshness is checked.
 
 ## Fresh Signals
 
-- `meta.yaml` has a non-empty `freshness.git_hash`.
-- `meta.yaml` has a non-empty `freshness.generated_at`.
-- `freshness.status` is `fresh`.
-- The recorded hash matches current `git rev-parse HEAD`.
-- The relevant source area has no working-tree changes.
+- `meta.yaml` has a complete, non-empty `source_fingerprint` matching current scoped source contents.
+- `manifest.json` has a complete area fingerprint matching current scoped source contents.
+- `generated_at`, baseline status, and index status are complete/fresh.
+- `git_hash` is retained for audit only and does not determine freshness.
 
 ## Stale Or Incomplete Signals
 
-- `freshness.git_hash` is empty or differs from current HEAD.
-- `freshness.generated_at` is empty.
-- `freshness.status` is `scaffold`, `stale`, or anything other than `fresh`.
-- Backend source changed and backend knowledge is being used.
-- Frontend source changed and frontend knowledge is being used.
+- A source fingerprint is missing, incomplete, or differs from current scoped source contents.
+- `generated_at` is empty.
+- Baseline or index status is `scaffold`, `stale`, `partial`, or otherwise incomplete.
 - The required knowledge document is missing or scaffold-only.
 
 ## Required Behavior
@@ -25,3 +22,5 @@ Knowledge is advisory unless freshness is checked.
 - Use source files directly when knowledge is stale.
 - Create refresh tasks instead of silently trusting stale docs.
 - Preserve manual `custom/` notes during refresh.
+- Legacy metadata without fingerprints requires one baseline refresh.
+- Common changes use `generate-kb.ps1 -Area all -Mode baseline` because Common is indexed during all-area generation.
