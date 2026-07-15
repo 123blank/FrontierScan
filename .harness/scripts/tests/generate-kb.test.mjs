@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { runGenerateKnowledge } from "../lib/generate-kb.mjs";
-import { computeFileSetFingerprint } from "../lib/source-fingerprint.mjs";
+import { computeFileSetFingerprint, computeSourceFingerprints } from "../lib/source-fingerprint.mjs";
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const generateScript = path.resolve(testDirectory, "../generate-kb.ps1");
+const queryScript = path.resolve(testDirectory, "../kb-query.ps1");
 
 async function write(root, relativePath, content) {
   const fullPath = path.join(root, relativePath);
@@ -273,6 +274,173 @@ async function testBaselineGeneratesModulesAndIndex() {
   }
 }
 
+async function testSymlinkedKnowledgeFilesAreSkipped() {
+  const root = await createFixture();
+  const externalRoot = await mkdtemp(path.join(os.tmpdir(), "frontier-kb-external-"));
+  try {
+    const externalFile = path.join(externalRoot, "private-note.md");
+    await writeFile(externalFile, "PRIVATE CONTENT OUTSIDE THE REPOSITORY", "utf8");
+    const linkedFile = path.join(root, "llm-knowledge/common/conventions/external-link.md");
+    await mkdir(path.dirname(linkedFile), { recursive: true });
+    await symlink(externalFile, linkedFile, "file");
+
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+
+    const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
+    assert.equal(chunks.some((chunk) => chunk.text.includes("PRIVATE CONTENT OUTSIDE THE REPOSITORY")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(externalRoot, { recursive: true, force: true });
+  }
+}
+
+async function testSymlinkedRootAgentsFileIsSkipped() {
+  const root = await createFixture();
+  const externalRoot = await mkdtemp(path.join(os.tmpdir(), "frontier-kb-external-"));
+  try {
+    const externalFile = path.join(externalRoot, "private-agents.md");
+    await writeFile(externalFile, "PRIVATE AGENTS CONTENT OUTSIDE THE REPOSITORY", "utf8");
+    const agentsFile = path.join(root, "AGENTS.md");
+    await symlink(externalFile, agentsFile, "file");
+
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+
+    const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
+    assert.equal(chunks.some((chunk) => chunk.text.includes("PRIVATE AGENTS CONTENT OUTSIDE THE REPOSITORY")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(externalRoot, { recursive: true, force: true });
+  }
+}
+
+async function testAreaRefreshRemovesChunksWhenLastModuleIsDeleted() {
+  const root = await createFixture();
+  try {
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+    await rm(path.join(root, "backend", "src"), { recursive: true, force: true });
+
+    await runGenerateKnowledge({ root, area: "backend", mode: "baseline" });
+
+    const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    const backendMeta = await readFile(path.join(root, "llm-knowledge/backend/meta.yaml"), "utf8");
+    const currentFingerprints = await computeSourceFingerprints(root, ["backend"]);
+    assert.equal(chunks.some((chunk) => chunk.area === "backend"), false);
+    assert.equal(manifest.source_fingerprint_status.backend, "complete");
+    assert.equal(manifest.source_fingerprints.backend, currentFingerprints.backend.fingerprint);
+    assert.match(backendMeta, /^baseline_status: fresh$/m);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testEmptySourceDirectoriesAreNotDiscoveredAsModules() {
+  const root = await createFixture();
+  try {
+    await mkdir(path.join(root, "backend/src/main/java/com/frontierscan/empty"), { recursive: true });
+    await mkdir(path.join(root, "frontend/src/empty"), { recursive: true });
+
+    const result = await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+
+    assert.equal(result.modules.some((module) => module.name === "empty"), false);
+    const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
+    assert.equal(chunks.some((chunk) => chunk.module === "empty"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testAreaRefreshRemovesDeletedModuleArtifactsAndPreservesManualFiles() {
+  const root = await createFixture();
+  try {
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+    const moduleDocsRoot = path.join(root, "llm-knowledge/backend/modules/article");
+    const customFile = path.join(moduleDocsRoot, "custom/business-rules.md");
+    await writeFile(customFile, "# Preserved manual note\n", "utf8");
+    await rm(path.join(root, "backend/src/main/java/com/frontierscan/article"), { recursive: true, force: true });
+
+    const dryRun = await runGenerateKnowledge({ root, area: "backend", mode: "baseline", dryRun: true });
+    const overviewPath = path.join(moduleDocsRoot, "overview.md");
+    assert.equal(existsSync(overviewPath), true);
+    assert.ok((dryRun.plannedDeletes ?? []).includes(overviewPath.replaceAll("\\", "/")));
+
+    const { stdout: dryRunStdout } = await execFileAsync("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", generateScript,
+      "-Root", root,
+      "-Area", "backend",
+      "-Mode", "baseline",
+      "-DryRun",
+    ], { encoding: "utf8" });
+    assert.match(dryRunStdout, /Planned deletes: [1-9]/);
+    assert.match(dryRunStdout, /Deleted files: 0/);
+
+    await runGenerateKnowledge({ root, area: "backend", mode: "baseline" });
+
+    assert.equal(existsSync(overviewPath), false);
+    assert.equal(existsSync(path.join(moduleDocsRoot, "facts.json")), false);
+    assert.equal(existsSync(path.join(moduleDocsRoot, "semantic.md")), false);
+    assert.equal(existsSync(customFile), true);
+    assert.equal(existsSync(path.join(moduleDocsRoot, "log.md")), true);
+
+    const { stdout } = await execFileAsync("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", queryScript,
+      "-Root", root,
+      "-Query", "ArticleController",
+      "-Area", "backend",
+    ], { encoding: "utf8" });
+    assert.match(stdout, /Source: markdown-fallback/);
+    assert.match(stdout, /Matches: 0/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testPartialRefreshMarksUnselectedAreaPartialWhenIndexIsInvalid() {
+  const root = await createFixture();
+  try {
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+    await writeFile(path.join(root, "llm-knowledge/index/chunks.json"), "{invalid json", "utf8");
+
+    await runGenerateKnowledge({ root, area: "backend", mode: "baseline" });
+
+    const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(chunks.some((chunk) => chunk.area === "frontend"), false);
+    assert.equal(manifest.source_fingerprint_status.backend, "complete");
+    assert.equal(manifest.source_fingerprint_status.frontend, "partial");
+    assert.equal(manifest.source_fingerprints.frontend, null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testPartialRefreshMarksAreaPartialWhenModuleDocTypesAreMissing() {
+  const root = await createFixture();
+  try {
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+    const chunksPath = path.join(root, "llm-knowledge/index/chunks.json");
+    const chunks = JSON.parse(await readFile(chunksPath, "utf8"));
+    const partialChunks = chunks.filter((chunk) => !(
+      chunk.area === "frontend"
+      && chunk.module === "views"
+      && !["overview", "semantic"].includes(chunk.doc_type)
+    ));
+    await writeFile(chunksPath, `${JSON.stringify(partialChunks, null, 2)}\n`, "utf8");
+
+    await runGenerateKnowledge({ root, area: "backend", mode: "baseline" });
+
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.source_fingerprint_status.frontend, "partial");
+    assert.equal(manifest.source_fingerprints.frontend, null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 async function testSourceCoverageRecordsReadFailuresAndContinues() {
   const root = await createFixture();
   const failedRelativePath = "backend/src/main/java/com/frontierscan/article/ArticleRepository.java";
@@ -304,6 +472,50 @@ async function testSourceCoverageRecordsReadFailuresAndContinues() {
     assert.doesNotMatch(coverage.failed_files[0].error, /sensitive fixture detail/);
     assert.equal(coverage.parsed_files.includes(failedRelativePath), false);
     assert.equal(coverage.skipped_files.includes(failedRelativePath), false);
+
+    const overview = await readFile(path.join(root, "llm-knowledge/backend/modules/article/overview.md"), "utf8");
+    assert.match(overview, /^baseline_status: partial$/m);
+    const backendMeta = await readFile(path.join(root, "llm-knowledge/backend/meta.yaml"), "utf8");
+    assert.match(backendMeta, /^status: partial$/m);
+    assert.match(backendMeta, /^baseline_status: partial$/m);
+    assert.match(backendMeta, /^index_status: partial$/m);
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.source_fingerprint_status.backend, "partial");
+    assert.equal(manifest.source_fingerprints.backend, null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testSharedResourceReadFailureMarksBackendPartial() {
+  const root = await createFixture();
+  const failedResource = "backend/src/main/resources/application.yml";
+  try {
+    await runGenerateKnowledge({
+      root,
+      area: "backend",
+      mode: "baseline",
+      readTextImpl: async (filePath) => {
+        if (filePath.replaceAll("\\", "/").endsWith(failedResource)) {
+          const error = new Error("sensitive resource detail must not be persisted");
+          error.code = "EACCES";
+          throw error;
+        }
+        return readFile(filePath, "utf8");
+      },
+    });
+
+    const coverage = JSON.parse(await readFile(path.join(root, "llm-knowledge/backend/source-coverage.json"), "utf8"));
+    assert.ok(coverage.failed_files.some((failure) => (
+      failure.file === failedResource && failure.stage === "backend-resource-read"
+    )));
+    const articleOverview = await readFile(path.join(root, "llm-knowledge/backend/modules/article/overview.md"), "utf8");
+    const authOverview = await readFile(path.join(root, "llm-knowledge/backend/modules/auth/overview.md"), "utf8");
+    assert.match(articleOverview, /^baseline_status: partial$/m);
+    assert.match(authOverview, /^baseline_status: partial$/m);
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.source_fingerprint_status.backend, "partial");
+    assert.equal(manifest.source_fingerprints.backend, null);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -464,6 +676,73 @@ async function testSemanticSuccessUsesStructuredOutput() {
     const backendMeta = await readFile(path.join(root, "llm-knowledge/backend/meta.yaml"), "utf8");
     assert.match(backendMeta, /^baseline_status: missing$/m);
     assert.match(backendMeta, /^status: partial$/m);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testPartialSemanticKeepsGlobalIndexPending() {
+  const root = await createFixture();
+  const semanticOutput = {
+    responsibility: "Article module responsibilities.",
+    business_flows: [],
+    cross_module_dependencies: [],
+    risks: [],
+    consumption_hints: [],
+  };
+  try {
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+    const result = await runGenerateKnowledge({
+      root,
+      area: "backend",
+      module: "article",
+      mode: "semantic",
+      env: { OPENAI_API_KEY: "test-key" },
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        async json() {
+          return { output_text: JSON.stringify(semanticOutput) };
+        },
+      }),
+    });
+
+    assert.equal(result.semantic.status, "fresh");
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.semantic_status, "pending");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testBackendSemanticKeepsGlobalIndexPendingWhenFrontendIsPending() {
+  const root = await createFixture();
+  const semanticOutput = {
+    responsibility: "Backend module responsibilities.",
+    business_flows: [],
+    cross_module_dependencies: [],
+    risks: [],
+    consumption_hints: [],
+  };
+  try {
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+    const result = await runGenerateKnowledge({
+      root,
+      area: "backend",
+      mode: "semantic",
+      env: { OPENAI_API_KEY: "test-key" },
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        async json() {
+          return { output_text: JSON.stringify(semanticOutput) };
+        },
+      }),
+    });
+
+    assert.equal(result.semantic.status, "fresh");
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.semantic_status, "pending");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -659,22 +938,91 @@ async function testEmbeddingsRequireExplicitFlag() {
   }
 }
 
-async function testEmbeddingsFlagIsExplicitlyDisabledWithoutRetriever() {
+async function testEmbeddingsGenerateJsonlWhenRequested() {
+  const root = await createFixture();
+  const requests = [];
+  try {
+    const result = await runGenerateKnowledge({
+      root,
+      area: "backend",
+      module: "article",
+      mode: "baseline",
+      withEmbeddings: true,
+      env: { OPENAI_API_KEY: "test-key", OPENAI_EMBEDDING_MODEL: "test-embedding-model" },
+      fetchImpl: async (url, options) => {
+        requests.push({ url, options });
+        const body = JSON.parse(options.body);
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              data: body.input.map((input, index) => ({ index, embedding: [index, input.length] })),
+            };
+          },
+        };
+      },
+    });
+    assert.equal(result.embeddings.status, "fresh");
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, "https://api.openai.com/v1/embeddings");
+    const requestBody = JSON.parse(requests[0].options.body);
+    assert.equal(requestBody.model, "test-embedding-model");
+    assert.ok(Array.isArray(requestBody.input));
+
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.embeddings_status, "fresh");
+    assert.equal(manifest.files.embeddings, "llm-knowledge/index/embeddings.jsonl");
+    const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
+    const embeddingLines = (await readFile(path.join(root, "llm-knowledge/index/embeddings.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(embeddingLines.length, chunks.length);
+    assert.deepEqual(embeddingLines[0].embedding, [0, requestBody.input[0].length]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testEmbeddingsWithoutKeyDegrade() {
   const root = await createFixture();
   try {
     const result = await runGenerateKnowledge({
       root,
-      area: "all",
+      area: "backend",
+      module: "article",
       mode: "baseline",
       withEmbeddings: true,
       env: {},
     });
-    assert.equal(result.embeddings.status, "disabled");
-    assert.match(result.embeddings.message, /retrieval consumer/i);
-    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
-    assert.equal(manifest.embeddings_status, "disabled");
-    assert.equal(manifest.files.embeddings, null);
+    assert.equal(result.embeddings.status, "pending");
     assert.equal(existsSync(path.join(root, "llm-knowledge/index/embeddings.jsonl")), false);
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.embeddings_status, "pending");
+    assert.equal(manifest.files.embeddings, null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testEmbeddingHttpFailureDegrades() {
+  const root = await createFixture();
+  try {
+    const result = await runGenerateKnowledge({
+      root,
+      area: "backend",
+      module: "article",
+      mode: "baseline",
+      withEmbeddings: true,
+      env: { OPENAI_API_KEY: "test-key" },
+      fetchImpl: async () => ({ ok: false, status: 429 }),
+    });
+    assert.equal(result.embeddings.status, "failed");
+    assert.match(result.embeddings.message, /status 429/);
+    const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
+    assert.equal(manifest.embeddings_status, "failed");
+    assert.equal(manifest.files.embeddings, null);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -696,9 +1044,19 @@ async function testAreaScopedRefreshPreservesOtherAreaIndex() {
 
 await testDryRunDoesNotWrite();
 await testBaselineGeneratesModulesAndIndex();
+await testSymlinkedKnowledgeFilesAreSkipped();
+await testSymlinkedRootAgentsFileIsSkipped();
+await testAreaRefreshRemovesChunksWhenLastModuleIsDeleted();
+await testEmptySourceDirectoriesAreNotDiscoveredAsModules();
+await testAreaRefreshRemovesDeletedModuleArtifactsAndPreservesManualFiles();
+await testPartialRefreshMarksUnselectedAreaPartialWhenIndexIsInvalid();
+await testPartialRefreshMarksAreaPartialWhenModuleDocTypesAreMissing();
 await testSourceCoverageRecordsReadFailuresAndContinues();
+await testSharedResourceReadFailureMarksBackendPartial();
 await testSemanticWithoutKeyDegrades();
 await testSemanticSuccessUsesStructuredOutput();
+await testPartialSemanticKeepsGlobalIndexPending();
+await testBackendSemanticKeepsGlobalIndexPendingWhenFrontendIsPending();
 await testSemanticHttpFailureDegrades();
 await testSemanticTimeoutAbortsAndDegrades();
 await testSemanticMalformedJsonDegrades();
@@ -706,7 +1064,9 @@ await testSemanticSchemaInvalidOutputDegrades();
 await testSemanticAggregateStatusFailsWhenAnyModuleFails();
 await testBaselineRefreshPreservesSemanticLayer();
 await testEmbeddingsRequireExplicitFlag();
-await testEmbeddingsFlagIsExplicitlyDisabledWithoutRetriever();
+await testEmbeddingsGenerateJsonlWhenRequested();
+await testEmbeddingsWithoutKeyDegrade();
+await testEmbeddingHttpFailureDegrades();
 await testAreaScopedRefreshPreservesOtherAreaIndex();
 await testModuleScopedRefreshPreservesUnrelatedArtifacts();
 await testPowerShellEntryPointSupportsModuleRefresh();

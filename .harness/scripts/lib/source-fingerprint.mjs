@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,7 +39,13 @@ async function collectFiles(root, relativeEntry) {
   } catch {
     return [];
   }
-  if (!existsSync(resolved.fullPath)) return [];
+  const entryInfo = await lstat(resolved.fullPath).catch(() => null);
+  if (!entryInfo || entryInfo.isSymbolicLink()) return [];
+
+  if (entryInfo.isFile()) {
+    return [resolved.relative];
+  }
+  if (!entryInfo.isDirectory()) return [];
 
   const entries = await readdir(resolved.fullPath, { withFileTypes: true }).catch(() => null);
   if (entries === null) {

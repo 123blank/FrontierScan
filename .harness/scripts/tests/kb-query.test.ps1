@@ -194,6 +194,22 @@ try {
     throw "api-search did not prioritize interface knowledge. Output:`n${apiJoined}"
   }
 
+  $fallbackFile = Join-Path $tempRoot "llm-knowledge\backend\modules\article\overview.md"
+  New-Item -ItemType Directory -Path (Split-Path -Parent $fallbackFile) -Force | Out-Null
+  [System.IO.File]::WriteAllText($fallbackFile, "FallbackOnlyMarker", $utf8NoBom)
+  [System.IO.File]::WriteAllText((Join-Path $indexRoot "chunks.json"), "[]", $utf8NoBom)
+  $fallbackOutput = & $queryScript -Root $tempRoot -Query "FallbackOnlyMarker" -Mode knowledge-qa -Area backend 2>&1
+  $fallbackJoined = $fallbackOutput -join "`n"
+  if ($fallbackJoined -notmatch "Source: markdown-fallback") {
+    throw "Empty index did not use Markdown fallback. Output:`n${fallbackJoined}"
+  }
+  if ($fallbackJoined -notmatch "Index freshness: stale") {
+    throw "Markdown fallback bypassed stale index reporting. Output:`n${fallbackJoined}"
+  }
+  if ($fallbackJoined -notmatch "manifest chunk_count differs from chunks.json") {
+    throw "Markdown fallback did not explain index incompleteness. Output:`n${fallbackJoined}"
+  }
+
   Write-Output "kb-query tests passed"
 } finally {
   if (Test-Path -LiteralPath $tempRoot) {

@@ -46,6 +46,7 @@ index_status: fresh
 try {
   New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
   Write-Utf8File -Path (Join-Path $tempRoot "backend\src\main\java\com\frontierscan\article\Article.java") -Content "class Article {}"
+  Write-Utf8File -Path (Join-Path $tempRoot "backend\src\main\resources\application.yml") -Content "app: fixture"
   Write-Utf8File -Path (Join-Path $tempRoot "frontend\src\views\Dashboard.vue") -Content "<template />"
   Write-Utf8File -Path (Join-Path $tempRoot "AGENTS.md") -Content "# Fixture rules"
   $skillFile = Join-Path $tempRoot ".codex\skills\frontier-test\SKILL.md"
@@ -109,7 +110,67 @@ try {
     throw "Fresh frontend area must not receive a refresh target."
   }
 
+  Add-Content -LiteralPath (Join-Path $tempRoot "backend\src\main\resources\application.yml") -Value "`nchanged: true"
+  $sharedSourceOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Shared-source freshness check exited with code ${LASTEXITCODE}: $($sharedSourceOutput -join "`n")"
+  }
+  $sharedSourceResult = ($sharedSourceOutput -join "`n") | ConvertFrom-Json
+  $sharedSourceTask = @($sharedSourceResult.refresh_task.targets | Where-Object { $_.area -eq "backend" })[0]
+  if ($sharedSourceTask.command -notmatch '-Area backend -Mode baseline') {
+    throw "Shared backend source change did not fall back to area baseline refresh: $($sharedSourceTask.command)"
+  }
+  if ($sharedSourceTask.command -match '-Module article') {
+    throw "Shared backend source change generated a non-converging module refresh: $($sharedSourceTask.command)"
+  }
+  & git -C $tempRoot restore backend/src/main/resources/application.yml
+
+  Remove-Item -LiteralPath (Join-Path $tempRoot "backend\src\main\java\com\frontierscan\article\Article.java") -Force
+  $deletedModuleOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Deleted module freshness check exited with code ${LASTEXITCODE}: $($deletedModuleOutput -join "`n")"
+  }
+  $deletedModuleResult = ($deletedModuleOutput -join "`n") | ConvertFrom-Json
+  $deletedModuleTask = @($deletedModuleResult.refresh_task.targets | Where-Object { $_.area -eq "backend" })[0]
+  if (-not $deletedModuleTask) {
+    throw "Deleted backend module did not generate a refresh target."
+  }
+  if ($deletedModuleTask.command -notmatch '-Area backend -Mode baseline') {
+    throw "Deleted backend module did not fall back to area baseline refresh: $($deletedModuleTask.command)"
+  }
+  if ($deletedModuleTask.command -match '-Module article') {
+    throw "Deleted backend module generated an unusable module refresh command: $($deletedModuleTask.command)"
+  }
+
   & git -C $tempRoot restore backend
+
+  $articleSource = Join-Path $tempRoot "backend\src\main\java\com\frontierscan\article\Article.java"
+  $renamedSource = Join-Path $tempRoot "backend\src\main\java\com\frontierscan\digest\Article.java"
+  New-Item -ItemType Directory -Path (Split-Path -Parent $renamedSource) -Force | Out-Null
+  Move-Item -LiteralPath $articleSource -Destination $renamedSource
+  & git -C $tempRoot add -A backend
+  $renamedModuleOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Renamed module freshness check exited with code ${LASTEXITCODE}: $($renamedModuleOutput -join "`n")"
+  }
+  $renamedModuleResult = ($renamedModuleOutput -join "`n") | ConvertFrom-Json
+  $renamedModuleTask = @($renamedModuleResult.refresh_task.targets | Where-Object { $_.area -eq "backend" })[0]
+  if (-not $renamedModuleTask) {
+    throw "Renamed backend module did not generate a refresh target."
+  }
+  if ($renamedModuleTask.command -notmatch '-Area backend -Mode baseline') {
+    throw "Renamed backend module did not fall back to area baseline refresh: $($renamedModuleTask.command)"
+  }
+  if ($renamedModuleTask.command -match '-Module digest') {
+    throw "Renamed backend module generated a stale-module-preserving refresh command: $($renamedModuleTask.command)"
+  }
+  & git -C $tempRoot restore --staged backend
+  & git -C $tempRoot restore backend
+  $renamedDirectory = Split-Path -Parent $renamedSource
+  if (Test-Path -LiteralPath $renamedDirectory) {
+    Remove-Item -LiteralPath $renamedDirectory -Recurse -Force
+  }
+
   $semanticFailureMeta = New-MetaContent -GitHash $headHash -SourceFingerprint $initialFingerprints.backend.fingerprint -SemanticStatus "failed"
   Write-Utf8File -Path (Join-Path $tempRoot "llm-knowledge\backend\meta.yaml") -Content $semanticFailureMeta
   $semanticTaskPath = Join-Path $tempRoot ".harness\outputs\kb-semantic-refresh-task.json"
@@ -169,6 +230,32 @@ try {
   }
   if (@($commonResult.refresh_task.targets | Where-Object { $_.area -eq "backend" }).Count -ne 0) {
     throw "Common Skill change incorrectly affected backend freshness."
+  }
+
+  Write-Utf8File -Path (Join-Path $tempRoot "frontend\src\theme\only.scss") -Content ".theme { color: red; }"
+  $unsupportedModuleOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Unsupported-module freshness check exited with code ${LASTEXITCODE}: $($unsupportedModuleOutput -join "`n")"
+  }
+  $unsupportedModuleResult = ($unsupportedModuleOutput -join "`n") | ConvertFrom-Json
+  $unsupportedModuleTask = @($unsupportedModuleResult.refresh_task.targets | Where-Object { $_.area -eq "frontend" })[0]
+  if ($unsupportedModuleTask.command -notmatch '-Area frontend -Mode baseline') {
+    throw "Unsupported frontend module did not fall back to area baseline refresh: $($unsupportedModuleTask.command)"
+  }
+  if ($unsupportedModuleTask.command -match '-Module theme') {
+    throw "Unsupported SCSS-only module generated an unusable module refresh: $($unsupportedModuleTask.command)"
+  }
+
+  Remove-Item -LiteralPath (Join-Path $tempRoot "frontend\src\theme\only.scss") -Force
+  Write-Utf8File -Path (Join-Path $tempRoot "frontend\src\legacy\only.js") -Content "export const legacy = true;"
+  $javascriptModuleOutput = & $freshnessScript -Root $tempRoot -Json 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "JavaScript-module freshness check exited with code ${LASTEXITCODE}: $($javascriptModuleOutput -join "`n")"
+  }
+  $javascriptModuleResult = ($javascriptModuleOutput -join "`n") | ConvertFrom-Json
+  $javascriptModuleTask = @($javascriptModuleResult.refresh_task.targets | Where-Object { $_.area -eq "frontend" })[0]
+  if ($javascriptModuleTask.command -notmatch '-Area frontend -Module legacy -Mode baseline') {
+    throw "Supported JavaScript-only module did not receive a module refresh: $($javascriptModuleTask.command)"
   }
 
   $legacyBackendMeta = $dirtyBackendMeta -replace '(?m)^source_fingerprint:.*\r?\n', ''

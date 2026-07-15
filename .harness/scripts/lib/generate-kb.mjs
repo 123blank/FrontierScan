@@ -2,9 +2,11 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
   appendFile,
+  lstat,
   mkdir,
   readFile,
   readdir,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -17,6 +19,8 @@ import {
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
 const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 const DEFAULT_SEMANTIC_TIMEOUT_MS = 30_000;
+const DEFAULT_EMBEDDING_BATCH_SIZE = 64;
+const MAX_EMBEDDING_INPUT_LENGTH = 8_000;
 
 const SEMANTIC_OUTPUT_SCHEMA = {
   type: "object",
@@ -78,13 +82,17 @@ async function tryReadSource(root, filePath, stage, readTextImpl) {
 }
 
 async function listFiles(root, extensions) {
-  if (!existsSync(root)) {
+  const rootInfo = await lstat(root).catch(() => null);
+  if (!rootInfo || rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) {
     return [];
   }
 
   const entries = await readdir(root, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
+    if (entry.isSymbolicLink()) {
+      continue;
+    }
     const fullPath = path.join(root, entry.name);
     if (entry.isDirectory()) {
       files.push(...await listFiles(fullPath, extensions));
@@ -93,6 +101,11 @@ async function listFiles(root, extensions) {
     }
   }
   return files.sort();
+}
+
+async function isRegularNonSymlinkFile(filePath) {
+  const fileInfo = await lstat(filePath).catch(() => null);
+  return Boolean(fileInfo?.isFile() && !fileInfo.isSymbolicLink());
 }
 
 async function listAllFiles(root) {
@@ -544,6 +557,7 @@ async function discoverBackendModules(root, readTextImpl = readText) {
   for (const entry of entries.filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
     const modulePath = path.join(backendRoot, entry.name);
     const files = await listFiles(modulePath, [".java"]);
+    if (!files.length) continue;
     const facts = {
       area: "backend",
       module: entry.name,
@@ -663,6 +677,7 @@ async function discoverFrontendModules(root, readTextImpl = readText) {
   for (const entry of entries.filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
     const modulePath = path.join(frontendRoot, entry.name);
     const files = await listFiles(modulePath, [".ts", ".tsx", ".js", ".vue", ".css"]);
+    if (!files.length) continue;
     const parsedFiles = [];
     const facts = {
       area: "frontend",
@@ -719,8 +734,8 @@ function yamlList(items, indent = 2) {
   return items.map((item) => `${" ".repeat(indent)}- ${item}`).join("\n");
 }
 
-function docHeader({ area, moduleName, docType, generatedAt, gitHash, sourceFingerprint, sourceFiles, layer, semanticStatus, generatedBy = "frontier-kb-generate" }) {
-  return `---\ngenerated_by: ${generatedBy}\nlayer: ${layer}\narea: ${area}\nmodule: ${moduleName}\ndoc_type: ${docType}\ngit_hash: ${gitHash}\nsource_fingerprint: ${sourceFingerprint}\ngenerated_at: ${generatedAt}\nbaseline_status: fresh\nsemantic_status: ${semanticStatus}\nsource_files:\n${yamlList(sourceFiles.slice(0, 30), 2)}\n---\n\n`;
+function docHeader({ area, moduleName, docType, generatedAt, gitHash, sourceFingerprint, sourceFiles, layer, baselineStatus = "fresh", semanticStatus, generatedBy = "frontier-kb-generate" }) {
+  return `---\ngenerated_by: ${generatedBy}\nlayer: ${layer}\narea: ${area}\nmodule: ${moduleName}\ndoc_type: ${docType}\ngit_hash: ${gitHash}\nsource_fingerprint: ${sourceFingerprint}\ngenerated_at: ${generatedAt}\nbaseline_status: ${baselineStatus}\nsemantic_status: ${semanticStatus}\nsource_files:\n${yamlList(sourceFiles.slice(0, 30), 2)}\n---\n\n`;
 }
 
 function bullet(items, emptyText = "暂无自动识别结果。") {
@@ -924,6 +939,103 @@ async function callOpenAIForSemantic(module, context, env, requestOptions = {}) 
   }
 }
 
+function embeddingInput(chunk) {
+  return [
+    `area: ${chunk.area}`,
+    `module: ${chunk.module}`,
+    `document: ${chunk.doc_type}`,
+    chunk.text,
+  ].join("\n").slice(0, MAX_EMBEDDING_INPUT_LENGTH);
+}
+
+function embeddingRecord(chunk, model, embedding) {
+  return {
+    schema_version: "1.0",
+    id: chunk.id,
+    model,
+    embedding,
+    area: chunk.area,
+    module: chunk.module,
+    doc_type: chunk.doc_type,
+    path: chunk.path,
+    source_fingerprint: chunk.source_fingerprint,
+    generated_at: chunk.generated_at,
+  };
+}
+
+async function callOpenAIForEmbeddings(chunks, env, requestOptions = {}) {
+  const apiKey = env.OPENAI_API_KEY;
+  const model = env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL;
+  if (!apiKey) {
+    return {
+      status: "pending",
+      model,
+      message: "OPENAI_API_KEY is not configured; embeddings remain pending.",
+      records: [],
+    };
+  }
+
+  const fetchImpl = requestOptions.fetchImpl ?? globalThis.fetch;
+  const timeoutMs = requestOptions.timeoutMs ?? DEFAULT_SEMANTIC_TIMEOUT_MS;
+  const records = [];
+  try {
+    for (let start = 0; start < chunks.length; start += DEFAULT_EMBEDDING_BATCH_SIZE) {
+      const batch = chunks.slice(start, start + DEFAULT_EMBEDDING_BATCH_SIZE);
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+      try {
+        const response = await fetchImpl("https://api.openai.com/v1/embeddings", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            input: batch.map(embeddingInput),
+            encoding_format: "float",
+          }),
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`OpenAI embeddings response status ${response.status}`);
+        }
+        const payload = await response.json();
+        const responseItems = Array.isArray(payload?.data) ? payload.data : [];
+        if (responseItems.length !== batch.length) {
+          throw new Error(`OpenAI embeddings response returned ${responseItems.length} vectors for ${batch.length} inputs.`);
+        }
+        const byIndex = new Map(responseItems.map((item) => [item.index, item]));
+        for (let index = 0; index < batch.length; index += 1) {
+          const item = byIndex.get(index);
+          if (!item || !Array.isArray(item.embedding) || !item.embedding.every(Number.isFinite)) {
+            throw new Error(`OpenAI embeddings response has an invalid vector at index ${index}.`);
+          }
+          records.push(embeddingRecord(batch[index], model, item.embedding));
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+    return {
+      status: "fresh",
+      model,
+      message: `OpenAI embeddings completed for ${records.length} chunks.`,
+      records,
+    };
+  } catch (error) {
+    const message = error?.name === "AbortError"
+      ? `OpenAI embeddings request timed out after ${timeoutMs}ms.`
+      : error.message;
+    return {
+      status: "failed",
+      model,
+      message: `OpenAI embeddings failed: ${message}`,
+      records: [],
+    };
+  }
+}
+
 function docsForModule(module, context, includeBaseline, semanticContent) {
   const docs = [];
   const docTypes = module.area === "backend" ? BACKEND_DOC_TYPES : FRONTEND_DOC_TYPES;
@@ -962,7 +1074,7 @@ function createChunk(entry, module, context) {
     git_hash: context.gitHash,
     source_fingerprint: module.sourceFingerprint,
     generated_at: context.generatedAt,
-    baseline_status: "fresh",
+    baseline_status: context.baselineStatus,
     semantic_status: context.semanticStatus,
     keywords: unique([
       entry.area,
@@ -1087,7 +1199,7 @@ async function discoverCuratedChunks(root, area, context) {
   }));
 
   const agentsFile = path.join(root, "AGENTS.md");
-  if (existsSync(agentsFile)) {
+  if (await isRegularNonSymlinkFile(agentsFile)) {
     await addFiles([agentsFile], () => ({
       area: "common",
       module: "project-rules",
@@ -1128,6 +1240,30 @@ async function appendModuleLog(root, area, moduleName, generatedAt, mode, semant
   await mkdir(path.dirname(logPath), { recursive: true });
   await appendFile(logPath, entry, "utf8");
   result.writtenFiles.push(normalizePath(logPath));
+}
+
+function generatedModuleFileNames(area) {
+  const docTypes = area === "backend" ? BACKEND_DOC_TYPES : FRONTEND_DOC_TYPES;
+  return [...docTypes.map((docType) => `${docType}.md`), "semantic.md", "facts.json"];
+}
+
+async function cleanupObsoleteModuleArtifacts(root, area, activeModuleNames, result, dryRun) {
+  const modulesRoot = path.join(root, "llm-knowledge", area, "modules");
+  const entries = await readdir(modulesRoot, { withFileTypes: true }).catch(() => []);
+  const active = new Set(activeModuleNames);
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink() || active.has(entry.name)) continue;
+    for (const fileName of generatedModuleFileNames(area)) {
+      const filePath = path.join(modulesRoot, entry.name, fileName);
+      const fileInfo = await lstat(filePath).catch(() => null);
+      if (!fileInfo || (!fileInfo.isFile() && !fileInfo.isSymbolicLink())) continue;
+      const normalized = normalizePath(filePath);
+      result.plannedDeletes.push(normalized);
+      if (dryRun) continue;
+      await unlink(filePath);
+      result.deletedFiles.push(normalized);
+    }
+  }
 }
 
 function parseGeneratedDocumentMeta(content) {
@@ -1187,6 +1323,7 @@ async function collectModuleFreshness(root, module) {
 
 function aggregateBaselineStatus(moduleFreshness) {
   const statuses = moduleFreshness.map((item) => item.baselineStatus);
+  if (!statuses.length) return "fresh";
   if (statuses.length && statuses.every((status) => status === "fresh")) return "fresh";
   if (statuses.length && statuses.every((status) => status === "missing")) return "missing";
   return "partial";
@@ -1307,6 +1444,15 @@ async function buildSourceCoverage(root, area, modules, generatedAt, gitHash, sc
   };
 }
 
+function ingestionFailuresForModule(module, scanResults) {
+  const failures = scanResults[module.area]?.failedFiles ?? [];
+  const modulePrefix = `${normalizePath(module.path)}/`;
+  return failures.filter((failure) => (
+    normalizePath(failure.file).startsWith(modulePrefix)
+    || (module.area === "backend" && failure.stage === "backend-resource-read")
+  ));
+}
+
 async function readExistingIndexChunks(indexRoot) {
   const chunksPath = path.join(indexRoot, "chunks.json");
   if (!existsSync(chunksPath)) {
@@ -1321,34 +1467,32 @@ async function readExistingIndexChunks(indexRoot) {
   }
 }
 
-async function readExistingIndexManifest(indexRoot) {
-  const manifestPath = path.join(indexRoot, "manifest.json");
-  if (!existsSync(manifestPath)) return {};
-  try {
-    return JSON.parse(await readFile(manifestPath, "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-function buildIndexedFingerprints({ modules, chunks, currentFingerprints, existingManifest }) {
+function buildIndexedFingerprints({ modules, chunks, currentFingerprints }) {
   const values = {};
   const statuses = {};
   for (const area of ["backend", "frontend"]) {
     const areaModules = modules.filter((module) => module.area === area);
     if (!areaModules.length) {
-      values[area] = existingManifest.source_fingerprints?.[area] ?? null;
-      statuses[area] = existingManifest.source_fingerprint_status?.[area] ?? "missing";
+      const hasBaselineChunks = chunks.some((chunk) => (
+        chunk.area === area
+        && chunk.baseline_status === "fresh"
+        && chunk.doc_type !== "semantic"
+      ));
+      const complete = currentFingerprints[area].status === "complete" && !hasBaselineChunks;
+      values[area] = complete ? currentFingerprints[area].fingerprint : null;
+      statuses[area] = complete ? "complete" : "partial";
       continue;
     }
     const allModulesCurrent = areaModules.every((module) => {
+      const expectedDocTypes = module.area === "backend" ? BACKEND_DOC_TYPES : FRONTEND_DOC_TYPES;
       const baselineChunks = chunks.filter((chunk) => (
         chunk.area === area
         && chunk.module === module.name
         && chunk.baseline_status === "fresh"
         && chunk.doc_type !== "semantic"
       ));
-      return baselineChunks.length > 0
+      const indexedDocTypes = new Set(baselineChunks.map((chunk) => chunk.doc_type));
+      return expectedDocTypes.every((docType) => indexedDocTypes.has(docType))
         && baselineChunks.every((chunk) => chunk.source_fingerprint === module.sourceFingerprint);
     });
     const complete = currentFingerprints[area].status === "complete" && allModulesCurrent;
@@ -1405,14 +1549,32 @@ export async function runGenerateKnowledge(options = {}) {
   const generatedAt = new Date().toISOString();
   const gitHash = await getGitHash(root);
   const discovery = await discoverModules(root, area, options.readTextImpl ?? readText);
+  const globalDiscovery = area === "all"
+    ? discovery
+    : await discoverModules(root, "all", options.readTextImpl ?? readText);
   const discoveredModules = discovery.modules;
+  const globalModules = globalDiscovery.modules;
   const currentFingerprints = await computeSourceFingerprints(root, ["backend", "frontend", "common"]);
-  for (const module of discoveredModules) {
-    module.sourceFingerprintResult = await computeFileSetFingerprint(root, [
+  for (const module of globalModules) {
+    const sourceFingerprintResult = await computeFileSetFingerprint(root, [
       ...module.facts.source_files,
       ...(module.facts.resources ?? []).map((resource) => resource.file),
     ]);
+    const ingestionFailures = ingestionFailuresForModule(module, globalDiscovery.scanResults);
+    module.sourceFingerprintResult = ingestionFailures.length
+      ? {
+          ...sourceFingerprintResult,
+          status: "incomplete",
+          failed_files: [...sourceFingerprintResult.failed_files, ...ingestionFailures],
+        }
+      : sourceFingerprintResult;
     module.sourceFingerprint = module.sourceFingerprintResult.fingerprint;
+  }
+  const globalModuleByKey = new Map(globalModules.map((module) => [`${module.area}:${module.name}`, module]));
+  for (const module of discoveredModules) {
+    const globalModule = globalModuleByKey.get(`${module.area}:${module.name}`);
+    module.sourceFingerprintResult = globalModule.sourceFingerprintResult;
+    module.sourceFingerprint = globalModule.sourceFingerprint;
   }
   const modules = moduleName
     ? discoveredModules.filter((module) => module.name === moduleName)
@@ -1430,15 +1592,29 @@ export async function runGenerateKnowledge(options = {}) {
     modules: modules.map((module) => ({ area: module.area, name: module.name, path: module.path })),
     plannedWrites: [],
     writtenFiles: [],
+    plannedDeletes: [],
+    deletedFiles: [],
     semantic: { status: "pending", model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL },
     embeddings: { status: "skipped", model: env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL },
   };
 
   const includeBaseline = mode === "baseline" || mode === "all";
   const includeSemantic = mode === "semantic" || mode === "all";
+  const selectedAreas = moduleName
+    ? unique(modules.map((module) => module.area))
+    : area === "all" ? ["backend", "frontend"] : [area];
   const docs = [];
   const chunks = [];
   const semanticModules = [];
+
+  if (includeBaseline && !moduleName) {
+    for (const selectedArea of selectedAreas) {
+      const activeModuleNames = discoveredModules
+        .filter((module) => module.area === selectedArea)
+        .map((module) => module.name);
+      await cleanupObsoleteModuleArtifacts(root, selectedArea, activeModuleNames, result, dryRun);
+    }
+  }
 
   for (const module of modules) {
     const context = {
@@ -1446,6 +1622,7 @@ export async function runGenerateKnowledge(options = {}) {
       generatedAt,
       gitHash,
       sourceFingerprint: module.sourceFingerprint,
+      baselineStatus: module.sourceFingerprintResult.status === "complete" ? "fresh" : "partial",
       semanticStatus: "pending",
     };
     let semanticContent = null;
@@ -1496,7 +1673,6 @@ export async function runGenerateKnowledge(options = {}) {
     await appendModuleLog(root, module.area, module.name, generatedAt, mode, context.semanticStatus, result, dryRun);
   }
 
-  const selectedAreas = unique(modules.map((module) => module.area));
   const semanticStatus = includeSemantic
     ? aggregateSemanticStatus(semanticModules, true)
     : aggregateSemanticStatus(
@@ -1520,6 +1696,7 @@ export async function runGenerateKnowledge(options = {}) {
       gitHash,
       generatedAt,
       sourceFingerprint: entry.moduleObject.sourceFingerprint,
+      baselineStatus: entry.moduleObject.sourceFingerprintResult.status === "complete" ? "fresh" : "partial",
       semanticStatus: entry.docType === "semantic" ? (entry.content.match(/semantic_status:\s*(\w+)/)?.[1] ?? "pending") : "pending",
     }));
   }
@@ -1532,10 +1709,11 @@ export async function runGenerateKnowledge(options = {}) {
 
   const indexRoot = path.join(root, "llm-knowledge", "index");
   const existingChunks = await readExistingIndexChunks(indexRoot);
-  const existingManifest = await readExistingIndexManifest(indexRoot);
+  const discoveredModuleIds = new Set(discoveredModules.map((module) => `${module.area}:${module.name}`));
   const preservedChunks = existingChunks.filter((chunk) => {
     if (!selectedAreas.includes(chunk.area)) return true;
     if (moduleName && chunk.module !== moduleName) return true;
+    if (!moduleName && !discoveredModuleIds.has(`${chunk.area}:${chunk.module}`)) return false;
     if (chunk.doc_type === "semantic") return !includeSemantic;
     return !includeBaseline;
   });
@@ -1550,27 +1728,51 @@ export async function runGenerateKnowledge(options = {}) {
 
   const embeddingModel = env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL;
   let embeddingsStatus = "skipped";
+  let embeddingResult = {
+    status: "skipped",
+    model: embeddingModel,
+    message: "Embedding generation was not requested.",
+    records: [],
+  };
   if (withEmbeddings) {
-    embeddingsStatus = "disabled";
-    result.embeddings = {
-      status: "disabled",
-      model: embeddingModel,
-      message: "Embedding generation is disabled until a tested retrieval consumer is implemented.",
-    };
+    embeddingResult = dryRun
+      ? {
+          status: "pending",
+          model: embeddingModel,
+          message: "Dry run skips OpenAI embedding generation.",
+          records: [],
+        }
+      : await callOpenAIForEmbeddings(indexChunks, env, {
+          fetchImpl: options.fetchImpl,
+          timeoutMs: options.embeddingTimeoutMs ?? options.semanticTimeoutMs,
+        });
+    embeddingsStatus = embeddingResult.status;
+    if (embeddingResult.status === "fresh") {
+      const embeddingContent = `${embeddingResult.records.map((record) => JSON.stringify(record)).join("\n")}\n`;
+      await writePlanned(result, path.join(indexRoot, "embeddings.jsonl"), embeddingContent, dryRun);
+    }
   }
+  result.embeddings = {
+    status: embeddingResult.status,
+    model: embeddingResult.model,
+    message: embeddingResult.message,
+    chunks: embeddingResult.records.length,
+  };
 
   const indexedFingerprints = buildIndexedFingerprints({
-    modules: discoveredModules,
+    modules: globalModules,
     chunks: indexChunks,
     currentFingerprints,
-    existingManifest,
   });
+  const globalSemanticStatus = aggregateDocumentSemanticStatus(
+    await Promise.all(globalModules.map((module) => collectModuleFreshness(root, module)))
+  );
   const manifest = buildIndexManifest({
     chunks: indexChunks,
     generatedAt,
     gitHash,
     areas: indexAreas,
-    semanticStatus,
+    semanticStatus: globalSemanticStatus,
     embeddingsStatus,
     embeddingModel,
     indexedFingerprints,
@@ -1671,6 +1873,8 @@ async function main() {
   console.log(`Embeddings: ${result.embeddings.status}`);
   console.log(`Planned writes: ${result.plannedWrites.length}`);
   console.log(`Written files: ${result.writtenFiles.length}`);
+  console.log(`Planned deletes: ${result.plannedDeletes.length}`);
+  console.log(`Deleted files: ${result.deletedFiles.length}`);
 }
 
 const isCli = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);

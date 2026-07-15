@@ -85,6 +85,66 @@ function Get-ChangedModules {
   )
 }
 
+function Test-ModuleSourceExists {
+  param(
+    [string]$RepoRoot,
+    [string]$Area,
+    [string]$Module
+  )
+
+  $modulePath = if ($Area -eq "backend") {
+    Join-Path $RepoRoot "backend\src\main\java\com\frontierscan\$Module"
+  } else {
+    Join-Path $RepoRoot "frontend\src\$Module"
+  }
+  if (-not (Test-Path -LiteralPath $modulePath -PathType Container)) {
+    return $false
+  }
+
+  $extensions = if ($Area -eq "backend") {
+    @(".java")
+  } else {
+    @(".ts", ".tsx", ".js", ".vue", ".css")
+  }
+  return @(
+    Get-ChildItem -LiteralPath $modulePath -Recurse -File -ErrorAction SilentlyContinue |
+      Where-Object { $_.Extension -in $extensions } |
+      Select-Object -First 1
+  ).Count -gt 0
+}
+
+function Test-ModuleOwnsAllChangedSources {
+  param(
+    [string[]]$Paths,
+    [string]$Area,
+    [string]$Module
+  )
+
+  $areaPrefix = if ($Area -eq "backend") { "backend/src/" } else { "frontend/src/" }
+  $modulePrefix = if ($Area -eq "backend") {
+    "backend/src/main/java/com/frontierscan/${Module}/"
+  } else {
+    "frontend/src/${Module}/"
+  }
+  $areaSourcePaths = @($Paths | Where-Object { $_.StartsWith($areaPrefix) })
+  return $areaSourcePaths.Count -gt 0 -and @(
+    $areaSourcePaths | Where-Object { -not $_.StartsWith($modulePrefix) }
+  ).Count -eq 0
+}
+
+function Test-AreaHasRename {
+  param(
+    [string[]]$StatusLines,
+    [string]$Area
+  )
+
+  $sourcePrefix = if ($Area -eq "backend") { "backend/src/" } else { "frontend/src/" }
+  return @(
+    $StatusLines |
+      Where-Object { $_ -match "\s+->\s+" -and $_.Replace("\", "/").Contains($sourcePrefix) }
+  ).Count -gt 0
+}
+
 function Get-RefreshMode {
   param([pscustomobject]$Finding)
 
@@ -109,8 +169,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $Root ".git"))) {
 }
 
 $headHash = (Invoke-RepoGit -Arguments @("rev-parse", "HEAD")).Trim()
+$changedStatusLines = @(Invoke-RepoGit -Arguments @("status", "--short", "--untracked-files=all"))
 $changedPaths = @(
-  Invoke-RepoGit -Arguments @("status", "--short", "--untracked-files=all") |
+  $changedStatusLines |
     ForEach-Object { Get-PathFromStatusLine -Line $_ }
 ) | Where-Object { $_ } | Sort-Object -Unique
 $currentFingerprints = Get-CurrentSourceFingerprints
@@ -268,7 +329,7 @@ $refreshTargets = @(
     $mode = Get-RefreshMode -Finding $finding
     $command = if ($finding.area -eq "common") {
       ".\.harness\scripts\generate-kb.ps1 -Area all -Mode baseline"
-    } elseif ($mode -ne "semantic" -and $modules.Count -eq 1) {
+    } elseif ($mode -ne "semantic" -and $modules.Count -eq 1 -and -not (Test-AreaHasRename -StatusLines $changedStatusLines -Area $finding.area) -and (Test-ModuleSourceExists -RepoRoot $Root -Area $finding.area -Module $modules[0]) -and (Test-ModuleOwnsAllChangedSources -Paths $changedPaths -Area $finding.area -Module $modules[0])) {
       ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Module $($modules[0]) -Mode $mode"
     } else {
       ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Mode $mode"
