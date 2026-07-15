@@ -20,6 +20,15 @@ function sanitizedFailure(file, stage, error) {
   return { file, stage, error: `Read failed (${code}).` };
 }
 
+function canonicalFingerprintBytes(content) {
+  const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  const text = bytes.toString("utf8");
+  if (!Buffer.from(text, "utf8").equals(bytes)) {
+    return bytes;
+  }
+  return Buffer.from(text.replaceAll("\r\n", "\n"), "utf8");
+}
+
 function resolveRepositoryFile(root, relativeFile) {
   const normalized = normalizePath(relativeFile);
   const fullPath = path.resolve(root, normalized);
@@ -83,7 +92,7 @@ export async function computeFileSetFingerprint(root, relativeFiles, options = {
 
     try {
       const content = await readFileImpl(resolved.fullPath);
-      const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content);
+      const bytes = canonicalFingerprintBytes(content);
       hash.update(resolved.relative, "utf8");
       hash.update("\0", "utf8");
       hash.update(String(bytes.length), "utf8");

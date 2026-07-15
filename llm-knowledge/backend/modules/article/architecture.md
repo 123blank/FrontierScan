@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: article
 doc_type: architecture
-git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
-source_fingerprint: sha256:bbcf5341e6170bd7ed08d61a4a0c011601f2a3a4d843008f80dbda0d6a18662b
-generated_at: 2026-07-15T15:00:02.197Z
+git_hash: 8f741538f612f9293972aaff3a81e8c3812b8236
+source_fingerprint: sha256:02897b16ea75aacf078cb5559e731ab6e8d90f3a10e4121a11641f642ae653b4
+generated_at: 2026-07-15T15:48:15.724Z
 baseline_status: fresh
 semantic_status: fresh
 source_files:

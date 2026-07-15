@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: auth
 doc_type: config
-git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
-source_fingerprint: sha256:2cf816b9b9819e4d244816bf1c39b3c4ea477f229593acf79737585b70fc2afa
-generated_at: 2026-07-15T15:00:02.197Z
+git_hash: 8f741538f612f9293972aaff3a81e8c3812b8236
+source_fingerprint: sha256:8c3fbb52cd829b48dfadadefb099fac71ed8a3f969c81464adb48ac29160c2c3
+generated_at: 2026-07-15T15:48:15.724Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
   "generated_by": "frontier-kb-generate",
-  "generated_at": "2026-07-15T15:00:02.197Z",
-  "git_hash": "cb5edb5cde7a1635447198f2e2bedc8c3ee225e9",
+  "generated_at": "2026-07-15T15:48:15.724Z",
+  "git_hash": "8f741538f612f9293972aaff3a81e8c3812b8236",
   "area": "frontend",
   "parsed_files": [
     "frontend/src/api/articles.ts",

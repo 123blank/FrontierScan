@@ -179,3 +179,11 @@ text-embedding-v4
 - 第三次 RED 使用 `semantic-model-v1` 完成 L2 模拟生成，再执行不带模型变量的 baseline 刷新；测试稳定复现元数据被覆盖。
 - 生成器现已在非 semantic 模式下读取并保留已有区域 `semantic_model`；首次生成或显式 semantic 模式仍使用当前 `OPENAI_MODEL` 或脚本默认值。
 - 使用仅作用于刷新进程的 `OPENAI_MODEL=gpt-5.5` 重建基线后，后端和前端区域 meta 均记录 `semantic_model: "gpt-5.5"`，且没有调用任何外部模型服务。
+
+## 合并后跨平台指纹修复
+
+- 在功能分支快进合并到本地 `dev` 后，验证发现 Windows 检出将部分公共知识源从 LF 转为 CRLF，导致原始字节指纹误报过期。
+- 回归测试先稳定复现 LF 和 CRLF 生成不同指纹，修复后两者生成相同指纹。
+- 指纹计算现仅对有效 UTF-8 文本规范化 CRLF，无法无损解码的二进制内容仍按原始字节处理。
+- 已重建全量 L1 基线和本地索引，并将已有 `backend/article` 真实 L2 文档迁移到新指纹，未重复调用外部模型。
+- 迁移后 `backend`、`frontend` 和 `common` 均为 `fresh`，语义总状态保持 `pending`，准确反映仍有其他模块未执行 L2 增强。

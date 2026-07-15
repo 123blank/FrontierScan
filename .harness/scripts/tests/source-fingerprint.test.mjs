@@ -110,6 +110,22 @@ async function testFileSetAndReadFailureSafety() {
   }
 }
 
+async function testTextLineEndingsDoNotChangeFingerprint() {
+  const root = await createFixture();
+  try {
+    const file = "AGENTS.md";
+    await write(root, file, "# Project rules\n\n- Keep knowledge fresh.\n");
+    const lf = await computeFileSetFingerprint(root, [file]);
+
+    await write(root, file, "# Project rules\r\n\r\n- Keep knowledge fresh.\r\n");
+    const crlf = await computeFileSetFingerprint(root, [file]);
+
+    assert.equal(crlf.fingerprint, lf.fingerprint);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 async function testSymlinkedRootAgentsFileDoesNotAffectCommonFingerprint() {
   const root = await createFixture();
   const externalRoot = await mkdtemp(path.join(os.tmpdir(), "frontier-source-fingerprint-external-"));
@@ -148,6 +164,7 @@ async function testJsonCli() {
 
 await testDeterminismAndAreaIsolation();
 await testFileSetAndReadFailureSafety();
+await testTextLineEndingsDoNotChangeFingerprint();
 await testSymlinkedRootAgentsFileDoesNotAffectCommonFingerprint();
 await testJsonCli();
 console.log("source-fingerprint tests passed");
