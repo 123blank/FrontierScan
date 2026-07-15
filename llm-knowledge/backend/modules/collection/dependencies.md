@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: collection
 doc_type: dependencies
-git_hash: 50253a205e583bc24faab6c8f50cdcf352ddae23
+git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
 source_fingerprint: sha256:989e52a4506cb7a3a3f671a7d940614b1270a0f23460cd17c63d2f182d89b958
-generated_at: 2026-07-15T03:45:44.398Z
+generated_at: 2026-07-15T15:00:02.197Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -33,7 +33,7 @@ source_files:
 
 # collection 依赖基线
 
-## 识别到的 imports
+## 识别到的导入项
 
 - com.frontierscan.article.Article
 - com.frontierscan.article.ArticleService
@@ -88,4 +88,4 @@ source_files:
 
 ## 待增强说明
 
-Needs AI Review: 请区分框架依赖、业务依赖、外部服务依赖和测试替身。
+需要 AI 审核：请区分框架依赖、业务依赖、外部服务依赖和测试替身。

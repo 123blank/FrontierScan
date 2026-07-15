@@ -17,9 +17,11 @@ import {
 } from "./source-fingerprint.mjs";
 
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
-const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_EMBEDDING_MODEL = "text-embedding-v4";
+const DEFAULT_EMBEDDING_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const DEFAULT_SEMANTIC_TIMEOUT_MS = 30_000;
-const DEFAULT_EMBEDDING_BATCH_SIZE = 64;
+const DEFAULT_EMBEDDING_BATCH_SIZE = 10;
 const MAX_EMBEDDING_INPUT_LENGTH = 8_000;
 
 const SEMANTIC_OUTPUT_SCHEMA = {
@@ -57,6 +59,65 @@ function relativePath(root, fullPath) {
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))].sort();
+}
+
+function openAIBaseUrl(env) {
+  const configuredBaseUrl = env.OPENAI_BASE_URL?.trim() || DEFAULT_OPENAI_BASE_URL;
+  const baseUrl = new URL(configuredBaseUrl.replace(/\/+$/, ""));
+  if (baseUrl.protocol !== "https:") {
+    throw new Error("OPENAI_BASE_URL must use HTTPS.");
+  }
+  return baseUrl;
+}
+
+function openAIEndpoint(env, resource) {
+  const baseUrl = openAIBaseUrl(env);
+  const endpoint = new URL(`${baseUrl.toString().replace(/\/+$/, "")}/${resource}`);
+  return endpoint.toString();
+}
+
+function openAIProvider(env) {
+  const hostname = openAIBaseUrl(env).hostname.toLowerCase();
+  return {
+    generatedBy: hostname === "api.openai.com" ? "openai" : "openai-compatible",
+    hostname,
+  };
+}
+
+function embeddingModel(env) {
+  return env.EMBEDDING_MODEL?.trim()
+    || env.OPENAI_EMBEDDING_MODEL?.trim()
+    || DEFAULT_EMBEDDING_MODEL;
+}
+
+function embeddingApiKey(env) {
+  return env.EMBEDDING_API_KEY?.trim() || env.DASHSCOPE_API_KEY?.trim() || "";
+}
+
+function embeddingBaseUrl(env) {
+  const configuredBaseUrl = env.EMBEDDING_BASE_URL?.trim() || DEFAULT_EMBEDDING_BASE_URL;
+  const baseUrl = new URL(configuredBaseUrl.replace(/\/+$/, ""));
+  if (baseUrl.protocol !== "https:") {
+    throw new Error("EMBEDDING_BASE_URL must use HTTPS.");
+  }
+  return baseUrl;
+}
+
+function embeddingProvider(env) {
+  return embeddingBaseUrl(env).hostname.toLowerCase();
+}
+
+function safeEmbeddingProvider(env) {
+  try {
+    return embeddingProvider(env);
+  } catch {
+    return "";
+  }
+}
+
+function embeddingEndpoint(env) {
+  const baseUrl = embeddingBaseUrl(env);
+  return new URL(`${baseUrl.toString().replace(/\/+$/, "")}/embeddings`).toString();
 }
 
 async function readText(filePath) {
@@ -734,8 +795,9 @@ function yamlList(items, indent = 2) {
   return items.map((item) => `${" ".repeat(indent)}- ${item}`).join("\n");
 }
 
-function docHeader({ area, moduleName, docType, generatedAt, gitHash, sourceFingerprint, sourceFiles, layer, baselineStatus = "fresh", semanticStatus, generatedBy = "frontier-kb-generate" }) {
-  return `---\ngenerated_by: ${generatedBy}\nlayer: ${layer}\narea: ${area}\nmodule: ${moduleName}\ndoc_type: ${docType}\ngit_hash: ${gitHash}\nsource_fingerprint: ${sourceFingerprint}\ngenerated_at: ${generatedAt}\nbaseline_status: ${baselineStatus}\nsemantic_status: ${semanticStatus}\nsource_files:\n${yamlList(sourceFiles.slice(0, 30), 2)}\n---\n\n`;
+function docHeader({ area, moduleName, docType, generatedAt, gitHash, sourceFingerprint, sourceFiles, layer, baselineStatus = "fresh", semanticStatus, generatedBy = "frontier-kb-generate", semanticProvider = "" }) {
+  const semanticProviderLine = semanticProvider ? `semantic_provider: ${semanticProvider}\n` : "";
+  return `---\ngenerated_by: ${generatedBy}\nlayer: ${layer}\narea: ${area}\nmodule: ${moduleName}\ndoc_type: ${docType}\ngit_hash: ${gitHash}\nsource_fingerprint: ${sourceFingerprint}\ngenerated_at: ${generatedAt}\nbaseline_status: ${baselineStatus}\nsemantic_status: ${semanticStatus}\n${semanticProviderLine}source_files:\n${yamlList(sourceFiles.slice(0, 30), 2)}\n---\n\n`;
 }
 
 function bullet(items, emptyText = "暂无自动识别结果。") {
@@ -758,26 +820,26 @@ function backendDoc(module, docType, context) {
 
   switch (docType) {
     case "overview":
-      return `${header}# ${module.name} 后端模块概览\n\n## 自动识别职责\n\n- 模块路径：\`${module.path}\`\n- Java 文件数：${facts.file_count}\n- 类/接口/记录/枚举数量：${facts.classes.length}\n- Controller 数量：${facts.controllers.length}\n- Entity 数量：${facts.entities.length}\n- Repository 数量：${facts.repositories.length}\n\n## 主要类\n\n${bullet(facts.classes.map((item) => `${item.kind} ${item.name} (${item.file})`))}\n\n## 语义说明\n\nNeeds AI Review: 请结合 L2 语义增强确认该模块的业务边界、核心流程和跨模块依赖。\n`;
+      return `${header}# ${module.name} 后端模块概览\n\n## 自动识别职责\n\n- 模块路径：\`${module.path}\`\n- Java 文件数：${facts.file_count}\n- 类/接口/记录/枚举数量：${facts.classes.length}\n- 控制器数量：${facts.controllers.length}\n- 实体数量：${facts.entities.length}\n- 数据仓库数量：${facts.repositories.length}\n\n## 主要类\n\n${bullet(facts.classes.map((item) => `${item.kind} ${item.name} (${item.file})`))}\n\n## 语义说明\n\n需要 AI 审核：请结合 L2 语义增强确认该模块的业务边界、核心流程和跨模块依赖。\n`;
     case "interfaces":
-      return `${header}# ${module.name} 接口与集成点\n\n## Controllers\n\n${bullet(controllerLines)}\n\n## HTTP Endpoints\n\n${bullet(endpointLines)}\n\n## 外部调用/集成提示\n\nNeeds AI Review: 自动基线只识别 Spring MVC 注解，复杂参数、权限、响应体和异常语义需由 L2 或人工补充。\n`;
+      return `${header}# ${module.name} 接口与集成点\n\n## 控制器\n\n${bullet(controllerLines)}\n\n## HTTP 接口\n\n${bullet(endpointLines)}\n\n## 外部调用与集成提示\n\n需要 AI 审核：自动基线只识别 Spring MVC 注解，复杂参数、权限、响应体和异常语义需由 L2 或人工补充。\n`;
     case "architecture":
-      return `${header}# ${module.name} 架构基线\n\n## 模块内部结构\n\n${bullet(facts.source_files)}\n\n## 定时/异步执行\n\n${bullet([...jobLines, ...asyncLines])}\n\n## 待增强说明\n\nNeeds AI Review: 请补充核心调用链、事务边界、异步补偿流程和跨模块协作方式。\n`;
+      return `${header}# ${module.name} 架构基线\n\n## 模块内部结构\n\n${bullet(facts.source_files)}\n\n## 定时与异步执行\n\n${bullet([...jobLines, ...asyncLines])}\n\n## 待增强说明\n\n需要 AI 审核：请补充核心调用链、事务边界、异步补偿流程和跨模块协作方式。\n`;
     case "dependencies":
-      return `${header}# ${module.name} 依赖基线\n\n## 识别到的 imports\n\n${bullet(facts.imports.slice(0, 50))}\n\n## 待增强说明\n\nNeeds AI Review: 请区分框架依赖、业务依赖、外部服务依赖和测试替身。\n`;
+      return `${header}# ${module.name} 依赖基线\n\n## 识别到的导入项\n\n${bullet(facts.imports.slice(0, 50))}\n\n## 待增强说明\n\n需要 AI 审核：请区分框架依赖、业务依赖、外部服务依赖和测试替身。\n`;
     case "storage":
-      return `${header}# ${module.name} 存储基线\n\n## Entities / Tables\n\n${bullet(entityLines)}\n\n## Repositories / Mappers\n\n${bullet(repositoryLines)}\n\n## 待增强说明\n\nNeeds AI Review: 请结合 Flyway migration、索引、约束和查询模式补充数据语义。\n`;
+      return `${header}# ${module.name} 存储基线\n\n## 实体与数据表\n\n${bullet(entityLines)}\n\n## 数据仓库与映射器\n\n${bullet(repositoryLines)}\n\n## 待增强说明\n\n需要 AI 审核：请结合 Flyway 迁移、索引、约束和查询模式补充数据语义。\n`;
     case "config":
-      return `${header}# ${module.name} 配置基线\n\n## Configuration Properties\n\n${bullet(configLines)}\n\n## 异步/调度配置线索\n\n${bullet([...jobLines, ...asyncLines])}\n\n## 待增强说明\n\nNeeds AI Review: 请补充环境变量、默认值、生产风险和降级行为。\n`;
+      return `${header}# ${module.name} 配置基线\n\n## 配置属性\n\n${bullet(configLines)}\n\n## 异步与调度配置线索\n\n${bullet([...jobLines, ...asyncLines])}\n\n## 待增强说明\n\n需要 AI 审核：请补充环境变量、默认值、生产风险和降级行为。\n`;
     case "pitfalls":
       return `${header}# ${module.name} 风险与注意事项\n\n## 自动识别风险线索\n\n${bullet([
         facts.controllers.length ? "存在对外 HTTP API，需关注鉴权、参数校验和响应兼容性。" : "",
         facts.scheduled_jobs.length ? "存在定时任务，需关注重复执行、锁、幂等和失败恢复。" : "",
         facts.async_methods.length ? "存在异步执行，需关注线程池、事务上下文和异常传播。" : "",
         facts.entities.length ? "存在持久化实体，需关注 migration、索引和数据兼容。" : "",
-      ].filter(Boolean))}\n\n## 待增强说明\n\nNeeds AI Review: 请结合线上故障、测试缺口和业务规则补充真实风险。\n`;
+      ].filter(Boolean))}\n\n## 待增强说明\n\n需要 AI 审核：请结合线上故障、测试缺口和业务规则补充真实风险。\n`;
     default:
-      return `${header}# ${module.name} ${docType}\n\nNeeds AI Review\n`;
+      return `${header}# ${module.name} ${docType}\n\n需要 AI 审核\n`;
   }
 }
 
@@ -786,23 +848,23 @@ function frontendDoc(module, docType, context) {
   const header = docHeader({ ...context, area: "frontend", moduleName: module.name, docType, sourceFiles: facts.source_files, layer: "L1-baseline" });
   switch (docType) {
     case "overview":
-      return `${header}# ${module.name} 前端区域概览\n\n## 自动识别职责\n\n- 区域路径：\`${module.path}\`\n- 文件数：${facts.file_count}\n- Vue 组件数：${facts.components.length}\n- API 调用数：${facts.api_calls.length}\n- 路由数：${facts.routes.length}\n- Store 数：${facts.stores.length}\n\n## 文件清单\n\n${bullet(facts.files.map((item) => `${item.file} (${item.kind})`))}\n\n## 语义说明\n\nNeeds AI Review: 请结合页面流程、B2B 后台交互规范和用户任务补充语义。\n`;
+      return `${header}# ${module.name} 前端区域概览\n\n## 自动识别职责\n\n- 区域路径：\`${module.path}\`\n- 文件数：${facts.file_count}\n- Vue 组件数：${facts.components.length}\n- API 调用数：${facts.api_calls.length}\n- 路由数：${facts.routes.length}\n- Store 数：${facts.stores.length}\n\n## 文件清单\n\n${bullet(facts.files.map((item) => `${item.file} (${item.kind})`))}\n\n## 语义说明\n\n需要 AI 审核：请结合页面流程、B2B 后台交互规范和用户任务补充语义。\n`;
     case "routes":
-      return `${header}# ${module.name} 路由基线\n\n${bullet(facts.routes.map((item) => `${item.path} -> ${item.name} (${item.file})`))}\n\n## 路由守卫\n\n${bullet(facts.route_guards.map((item) => item.kind === "route-meta" ? `${item.key}=${item.value} (${item.file})` : `${item.kind} (${item.file})`))}\n\nNeeds AI Review: 权限跳转和布局关系需结合源码进一步确认。\n`;
+      return `${header}# ${module.name} 路由基线\n\n${bullet(facts.routes.map((item) => `${item.path} -> ${item.name} (${item.file})`))}\n\n## 路由守卫\n\n${bullet(facts.route_guards.map((item) => item.kind === "route-meta" ? `${item.key}=${item.value} (${item.file})` : `${item.kind} (${item.file})`))}\n\n需要 AI 审核：权限跳转和布局关系需结合源码进一步确认。\n`;
     case "components":
-      return `${header}# ${module.name} 组件基线\n\n${bullet(facts.components.map((item) => `${item.name} (${item.file})`))}\n\n## Exports\n\n${bullet(facts.exports.map((item) => `${item.name} (${item.file})`))}\n\n## 页面到 API 依赖\n\n${bullet(facts.api_dependencies.map((item) => `${item.symbol} -> api/${item.api_module} (${item.file})`))}\n\nNeeds AI Review: 组件职责、复用边界、表格/弹窗/筛选交互需补充。\n`;
+      return `${header}# ${module.name} 组件基线\n\n${bullet(facts.components.map((item) => `${item.name} (${item.file})`))}\n\n## 导出项\n\n${bullet(facts.exports.map((item) => `${item.name} (${item.file})`))}\n\n## 页面到 API 依赖\n\n${bullet(facts.api_dependencies.map((item) => `${item.symbol} -> api/${item.api_module} (${item.file})`))}\n\n需要 AI 审核：组件职责、复用边界、表格、弹窗和筛选交互需补充。\n`;
     case "api-usage":
-      return `${header}# ${module.name} API 使用基线\n\n${bullet(facts.api_calls.map((item) => `${item.method} ${item.path} (${item.file})`))}\n\nNeeds AI Review: 请求参数、错误处理、加载状态和后端契约兼容性需补充。\n`;
+      return `${header}# ${module.name} API 使用基线\n\n${bullet(facts.api_calls.map((item) => `${item.method} ${item.path} (${item.file})`))}\n\n需要 AI 审核：请求参数、错误处理、加载状态和后端契约兼容性需补充。\n`;
     case "state":
-      return `${header}# ${module.name} 状态基线\n\n${bullet(facts.stores.map((item) => `${item.name} (${item.file})`))}\n\nNeeds AI Review: 跨页面状态、localStorage、鉴权状态和缓存刷新策略需补充。\n`;
+      return `${header}# ${module.name} 状态基线\n\n${bullet(facts.stores.map((item) => `${item.name} (${item.file})`))}\n\n需要 AI 审核：跨页面状态、localStorage、鉴权状态和缓存刷新策略需补充。\n`;
     case "pitfalls":
       return `${header}# ${module.name} 风险与注意事项\n\n${bullet([
         facts.api_calls.length ? "存在后端 API 依赖，需关注空态、错误态、鉴权过期和契约变化。" : "",
         facts.routes.length ? "存在路由配置，需关注登录态和默认跳转。" : "",
         facts.components.length ? "存在 Vue 组件，需关注 B2B 后台一致性和响应式布局。" : "",
-      ].filter(Boolean))}\n\nNeeds AI Review: 请补充页面级业务风险、测试缺口和已知 UI 陷阱。\n`;
+      ].filter(Boolean))}\n\n需要 AI 审核：请补充页面级业务风险、测试缺口和已知 UI 陷阱。\n`;
     default:
-      return `${header}# ${module.name} ${docType}\n\nNeeds AI Review\n`;
+      return `${header}# ${module.name} ${docType}\n\n需要 AI 审核\n`;
   }
 }
 
@@ -843,7 +905,17 @@ function responseOutputText(payload) {
     .join("\n");
 }
 
-function renderSemanticDoc(module, context, model, semantic) {
+function sanitizedExternalErrorMessage(error) {
+  const message = typeof error?.message === "string" && error.message
+    ? error.message
+    : "Unknown error";
+  const causeCode = typeof error?.cause?.code === "string" && /^[A-Za-z0-9_-]+$/.test(error.cause.code)
+    ? error.cause.code
+    : "";
+  return causeCode ? `${message} (${causeCode})` : message;
+}
+
+function renderSemanticDoc(module, context, model, semantic, provider) {
   const header = docHeader({
     ...context,
     area: module.area,
@@ -852,9 +924,10 @@ function renderSemanticDoc(module, context, model, semantic) {
     sourceFiles: module.facts.source_files,
     layer: "L2-semantic",
     semanticStatus: "fresh",
-    generatedBy: "openai",
+    generatedBy: provider.generatedBy,
+    semanticProvider: provider.hostname,
   });
-  return `${header}# ${module.name} 语义增强\n\nsemantic_status: fresh\nsemantic_model: ${model}\n\n## 模块职责\n\n${semantic.responsibility.trim()}\n\n## 核心业务流程\n\n${bullet(semantic.business_flows)}\n\n## 跨模块依赖\n\n${bullet(semantic.cross_module_dependencies)}\n\n## 风险点\n\n${bullet(semantic.risks)}\n\n## 动态消费提示\n\n${bullet(semantic.consumption_hints)}\n\n## 来源文件\n\n${bullet(module.facts.source_files)}\n`;
+  return `${header}# ${module.name} 语义增强\n\nsemantic_status: fresh\nsemantic_model: ${model}\nsemantic_provider: ${provider.hostname}\n\n## 模块职责\n\n${semantic.responsibility.trim()}\n\n## 核心业务流程\n\n${bullet(semantic.business_flows)}\n\n## 跨模块依赖\n\n${bullet(semantic.cross_module_dependencies)}\n\n## 风险点\n\n${bullet(semantic.risks)}\n\n## 动态消费提示\n\n${bullet(semantic.consumption_hints)}\n\n## 来源文件\n\n${bullet(module.facts.source_files)}\n`;
 }
 
 async function callOpenAIForSemantic(module, context, env, requestOptions = {}) {
@@ -885,7 +958,8 @@ async function callOpenAIForSemantic(module, context, env, requestOptions = {}) 
   const abortController = new AbortController();
   const timeout = setTimeout(() => abortController.abort(), timeoutMs);
   try {
-    const response = await fetchImpl("https://api.openai.com/v1/responses", {
+    const provider = openAIProvider(env);
+    const response = await fetchImpl(openAIEndpoint(env, "responses"), {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
@@ -918,12 +992,12 @@ async function callOpenAIForSemantic(module, context, env, requestOptions = {}) 
       status: "fresh",
       model,
       message: "OpenAI semantic enrichment completed.",
-      content: renderSemanticDoc(module, context, model, semantic),
+      content: renderSemanticDoc(module, context, model, semantic, provider),
     };
   } catch (error) {
     const message = abortController.signal.aborted
       ? `OpenAI semantic request timed out after ${timeoutMs}ms.`
-      : error.message;
+      : sanitizedExternalErrorMessage(error);
     return {
       status: "failed",
       model,
@@ -948,11 +1022,12 @@ function embeddingInput(chunk) {
   ].join("\n").slice(0, MAX_EMBEDDING_INPUT_LENGTH);
 }
 
-function embeddingRecord(chunk, model, embedding) {
+function embeddingRecord(chunk, model, provider, embedding) {
   return {
     schema_version: "1.0",
     id: chunk.id,
     model,
+    embedding_provider: provider,
     embedding,
     area: chunk.area,
     module: chunk.module,
@@ -964,13 +1039,15 @@ function embeddingRecord(chunk, model, embedding) {
 }
 
 async function callOpenAIForEmbeddings(chunks, env, requestOptions = {}) {
-  const apiKey = env.OPENAI_API_KEY;
-  const model = env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL;
+  const apiKey = embeddingApiKey(env);
+  const model = embeddingModel(env);
+  let provider = safeEmbeddingProvider(env);
   if (!apiKey) {
     return {
       status: "pending",
       model,
-      message: "OPENAI_API_KEY is not configured; embeddings remain pending.",
+      provider,
+      message: "EMBEDDING_API_KEY or DASHSCOPE_API_KEY is not configured; embeddings remain pending.",
       records: [],
     };
   }
@@ -979,12 +1056,13 @@ async function callOpenAIForEmbeddings(chunks, env, requestOptions = {}) {
   const timeoutMs = requestOptions.timeoutMs ?? DEFAULT_SEMANTIC_TIMEOUT_MS;
   const records = [];
   try {
+    provider = embeddingProvider(env);
     for (let start = 0; start < chunks.length; start += DEFAULT_EMBEDDING_BATCH_SIZE) {
       const batch = chunks.slice(start, start + DEFAULT_EMBEDDING_BATCH_SIZE);
       const abortController = new AbortController();
       const timeout = setTimeout(() => abortController.abort(), timeoutMs);
       try {
-        const response = await fetchImpl("https://api.openai.com/v1/embeddings", {
+        const response = await fetchImpl(embeddingEndpoint(env), {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${apiKey}`,
@@ -998,20 +1076,20 @@ async function callOpenAIForEmbeddings(chunks, env, requestOptions = {}) {
           signal: abortController.signal,
         });
         if (!response.ok) {
-          throw new Error(`OpenAI embeddings response status ${response.status}`);
+          throw new Error(`Embedding response status ${response.status}`);
         }
         const payload = await response.json();
         const responseItems = Array.isArray(payload?.data) ? payload.data : [];
         if (responseItems.length !== batch.length) {
-          throw new Error(`OpenAI embeddings response returned ${responseItems.length} vectors for ${batch.length} inputs.`);
+          throw new Error(`Embedding response returned ${responseItems.length} vectors for ${batch.length} inputs.`);
         }
         const byIndex = new Map(responseItems.map((item) => [item.index, item]));
         for (let index = 0; index < batch.length; index += 1) {
           const item = byIndex.get(index);
           if (!item || !Array.isArray(item.embedding) || !item.embedding.every(Number.isFinite)) {
-            throw new Error(`OpenAI embeddings response has an invalid vector at index ${index}.`);
+            throw new Error(`Embedding response has an invalid vector at index ${index}.`);
           }
-          records.push(embeddingRecord(batch[index], model, item.embedding));
+          records.push(embeddingRecord(batch[index], model, provider, item.embedding));
         }
       } finally {
         clearTimeout(timeout);
@@ -1020,17 +1098,19 @@ async function callOpenAIForEmbeddings(chunks, env, requestOptions = {}) {
     return {
       status: "fresh",
       model,
-      message: `OpenAI embeddings completed for ${records.length} chunks.`,
+      provider,
+      message: `Embedding generation completed for ${records.length} chunks.`,
       records,
     };
   } catch (error) {
     const message = error?.name === "AbortError"
-      ? `OpenAI embeddings request timed out after ${timeoutMs}ms.`
+      ? `Embedding request timed out after ${timeoutMs}ms.`
       : error.message;
     return {
       status: "failed",
       model,
-      message: `OpenAI embeddings failed: ${message}`,
+      provider,
+      message: `Embedding generation failed: ${message}`,
       records: [],
     };
   }
@@ -1063,6 +1143,9 @@ function createChunk(entry, module, context) {
     .replace(/\r/g, "")
     .trim()
     .slice(0, 4000);
+  const semanticProvider = entry.docType === "semantic"
+    ? entry.content.match(/^semantic_provider:\s*([^\s]+)\s*$/m)?.[1] ?? ""
+    : "";
   return {
     id: `${entry.area}:${entry.module}:${entry.docType}`,
     area: entry.area,
@@ -1076,6 +1159,7 @@ function createChunk(entry, module, context) {
     generated_at: context.generatedAt,
     baseline_status: context.baselineStatus,
     semantic_status: context.semanticStatus,
+    ...(semanticProvider ? { semantic_provider: semanticProvider } : {}),
     keywords: unique([
       entry.area,
       entry.module,
@@ -1337,7 +1421,7 @@ function aggregateDocumentSemanticStatus(moduleFreshness) {
   return "pending";
 }
 
-function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, sourceFingerprint, baselineStatus, semanticStatus, indexStatus, model, embeddingModel }) {
+function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, sourceFingerprint, baselineStatus, semanticStatus, indexStatus, model, embeddingModel, embeddingProvider }) {
   const technology = area === "backend"
     ? [
         "  language: Java 17",
@@ -1370,6 +1454,7 @@ function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, s
     `source_changed: ${baselineStatus !== "fresh"}`,
     `semantic_model: "${model}"`,
     `embedding_model: "${embeddingModel}"`,
+    `embedding_provider: "${embeddingProvider}"`,
     "technology:",
     ...technology,
     "modules:",
@@ -1400,7 +1485,7 @@ function buildAreaMeta({ area, modules, moduleFreshness, generatedAt, gitHash, s
   return `${lines.join("\n")}\n`;
 }
 
-function buildIndexManifest({ chunks, generatedAt, gitHash, areas, semanticStatus, embeddingsStatus, embeddingModel, indexedFingerprints }) {
+function buildIndexManifest({ chunks, generatedAt, gitHash, areas, semanticStatus, embeddingsStatus, embeddingModel, embeddingProvider, indexedFingerprints }) {
   return {
     schema_version: "1.0",
     generated_by: "frontier-kb-generate",
@@ -1413,6 +1498,7 @@ function buildIndexManifest({ chunks, generatedAt, gitHash, areas, semanticStatu
     semantic_status: semanticStatus,
     embeddings_status: embeddingsStatus,
     embedding_model: embeddingModel,
+    embedding_provider: embeddingProvider,
     files: {
       chunks: "llm-knowledge/index/chunks.json",
       embeddings: embeddingsStatus === "fresh" ? "llm-knowledge/index/embeddings.jsonl" : null,
@@ -1538,6 +1624,13 @@ async function readAreaSemanticStatus(root, area) {
   return content.match(/^semantic_status:\s*([^\s]+)\s*$/m)?.[1] ?? "pending";
 }
 
+async function readAreaSemanticModel(root, area, fallback) {
+  const metaPath = path.join(root, "llm-knowledge", area, "meta.yaml");
+  if (!existsSync(metaPath)) return fallback;
+  const content = await readText(metaPath);
+  return content.match(/^semantic_model:\s*"([^"]+)"\s*$/m)?.[1] ?? fallback;
+}
+
 export async function runGenerateKnowledge(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   const area = options.area ?? "all";
@@ -1546,6 +1639,8 @@ export async function runGenerateKnowledge(options = {}) {
   const dryRun = Boolean(options.dryRun);
   const withEmbeddings = Boolean(options.withEmbeddings);
   const env = options.env ?? process.env;
+  const configuredEmbeddingModel = embeddingModel(env);
+  const configuredEmbeddingProvider = safeEmbeddingProvider(env);
   const generatedAt = new Date().toISOString();
   const gitHash = await getGitHash(root);
   const discovery = await discoverModules(root, area, options.readTextImpl ?? readText);
@@ -1595,7 +1690,11 @@ export async function runGenerateKnowledge(options = {}) {
     plannedDeletes: [],
     deletedFiles: [],
     semantic: { status: "pending", model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL },
-    embeddings: { status: "skipped", model: env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL },
+    embeddings: {
+      status: "skipped",
+      model: configuredEmbeddingModel,
+      provider: configuredEmbeddingProvider,
+    },
   };
 
   const includeBaseline = mode === "baseline" || mode === "all";
@@ -1726,11 +1825,12 @@ export async function runGenerateKnowledge(options = {}) {
   ));
   const indexAreas = unique(indexChunks.map((chunk) => chunk.area));
 
-  const embeddingModel = env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL;
+  const selectedEmbeddingModel = configuredEmbeddingModel;
   let embeddingsStatus = "skipped";
   let embeddingResult = {
     status: "skipped",
-    model: embeddingModel,
+    model: selectedEmbeddingModel,
+    provider: configuredEmbeddingProvider,
     message: "Embedding generation was not requested.",
     records: [],
   };
@@ -1738,8 +1838,9 @@ export async function runGenerateKnowledge(options = {}) {
     embeddingResult = dryRun
       ? {
           status: "pending",
-          model: embeddingModel,
-          message: "Dry run skips OpenAI embedding generation.",
+          model: selectedEmbeddingModel,
+          provider: configuredEmbeddingProvider,
+          message: "Dry run skips embedding generation.",
           records: [],
         }
       : await callOpenAIForEmbeddings(indexChunks, env, {
@@ -1755,6 +1856,7 @@ export async function runGenerateKnowledge(options = {}) {
   result.embeddings = {
     status: embeddingResult.status,
     model: embeddingResult.model,
+    provider: embeddingResult.provider,
     message: embeddingResult.message,
     chunks: embeddingResult.records.length,
   };
@@ -1774,7 +1876,8 @@ export async function runGenerateKnowledge(options = {}) {
     areas: indexAreas,
     semanticStatus: globalSemanticStatus,
     embeddingsStatus,
-    embeddingModel,
+    embeddingModel: selectedEmbeddingModel,
+    embeddingProvider: embeddingResult.provider,
     indexedFingerprints,
   });
   await writePlanned(result, path.join(indexRoot, "chunks.json"), `${JSON.stringify(indexChunks, null, 2)}\n`, dryRun);
@@ -1789,6 +1892,9 @@ export async function runGenerateKnowledge(options = {}) {
     const areaBaselineStatus = aggregateBaselineStatus(moduleFreshness);
     const areaSemanticStatus = aggregateDocumentSemanticStatus(moduleFreshness);
     const areaIndexStatus = indexedFingerprints.statuses[selectedArea] === "complete" ? "fresh" : "partial";
+    const areaSemanticModel = includeSemantic
+      ? env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL
+      : await readAreaSemanticModel(root, selectedArea, env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
     const sourceCoverage = await buildSourceCoverage(
       root,
       selectedArea,
@@ -1813,8 +1919,9 @@ export async function runGenerateKnowledge(options = {}) {
       baselineStatus: areaBaselineStatus,
       semanticStatus: areaSemanticStatus,
       indexStatus: areaIndexStatus,
-      model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
-      embeddingModel,
+      model: areaSemanticModel,
+      embeddingModel: selectedEmbeddingModel,
+      embeddingProvider: embeddingResult.provider,
     });
     await writePlanned(result, path.join(root, "llm-knowledge", selectedArea, "meta.yaml"), meta, dryRun);
   }
@@ -1862,7 +1969,7 @@ async function main() {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  console.log("# FrontierScan Knowledge Generation");
+  console.log("# FrontierScan 知识生成");
   console.log(`Root: ${result.root}`);
   console.log(`Area: ${result.area}`);
   console.log(`Mode: ${result.mode}`);

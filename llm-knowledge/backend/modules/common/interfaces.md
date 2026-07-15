@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: common
 doc_type: interfaces
-git_hash: 50253a205e583bc24faab6c8f50cdcf352ddae23
+git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
 source_fingerprint: sha256:99c956d5a210d763f120b72d810cac701140ee3cfc0cb4a14b511df4a9ac278c
-generated_at: 2026-07-15T03:45:44.398Z
+generated_at: 2026-07-15T15:00:02.197Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -30,15 +30,15 @@ source_files:
 
 # common 接口与集成点
 
-## Controllers
+## 控制器
 
 - PingController：/api (backend/src/main/java/com/frontierscan/common/api/PingController.java)
 - GlobalExceptionHandler：(root) (backend/src/main/java/com/frontierscan/common/error/GlobalExceptionHandler.java)
 
-## HTTP Endpoints
+## HTTP 接口
 
 - GET /api/ping -> PingController (backend/src/main/java/com/frontierscan/common/api/PingController.java)
 
-## 外部调用/集成提示
+## 外部调用与集成提示
 
-Needs AI Review: 自动基线只识别 Spring MVC 注解，复杂参数、权限、响应体和异常语义需由 L2 或人工补充。
+需要 AI 审核：自动基线只识别 Spring MVC 注解，复杂参数、权限、响应体和异常语义需由 L2 或人工补充。

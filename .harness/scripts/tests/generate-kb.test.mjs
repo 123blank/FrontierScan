@@ -11,6 +11,7 @@ import { computeFileSetFingerprint, computeSourceFingerprints } from "../lib/sou
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = path.resolve(testDirectory, "../../..");
 const generateScript = path.resolve(testDirectory, "../generate-kb.ps1");
 const queryScript = path.resolve(testDirectory, "../kb-query.ps1");
 
@@ -669,6 +670,7 @@ async function testSemanticSuccessUsesStructuredOutput() {
 
     const semanticDoc = await readFile(path.join(root, "llm-knowledge/backend/modules/article/semantic.md"), "utf8");
     assert.match(semanticDoc, /^---\ngenerated_by: openai/m);
+    assert.match(semanticDoc, /^semantic_provider: api\.openai\.com$/m);
     assert.match(semanticDoc, /## 模块职责/);
     assert.match(semanticDoc, /## 核心业务流程/);
     assert.match(semanticDoc, /## 来源文件/);
@@ -763,6 +765,142 @@ async function testSemanticHttpFailureDegrades() {
     assert.match(result.semantic.message, /status 429/);
     const semanticDoc = await readFile(path.join(root, "llm-knowledge/backend/modules/article/semantic.md"), "utf8");
     assert.match(semanticDoc, /semantic_status: failed/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testGeneratedMarkdownUsesChineseExplanatoryText() {
+  const root = await createFixture();
+  try {
+    await runGenerateKnowledge({ root, area: "all", mode: "baseline" });
+
+    const documentPaths = [
+      "llm-knowledge/backend/modules/article/overview.md",
+      "llm-knowledge/backend/modules/article/interfaces.md",
+      "llm-knowledge/backend/modules/article/dependencies.md",
+      "llm-knowledge/backend/modules/article/storage.md",
+      "llm-knowledge/backend/modules/article/config.md",
+      "llm-knowledge/frontend/modules/api/components.md",
+    ];
+    const generatedMarkdown = (await Promise.all(
+      documentPaths.map((relativePath) => readFile(path.join(root, relativePath), "utf8"))
+    )).join("\n");
+
+    assert.doesNotMatch(
+      generatedMarkdown,
+      /Needs AI Review|## Controllers|## HTTP Endpoints|## Exports|## Entities \/ Tables|## Repositories \/ Mappers|## Configuration Properties|## 识别到的 imports/
+    );
+    assert.match(generatedMarkdown, /## 控制器/);
+    assert.match(generatedMarkdown, /## HTTP 接口/);
+    assert.match(generatedMarkdown, /需要 AI 审核：/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testOperationalEmbeddingDocsUseDedicatedConfiguration() {
+  const operationalDocs = [
+    ".harness/scripts/README.md",
+    ".codex/skills/frontier-kb-generate/SKILL.md",
+    "docs/AI-handover.md",
+    "llm-knowledge/index/chunks.json",
+  ];
+  for (const relativePath of operationalDocs) {
+    const content = await readFile(path.join(repositoryRoot, relativePath), "utf8");
+    for (const environmentVariable of [
+      "EMBEDDING_API_KEY",
+      "DASHSCOPE_API_KEY",
+      "EMBEDDING_BASE_URL",
+      "EMBEDDING_MODEL",
+    ]) {
+      assert.match(content, new RegExp(environmentVariable), `${relativePath} must document ${environmentVariable}`);
+    }
+    assert.match(content, /text-embedding-v4/, `${relativePath} must document the default embedding model`);
+    assert.doesNotMatch(
+      content,
+      /Use `OPENAI_API_KEY` and optional `OPENAI_EMBEDDING_MODEL`|OpenAI Embeddings API|`-WithEmbeddings` 当前明确返回 `disabled`|Embedding 明确 `disabled`|Maximum batch size: 64/,
+      `${relativePath} contains a superseded embedding contract`
+    );
+  }
+
+  const skill = await readFile(
+    path.join(repositoryRoot, ".codex/skills/frontier-kb-generate/SKILL.md"),
+    "utf8"
+  );
+  assert.match(skill, /## 快速工作流/);
+  assert.match(skill, /## 分层规则/);
+  assert.match(skill, /## 安全规则/);
+}
+
+async function testSemanticUsesConfiguredBaseUrl() {
+  const root = await createFixture();
+  let requestUrl = "";
+  try {
+    const result = await runGenerateKnowledge({
+      root,
+      area: "backend",
+      module: "article",
+      mode: "semantic",
+      env: {
+        OPENAI_API_KEY: "test-key",
+        OPENAI_BASE_URL: "https://coding.xiaofeilun.cn/v1/",
+      },
+      fetchImpl: async (url) => {
+        requestUrl = url;
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              output_text: JSON.stringify({
+                responsibility: "Article module responsibilities.",
+                business_flows: [],
+                cross_module_dependencies: [],
+                risks: [],
+                consumption_hints: [],
+              }),
+            };
+          },
+        };
+      },
+    });
+
+    assert.equal(result.semantic.status, "fresh");
+    assert.equal(requestUrl, "https://coding.xiaofeilun.cn/v1/responses");
+    const semanticDoc = await readFile(path.join(root, "llm-knowledge/backend/modules/article/semantic.md"), "utf8");
+    assert.match(semanticDoc, /^generated_by: openai-compatible$/m);
+    assert.match(semanticDoc, /^semantic_provider: coding\.xiaofeilun\.cn$/m);
+    const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
+    const semanticChunk = chunks.find((chunk) => (
+      chunk.area === "backend" && chunk.module === "article" && chunk.doc_type === "semantic"
+    ));
+    assert.equal(semanticChunk.semantic_provider, "coding.xiaofeilun.cn");
+    assert.match(semanticChunk.text, /^semantic_provider: coding\.xiaofeilun\.cn$/m);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testSemanticNetworkFailureIncludesSanitizedCauseCode() {
+  const root = await createFixture();
+  try {
+    const networkError = new TypeError("fetch failed");
+    networkError.cause = Object.assign(new Error("connect ECONNREFUSED private-host:443"), {
+      code: "ECONNREFUSED",
+    });
+    const result = await runGenerateKnowledge({
+      root,
+      area: "backend",
+      module: "article",
+      mode: "semantic",
+      env: { OPENAI_API_KEY: "test-key" },
+      fetchImpl: async () => { throw networkError; },
+    });
+
+    assert.equal(result.semantic.status, "failed");
+    assert.match(result.semantic.message, /fetch failed \(ECONNREFUSED\)/);
+    assert.doesNotMatch(result.semantic.message, /private-host/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -907,7 +1045,7 @@ async function testBaselineRefreshPreservesSemanticLayer() {
       root,
       area: "backend",
       mode: "semantic",
-      env: { OPENAI_API_KEY: "test-key" },
+      env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "semantic-model-v1" },
       fetchImpl,
     });
     const semanticPath = path.join(root, "llm-knowledge/backend/modules/article/semantic.md");
@@ -922,6 +1060,7 @@ async function testBaselineRefreshPreservesSemanticLayer() {
     assert.deepEqual(chunksAfter.find((chunk) => chunk.id === "backend:article:semantic"), semanticChunkBefore);
     const backendMeta = await readFile(path.join(root, "llm-knowledge/backend/meta.yaml"), "utf8");
     assert.match(backendMeta, /^semantic_status: fresh$/m);
+    assert.match(backendMeta, /^semantic_model: "semantic-model-v1"$/m);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -948,7 +1087,7 @@ async function testEmbeddingsGenerateJsonlWhenRequested() {
       module: "article",
       mode: "baseline",
       withEmbeddings: true,
-      env: { OPENAI_API_KEY: "test-key", OPENAI_EMBEDDING_MODEL: "test-embedding-model" },
+      env: { DASHSCOPE_API_KEY: "dashscope-test-key" },
       fetchImpl: async (url, options) => {
         requests.push({ url, options });
         const body = JSON.parse(options.body);
@@ -964,14 +1103,17 @@ async function testEmbeddingsGenerateJsonlWhenRequested() {
       },
     });
     assert.equal(result.embeddings.status, "fresh");
+    assert.equal(result.embeddings.provider, "dashscope.aliyuncs.com");
     assert.equal(requests.length, 1);
-    assert.equal(requests[0].url, "https://api.openai.com/v1/embeddings");
+    assert.equal(requests[0].url, "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings");
+    assert.equal(requests[0].options.headers.Authorization, "Bearer dashscope-test-key");
     const requestBody = JSON.parse(requests[0].options.body);
-    assert.equal(requestBody.model, "test-embedding-model");
+    assert.equal(requestBody.model, "text-embedding-v4");
     assert.ok(Array.isArray(requestBody.input));
 
     const manifest = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/manifest.json"), "utf8"));
     assert.equal(manifest.embeddings_status, "fresh");
+    assert.equal(manifest.embedding_provider, "dashscope.aliyuncs.com");
     assert.equal(manifest.files.embeddings, "llm-knowledge/index/embeddings.jsonl");
     const chunks = JSON.parse(await readFile(path.join(root, "llm-knowledge/index/chunks.json"), "utf8"));
     const embeddingLines = (await readFile(path.join(root, "llm-knowledge/index/embeddings.jsonl"), "utf8"))
@@ -979,7 +1121,84 @@ async function testEmbeddingsGenerateJsonlWhenRequested() {
       .split("\n")
       .map((line) => JSON.parse(line));
     assert.equal(embeddingLines.length, chunks.length);
+    assert.ok(embeddingLines.every((record) => record.embedding_provider === "dashscope.aliyuncs.com"));
     assert.deepEqual(embeddingLines[0].embedding, [0, requestBody.input[0].length]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testEmbeddingsUseDedicatedConfiguration() {
+  const root = await createFixture();
+  let request = null;
+  try {
+    const result = await runGenerateKnowledge({
+      root,
+      area: "backend",
+      module: "article",
+      mode: "baseline",
+      withEmbeddings: true,
+      env: {
+        OPENAI_API_KEY: "semantic-key-must-not-be-used",
+        EMBEDDING_API_KEY: "embedding-key",
+        EMBEDDING_BASE_URL: "https://embedding.example.com/v1/",
+        EMBEDDING_MODEL: "custom-embedding-model",
+        OPENAI_EMBEDDING_MODEL: "legacy-model-must-not-win",
+      },
+      fetchImpl: async (url, options) => {
+        request = { url, options };
+        const body = JSON.parse(options.body);
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              data: body.input.map((input, index) => ({ index, embedding: [index, input.length] })),
+            };
+          },
+        };
+      },
+    });
+
+    assert.equal(result.embeddings.status, "fresh");
+    assert.equal(result.embeddings.model, "custom-embedding-model");
+    assert.equal(result.embeddings.provider, "embedding.example.com");
+    assert.equal(request.url, "https://embedding.example.com/v1/embeddings");
+    assert.equal(request.options.headers.Authorization, "Bearer embedding-key");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testDashScopeEmbeddingBatchesRespectMaximumRows() {
+  const root = await createFixture();
+  const batchSizes = [];
+  try {
+    const result = await runGenerateKnowledge({
+      root,
+      area: "all",
+      mode: "baseline",
+      withEmbeddings: true,
+      env: { DASHSCOPE_API_KEY: "dashscope-test-key" },
+      fetchImpl: async (_url, options) => {
+        const body = JSON.parse(options.body);
+        batchSizes.push(body.input.length);
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              data: body.input.map((input, index) => ({ index, embedding: [index, input.length] })),
+            };
+          },
+        };
+      },
+    });
+
+    assert.equal(result.embeddings.status, "fresh");
+    assert.ok(batchSizes.length > 1);
+    assert.ok(batchSizes.every((size) => size <= 10));
+    assert.equal(batchSizes.reduce((total, size) => total + size, 0), result.embeddings.chunks);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -994,7 +1213,10 @@ async function testEmbeddingsWithoutKeyDegrade() {
       module: "article",
       mode: "baseline",
       withEmbeddings: true,
-      env: {},
+      env: { OPENAI_API_KEY: "semantic-key-must-not-be-used" },
+      fetchImpl: async () => {
+        throw new Error("Embedding request must not use OPENAI_API_KEY.");
+      },
     });
     assert.equal(result.embeddings.status, "pending");
     assert.equal(existsSync(path.join(root, "llm-knowledge/index/embeddings.jsonl")), false);
@@ -1015,7 +1237,7 @@ async function testEmbeddingHttpFailureDegrades() {
       module: "article",
       mode: "baseline",
       withEmbeddings: true,
-      env: { OPENAI_API_KEY: "test-key" },
+      env: { DASHSCOPE_API_KEY: "test-key" },
       fetchImpl: async () => ({ ok: false, status: 429 }),
     });
     assert.equal(result.embeddings.status, "failed");
@@ -1044,6 +1266,8 @@ async function testAreaScopedRefreshPreservesOtherAreaIndex() {
 
 await testDryRunDoesNotWrite();
 await testBaselineGeneratesModulesAndIndex();
+await testGeneratedMarkdownUsesChineseExplanatoryText();
+await testOperationalEmbeddingDocsUseDedicatedConfiguration();
 await testSymlinkedKnowledgeFilesAreSkipped();
 await testSymlinkedRootAgentsFileIsSkipped();
 await testAreaRefreshRemovesChunksWhenLastModuleIsDeleted();
@@ -1055,9 +1279,11 @@ await testSourceCoverageRecordsReadFailuresAndContinues();
 await testSharedResourceReadFailureMarksBackendPartial();
 await testSemanticWithoutKeyDegrades();
 await testSemanticSuccessUsesStructuredOutput();
+await testSemanticUsesConfiguredBaseUrl();
 await testPartialSemanticKeepsGlobalIndexPending();
 await testBackendSemanticKeepsGlobalIndexPendingWhenFrontendIsPending();
 await testSemanticHttpFailureDegrades();
+await testSemanticNetworkFailureIncludesSanitizedCauseCode();
 await testSemanticTimeoutAbortsAndDegrades();
 await testSemanticMalformedJsonDegrades();
 await testSemanticSchemaInvalidOutputDegrades();
@@ -1065,6 +1291,8 @@ await testSemanticAggregateStatusFailsWhenAnyModuleFails();
 await testBaselineRefreshPreservesSemanticLayer();
 await testEmbeddingsRequireExplicitFlag();
 await testEmbeddingsGenerateJsonlWhenRequested();
+await testEmbeddingsUseDedicatedConfiguration();
+await testDashScopeEmbeddingBatchesRespectMaximumRows();
 await testEmbeddingsWithoutKeyDegrade();
 await testEmbeddingHttpFailureDegrades();
 await testAreaScopedRefreshPreservesOtherAreaIndex();

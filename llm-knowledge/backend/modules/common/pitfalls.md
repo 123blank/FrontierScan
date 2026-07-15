@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: common
 doc_type: pitfalls
-git_hash: 50253a205e583bc24faab6c8f50cdcf352ddae23
+git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
 source_fingerprint: sha256:99c956d5a210d763f120b72d810cac701140ee3cfc0cb4a14b511df4a9ac278c
-generated_at: 2026-07-15T03:45:44.398Z
+generated_at: 2026-07-15T15:00:02.197Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -37,4 +37,4 @@ source_files:
 
 ## 待增强说明
 
-Needs AI Review: 请结合线上故障、测试缺口和业务规则补充真实风险。
+需要 AI 审核：请结合线上故障、测试缺口和业务规则补充真实风险。

@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: llm
 doc_type: storage
-git_hash: 50253a205e583bc24faab6c8f50cdcf352ddae23
+git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
 source_fingerprint: sha256:109e1ad7eb8d9914a617ea97266b44398468c426bf665808e0e74d2313e753dc
-generated_at: 2026-07-15T03:45:44.398Z
+generated_at: 2026-07-15T15:00:02.197Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -40,14 +40,14 @@ source_files:
 
 # llm 存储基线
 
-## Entities / Tables
+## 实体与数据表
 
 - ArticleTagMapping -> article_tags (backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMapping.java)
 - TagDomain -> tag_domains (backend/src/main/java/com/frontierscan/llm/tag/TagDomain.java)
 - ArticleTagMappingPo -> article_tags (backend/src/main/java/com/frontierscan/llm/tag/mp/ArticleTagMappingPo.java)
 - TagDomainPo -> tag_domains (backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java)
 
-## Repositories / Mappers
+## 数据仓库与映射器
 
 - ArticleTagMappingRepository (backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMappingRepository.java)
 - TagDomainRepository (backend/src/main/java/com/frontierscan/llm/tag/TagDomainRepository.java)
@@ -56,4 +56,4 @@ source_files:
 
 ## 待增强说明
 
-Needs AI Review: 请结合 Flyway migration、索引、约束和查询模式补充数据语义。
+需要 AI 审核：请结合 Flyway 迁移、索引、约束和查询模式补充数据语义。

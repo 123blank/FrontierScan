@@ -1,5 +1,7 @@
 # Harness KB Integrity Fixes Report
 
+> 历史记录说明：本报告描述的是当时的实现阶段，不作为现行 Embedding 配置指南。当前配置使用 `EMBEDDING_API_KEY`（未配置时回退到 `DASHSCOPE_API_KEY`）、`EMBEDDING_BASE_URL`、`EMBEDDING_MODEL` 和默认模型 `text-embedding-v4`；现行操作以 `.codex/skills/frontier-kb-generate/SKILL.md` 与 `.harness/scripts/README.md` 为准。
+
 > Date: 2026-07-13
 > Updated: 2026-07-14
 > Branch: `fix/harness-kb-review-followup`
@@ -12,7 +14,7 @@ This change fixes seventeen integrity defects in the Harness knowledge generatio
 1. A partial L2 run could mark the global index manifest as semantic `fresh`.
 2. A deleted module could produce a module-scoped refresh command that the generator could not execute.
 3. A renamed module could preserve old index chunks while the refreshed index was marked `fresh`.
-4. `-WithEmbeddings` reported `disabled` instead of generating the documented optional JSONL embedding index.
+4. 历史问题：`-WithEmbeddings` 曾无法生成文档约定的可选 JSONL 向量索引。
 5. Symbolic links could expose repository-external content to the local knowledge index and optional OpenAI calls.
 6. A root-level `AGENTS.md` symbolic link could bypass the directory-entry link filter and expose repository-external content to the local knowledge index and optional OpenAI calls.
 7. Deleting the last module in an Area left obsolete baseline and semantic chunks while retaining a complete fingerprint.
@@ -43,15 +45,17 @@ This change fixes seventeen integrity defects in the Harness knowledge generatio
 
 ### Optional Embeddings
 
-`-WithEmbeddings` now performs bounded sequential requests to `POST /v1/embeddings` using `OPENAI_API_KEY` and optional `OPENAI_EMBEDDING_MODEL`.
+该阶段首次实现了 `-WithEmbeddings` 的有界顺序请求，后续已完成百炼适配和配置隔离。当前行为如下：
 
-- Maximum batch size: 64 chunks.
-- Input: bounded chunk metadata and text, capped at 8,000 characters per item.
-- Validation: response count, response index, numeric vector shape, and API status are checked before publishing output.
-- Output: `llm-knowledge/index/embeddings.jsonl`; each record stores the chunk id, model, vector, path, source fingerprint, and generation time.
-- Degradation: missing key reports `pending`; API, malformed response, or timeout failures report `failed`; L1/L2 and `chunks.json` remain available and the manifest does not reference a failed embedding file.
+- 密钥：`EMBEDDING_API_KEY`，未配置时回退到 `DASHSCOPE_API_KEY`。
+- 端点：`EMBEDDING_BASE_URL`，默认使用阿里百炼 OpenAI 兼容端点。
+- 模型：`EMBEDDING_MODEL`，默认 `text-embedding-v4`；`OPENAI_EMBEDDING_MODEL` 仅作为旧配置兼容兜底。
+- 批量：每批最多 10 条，每条输入最多 8,000 个字符。
+- 校验：发布前检查响应数量、响应索引、数值向量和 API 状态。
+- 输出：`llm-knowledge/index/embeddings.jsonl`，每条记录包含分块 ID、模型、provider、向量、路径、源指纹和生成时间。
+- 降级：缺少密钥时返回 `pending`；API、响应或超时失败时返回 `failed`；L1/L2 和 `chunks.json` 仍保持可用。
 
-The existing keyword and metadata query remains the only active retrieval path. Cosine/vector retrieval is intentionally out of scope for this fix.
+当前关键词和元数据查询仍是唯一启用的检索路径，余弦或向量检索消费者尚未实现。
 
 ### Symbolic Link Exclusion
 
@@ -108,7 +112,7 @@ Sanitized discovery failures now participate in module completeness. Source-file
 | Partial L2 manifest status | Expected `pending`, actual `fresh` for module and Area scopes | New module-scope and cross-Area regressions plus the full generator suite pass |
 | Deleted module refresh | Generated `-Module article` after the source file was deleted | Refresh task falls back to `-Area backend -Mode baseline`; freshness suite passes |
 | Renamed module refresh | Generated `-Module digest` after `article` was renamed | Refresh task falls back to `-Area backend -Mode baseline`; freshness suite passes |
-| Embedding generation | Expected `fresh`, actual `disabled` | Success, missing-key, and HTTP-429 regressions pass |
+| Embedding generation | 历史实现未生成向量文件 | Success, missing-key, and HTTP-429 regressions pass |
 | Symbolic-link exclusion | Repository-external Markdown appeared in `chunks.json` | Linked content is absent from the generated index; generator suite passes |
 | Root `AGENTS.md` link boundary | Root link indexed an external marker and changed the Common fingerprint | Generator and fingerprint suites reject the link and pass |
 | Empty Area cleanup | Deleting the only Area source left 8 stale backend chunks and a `complete` fingerprint | Area refresh removes all obsolete chunks and records the current empty-source fingerprint |

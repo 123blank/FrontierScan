@@ -1,232 +1,228 @@
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+# Codex 项目规范
 
-## 1. Think Before Coding
+用于减少常见大模型编码错误的行为规范。执行任务时，应与项目专用规则合并使用。
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+## 1. 编码前先思考
 
-Before implementing:
+**不要假设，不要隐藏疑问，明确说明权衡。**
 
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-- Adopt TDD as the primary approach for business development; use alternative suitable development methods only when you determine TDD is unnecessary.
+实现前：
 
-## 2. Simplicity First
+- 明确说明假设；存在不确定性时先询问。
+- 存在多种解释时列出差异，不要静默选择。
+- 存在更简单的方案时主动说明，必要时提出异议。
+- 需求不清楚时停止实现，指出具体疑问并询问。
+- 业务开发优先采用 TDD；只有明确判断 TDD 不适用时，才采用其他合适方法。
 
-**Minimum code that solves the problem. Nothing speculative.**
+## 2. 简单优先
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+**只编写解决当前问题所需的最少代码，不进行推测性扩展。**
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+- 不实现需求范围外的功能。
+- 不为单次使用创建抽象层。
+- 不增加未被要求的灵活性或配置能力。
+- 不为不可能发生的场景增加错误处理。
+- 如果 200 行代码可以缩减到 50 行，应重新简化。
 
-## 3. Surgical Changes
+自检问题：资深工程师是否会认为这个实现过度复杂？如果答案是肯定的，应继续简化。
 
-**Touch only what you must. Clean up only your own mess.**
+## 3. 最小范围修改
 
-When editing existing code:
+**只修改必要内容，只清理本次修改产生的问题。**
 
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
+编辑现有代码时：
 
-When your changes create orphans:
+- 不顺带改进相邻代码、注释或格式。
+- 不重构没有问题的代码。
+- 遵循现有代码风格，即使个人偏好不同。
+- 发现无关的废弃代码时只进行说明，不要删除。
 
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
+如果本次修改产生了无用内容：
 
-The test: Every changed line should trace directly to the user's request.
+- 删除由本次修改造成的无用导入、变量或函数。
+- 除非用户明确要求，否则不删除原有废弃代码。
 
-## 4. Goal-Driven Execution
+判断标准：每一处修改都应能够直接追溯到用户需求。
 
-**Define success criteria. Loop until verified.**
+## 4. 目标驱动执行
 
-Transform tasks into verifiable goals:
+**定义可验证的成功标准，并循环执行直到验证通过。**
 
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+将任务转换为可验证目标：
 
-For multi-step tasks, state a brief plan:
+- “增加校验”转换为“先为非法输入编写测试，再让测试通过”。
+- “修复问题”转换为“先编写可复现问题的测试，再让测试通过”。
+- “重构某模块”转换为“确保重构前后测试均通过”。
 
+多步骤任务应先给出简短计划：
+
+```text
+1. [步骤] -> 验证：[检查方法]
+2. [步骤] -> 验证：[检查方法]
+3. [步骤] -> 验证：[检查方法]
 ```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
 
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+清晰的成功标准支持自主迭代；“让它能工作”之类的模糊目标需要先澄清。
 
----
+## 5. 文档语言规范
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+- 项目新增或更新的计划、报告、交接文档、复盘、方案和说明默认使用中文。
+- 不在同一段说明中无必要地混用中英文；已有中英混杂内容在本次任务涉及范围内应统一改为中文。
+- 命令、路径、环境变量、API 字段、模型标识、状态值、代码标识符、文件名和官方专有名称保留原文，必要时补充中文解释。
+- 引用程序原始输出时可以保留原文，但必须提供中文上下文或结论。
 
-## 5. Harness Structure Guidelines
+## 6. Harness 结构规范
 
-FrontierScan is being adapted toward a Harness Engineering workflow inspired by the Tencent article.
+FrontierScan 正在参考腾讯相关文章向 Harness Engineering 工作流演进。
 
-Current structural areas:
+当前结构区域：
 
-- `.harness/`: workflow state, schemas, workflow definitions, reports, templates, and deterministic scripts.
-- `.codex/agents/`: planned expert Agent registry.
-- `.codex/skills/`: project-local Skill scaffolds.
-- `llm-knowledge/`: AI-consumable structured project knowledge.
-- `docs/harness-*.md`: human-facing Harness plans and checklists.
+- `.harness/`：工作流状态、结构定义、工作流、报告、模板和确定性脚本。
+- `.codex/agents/`：规划中的专家 Agent 注册表。
+- `.codex/skills/`：项目本地 Skill 脚手架。
+- `llm-knowledge/`：供 AI 消费的结构化项目知识。
+- `docs/`：面向开发人员的业务计划、报告、Harness 方案和检查清单。
 
-When working on Harness structure:
+处理 Harness 结构时：
 
-- Treat `.harness/states/` as workflow state, not source code.
-- Treat `llm-knowledge/` as generated or manually curated AI knowledge.
-- Keep Skill and Agent scaffolds separate from runtime state.
-- Do not implement publish, push, commit, or destructive git automation without explicit user approval.
-- Do not touch unrelated dirty business files.
-- Run `.\.harness\scripts\validate-structure.ps1` after changing Harness structure.
+- 将 `.harness/states/` 视为工作流状态，而不是源码。
+- 将 `llm-knowledge/` 视为自动生成或人工维护的 AI 知识。
+- Skill 和 Agent 脚手架必须与运行时状态分离。
+- 未经用户明确批准，不得实现或执行发布、推送、提交及破坏性 Git 自动化。
+- 不修改无关的业务文件。
+- 修改 Harness 结构后运行 `.\.harness\scripts\validate-structure.ps1`。
 
-## 6. FrontierScan Harness Default Entry Rules
+## 7. FrontierScan Harness 默认入口规则
 
-When Codex is working inside `D:\ProjectStudy\FrontierScan`, treat this file as the default operating entry point for Harness-style AI coding.
+当 Codex 在 `D:\ProjectStudy\FrontierScan` 中工作时，将本文件作为 Harness 风格 AI 编码的默认操作入口。
 
-At the start of each task, classify the request before acting:
+每个任务开始时先分类：
 
-- `question`: answer from local docs, `.harness/`, `.codex/skills/`, `llm-knowledge/`, and source files as needed. Do not modify files.
-- `harness-structure`: update Harness, Skill, Agent, state, workflow, template, docs, or knowledge scaffolding only.
-- `business-implementation`: modify backend/frontend/product code only after checking relevant knowledge and current workflow state.
-- `review`: inspect diffs and report findings first; do not modify files unless explicitly asked to fix.
-- `test-or-verification`: select and run the narrowest useful tests or verification commands, then report evidence.
-- `delivery`: summarize owned changes and ask for explicit approval before staging, committing, pushing, publishing, or opening PRs.
+- `question`：按需从本地文档、`.harness/`、`.codex/skills/`、`llm-knowledge/` 和源码中查找答案，不修改文件。
+- `harness-structure`：只更新 Harness、Skill、Agent、状态、工作流、模板、文档或知识脚手架。
+- `business-implementation`：检查相关知识和当前工作流状态后，才修改后端、前端或产品代码。
+- `review`：先检查差异并报告发现；除非用户明确要求修复，否则不修改文件。
+- `test-or-verification`：选择并运行范围最小且有效的测试或验证命令，然后报告证据。
+- `delivery`：总结本任务修改；执行暂存、提交、推送、发布或创建 PR 前必须获得明确批准。
 
-For non-trivial implementation work, state the assumed workflow phase and success criteria before editing files.
+对于非简单实现任务，修改文件前先说明当前工作流阶段和成功标准。
 
-## 7. Knowledge-First Development
+## 8. 知识优先开发
 
-Use `llm-knowledge/` as the first project knowledge source before broad source-code exploration.
+广泛阅读源码前，优先使用 `llm-knowledge/` 获取项目知识。
 
-Before requirement analysis, design, implementation, review, or verification:
+进行需求分析、设计、实现、审核或验证前：
 
-- Check knowledge freshness with `.harness\scripts\check-kb-freshness.ps1` when the task depends on existing project knowledge.
-- Query relevant knowledge with `.harness\scripts\kb-query.ps1`.
-- If knowledge is missing or stale, say so explicitly and verify against source files before making decisions.
-- Prefer targeted source reads after knowledge lookup instead of loading unrelated modules.
-- Preserve manual notes under `llm-knowledge/**/custom/` when updating generated knowledge.
+- 当任务依赖现有项目知识时，使用 `.harness\scripts\check-kb-freshness.ps1` 检查知识新鲜度。
+- 使用 `.harness\scripts\kb-query.ps1` 查询相关知识。
+- 知识缺失或过期时必须明确说明，并以源码核验后再做决定。
+- 完成知识查询后优先阅读目标源码，避免加载无关模块。
+- 更新生成知识时保留 `llm-knowledge/**/custom/` 下的人工记录。
 
-Recommended query modes:
+推荐查询模式：
 
-- Requirement breakdown: `-Mode requirement-breakdown`
-- Technical design: `-Mode technical-design`
-- API discovery: `-Mode api-search`
-- Frontend UI/component lookup: `-Mode frontend-ui-search`
-- Data flow tracing: `-Mode data-flow-trace`
-- General project questions: `-Mode knowledge-qa`
+- 需求拆解：`-Mode requirement-breakdown`
+- 技术设计：`-Mode technical-design`
+- API 查询：`-Mode api-search`
+- 前端界面和组件查询：`-Mode frontend-ui-search`
+- 数据流追踪：`-Mode data-flow-trace`
+- 通用项目问题：`-Mode knowledge-qa`
 
-## 8. Project Skill Routing
+## 9. 项目 Skill 路由
 
-Project-local Skills live under `.codex/skills/`.
+项目本地 Skill 位于 `.codex/skills/`。
 
-If a matching `frontier-*` Skill is available in the active Codex runtime, invoke it normally. If it is not available in the active runtime, manually read the matching project-local `SKILL.md` and only the directly relevant references before acting.
+如果当前 Codex 运行时提供匹配的 `frontier-*` Skill，应正常调用。如果运行时未提供，则手动读取对应项目本地 `SKILL.md`，并且只读取与当前任务直接相关的参考资料。
 
-Use this routing map:
+路由映射：
 
-- General project conventions: `frontier-common`
-- Generate or refresh structured knowledge: `frontier-kb-generate`
-- Query structured knowledge: `frontier-kb-query`
-- Check stale knowledge: `frontier-kb-refresh-check`
-- Break down product or engineering requests: `frontier-requirement-breakdown`
-- Plan tasks, dependencies, and parallel waves: `frontier-task-dag-planner`
-- Read, validate, resume, or update workflow state: `frontier-state-runner`
-- Plan isolated worktrees: `frontier-worktree-orchestrator`
-- Select or run tests: `frontier-test-gate`
-- Review code changes: `frontier-code-review-gate`
-- Derive or run API/UI verification cases: `frontier-interface-verifier`
-- Plan builds or publish steps: `frontier-build-publish`
-- Prepare delivery, commits, or PR summaries: `frontier-git-delivery`
+- 通用项目规范：`frontier-common`
+- 生成或刷新结构化知识：`frontier-kb-generate`
+- 查询结构化知识：`frontier-kb-query`
+- 检查知识过期状态：`frontier-kb-refresh-check`
+- 拆解产品或工程需求：`frontier-requirement-breakdown`
+- 规划任务、依赖和并行批次：`frontier-task-dag-planner`
+- 读取、校验、恢复或更新工作流状态：`frontier-state-runner`
+- 规划隔离工作树：`frontier-worktree-orchestrator`
+- 选择或运行测试：`frontier-test-gate`
+- 审核代码修改：`frontier-code-review-gate`
+- 推导或运行 API、界面验证用例：`frontier-interface-verifier`
+- 规划构建或发布步骤：`frontier-build-publish`
+- 准备交付、提交或 PR 摘要：`frontier-git-delivery`
 
-Current project-local Skills are guidance scaffolds unless the active Codex runtime exposes them as installed Skills. Do not claim they are automatically triggered by runtime unless they appear in the current available Skill list.
+当前项目本地 Skill 只是指导脚手架，除非它们出现在当前运行时可用 Skill 列表中，否则不得声称运行时会自动触发这些 Skill。
 
-## 9. Agent Registry Usage
+## 10. Agent 注册表使用规则
 
-`.codex/agents/agents.yaml` is a role and responsibility registry, not an active Agent runtime.
+`.codex/agents/agents.yaml` 是角色和职责注册表，不是正在运行的 Agent 运行时。
 
-Use it to decide which responsibility lens applies to the task:
+使用以下角色视角处理任务：
 
-- `product-analyst` and `requirement-analyst` for request breakdown and acceptance criteria.
-- `task-planner` for DAG and dependency planning.
-- `backend-developer` and `frontend-developer` for implementation.
-- `unit-tester`, `test-case-designer`, and `interface-verifier` for verification.
-- `code-reviewer` for review-only work.
-- `publisher` and `git-committer` for approval-gated delivery.
+- `product-analyst` 和 `requirement-analyst`：需求拆解和验收标准。
+- `task-planner`：任务 DAG 和依赖规划。
+- `backend-developer` 和 `frontend-developer`：功能实现。
+- `unit-tester`、`test-case-designer` 和 `interface-verifier`：验证。
+- `code-reviewer`：只读代码审核。
+- `publisher` 和 `git-committer`：需要用户批准的交付操作。
 
-Do not pretend that Agents have been automatically dispatched unless an actual runtime dispatch mechanism is present.
+除非存在真实的运行时调度机制，否则不得声称 Agent 已经自动派发。
 
-## 10. Harness Workflow Triggers
+## 11. Harness 工作流触发规则
 
-Use the single-story workflow in `.harness/workflows/e2e-development.yaml` for ordinary feature or bugfix work:
+普通功能或缺陷修复使用 `.harness/workflows/e2e-development.yaml` 中的单业务工作流：
 
 ```text
 requirement -> technical-design -> task-dag -> implementation -> unit-test -> code-review -> build-publish -> interface-verification -> git-delivery -> done
 ```
 
-Use `.harness/workflows/product-fork-join.yaml` when one user request naturally splits into multiple independent stories:
+当一个用户请求自然拆分为多个相互独立的业务时，使用 `.harness/workflows/product-fork-join.yaml`：
 
 ```text
 breakdown -> forking -> joining -> done
 ```
 
-Trigger expectations:
+触发要求：
 
-- New ambiguous product request: create or update requirement breakdown before implementation.
-- Multi-module change: create or update a task DAG before implementation.
-- Existing active state file: read and respect it before continuing work.
-- Frontend UI change: follow existing frontend patterns and any B2B admin UI guideline document present in the repo.
-- Backend/data change: use narrow backend tests where possible before broader builds.
-- Review/test/build/delivery phase: write evidence into `.harness/reports/` or summarize it clearly to the user when not writing files.
+- 新的模糊产品需求：实现前先创建或更新需求拆解。
+- 跨模块修改：实现前先创建或更新任务 DAG。
+- 存在有效的活动状态文件：继续工作前先读取并遵守该状态。
+- 前端界面修改：遵循现有前端模式以及仓库中存在的 B2B 后台界面规范。
+- 后端或数据修改：运行更广泛构建前，优先使用针对性后端测试。
+- 审核、测试、构建或交付阶段：将证据写入 `.harness/reports/`；不写文件时向用户清晰总结。
 
-## 11. Required Harness Checks
+## 12. Harness 必需检查
 
-Run the relevant deterministic checks after changing Harness assets:
+修改 Harness 资产后运行相关的确定性检查：
 
-- Structure, Skill, Agent, docs, or knowledge scaffolding changed:
-  `.\.harness\scripts\validate-structure.ps1`
-- State files changed:
-  `.\.harness\scripts\validate-state.ps1 -StateFile <state-file>`
-- Task DAG changed:
-  `.\.harness\scripts\validate-task-dag.ps1 -TaskDagFile <dag-file>`
-- Need knowledge lookup:
-  `.\.harness\scripts\kb-query.ps1 -Query "<keywords>" -Mode <mode> -Area <area>`
-- Need stale knowledge detection:
-  `.\.harness\scripts\check-kb-freshness.ps1`
-- Need test recommendation:
-  `.\.harness\scripts\select-tests.ps1`
-- Need build recommendation:
-  `.\.harness\scripts\plan-build.ps1`
-- Need delivery summary:
-  `.\.harness\scripts\summarize-delivery.ps1`
-- Need non-destructive smoke validation:
-  `.\.harness\scripts\smoke-harness-flow.ps1`
+- 修改结构、Skill、Agent、文档或知识脚手架：`.\.harness\scripts\validate-structure.ps1`
+- 修改状态文件：`.\.harness\scripts\validate-state.ps1 -StateFile <state-file>`
+- 修改任务 DAG：`.\.harness\scripts\validate-task-dag.ps1 -TaskDagFile <dag-file>`
+- 查询知识：`.\.harness\scripts\kb-query.ps1 -Query "<keywords>" -Mode <mode> -Area <area>`
+- 检查知识过期状态：`.\.harness\scripts\check-kb-freshness.ps1`
+- 获取测试建议：`.\.harness\scripts\select-tests.ps1`
+- 获取构建建议：`.\.harness\scripts\plan-build.ps1`
+- 获取交付摘要：`.\.harness\scripts\summarize-delivery.ps1`
+- 执行非破坏性冒烟验证：`.\.harness\scripts\smoke-harness-flow.ps1`
 
-These scripts are helpers. They do not replace source review, real tests, or user approval for external-state-changing actions.
+这些脚本只是辅助工具，不能替代源码审核、真实测试，也不能替代用户对外部状态变更操作的批准。
 
-## 12. Approval and Safety Boundaries
+## 13. 批准与安全边界
 
-Never perform these actions without explicit user approval:
+未经用户明确批准，不得执行：
 
-- `git add`, `git commit`, `git push`, PR creation, tagging, release, publish, or deploy.
-- Destructive git or filesystem cleanup.
-- Worktree deletion or branch deletion.
-- Any command that modifies external services, production data, or deployment environments.
+- `git add`、`git commit`、`git push`、创建 PR、打标签、发布或部署。
+- 破坏性 Git 操作或文件系统清理。
+- 删除工作树或分支。
+- 修改外部服务、生产数据或部署环境的命令。
 
-Before delivery, always separate owned task changes from unrelated dirty files. Do not revert or overwrite unrelated changes.
+交付前必须区分本任务修改和无关工作区修改。不得还原或覆盖无关修改。
 
-## 13. Stage-Appropriate Code Review
+## 14. 与阶段匹配的代码审核
 
-Keep code review proportional to the project's current stage. The current goal is basic usability and reasonable extensibility, not exhaustive hardening against every theoretical scenario.
+代码审核范围应与项目当前阶段相匹配。当前目标是保证基本可用和合理可扩展，而不是对每个理论场景进行穷尽式加固。
 
-- Report issues that can realistically break the main workflow, violate correctness or security, damage data, or create a clear near-term extension barrier.
-- Prioritize reproducible problems and risks with concrete evidence in the changed code.
-- Do not list low-probability hypotheticals, speculative future requirements, minor style preferences, or premature hardening as findings.
-- Do not block delivery for non-essential improvements. Mention residual risk only when it materially affects a current decision.
-- Prefer a small number of actionable findings over an exhaustive inventory of possible concerns.
+- 报告可能破坏主流程、违反正确性或安全性、损坏数据，或者形成明确近期扩展障碍的问题。
+- 优先报告能够复现，并且在修改代码中有具体证据的问题和风险。
+- 不将低概率假设、推测性未来需求、轻微风格偏好或过早加固列为问题。
+- 不因非必要改进阻塞交付。只有剩余风险会实质影响当前决策时才进行说明。
+- 优先提供少量可执行问题，不进行所有可能问题的穷举。

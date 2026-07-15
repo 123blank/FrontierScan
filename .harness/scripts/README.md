@@ -1,8 +1,8 @@
-# Harness Scripts
+# Harness 脚本
 
-This directory is reserved for deterministic workflow scripts.
+本目录用于存放确定性工作流脚本。
 
-Planned scripts:
+规划脚本：
 
 ```text
 validate-state.ps1
@@ -19,17 +19,17 @@ summarize-delivery.ps1
 smoke-harness-flow.ps1
 ```
 
-Current status:
+当前状态：
 
-- `validate-state.ps1`, `validate-task-dag.ps1`, `validate-structure.ps1`, `kb-query.ps1`, `select-tests.ps1`, `collect-diff-context.ps1`, `scan-knowledge-inputs.ps1`, `check-kb-freshness.ps1`, `plan-worktrees.ps1`, `derive-interface-cases.ps1`, `plan-build.ps1`, `summarize-delivery.ps1`, and `smoke-harness-flow.ps1` are implemented as read-only helpers.
-- `generate-kb.ps1` is a write-capable knowledge generator. It writes only under `llm-knowledge/`, supports dry-run, preserves `custom/` notes, and degrades OpenAI semantic enrichment when `OPENAI_API_KEY` is absent.
-- `generate-kb.ps1 -Area backend -Module article -Mode baseline` refreshes one module while preserving unrelated documents, metadata, logs, and index chunks.
-- `check-kb-freshness.ps1 -WriteRefreshTask` explicitly writes `.harness/outputs/kb-refresh-task.json` for stale areas/modules; it never executes the task.
-- Module-scoped refresh is emitted only when every changed source path in the Area belongs to that supported module; shared or root-level source changes fall back to an Area refresh.
-- `.harness/scripts/lib/source-fingerprint.mjs` is the shared SHA-256 freshness engine for Generator, Query, and Refresh Check. Source fingerprints are authoritative; `git_hash` is audit-only.
-- Generator ingestion failures are fail-closed: source and shared-resource read failures keep source coverage diagnostics while marking affected documents and index fingerprints `partial`.
-- Missing legacy fingerprints require one baseline refresh. Common source changes are repaired through `generate-kb.ps1 -Area all -Mode baseline`.
-- `generate-kb.ps1 -WithEmbeddings` is opt-in and uses `OPENAI_API_KEY` plus optional `OPENAI_EMBEDDING_MODEL` to write `llm-knowledge/index/embeddings.jsonl`. Missing keys or API failures report `pending` or `failed` without blocking baseline/index generation; cosine/vector retrieval remains a separate future consumer.
-- Regression coverage lives in `tests/source-fingerprint.test.mjs`, `tests/harness-status.test.mjs`, `tests/generate-kb.test.mjs`, `tests/kb-query.test.ps1`, and `tests/kb-freshness.test.ps1`.
-- Do not place business logic here.
-- Scripts should read from the repository and write only `.harness/` artifacts when explicitly documented.
+- `validate-state.ps1`、`validate-task-dag.ps1`、`validate-structure.ps1`、`kb-query.ps1`、`select-tests.ps1`、`collect-diff-context.ps1`、`scan-knowledge-inputs.ps1`、`check-kb-freshness.ps1`、`plan-worktrees.ps1`、`derive-interface-cases.ps1`、`plan-build.ps1`、`summarize-delivery.ps1` 和 `smoke-harness-flow.ps1` 已实现为只读辅助脚本。
+- `generate-kb.ps1` 是可写的知识生成器。它只写入 `llm-knowledge/`，支持试运行，保留 `custom/` 说明，并在缺少 `OPENAI_API_KEY` 时降级 OpenAI 语义增强。
+- `generate-kb.ps1 -Area backend -Module article -Mode baseline` 可以刷新单个模块，同时保留无关文档、元数据、日志和索引分块。
+- `check-kb-freshness.ps1 -WriteRefreshTask` 会为过期区域或模块显式写入 `.harness/outputs/kb-refresh-task.json`，但不会执行该任务。
+- 只有当区域内每个变更源文件都属于同一受支持模块时，才会生成模块级刷新任务；共享源文件或区域根目录文件发生变化时，会回退为区域级刷新。
+- `.harness/scripts/lib/source-fingerprint.mjs` 是生成、查询和新鲜度检查共用的 SHA-256 新鲜度引擎。源指纹是权威依据，`git_hash` 仅用于审计。
+- 生成器采用失败关闭策略处理摄取失败：读取源文件或共享资源失败时保留覆盖率诊断，并将受影响文档和索引指纹标记为 `partial`。
+- 缺少旧版指纹时需要执行一次基线刷新。公共源文件变化通过 `generate-kb.ps1 -Area all -Mode baseline` 修复。
+- `generate-kb.ps1 -WithEmbeddings` 为显式启用项，使用 `EMBEDDING_API_KEY`（未配置时回退到 `DASHSCOPE_API_KEY`），并支持通过 `EMBEDDING_BASE_URL` 和 `EMBEDDING_MODEL` 覆盖默认的阿里百炼端点与 `text-embedding-v4` 模型；`OPENAI_EMBEDDING_MODEL` 仅作为旧配置兼容项。缺少密钥或 API 调用失败时会报告 `pending` 或 `failed`，但不会阻塞基线文档和本地索引生成。
+- 回归测试位于 `tests/source-fingerprint.test.mjs`、`tests/harness-status.test.mjs`、`tests/generate-kb.test.mjs`、`tests/kb-query.test.ps1` 和 `tests/kb-freshness.test.ps1`。
+- 禁止在此处放置业务逻辑。
+- 脚本应从仓库读取数据，并且只有在文档明确说明时才能写入 `.harness/` 产物。

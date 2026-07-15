@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: llm
 doc_type: architecture
-git_hash: 50253a205e583bc24faab6c8f50cdcf352ddae23
+git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
 source_fingerprint: sha256:109e1ad7eb8d9914a617ea97266b44398468c426bf665808e0e74d2313e753dc
-generated_at: 2026-07-15T03:45:44.398Z
+generated_at: 2026-07-15T15:00:02.197Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -69,10 +69,10 @@ source_files:
 - backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java
 - backend/src/main/java/com/frontierscan/llm/tag/package-info.java
 
-## 定时/异步执行
+## 定时与异步执行
 
 - 暂无自动识别结果。
 
 ## 待增强说明
 
-Needs AI Review: 请补充核心调用链、事务边界、异步补偿流程和跨模块协作方式。
+需要 AI 审核：请补充核心调用链、事务边界、异步补偿流程和跨模块协作方式。

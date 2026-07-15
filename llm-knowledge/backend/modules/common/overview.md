@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: common
 doc_type: overview
-git_hash: 50253a205e583bc24faab6c8f50cdcf352ddae23
+git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
 source_fingerprint: sha256:99c956d5a210d763f120b72d810cac701140ee3cfc0cb4a14b511df4a9ac278c
-generated_at: 2026-07-15T03:45:44.398Z
+generated_at: 2026-07-15T15:00:02.197Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -35,9 +35,9 @@ source_files:
 - 模块路径：`backend/src/main/java/com/frontierscan/common`
 - Java 文件数：16
 - 类/接口/记录/枚举数量：11
-- Controller 数量：2
-- Entity 数量：0
-- Repository 数量：0
+- 控制器数量：2
+- 实体数量：0
+- 数据仓库数量：0
 
 ## 主要类
 
@@ -55,4 +55,4 @@ source_files:
 
 ## 语义说明
 
-Needs AI Review: 请结合 L2 语义增强确认该模块的业务边界、核心流程和跨模块依赖。
+需要 AI 审核：请结合 L2 语义增强确认该模块的业务边界、核心流程和跨模块依赖。

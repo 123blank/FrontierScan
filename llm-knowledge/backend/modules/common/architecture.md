@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: common
 doc_type: architecture
-git_hash: 50253a205e583bc24faab6c8f50cdcf352ddae23
+git_hash: cb5edb5cde7a1635447198f2e2bedc8c3ee225e9
 source_fingerprint: sha256:99c956d5a210d763f120b72d810cac701140ee3cfc0cb4a14b511df4a9ac278c
-generated_at: 2026-07-15T03:45:44.398Z
+generated_at: 2026-07-15T15:00:02.197Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -49,10 +49,10 @@ source_files:
 - backend/src/main/java/com/frontierscan/common/security/JwtUtil.java
 - backend/src/main/java/com/frontierscan/common/security/package-info.java
 
-## 定时/异步执行
+## 定时与异步执行
 
 - AsyncConfig -> frontierScanCollectionExecutor (backend/src/main/java/com/frontierscan/common/config/AsyncConfig.java)
 
 ## 待增强说明
 
-Needs AI Review: 请补充核心调用链、事务边界、异步补偿流程和跨模块协作方式。
+需要 AI 审核：请补充核心调用链、事务边界、异步补偿流程和跨模块协作方式。
