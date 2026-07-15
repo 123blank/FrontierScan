@@ -220,3 +220,13 @@ Never perform these actions without explicit user approval:
 - Any command that modifies external services, production data, or deployment environments.
 
 Before delivery, always separate owned task changes from unrelated dirty files. Do not revert or overwrite unrelated changes.
+
+## 13. Stage-Appropriate Code Review
+
+Keep code review proportional to the project's current stage. The current goal is basic usability and reasonable extensibility, not exhaustive hardening against every theoretical scenario.
+
+- Report issues that can realistically break the main workflow, violate correctness or security, damage data, or create a clear near-term extension barrier.
+- Prioritize reproducible problems and risks with concrete evidence in the changed code.
+- Do not list low-probability hypotheticals, speculative future requirements, minor style preferences, or premature hardening as findings.
+- Do not block delivery for non-essential improvements. Mention residual risk only when it materially affects a current decision.
+- Prefer a small number of actionable findings over an exhaustive inventory of possible concerns.
