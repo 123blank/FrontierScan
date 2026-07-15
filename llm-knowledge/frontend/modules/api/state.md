@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: api
 doc_type: state
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
+git_hash: 50253a205e583bc24faab6c8f50cdcf352ddae23
 source_fingerprint: sha256:3e142de410653b7af917a1ce1d4ed598a58ccd3b2032b732bb3aa148c2fa1e70
-generated_at: 2026-07-11T17:38:46.678Z
+generated_at: 2026-07-15T03:45:44.398Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

@@ -28,7 +28,7 @@ Current knowledge status:
 | L1 deterministic baseline | `fresh` | 7 backend modules, 7 frontend modules, and Common knowledge with Markdown + `facts.json` |
 | L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call has completed controlled acceptance |
 | L3 local index | `fresh` | 324 generated and curated keyword/metadata chunks in `index/chunks.json` |
-| Optional embeddings | `disabled` | Write-only vectors are blocked until a tested retrieval consumer exists |
+| Optional embeddings | `on-demand` | `-WithEmbeddings` writes source-fingerprinted JSONL vectors after successful OpenAI API calls; keyword/metadata retrieval remains the active consumer |
 
 Current limitations:
 

@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
   "generated_by": "frontier-kb-generate",
-  "generated_at": "2026-07-11T17:38:46.678Z",
-  "git_hash": "4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1",
+  "generated_at": "2026-07-15T03:45:44.398Z",
+  "git_hash": "50253a205e583bc24faab6c8f50cdcf352ddae23",
   "source_fingerprints": {
     "backend": "sha256:1ba1602ffd15d0695752a7d2febb48232404028c0009888b70d1c20d46c1b387",
     "frontend": "sha256:5a7a72c184158233e4d4fd9a7abfb4a81e6e035c6dfc28ce4b90460bb017db5e",
-    "common": "sha256:317062e2c3d95b9900e4b4bd5467ddbe17f1a17a76243fdc9f93b985888ed3f1"
+    "common": "sha256:3be9692b0f3532312603fda8266068e2b7c4add41014d570637d31ab45aa90a9"
   },
   "source_fingerprint_status": {
     "backend": "complete",
@@ -18,7 +18,7 @@
     "common",
     "frontend"
   ],
-  "chunk_count": 324,
+  "chunk_count": 326,
   "semantic_status": "pending",
   "embeddings_status": "skipped",
   "embedding_model": "text-embedding-3-small",
