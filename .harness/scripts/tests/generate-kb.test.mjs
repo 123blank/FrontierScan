@@ -614,6 +614,35 @@ async function testPowerShellEntryPointSupportsModuleRefresh() {
   }
 }
 
+async function testPowerShellEntryPointPreservesNodeFailureExitCode() {
+  const root = await createFixture();
+  try {
+    await writeFile(path.join(root, "llm-knowledge"), "not-a-directory", "utf8");
+    await assert.rejects(
+      execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-ExecutionPolicy", "Bypass",
+          "-File", generateScript,
+          "-Root", root,
+          "-Area", "backend",
+          "-Mode", "baseline",
+          "-Json",
+        ],
+        { encoding: "utf8" }
+      ),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(error.stderr, /ENOTDIR|EEXIST/);
+        return true;
+      }
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 async function testSemanticWithoutKeyDegrades() {
   const root = await createFixture();
   try {
@@ -1298,4 +1327,5 @@ await testEmbeddingHttpFailureDegrades();
 await testAreaScopedRefreshPreservesOtherAreaIndex();
 await testModuleScopedRefreshPreservesUnrelatedArtifacts();
 await testPowerShellEntryPointSupportsModuleRefresh();
+await testPowerShellEntryPointPreservesNodeFailureExitCode();
 console.log("generate-kb tests passed");
