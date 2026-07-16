@@ -6,6 +6,7 @@
 
 ```text
 validate-state.ps1
+run-state.ps1
 validate-task-dag.ps1
 select-tests.ps1
 collect-diff-context.ps1
@@ -22,6 +23,8 @@ smoke-harness-flow.ps1
 当前状态：
 
 - `validate-state.ps1`、`validate-task-dag.ps1`、`validate-structure.ps1`、`kb-query.ps1`、`select-tests.ps1`、`collect-diff-context.ps1`、`scan-knowledge-inputs.ps1`、`check-kb-freshness.ps1`、`plan-worktrees.ps1`、`derive-interface-cases.ps1`、`plan-build.ps1`、`summarize-delivery.ps1` 和 `smoke-harness-flow.ps1` 已实现为只读辅助脚本。
+- `run-state.ps1` 是单 Story 确定性状态运行时入口，支持 `init/status/validate/record/next/block/resume/complete`。更新命令使用独占锁、原子 JSON 写入和 JSONL 事务事件；`status/validate` 保持只读。
+- 状态运行时核心与回归测试分别位于 `lib/state-runtime.mjs` 和 `tests/state-runtime.test.mjs`。
 - `generate-kb.ps1` 是可写的知识生成器。它只写入 `llm-knowledge/`，支持试运行，保留 `custom/` 说明，并在缺少 `OPENAI_API_KEY` 时降级 OpenAI 语义增强。
 - `generate-kb.ps1 -Area backend -Module article -Mode baseline` 可以刷新单个模块，同时保留无关文档、元数据、日志和索引分块。
 - `check-kb-freshness.ps1 -WriteRefreshTask` 会为过期区域或模块显式写入 `.harness/outputs/kb-refresh-task.json`，但不会执行该任务。

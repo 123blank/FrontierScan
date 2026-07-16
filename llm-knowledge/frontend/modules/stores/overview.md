@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: stores
 doc_type: overview
-git_hash: 8f741538f612f9293972aaff3a81e8c3812b8236
+git_hash: 2bcaa65e73d02ab23d884f93e1640a7459fe1c46
 source_fingerprint: sha256:596930eaa00e0e4f014a56a496bcbd23b7238175ba20e09faf4573e1218d4833
-generated_at: 2026-07-15T15:48:15.724Z
+generated_at: 2026-07-16T08:51:47.497Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

@@ -16,7 +16,7 @@ mvp_skills:
     phase: knowledge
   - name: frontier-state-runner
     path: .codex/skills/frontier-state-runner
-    status: guidance-only
+    status: implemented-v1
     phase: workflow
   - name: frontier-requirement-breakdown
     path: .codex/skills/frontier-requirement-breakdown

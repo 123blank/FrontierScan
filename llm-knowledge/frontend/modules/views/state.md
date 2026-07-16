@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: views
 doc_type: state
-git_hash: 8f741538f612f9293972aaff3a81e8c3812b8236
+git_hash: 2bcaa65e73d02ab23d884f93e1640a7459fe1c46
 source_fingerprint: sha256:58c83e16d8cb1b2d8c72aa13d4e3ad3b2948ee469d952bfa16a89749ea23eb3c
-generated_at: 2026-07-15T15:48:15.724Z
+generated_at: 2026-07-16T08:51:47.497Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

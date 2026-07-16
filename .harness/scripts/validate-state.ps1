@@ -61,6 +61,7 @@ function Test-E2EState {
     "schemaVersion",
     "storyId",
     "phase",
+    "runtime",
     "requirement",
     "knowledge",
     "tasks",
@@ -90,6 +91,21 @@ function Test-E2EState {
     "done",
     "blocked"
   ) -Context "E2E state phase"
+
+  foreach ($name in @("runId", "workflow", "status", "revision", "previousPhase", "blocked", "records", "createdAt", "updatedAt")) {
+    Assert-HasProperty -Object $State.runtime -Name $name -Context "E2E runtime"
+  }
+  Assert-Enum -Value $State.runtime.status -Allowed @("template", "active", "blocked", "completed") -Context "E2E runtime status"
+  Assert-Array -Value $State.runtime.records -Context "E2E runtime records"
+  if ($State.runtime.runId -ne $State.storyId) {
+    throw "E2E runtime runId must match storyId."
+  }
+  if ($State.runtime.revision -isnot [int] -and $State.runtime.revision -isnot [long]) {
+    throw "E2E runtime revision must be an integer."
+  }
+  if ($State.runtime.revision -lt 0) {
+    throw "E2E runtime revision cannot be negative."
+  }
 
   foreach ($name in @("summary", "openQuestions", "acceptanceCriteria")) {
     Assert-HasProperty -Object $State.requirement -Name $name -Context "E2E requirement"

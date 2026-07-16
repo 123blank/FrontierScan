@@ -17,10 +17,12 @@ required_directories:
   - llm-knowledge/common
   - docs/harness-m0-m1
   - docs/harness-m1-1-source-fingerprint
+  - docs/harness-m2-state-runtime
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
   - .harness/schemas/e2e-state.schema.json
+  - .harness/schemas/active-run.schema.json
   - .harness/schemas/task-dag.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
@@ -40,11 +42,13 @@ required_files:
   - .harness/scripts/generate-kb.ps1
   - .harness/scripts/lib/generate-kb.mjs
   - .harness/scripts/lib/source-fingerprint.mjs
+  - .harness/scripts/lib/state-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
   - .harness/scripts/tests/kb-freshness.test.ps1
   - .harness/scripts/tests/harness-status.test.mjs
+  - .harness/scripts/tests/state-runtime.test.mjs
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
   - .harness/scripts/scan-knowledge-inputs.ps1
@@ -54,6 +58,7 @@ required_files:
   - .harness/scripts/plan-build.ps1
   - .harness/scripts/summarize-delivery.ps1
   - .harness/scripts/smoke-harness-flow.ps1
+  - .harness/scripts/run-state.ps1
   - .codex/agents/agents.yaml
   - .codex/skills/README.md
   - .codex/skills/skill-registry.yaml
@@ -120,12 +125,16 @@ required_files:
   - docs/harness-m0-m1/REPORT.md
   - docs/harness-m1-1-source-fingerprint/PLAN.md
   - docs/harness-m1-1-source-fingerprint/REPORT.md
+  - docs/harness-m2-state-runtime/DESIGN.md
+  - docs/harness-m2-state-runtime/PLAN.md
+  - docs/harness-m2-state-runtime/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
   knowledge_generation: implemented-v1
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
+  state_runtime: implemented-v1
   agent_runtime: deferred
-  deterministic_scripts: mixed-read-only-helpers-and-knowledge-writer
-  business_code_changes: none-required-for-m0-m1
+  deterministic_scripts: mixed-read-only-helpers-state-runtime-and-knowledge-writer
+  business_code_changes: none-required-for-m0-m2

@@ -1480,3 +1480,48 @@ docs/harness-l2-live-acceptance/REPORT.md
 - `.harness/scripts/README.md`、`.codex/skills/frontier-kb-generate/SKILL.md`、本交接文档和 `llm-knowledge/index/chunks.json` 由自动契约测试共同约束，旧配置不能再次进入现行操作入口。
 
 下一步仍是 M2 确定性状态运行时。未经单独批准，不执行真实 Embedding、提交、推送、发布或部署。
+
+### 16.15 2026-07-16 当前状态：M2 确定性状态运行时
+
+当前权威设计、计划和报告：
+
+```text
+docs/harness-m2-state-runtime/DESIGN.md
+docs/harness-m2-state-runtime/PLAN.md
+docs/harness-m2-state-runtime/REPORT.md
+```
+
+M2 已把单 Story E2E 模板升级为可执行、可恢复、可审计的确定性状态运行时：
+
+- `.harness/scripts/run-state.ps1` 提供 `init/status/validate/record/next/block/resume/complete` 统一入口。
+- `.harness/scripts/lib/state-runtime.mjs` 负责工作流解析、产物证据、质量门禁、独占锁、原子写入和恢复。
+- `.harness/states/active-run.json` 作为唯一活动运行指针；显式 `-StateFile` 可覆盖指针。
+- 活动状态、指针、JSONL 事件和锁按 Story 隔离；状态和指针支持 `.tmp/.bak` 高 revision 恢复。
+- 更新事务使用 `intent/committed` 协议；孤立 intent 会在下次写操作时确定性补记 `committed` 或 `aborted`。
+- 必需产物会记录 SHA-256 证据；测试门禁按证据路径读取最新结果，当前失败测试、未解决 `BLOCKER`、无效 DAG 和缺失产物都不能推进阶段。
+- 显式 `-StateFile` 不依赖活动指针，并且不会污染其他运行的活动指针。
+- 事件日志支持清理进程中断留下的最后一条不完整 JSON；中间损坏继续失败关闭。
+- 纯构建可以离开 `build-publish`；完成 `git-delivery` 前必须存在当前阶段的显式用户批准记录，任何真实发布仍在执行前单独批准。
+- 测试记录必须绑定仓库内证据文件；同一路径重跑时以最新结果判断当前门禁，推进时重新校验 SHA-256，历史结果仍保留。
+- 审批记录必须包含 `actor=user`、非空说明和仓库内证据文件，并持久化 SHA-256；同一路径的 `denied` 撤销旧批准，推进时重新校验当前文件哈希，真实用户身份由调用方确认。
+- `completed` 是不可变终态，更新命令不能继续增加 revision 或改写审计记录。
+- 完成态写命令会先对账孤立事务事件，再拒绝状态修改，保证终态状态不可变且日志闭合。
+- 纯构建无需状态内审批即可推进；M2 不执行发布，真实发布仍由 `frontier-build-publish` 在执行前获取用户批准。
+- 重复 `init` 不得覆盖同一 Story 已存在的正式状态、临时文件或备份。
+- 初始化和定位会恢复正式指针、`.tmp` 与 `.bak`，跨 Story 指针候选按当前原子写入身份选择，旧高 revision 备份不会遮蔽新运行。
+- 指针 revision 领先可恢复状态时失败关闭；普通命令校验 runtime，初始化和默认定位校验活动指针契约。
+- 同 revision 初始化重试会把被后续提交取代的早期孤立 intent 对账为 `aborted`；即使成功重试缺少 committed 尾事件，也只有最后一个孤立 intent 可补记为 `committed`。
+- 状态与指针按 `pointer stage -> state commit -> pointer promote` 更新；临时指针领先状态时回退正式指针，状态达到目标 revision 后才恢复临时指针。
+- 新 Story 初始化发现旧运行已完成时，会在全局初始化锁内获取旧 Story 锁、重新读取并闭合旧事务；仍在执行的 `complete` 会阻止并发初始化，释放锁后可重试。
+- `frontier-state-runner` 已登记为 `implemented-v1`，活动 E2E 状态不再允许手工推进阶段。
+- 完整 Harness 冒烟会在系统临时目录执行 `init/status/validate`，不会在仓库留下活动状态。
+
+当前边界：
+
+- 运行时只覆盖单 Story，不覆盖 `product-fork-join` 多 Story 编排。
+- `.codex/agents/agents.yaml` 仍是角色注册表，没有 Dispatcher 和自动派发能力。
+- Worktree 脚本仍只生成计划，不会创建、合并或删除 Worktree。
+- Build、接口验证、发布和 Git 交付仍是辅助计划或人工门禁，没有端到端自动执行。
+- 本批未修改业务源码，未使用 API 密钥，也未执行暂存、提交、推送或合并。
+
+下一阶段建议只进入 M3 Agent Dispatcher：先让单个 Agent 通过结构化输入/输出与 M2 状态运行时协作，再考虑 M4 Worktree 并行。不要把 M2 状态可恢复解释为文章级自动交付已经完成。

@@ -1,8 +1,8 @@
 schema_version: "2.0"
 area: frontend
 root_path: frontend
-generated_at: "2026-07-15T15:48:15.724Z"
-git_hash: "8f741538f612f9293972aaff3a81e8c3812b8236"
+generated_at: "2026-07-16T08:51:47.497Z"
+git_hash: "2bcaa65e73d02ab23d884f93e1640a7459fe1c46"
 source_fingerprint: "sha256:c9a94d3a93441cf9d26b0ca452a53dc9291e7d044b748d5cf1802bee938f5999"
 source_fingerprint_status: complete
 status: fresh
@@ -34,9 +34,9 @@ modules:
       semantic: llm-knowledge/frontend/modules/api/semantic.md
       facts: llm-knowledge/frontend/modules/api/facts.json
     freshness:
-      git_hash: "8f741538f612f9293972aaff3a81e8c3812b8236"
+      git_hash: "2bcaa65e73d02ab23d884f93e1640a7459fe1c46"
       baseline_source_fingerprint: "sha256:eac33941cb0b45f792cbff9bba24aab06f97034a44c3d8aec30061a333b04db9"
-      generated_at: "2026-07-15T15:48:15.724Z"
+      generated_at: "2026-07-16T08:51:47.497Z"
       baseline_status: fresh
       semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
       semantic_source_fingerprint: ""
@@ -56,9 +56,9 @@ modules:
       semantic: llm-knowledge/frontend/modules/components/semantic.md
       facts: llm-knowledge/frontend/modules/components/facts.json
     freshness:
-      git_hash: "8f741538f612f9293972aaff3a81e8c3812b8236"
+      git_hash: "2bcaa65e73d02ab23d884f93e1640a7459fe1c46"
       baseline_source_fingerprint: "sha256:8602688b0ef2e5c559d84c76c352cbe4f86de8c254c1c269da53d02f4928c879"
-      generated_at: "2026-07-15T15:48:15.724Z"
+      generated_at: "2026-07-16T08:51:47.497Z"
       baseline_status: fresh
       semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
       semantic_source_fingerprint: ""
@@ -78,9 +78,9 @@ modules:
       semantic: llm-knowledge/frontend/modules/layouts/semantic.md
       facts: llm-knowledge/frontend/modules/layouts/facts.json
     freshness:
-      git_hash: "8f741538f612f9293972aaff3a81e8c3812b8236"
+      git_hash: "2bcaa65e73d02ab23d884f93e1640a7459fe1c46"
       baseline_source_fingerprint: "sha256:4f250962349684a43da1cfd35e6c8a8cb4d10df25c74a119e21baf09575bd452"
-      generated_at: "2026-07-15T15:48:15.724Z"
+      generated_at: "2026-07-16T08:51:47.497Z"
       baseline_status: fresh
       semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
       semantic_source_fingerprint: ""
@@ -100,9 +100,9 @@ modules:
       semantic: llm-knowledge/frontend/modules/router/semantic.md
       facts: llm-knowledge/frontend/modules/router/facts.json
     freshness:
-      git_hash: "8f741538f612f9293972aaff3a81e8c3812b8236"
+      git_hash: "2bcaa65e73d02ab23d884f93e1640a7459fe1c46"
       baseline_source_fingerprint: "sha256:d59711cb9e3ee9df5746bdf92b9bdfde7419a924b1a27cacb1cf9504a1008ad8"
-      generated_at: "2026-07-15T15:48:15.724Z"
+      generated_at: "2026-07-16T08:51:47.497Z"
       baseline_status: fresh
       semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
       semantic_source_fingerprint: ""
@@ -122,9 +122,9 @@ modules:
       semantic: llm-knowledge/frontend/modules/stores/semantic.md
       facts: llm-knowledge/frontend/modules/stores/facts.json
     freshness:
-      git_hash: "8f741538f612f9293972aaff3a81e8c3812b8236"
+      git_hash: "2bcaa65e73d02ab23d884f93e1640a7459fe1c46"
       baseline_source_fingerprint: "sha256:596930eaa00e0e4f014a56a496bcbd23b7238175ba20e09faf4573e1218d4833"
-      generated_at: "2026-07-15T15:48:15.724Z"
+      generated_at: "2026-07-16T08:51:47.497Z"
       baseline_status: fresh
       semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
       semantic_source_fingerprint: ""
@@ -144,9 +144,9 @@ modules:
       semantic: llm-knowledge/frontend/modules/styles/semantic.md
       facts: llm-knowledge/frontend/modules/styles/facts.json
     freshness:
-      git_hash: "8f741538f612f9293972aaff3a81e8c3812b8236"
+      git_hash: "2bcaa65e73d02ab23d884f93e1640a7459fe1c46"
       baseline_source_fingerprint: "sha256:6ac0a5064f3e815ba924bdd978559a4cc5b3b6dcfa5fb4d034c0ea8f9196cfed"
-      generated_at: "2026-07-15T15:48:15.724Z"
+      generated_at: "2026-07-16T08:51:47.497Z"
       baseline_status: fresh
       semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
       semantic_source_fingerprint: ""
@@ -166,9 +166,9 @@ modules:
       semantic: llm-knowledge/frontend/modules/views/semantic.md
       facts: llm-knowledge/frontend/modules/views/facts.json
     freshness:
-      git_hash: "8f741538f612f9293972aaff3a81e8c3812b8236"
+      git_hash: "2bcaa65e73d02ab23d884f93e1640a7459fe1c46"
       baseline_source_fingerprint: "sha256:58c83e16d8cb1b2d8c72aa13d4e3ad3b2948ee469d952bfa16a89749ea23eb3c"
-      generated_at: "2026-07-15T15:48:15.724Z"
+      generated_at: "2026-07-16T08:51:47.497Z"
       baseline_status: fresh
       semantic_git_hash: "4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4"
       semantic_source_fingerprint: ""

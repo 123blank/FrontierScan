@@ -28,6 +28,24 @@ Invoke-Step -Name "Product State" -Action {
   & (Join-Path $Root ".harness\scripts\validate-state.ps1") -StateFile (Join-Path $Root ".harness\states\product-state.template.json")
 }
 
+Invoke-Step -Name "State Runtime" -Action {
+  $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) "frontierscan-harness-smoke-$([guid]::NewGuid().ToString('N'))"
+  try {
+    New-Item -ItemType Directory -Path (Join-Path $temporaryRoot ".harness\states") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $temporaryRoot ".harness\workflows") -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $Root ".harness\states\e2e-state.template.json") -Destination (Join-Path $temporaryRoot ".harness\states\e2e-state.template.json")
+    Copy-Item -LiteralPath (Join-Path $Root ".harness\workflows\e2e-development.yaml") -Destination (Join-Path $temporaryRoot ".harness\workflows\e2e-development.yaml")
+    $stateRunner = Join-Path $Root ".harness\scripts\run-state.ps1"
+    & $stateRunner -Command init -Root $temporaryRoot -StoryId "SMOKE-M2" -Summary "验证确定性状态运行时" -Json | Out-Null
+    & $stateRunner -Command status -Root $temporaryRoot -Json | Out-Null
+    & $stateRunner -Command validate -Root $temporaryRoot -Json | Out-Null
+  } finally {
+    if (Test-Path -LiteralPath $temporaryRoot) {
+      Remove-Item -LiteralPath $temporaryRoot -Recurse -Force
+    }
+  }
+}
+
 Invoke-Step -Name "Task DAG" -Action {
   & (Join-Path $Root ".harness\scripts\validate-task-dag.ps1") -TaskDagFile $TaskDagFile
 }
