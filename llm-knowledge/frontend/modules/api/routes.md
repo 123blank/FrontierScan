@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: api
 doc_type: routes
-git_hash: 2bcaa65e73d02ab23d884f93e1640a7459fe1c46
+git_hash: 2b15e640d9f0f6e5be179dee838b3cb70784470e
 source_fingerprint: sha256:eac33941cb0b45f792cbff9bba24aab06f97034a44c3d8aec30061a333b04db9
-generated_at: 2026-07-16T08:51:47.497Z
+generated_at: 2026-07-16T15:13:11.540Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

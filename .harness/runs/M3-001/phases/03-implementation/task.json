@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "493504dd-4157-4539-97df-738627f12a4b",
+  "storyId": "M3-001",
+  "phase": "implementation",
+  "ownerAgent": "backend-developer",
+  "purpose": "Implement task-owned changes only.",
+  "preparedRevision": 5,
+  "preparedAt": "2026-07-16T14:29:47.608Z",
+  "expectedOutputs": [
+    ".harness/runs/M3-001/phases/03-implementation/implementation-notes.md"
+  ],
+  "allowedAdapters": [],
+  "next": "unit-test"
+}

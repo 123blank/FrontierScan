@@ -27,15 +27,15 @@ Current knowledge status:
 | --- | --- | --- |
 | L1 deterministic baseline | `fresh` | 7 backend modules, 7 frontend modules, and Common knowledge with Markdown + `facts.json` |
 | L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call has completed controlled acceptance |
-| L3 local index | `fresh` | 324 generated and curated keyword/metadata chunks in `index/chunks.json` |
+| L3 local index | `fresh` | 328 generated and curated keyword/metadata chunks in `index/chunks.json` |
 | Optional embeddings | `on-demand` | `-WithEmbeddings` writes source-fingerprinted JSONL vectors after successful OpenAI API calls; keyword/metadata retrieval remains the active consumer |
 
 Current limitations:
 
 - Static extraction is intentionally bounded and reports unsupported root-level files in `source-coverage.json` instead of claiming full parser coverage.
 - Semantic content remains `pending` until explicitly generated with an approved `OPENAI_API_KEY`.
-- Project-local Skills and Agent roles are not an automatically dispatched runtime.
-- State schemas and workflow contracts exist, but deterministic phase advancement and resume are not implemented.
+- M2 deterministic phase advancement, evidence gates, block/resume, locks, and interrupted-write recovery are implemented for a single Story.
+- M3 provides a file-based single-Story Dispatcher with structured task/result/checkpoint artifacts and fixed local command adapters. It does not launch real Agent workers or provide multi-Agent concurrency.
 
 Trust rule:
 

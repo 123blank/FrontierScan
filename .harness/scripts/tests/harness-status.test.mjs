@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -15,32 +16,35 @@ const overview = await read("llm-knowledge/overview.md");
 assert.doesNotMatch(overview, /only scaffolded|not implemented yet/i);
 assert.match(overview, /L1.*fresh/i);
 assert.match(overview, /L2.*pending/i);
-assert.match(overview, /324/);
+assert.match(overview, /M2 deterministic phase advancement/i);
+assert.match(overview, /M3 provides a file-based single-Story Dispatcher/i);
 
 const adaptation = await read("docs/harness-architecture-adaptation.md");
 assert.doesNotMatch(adaptation, /current step creates structure only/i);
 assert.match(adaptation, /knowledge generator.*implemented/i);
-assert.match(adaptation, /agent runtime.*not implemented/i);
+assert.match(adaptation, /M2 deterministic state runtime.*implemented/i);
+assert.match(adaptation, /real Agent worker runtime.*not implemented/i);
 
 const checklist = await read("docs/harness-structure-checklist.md");
 assert.doesNotMatch(checklist, /freshness still scaffold/i);
-assert.match(checklist, /16.*102.*13/);
+assert.match(checklist, /19.*117.*13/);
 
 const registry = await read(".codex/skills/skill-registry.yaml");
 assert.match(registry, /status: mixed-runtime-readiness/);
 assert.match(registry, /name: frontier-kb-generate[\s\S]*?status: implemented-v1/);
 assert.match(registry, /name: frontier-kb-query[\s\S]*?status: implemented-v1/);
-assert.match(registry, /name: frontier-state-runner[\s\S]*?status: guidance-only/);
+assert.match(registry, /name: frontier-state-runner[\s\S]*?status: implemented-v1/);
 
 const manifest = await read(".harness/structure-manifest.yaml");
 assert.match(manifest, /structure: implemented/);
 assert.match(manifest, /knowledge_generation: implemented-v1/);
 assert.match(manifest, /knowledge_semantic: mock-verified-current-pending/);
-assert.match(manifest, /agent_runtime: deferred/);
+assert.match(manifest, /agent_runtime: single-story-dispatcher-v1/);
 assert.match(manifest, /harness-status\.test\.mjs/);
 assert.match(manifest, /kb-freshness\.test\.ps1/);
 assert.match(manifest, /docs\/harness-m0-m1\/PLAN\.md/);
 assert.match(manifest, /docs\/harness-m0-m1\/REPORT\.md/);
+assert.match(manifest, /docs\/harness-m3-agent-dispatcher\/REPORT\.md/);
 
 const businessPlan = await read("docs/harness-m0-m1/PLAN.md");
 assert.match(businessPlan, /M0: Baseline Consolidation/);
@@ -51,6 +55,23 @@ assert.equal(existsSync(path.join(root, "docs/harness-m0-m1-implementation-repor
 
 const deliverySummary = await read(".harness/scripts/summarize-delivery.ps1");
 assert.match(deliverySummary, /docs\/AI-handover\.md/);
+assert.match(deliverySummary, /"\.gitignore"/);
+
+for (const runtimePath of [
+  ".harness/states/active-run.json",
+  ".harness/states/active-run.json.bak",
+  ".harness/states/e2e-M3-001.json",
+  ".harness/states/e2e-M3-001.events.jsonl",
+]) {
+  const ignored = spawnSync("git", ["check-ignore", "--no-index", "--quiet", runtimePath], { cwd: root });
+  assert.equal(ignored.status, 0, `${runtimePath} must be ignored as local runtime state`);
+}
+const templateIgnored = spawnSync(
+  "git",
+  ["check-ignore", "--no-index", "--quiet", ".harness/states/e2e-state.template.json"],
+  { cwd: root },
+);
+assert.equal(templateIgnored.status, 1, "the tracked E2E state template must remain deliverable");
 
 assert.equal(
   existsSync(path.join(root, "llm-knowledge/backend/modules/application")),

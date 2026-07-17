@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: category
 doc_type: interfaces
-git_hash: 2bcaa65e73d02ab23d884f93e1640a7459fe1c46
+git_hash: 2b15e640d9f0f6e5be179dee838b3cb70784470e
 source_fingerprint: sha256:3ee916797c4b6364e522b078f89a697da2144c6b3989aa6836de821d10366ee7
-generated_at: 2026-07-16T08:51:47.497Z
+generated_at: 2026-07-16T15:13:11.540Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

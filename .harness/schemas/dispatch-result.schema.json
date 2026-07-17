@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/dispatch-result.schema.json",
+  "title": "FrontierScan Harness Dispatch Result",
+  "type": "object",
+  "required": ["schemaVersion", "dispatchId", "storyId", "phase", "status", "summary", "outputs", "records"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "storyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "phase": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["completed", "failed", "blocked"] },
+    "summary": { "type": "string", "minLength": 1 },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": { "path": { "type": "string", "minLength": 1 } },
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "status", "message"],
+        "properties": {
+          "type": { "type": "string", "enum": ["test", "review", "note"] },
+          "status": { "type": "string" },
+          "path": { "type": ["string", "null"] },
+          "message": { "type": "string" },
+          "actor": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "required": ["reason", "owner", "suggestedAction"],
+      "properties": {
+        "reason": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "suggestedAction": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

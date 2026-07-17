@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M3-001",
+  "phase": "build-publish",
+  "dispatchId": "fab1d40f-626c-4108-a195-0771aa2ffd55",
+  "adapter": "no-build-required",
+  "executable": "none",
+  "args": [],
+  "cwd": "D:/ProjectStudy/FrontierScan",
+  "status": "passed",
+  "exitCode": 0,
+  "startedAt": "2026-07-16T15:10:07.251Z",
+  "finishedAt": "2026-07-16T15:10:07.253Z",
+  "durationMs": 0,
+  "stdout": "No build required for the selected changes.",
+  "stderr": ""
+}

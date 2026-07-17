@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M3-001",
+  "phase": "unit-test",
+  "dispatchId": "13998512-7eb1-4f76-ac34-e66f97ac9d83",
+  "adapter": "harness-m3-tests",
+  "status": "passed",
+  "exitCode": 0,
+  "startedAt": "2026-07-16T14:56:26.345Z",
+  "finishedAt": "2026-07-16T14:56:30.159Z",
+  "durationMs": 3813,
+  "stdout": "story-runtime tests passed\n",
+  "stderr": ""
+}

@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
   "generated_by": "frontier-kb-generate",
-  "generated_at": "2026-07-16T08:51:47.497Z",
-  "git_hash": "2bcaa65e73d02ab23d884f93e1640a7459fe1c46",
+  "generated_at": "2026-07-16T15:13:11.540Z",
+  "git_hash": "2b15e640d9f0f6e5be179dee838b3cb70784470e",
   "source_fingerprints": {
     "backend": "sha256:c4968dc81529d61cd91410c95f2864ed1e3f4b166a88b0b4b7044548ed1acd5d",
     "frontend": "sha256:c9a94d3a93441cf9d26b0ca452a53dc9291e7d044b748d5cf1802bee938f5999",
-    "common": "sha256:3368f01a2912a5cda50e4298bddb4fb1d523d6872186833a3e0b7d02029852ba"
+    "common": "sha256:d6c4c5750f931cea8dd87889a6a4831cceafe8461333848231c797374c19142a"
   },
   "source_fingerprint_status": {
     "backend": "complete",

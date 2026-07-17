@@ -1,24 +1,32 @@
-# 代码审核报告
+# Harness M3 代码审核报告
 
-## 范围
+## 审核范围
 
-审核 M2 状态运行时完整差异，重点覆盖门禁、指针/状态恢复、原子替换、revision 一致性、运行时契约和 JSONL 事务对账。
+- `validate-state.ps1` 与活动指针状态门禁。
+- `story-runtime.mjs` 的固定 adapter 子进程输出处理。
+- `validate-structure.ps1` 与 Dispatch Schema JSON 校验。
+- `story-runtime.mjs` 的 no-build 差异门禁和推进后 checkpoint 对账。
+- `.gitignore` 与 `summarize-delivery.ps1` 的运行态交付边界。
+- 对应 M2/M3 回归测试和 M3 使用说明。
 
-## 发现
+历史 phase 5 证据保留在 `.harness/runs/M3-001/phases/05-code-review/code-review-report.md`，本次未改写该文件，避免破坏状态记录中的 SHA-256。
 
-此前审核问题及完成审计发现的活动指针候选遗漏、跨 Story revision 误选、指针领先状态回退、恢复后契约未校验和同 revision 初始化事务误判均已完成 TDD 修复；同 revision 存在多个孤立 intent 时也只有最后一个可以由状态证明提交。
+## 已关闭问题
 
-最终审核继续验证了跨文件提交和完成态并发边界：状态更新按 `pointer stage -> state commit -> pointer promote` 执行；新 Story 初始化会在全局初始化锁内获取 completed 旧 Story 的运行锁，重新读取并闭合旧事务。仍在执行的 `complete` 会阻止并发初始化，释放锁后可重试，且完成事务只有唯一一组 `intent/committed`。
-
-最终只读总复审未发现剩余 `BLOCKER` 或 `WARNING`。
-
-## 测试缺口
-
-- 本地 CLI 只能校验 `actor=user`、证据路径和 SHA-256，不能独立认证聊天中的真实用户身份；调用方必须继续遵守项目审批边界。
-- 本轮未执行真实发布、部署、暂存、提交、推送或 PR 创建，相关外部动作不在 M2 状态运行时修复范围内。
-- 原子恢复通过故障注入模拟，未覆盖真实断电和文件系统目录项持久性；并发测试覆盖关键锁竞争，但未执行高并发压力和多进程同时回收 stale lock。
-- PowerShell 冒烟覆盖 `init/status/validate`，完整写命令和门禁主要由 Node.js 临时 Fixture 验证；项目状态校验器不是通用 JSON Schema 引擎，复杂约束由运行时校验和测试补充。
+| 原问题 | 修复 | 直接证据 |
+| --- | --- | --- |
+| `active-run.json` 使推荐状态门禁失败 | 统一状态校验器识别并校验活动指针 | 合法指针通过、路径错配和字段类型错误失败；全目录状态命令退出 0 |
+| adapter 输出超过 Node.js 默认 1 MiB 时被误判失败 | stdout 和 stderr 各使用 16 MiB 有界缓冲 | 2 MiB 真实子进程输出完整写入证据并通过 |
+| Dispatch Schema 只检查存在性 | 两个 Schema 纳入 `Assert-Json` | M3 测试检查结构校验契约，结构门禁实际解析 JSON |
+| PowerShell wrapper 省略 `-Root` 时默认路径解析失败 | 在脚本正文基于 `$PSScriptRoot` 解析默认根目录 | `run-state.ps1` 和 `run-story.ps1` 的真实入口回归及当前仓库命令均通过 |
+| `build-publish` 只信任 checkpoint 中的 adapter 字段 | checkpoint 绑定 evidence SHA-256，`apply` 重验普通文件、哈希、派发身份和退出状态 | adapter 通过后篡改 evidence 的回归先 RED，修复后拒绝推进并保持当前 phase |
+| phase 4/5/6 证据早于最终门禁修复 | 在 `git-delivery` 新增最终验证报告并重新绑定最新测试、审核和核心文件哈希 | 完整 Harness 回归重新退出 0；历史证据保留且不再被表述为最终工作区的唯一依据 |
+| `no-build-required` 无条件成功 | 固定执行 backend/frontend Git 状态检查，发现 staged、unstaged 或 untracked 变化时保存失败 evidence | 脏范围 RED/GREEN、干净范围和当前真实工作区检查均通过 |
+| M2 已推进、checkpoint 未落盘时重试失败 | 使用 `runtime.previousPhase`、workflow next 和旧派发身份对账，补齐 checkpoint 并返回 `already-applied` | 状态先推进、checkpoint 保持 `result-received` 的故障注入 RED/GREEN 通过 |
+| 本机活动状态可能进入 Git 交付 | `.gitignore` 排除活动指针、E2E 状态、备份、临时文件、锁和事件日志；交付分类器将 `.gitignore` 纳入 owned | Git ignore 正反例和 delivery summary 均通过，模板与 run 证据仍可交付 |
 
 ## 结论
 
-当前主流程问题均有直接回归测试，并已分别通过针对性 Harness 验证、完整验收和最终只读总复审。现有剩余风险不影响 Harness M2 基本可用验收。
+未发现未解决的 `BLOCKER` 或 `WARNING`。M1/M2/M3 测试、Harness Smoke、结构、状态、DAG、知识回归、no-build 真实范围检查和差异检查均通过；`backend/src/**` 与 `frontend/src/**` 无差异。
+
+16 MiB 是当前有意的有界输出限制。超过该范围的超大日志仍会失败关闭，属于 M3 当前阶段可接受的资源边界，不影响常规 Maven/npm 门禁。

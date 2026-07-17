@@ -12,9 +12,11 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Output templates | `.harness/templates/*.md` | Done |
 | Task DAG example template | `.harness/templates/task-dag.example.json` | Done |
 | Report/output folders | `.harness/reports/`, `.harness/outputs/` | Done |
-| Deterministic script area | `.harness/scripts/` | Implemented V1 helpers; workflow runtime still deferred |
+| Deterministic script area | `.harness/scripts/` | M2 state runtime and M3 single-Story Dispatcher implemented V1 |
 | Structure validation script | `.harness/scripts/validate-structure.ps1` | Done |
-| State validation script | `.harness/scripts/validate-state.ps1` | Basic read-only validation done |
+| State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
+| State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
+| Story Dispatcher entry | `.harness/scripts/run-story.ps1` | M3 `prepare/status/run-adapter/apply` 文件式派发闭环已实现 V1 |
 | Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | Basic read-only validation done |
 | KB query script | `.harness/scripts/kb-query.ps1` | Index-first query with Markdown fallback implemented V1 |
 | KB generate script | `.harness/scripts/generate-kb.ps1` + `lib/generate-kb.mjs` + `lib/source-fingerprint.mjs` | Knowledge Reliability V2 plus M1.1 deterministic content fingerprints |
@@ -27,11 +29,11 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Interface case derivation script | `.harness/scripts/derive-interface-cases.ps1` | Basic read-only acceptance-case draft done |
 | Build plan script | `.harness/scripts/plan-build.ps1` | Basic read-only build/publish plan done |
 | Delivery summary script | `.harness/scripts/summarize-delivery.ps1` | Basic read-only owned/unrelated change summary done |
-| Harness smoke flow script | `.harness/scripts/smoke-harness-flow.ps1` | Non-destructive helper smoke implemented; not business E2E |
-| Agent registry | `.codex/agents/agents.yaml` | 12 roles defined; runtime dispatch deferred |
+| Harness smoke flow script | `.harness/scripts/smoke-harness-flow.ps1` | Non-destructive M2 init/validate and M3 prepare/status smoke implemented; not business E2E |
+| Agent registry | `.codex/agents/agents.yaml` | 12 roles feed M3 task owners; real Agent worker execution deferred |
 | Project Skill area | `.codex/skills/` | Done |
 | MVP Skill placeholders | `.codex/skills/frontier-*` | Replaced by basic guidance |
-| State runner Skill | `.codex/skills/frontier-state-runner/` | Basic workflow guidance done |
+| State runner Skill | `.codex/skills/frontier-state-runner/` | M2 deterministic runtime guidance and executable entry implemented V1 |
 | KB generate Skill | `.codex/skills/frontier-kb-generate/` | Implemented V1 workflow, generator, and M1.1 fingerprint contract |
 | KB query Skill | `.codex/skills/frontier-kb-query/` | Implemented V1 index-first query with fingerprint freshness reporting |
 | KB freshness Skill | `.codex/skills/frontier-kb-refresh-check/` | Implemented M1.1 content-fingerprint freshness workflow |
@@ -49,24 +51,21 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Backend knowledge registry | `llm-knowledge/backend/meta.yaml` | 7 modules; baseline/index fresh, semantic pending; complete `source_fingerprint` and source coverage recorded |
 | Frontend knowledge registry | `llm-knowledge/frontend/meta.yaml` | 7 modules; baseline/index fresh, semantic pending; complete `source_fingerprint` and source coverage recorded |
 | Common knowledge registry | `llm-knowledge/common/` + `llm-knowledge/index/manifest.json` | Common knowledge is indexed and has complete `source_fingerprint`; baseline/index fresh, semantic pending |
-| Local knowledge index | `llm-knowledge/index/` | 324 generated/curated chunks and fingerprint manifest generated |
+| Local knowledge index | `llm-knowledge/index/` | Generated/curated chunks and fingerprint manifest available; current count is reported by the generator and overview |
 | Quality gate knowledge | `llm-knowledge/common/conventions/quality-gates.md` | Basic guidance done |
 | Execution/verification knowledge | `llm-knowledge/common/conventions/execution-verification.md` | Basic guidance done |
 | Delivery knowledge | `llm-knowledge/common/conventions/delivery.md` | Basic guidance done |
 | Human architecture doc | `docs/harness-architecture-adaptation.md` | Done |
 | M0 + M1 business plan/report | `docs/harness-m0-m1/PLAN.md`, `docs/harness-m0-m1/REPORT.md` | Done |
 | M1.1 business plan/report | `docs/harness-m1-1-source-fingerprint/PLAN.md`, `docs/harness-m1-1-source-fingerprint/REPORT.md` | Done |
+| M2 state runtime plan/report | `docs/harness-m2-state-runtime/`, `.harness/scripts/run-state.ps1` | Implemented V1 |
+| M3 Dispatcher plan/report | `docs/harness-m3-agent-dispatcher/`, `.harness/scripts/run-story.ps1` | Implemented V1 |
 
 ## Deferred Functional Work
 
-- Implement M2 deterministic active state runtime with atomic transitions, evidence gates, locking, and resume.
-- Before M2, perform a controlled live L2 semantic-enrichment acceptance using the configured environment key; never print credentials or alter business source.
-- Verify and package project Skills through a supported Codex runtime integration mechanism.
-- Implement deterministic active state creation, legal transitions, atomic updates, locks, and resume.
+- Verify and package project Skills through a supported Codex runtime integration mechanism for M4.
+- Implement constrained Agent workers that consume M3 task/result schemas without owning state transitions.
 - Strengthen DAG validation for wave topology, file collisions, shared files, and global changes.
-- Add deterministic helper for creating active state files from requirement breakdown output.
-- Add deterministic helper for writing task DAG output from planning results.
-- Add active state files only when a real workflow starts.
 - Implement write-capable worktree orchestration only after explicit approval.
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
 
@@ -86,7 +85,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 16 directories, 102 required files, and 13 Skill files.
+Current verified structure: 19 directories, 117 required files, and 13 Skill files.
 
 ## Knowledge Query
 

@@ -11,3 +11,12 @@ frontend/.vite/
 
 .env
 *.log
+
+# Harness local runtime state
+.harness/states/active-run.json
+.harness/states/e2e-*.json
+!.harness/states/e2e-state.template.json
+.harness/states/*.bak
+.harness/states/*.tmp
+.harness/states/*.lock
+.harness/states/*.events.jsonl

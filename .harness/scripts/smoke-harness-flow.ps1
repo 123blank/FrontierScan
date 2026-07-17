@@ -36,9 +36,12 @@ Invoke-Step -Name "State Runtime" -Action {
     Copy-Item -LiteralPath (Join-Path $Root ".harness\states\e2e-state.template.json") -Destination (Join-Path $temporaryRoot ".harness\states\e2e-state.template.json")
     Copy-Item -LiteralPath (Join-Path $Root ".harness\workflows\e2e-development.yaml") -Destination (Join-Path $temporaryRoot ".harness\workflows\e2e-development.yaml")
     $stateRunner = Join-Path $Root ".harness\scripts\run-state.ps1"
-    & $stateRunner -Command init -Root $temporaryRoot -StoryId "SMOKE-M2" -Summary "验证确定性状态运行时" -Json | Out-Null
+    $storyRunner = Join-Path $Root ".harness\scripts\run-story.ps1"
+    & $stateRunner -Command init -Root $temporaryRoot -StoryId "SMOKE-M3" -Summary "验证单 Story Dispatcher" -Json | Out-Null
     & $stateRunner -Command status -Root $temporaryRoot -Json | Out-Null
     & $stateRunner -Command validate -Root $temporaryRoot -Json | Out-Null
+    & $storyRunner -Command prepare -Root $temporaryRoot -Json | Out-Null
+    & $storyRunner -Command status -Root $temporaryRoot -Json | Out-Null
   } finally {
     if (Test-Path -LiteralPath $temporaryRoot) {
       Remove-Item -LiteralPath $temporaryRoot -Recurse -Force

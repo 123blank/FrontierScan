@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "fab1d40f-626c-4108-a195-0771aa2ffd55",
+  "storyId": "M3-001",
+  "phase": "build-publish",
+  "status": "completed",
+  "summary": "No backend, frontend, Docker, or environment build was required; no publish was performed.",
+  "outputs": [
+    {
+      "path": ".harness/runs/M3-001/phases/06-build-publish/build-report.md"
+    }
+  ],
+  "records": []
+}

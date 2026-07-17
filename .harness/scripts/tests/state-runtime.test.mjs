@@ -8,6 +8,9 @@ import { runStateCommand } from "../lib/state-runtime.mjs";
 
 const FIXED_NOW = "2026-07-16T00:00:00.000Z";
 const RUN_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "run-state.ps1");
+const RUN_STORY_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "run-story.ps1");
+const STATE_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "state-runtime.mjs");
+const STORY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "story-runtime.mjs");
 const VALIDATE_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "validate-state.ps1");
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -39,8 +42,8 @@ async function readJson(root, relativePath) {
   return JSON.parse(await readFile(path.join(root, relativePath), "utf8"));
 }
 
-async function createFixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), "frontier-state-runtime-"));
+async function createFixture(fixtureParent = os.tmpdir()) {
+  const root = await mkdtemp(path.join(fixtureParent, "frontier-state-runtime-"));
   const template = {
     schemaVersion: "1.0",
     storyId: "S1",
@@ -346,6 +349,86 @@ async function testNextRequiresOutputsAndFollowsWorkflow() {
     assert.equal(advanced.state.runtime.revision, 2);
     assert.equal(advanced.state.runtime.records[0].type, "output");
     assert.match(advanced.state.runtime.records[0].sha256, /^sha256:[a-f0-9]{64}$/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testNextExpandsRunScopedRequiredOutput() {
+  const { root } = await createFixture();
+  try {
+    await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
+name: frontier-e2e-development
+phases:
+  - id: requirement
+    order: 0
+    required_outputs:
+      - .harness/runs/{runId}/phases/00-requirement/requirement-breakdown.md
+    next:
+      - technical-design
+  - id: technical-design
+    order: 1
+    required_outputs: []
+    next:
+      - done
+quality_gates: []
+`);
+    await runStateCommand({ root, command: "init", storyId: "M3-RUN", summary: "run scoped", now: () => FIXED_NOW });
+    await write(root, ".harness/outputs/requirement-breakdown.md", "legacy output");
+
+    await assert.rejects(
+      runStateCommand({ root, command: "next", now: () => FIXED_NOW }),
+      /\.harness\/runs\/M3-RUN\/phases\/00-requirement\/requirement-breakdown\.md/,
+    );
+
+    const expected = ".harness/runs/M3-RUN/phases/00-requirement/requirement-breakdown.md";
+    await write(root, expected, "run output");
+    const advanced = await runStateCommand({ root, command: "next", now: () => FIXED_NOW });
+    assert.equal(advanced.state.phase, "technical-design");
+    assert.equal(advanced.state.runtime.records.at(-1).path, expected);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testTaskDagGateUsesExpandedRequiredOutput() {
+  const { root } = await createFixture();
+  try {
+    await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
+name: frontier-e2e-development
+phases:
+  - id: task-dag
+    order: 0
+    required_outputs:
+      - .harness/runs/{runId}/phases/02-task-dag/task-dag.json
+    next:
+      - implementation
+  - id: implementation
+    order: 1
+    required_outputs: []
+    next:
+      - done
+quality_gates:
+  - phase: task-dag
+    rule: DAG must be valid.
+`);
+    await runStateCommand({ root, command: "init", storyId: "M3-DAG", summary: "run dag", now: () => FIXED_NOW });
+    await setRunPhase(root, "M3-DAG", "task-dag");
+    const expected = ".harness/runs/M3-DAG/phases/02-task-dag/task-dag.json";
+    await write(root, expected, "{}");
+    let validatedPath = null;
+
+    const advanced = await runStateCommand({
+      root,
+      command: "next",
+      now: () => FIXED_NOW,
+      taskDagValidator: async (dagPath) => {
+        validatedPath = path.relative(root, dagPath).replaceAll("\\", "/");
+      },
+    });
+
+    assert.equal(advanced.state.phase, "implementation");
+    assert.equal(validatedPath, expected);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1281,7 +1364,7 @@ async function testInitRejectsInvalidRecoverablePointerContract() {
 async function testStateValidatorRequiresRuntimeMetadata() {
   const { root } = await createFixture();
   try {
-    await runStateCommand({ root, command: "init", storyId: "M2-042", summary: "schema", now: () => FIXED_NOW });
+    await runStateCommand({ root, command: "init", storyId: "M2-042", summary: "中文状态摘要", now: () => FIXED_NOW });
     const stateFile = path.join(root, ".harness/states/e2e-M2-042.json");
     const valid = await execPowerShellScript(VALIDATE_STATE_SCRIPT, ["-StateFile", stateFile]);
     assert.equal(valid.exitCode, 0, valid.stderr);
@@ -1292,6 +1375,65 @@ async function testStateValidatorRequiresRuntimeMetadata() {
     const invalid = await execPowerShellScript(VALIDATE_STATE_SCRIPT, ["-StateFile", stateFile]);
     assert.notEqual(invalid.exitCode, 0);
     assert.match(`${invalid.stdout}${invalid.stderr}`, /runtime/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testPowerShellEntryPointsResolveDefaultRootFromScriptLocation() {
+  const { root } = await createFixture(REPOSITORY_ROOT);
+  try {
+    await runStateCommand({ root, command: "init", storyId: "M3-DEFAULT-ROOT", summary: "default root", now: () => FIXED_NOW });
+    for (const [source, target] of [
+      [RUN_STATE_SCRIPT, ".harness/scripts/run-state.ps1"],
+      [RUN_STORY_SCRIPT, ".harness/scripts/run-story.ps1"],
+      [STATE_RUNTIME_MODULE, ".harness/scripts/lib/state-runtime.mjs"],
+      [STORY_RUNTIME_MODULE, ".harness/scripts/lib/story-runtime.mjs"],
+    ]) {
+      await write(root, target, await readFile(source, "utf8"));
+    }
+
+    const stateStatus = await execPowerShellScript(
+      path.join(root, ".harness/scripts/run-state.ps1"),
+      ["-Command", "status", "-Json"],
+    );
+    assert.equal(stateStatus.exitCode, 0, stateStatus.stderr);
+    assert.equal(JSON.parse(stateStatus.stdout).state.storyId, "M3-DEFAULT-ROOT");
+
+    const storyStatus = await execPowerShellScript(
+      path.join(root, ".harness/scripts/run-story.ps1"),
+      ["-Command", "status", "-Json"],
+    );
+    assert.equal(storyStatus.exitCode, 0, storyStatus.stderr);
+    assert.equal(JSON.parse(storyStatus.stdout).state.storyId, "M3-DEFAULT-ROOT");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testStateValidatorAcceptsAndRejectsActivePointer() {
+  const { root } = await createFixture();
+  try {
+    await runStateCommand({ root, command: "init", storyId: "M2-POINTER", summary: "pointer schema", now: () => FIXED_NOW });
+    const pointerFile = path.join(root, ".harness/states/active-run.json");
+
+    const valid = await execPowerShellScript(VALIDATE_STATE_SCRIPT, ["-StateFile", pointerFile]);
+    assert.equal(valid.exitCode, 0, valid.stderr);
+    assert.match(valid.stdout, /State type: active-run/);
+
+    const pointer = await readJson(root, ".harness/states/active-run.json");
+    pointer.stateFile = ".harness/states/e2e-OTHER.json";
+    await write(root, ".harness/states/active-run.json", `${JSON.stringify(pointer, null, 2)}\n`);
+    const invalid = await execPowerShellScript(VALIDATE_STATE_SCRIPT, ["-StateFile", pointerFile]);
+    assert.notEqual(invalid.exitCode, 0);
+    assert.match(invalid.stderr, /stateFile.*runId|runId.*stateFile/i);
+
+    pointer.stateFile = `.harness/states/e2e-${pointer.runId}.json`;
+    pointer.schemaVersion = 1;
+    await write(root, ".harness/states/active-run.json", `${JSON.stringify(pointer, null, 2)}\n`);
+    const wrongType = await execPowerShellScript(VALIDATE_STATE_SCRIPT, ["-StateFile", pointerFile]);
+    assert.notEqual(wrongType.exitCode, 0);
+    assert.match(wrongType.stderr, /schemaVersion.*string|string.*schemaVersion/i);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1329,6 +1471,8 @@ await testInitKeepsNewRunDiscoverableAfterCompletedRun();
 await testStatusRecoversNewRunPointerFromInterruptedReplacement();
 await testInitRejectsExistingCompletedStory();
 await testNextRequiresOutputsAndFollowsWorkflow();
+await testNextExpandsRunScopedRequiredOutput();
+await testTaskDagGateUsesExpandedRequiredOutput();
 await testNextRejectsMalformedWorkflow();
 await testRecordAndTestGate();
 await testReviewBlockerGate();
@@ -1353,9 +1497,11 @@ await testRestartedInitCommitsOnlyLatestSameRevisionOrphan();
 await testNextMutationRepairsTruncatedEventTail();
 await testMutationRejectsTerminatedInvalidEvent();
 await testPowerShellEntryPointPreservesExitCodes();
+await testPowerShellEntryPointsResolveDefaultRootFromScriptLocation();
 await testValidateCommandChecksRuntimeState();
 await testStatusRejectsInvalidRuntimeContract();
 await testInitRejectsInvalidRecoverablePointerContract();
 await testStateValidatorRequiresRuntimeMetadata();
+await testStateValidatorAcceptsAndRejectsActivePointer();
 await testRuntimeIsRegisteredInHarnessContracts();
 console.log("state-runtime tests passed");

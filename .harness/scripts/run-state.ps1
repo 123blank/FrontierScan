@@ -17,11 +17,15 @@ param(
   [string]$Reason,
   [string]$Owner,
   [string]$SuggestedAction,
-  [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
+  [string]$Root,
   [switch]$Json
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($Root)) {
+  $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+}
 
 $nodeScript = Join-Path $PSScriptRoot "lib\state-runtime.mjs"
 if (-not (Test-Path -LiteralPath $nodeScript)) {

@@ -309,6 +309,15 @@ function yamlScalar(raw) {
   return value;
 }
 
+function expandWorkflowPath(template, state) {
+  const placeholders = [...template.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+  const unsupported = placeholders.filter((name) => name !== "runId");
+  if (unsupported.length) {
+    throw new Error(`Workflow path contains unsupported placeholder '{${unsupported[0]}}'.`);
+  }
+  return template.replaceAll("{runId}", state.runtime.runId);
+}
+
 function parseWorkflow(source) {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const phases = [];
@@ -392,6 +401,16 @@ async function readWorkflow(root, state) {
   return parseWorkflow(await readFile(resolved.fullPath, "utf8"));
 }
 
+export async function readWorkflowDefinition(root, state) {
+  const workflow = await readWorkflow(path.resolve(root), state);
+  return {
+    phases: workflow.phases.map((phase) => ({
+      ...phase,
+      required_outputs: phase.required_outputs.map((output) => expandWorkflowPath(output, state)),
+    })),
+  };
+}
+
 async function outputEvidence(root, phaseId, relativeOutput, timestamp) {
   const resolved = resolveInsideRoot(root, relativeOutput, "Required output");
   const info = await lstat(resolved.fullPath).catch(() => null);
@@ -412,8 +431,8 @@ async function outputEvidence(root, phaseId, relativeOutput, timestamp) {
   };
 }
 
-async function runTaskDagValidator(root, options) {
-  const dagPath = resolveInsideRoot(root, ".harness/outputs/task-dag.json", "Task DAG").fullPath;
+async function runTaskDagValidator(root, relativeDagPath, options) {
+  const dagPath = resolveInsideRoot(root, relativeDagPath, "Task DAG").fullPath;
   if (options.taskDagValidator) {
     await options.taskDagValidator(dagPath);
     return;
@@ -440,8 +459,12 @@ async function evidenceMatches(root, record, label) {
   return sha256 === record.sha256;
 }
 
-async function assertQualityGate(root, state, phaseId, options) {
-  if (phaseId === "task-dag") await runTaskDagValidator(root, options);
+async function assertQualityGate(root, state, phaseId, requiredOutputs, options) {
+  if (phaseId === "task-dag") {
+    const dagOutput = requiredOutputs.find((output) => output.endsWith("/task-dag.json"));
+    if (!dagOutput) throw new Error("Task DAG phase must require a task-dag.json output.");
+    await runTaskDagValidator(root, dagOutput, options);
+  }
   if (phaseId === "unit-test") {
     const results = state.tests.results.filter((item) => item.phase === phaseId);
     const latestResults = [...new Map(results.map((item) => [item.path ?? item.id, item])).values()];
@@ -529,10 +552,11 @@ async function advanceState(root, located, options) {
   if (current.next.length !== 1) throw new Error(`Workflow phase '${current.id}' must define exactly one next phase.`);
   const timestamp = nowValue(options);
   const evidence = [];
-  for (const output of current.required_outputs) {
+  const requiredOutputs = current.required_outputs.map((output) => expandWorkflowPath(output, located.state));
+  for (const output of requiredOutputs) {
     evidence.push(await outputEvidence(root, current.id, output, timestamp));
   }
-  await assertQualityGate(root, located.state, current.id, options);
+  await assertQualityGate(root, located.state, current.id, requiredOutputs, options);
   const nextPhase = current.next[0];
   if (nextPhase === "done") throw new Error("Use the complete command to enter done.");
   const state = structuredClone(located.state);
@@ -567,10 +591,11 @@ async function completeRun(root, located, options) {
   }
   const timestamp = nowValue(options);
   const evidence = [];
-  for (const output of current.required_outputs) {
+  const requiredOutputs = current.required_outputs.map((output) => expandWorkflowPath(output, located.state));
+  for (const output of requiredOutputs) {
     evidence.push(await outputEvidence(root, current.id, output, timestamp));
   }
-  await assertQualityGate(root, located.state, current.id, options);
+  await assertQualityGate(root, located.state, current.id, requiredOutputs, options);
   const state = structuredClone(located.state);
   state.runtime.records.push(...evidence);
   state.runtime.previousPhase = "git-delivery";

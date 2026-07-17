@@ -48,7 +48,7 @@ function Read-StateJson {
   }
 
   try {
-    return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    return Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
   } catch {
     throw "Invalid JSON in state file '${Path}': $($_.Exception.Message)"
   }
@@ -175,6 +175,40 @@ function Test-ProductState {
   return "product"
 }
 
+function Test-ActiveRunState {
+  param([object]$State)
+
+  foreach ($name in @("schemaVersion", "runId", "stateFile", "status", "revision", "updatedAt")) {
+    Assert-HasProperty -Object $State -Name $name -Context "Active run"
+  }
+
+  if ($State.schemaVersion -isnot [string] -or [string]::IsNullOrWhiteSpace($State.schemaVersion)) {
+    throw "Active run schemaVersion must be a non-empty string."
+  }
+  if ($State.runId -isnot [string] -or $State.runId -notmatch "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$") {
+    throw "Active run runId is invalid."
+  }
+  if ($State.stateFile -isnot [string]) {
+    throw "Active run stateFile must be a string."
+  }
+  $normalizedStateFile = $State.stateFile.Replace("\", "/")
+  if ($normalizedStateFile -ne ".harness/states/e2e-$($State.runId).json") {
+    throw "Active run stateFile must match runId."
+  }
+  if ($State.status -isnot [string]) {
+    throw "Active run status must be a string."
+  }
+  Assert-Enum -Value $State.status -Allowed @("active", "blocked", "completed") -Context "Active run status"
+  if (($State.revision -isnot [int] -and $State.revision -isnot [long]) -or $State.revision -lt 1) {
+    throw "Active run revision must be a positive integer."
+  }
+  if ($State.updatedAt -isnot [string] -or [string]::IsNullOrWhiteSpace($State.updatedAt)) {
+    throw "Active run updatedAt must be a non-empty string."
+  }
+
+  return "active-run"
+}
+
 $state = Read-StateJson -Path $StateFile
 
 $stateType = $null
@@ -182,8 +216,10 @@ if ($state.PSObject.Properties.Name -contains "storyId") {
   $stateType = Test-E2EState -State $state
 } elseif ($state.PSObject.Properties.Name -contains "requestId") {
   $stateType = Test-ProductState -State $state
+} elseif ($state.PSObject.Properties.Name -contains "runId" -and $state.PSObject.Properties.Name -contains "stateFile") {
+  $stateType = Test-ActiveRunState -State $state
 } else {
-  throw "Unknown state file type. Expected either storyId or requestId."
+  throw "Unknown state file type. Expected storyId, requestId, or an active run pointer."
 }
 
 Write-Output "Harness state validation passed."

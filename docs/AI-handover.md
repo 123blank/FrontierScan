@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-15
+> 最后更新：2026-07-17
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 的 M0、M1 与 M1.1 内容指纹新鲜度已完成。当前具备 14 模块 L1 基线、`backend/article` 的真实 L2 语义增强、327 块本地索引、模块刷新、模式感知查询和可修复 refresh-task 输出；backend、frontend、common 的 L1/L3 均为 `fresh`，全局 L2 因其余模块未增强而保持 `pending`。Embedding 已切换为阿里百炼独立配置但尚未执行真实数据上传。下一独立能力是 M2 确定性状态运行时；正式 Skill/Agent 自动接入、Worktree 并行和验证/交付适配仍未实现。
+> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 的 M0-M3 实现与质量门禁已完成，当前具备 M2 确定性状态运行时和 M3 单 Story 文件式 Dispatcher，M3 正等待明确批准后交付。14 个业务模块的 L1/L3 与 backend、frontend、common 知识均为 `fresh`，`backend/article` 已完成真实 L2 语义增强，其余模块仍为 `pending`；Embedding 尚未执行真实数据上传。下一独立能力是 M4 Codex Skill/Agent Runtime Integration，Worktree 并行、真实发布和 Git 自动写入仍未实现。
 
 ---
 
@@ -1525,3 +1525,52 @@ M2 已把单 Story E2E 模板升级为可执行、可恢复、可审计的确定
 - 本批未修改业务源码，未使用 API 密钥，也未执行暂存、提交、推送或合并。
 
 下一阶段建议只进入 M3 Agent Dispatcher：先让单个 Agent 通过结构化输入/输出与 M2 状态运行时协作，再考虑 M4 Worktree 并行。不要把 M2 状态可恢复解释为文章级自动交付已经完成。
+
+### 16.16 2026-07-17 当前状态：M3 单 Story 文件式 Dispatcher
+
+当前权威设计、计划和报告：
+
+```text
+docs/harness-m3-agent-dispatcher/DESIGN.md
+docs/harness-m3-agent-dispatcher/PLAN.md
+docs/harness-m3-agent-dispatcher/REPORT.md
+```
+
+M3 已按 Single-Story Vertical Slice 打通 M2 上层的结构化派发闭环：
+
+- `.harness/scripts/run-story.ps1` 提供 `prepare/status/run-adapter/apply`。
+- `prepare` 从 M2 状态和 workflow 生成包含 owner、revision、预期输出、允许 adapter 和 next 的 task。
+- 当前 Codex 会话或人工执行者负责认知工作，并写入阶段产物和 `result.json`；M3 不启动真实模型或 Agent 进程。
+- `run-adapter` 只执行代码内固定命令，使用 `execFile` 与 `shell: false`，保存 exit code、stdout、stderr、耗时和时间戳。
+- `apply` 校验 Story、phase、dispatch、完整输出集合、普通文件、run 目录边界和 adapter evidence SHA-256，只通过 M2 `record/next/block/complete` 更新状态。
+- 新阶段产物统一位于 `.harness/runs/<storyId>/phases/<order>-<phase>/`，task、result、checkpoint 和命令证据可跨进程读取。
+- unit-test 失败、未解决 `BLOCKER`、缺失产物和失败 build adapter 均不能推进；同 adapter 重跑通过后可按最新证据恢复。
+- `no-build-required` 会固定检查 `backend/`、`frontend/` 的 staged、unstaged 和 untracked Git 差异，只有范围为空时才生成成功证据。
+- M2 已推进但 checkpoint 尚未落盘时，`apply` 会对账 `runtime.previousPhase`、workflow next 和旧派发身份，补齐 checkpoint 并返回 `already-applied`，不会重复推进状态。
+- `.gitignore` 隔离本机活动指针、E2E 活动状态、备份、临时文件、锁和事件日志；状态模板与 `.harness/runs/` 阶段证据仍可交付。
+- 九阶段临时仓库测试已从 requirement 推进到 delivery summary，并在 fixture 用户批准证据存在时进入 `done`。
+
+当前真实运行状态：
+
+- Story 为 `M3-001`，phase 为 `git-delivery`，runtime 状态为 `active`，revision 为 24。
+- 当前没有用户 approval，因此不能执行状态完成、暂存、提交、推送或 PR 操作。
+- 最新工作区验证和审核分别以 `.harness/runs/M3-001/phases/08-git-delivery/final-verification-report.md`、`.harness/reports/code-review-report.md` 为准；phase 4/5/6 报告只保留当时的历史证据。
+
+接手时先执行：
+
+```powershell
+.\.harness\scripts\run-state.ps1 -Command status -Json
+.\.harness\scripts\run-story.ps1 -Command status -Json
+.\.harness\scripts\check-kb-freshness.ps1
+```
+
+继续 M4 前应保持 M2/M3 对状态推进和质量门禁的唯一控制权，让受约束 Worker 只消费 task schema、产出 result schema。若只做本次 M3 交付，必须先取得用户明确批准，再按 `git-delivery` 规则记录批准和执行批准范围内的 Git 操作。
+
+当前边界：
+
+- `.codex/agents/agents.yaml` 仍是角色注册表，M3 不代表真实 Agent 已自动启动或获得工具权限。
+- 没有多 Story、Fork-Join、DAG 波次执行或 Worktree 生命周期；这些属于 M5。
+- 没有真实发布、部署、API/UI 环境执行或 Git 写入；这些属于 M6 且继续需要用户批准。
+- 本批未修改业务源码，未使用 API 密钥，未执行暂存、提交、推送或合并。
+
+下一阶段是 M4 Codex Skill/Agent Runtime Integration：用受约束 Worker 消费 M3 task schema 并返回 result schema，M2/M3 继续拥有状态与门禁权。不要在 M4 同时引入 Worktree 并行或真实发布。

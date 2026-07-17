@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "13998512-7eb1-4f76-ac34-e66f97ac9d83",
+  "storyId": "M3-001",
+  "phase": "unit-test",
+  "status": "completed",
+  "summary": "Required M3, M2, Harness, knowledge, structure, state, DAG, smoke, and freshness gates passed.",
+  "outputs": [
+    {
+      "path": ".harness/runs/M3-001/phases/04-unit-test/test-report.md"
+    }
+  ],
+  "records": []
+}

@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-The repository now contains implemented structural contracts, deterministic helpers, 13 project-local Skill definitions, a 12-role Agent registry, and a layered knowledge generator. The knowledge generator and query helpers are implemented at V1 with M1.1 content-fingerprint freshness. The Agent runtime, deterministic phase runner, lifecycle hooks, Worktree execution, and DevOps loop are not implemented.
+The repository now contains implemented structural contracts, deterministic helpers, 13 project-local Skill definitions, a 12-role Agent registry, and a layered knowledge generator. The knowledge generator and query helpers are implemented at V1 with M1.1 content-fingerprint freshness. The M2 deterministic state runtime and M3 file-based single-Story Dispatcher are implemented. A real Agent worker runtime, lifecycle hooks, Worktree execution, and the DevOps loop are not implemented.
 
 ## Added Structure
 
@@ -102,7 +102,7 @@ publisher
 git-committer
 ```
 
-The registry records responsibilities and file-modification boundaries. It is not an active Agent runtime yet.
+The registry records responsibilities and file-modification boundaries. M3 uses these owners in structured task files, but the registry still does not launch Agent workers.
 
 ## Current Skill System
 
@@ -132,9 +132,9 @@ frontier-build-publish
 frontier-git-delivery
 ```
 
-Knowledge generation, query, freshness, structural validation, and planning helpers have executable V1 implementations. Requirement, state, DAG, review, test, verification, build, and delivery Skills primarily remain guidance contracts around read-only helpers. Automatic Skill discovery and Agent dispatch are not implemented.
+Knowledge generation, query, freshness, structural validation, M2 state transitions, and the M3 file-based single-Story dispatch loop have executable V1 implementations. Requirement, DAG, review, verification, build, and delivery Skills still provide guidance around deterministic helpers. Automatic Skill discovery and real Agent worker execution are not implemented.
 
-`frontier-state-runner` now includes basic workflow guidance and references for:
+`frontier-state-runner` now documents and exposes the implemented M2 workflow runtime for:
 
 - phase model
 - state update discipline
@@ -156,7 +156,7 @@ The query is index-first with Markdown fallback, mode/area-aware ranking, Common
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode all -DryRun -Json
 ```
 
-The generator produces L1 Markdown/facts, L2 OpenAI semantic documents with graceful degradation, and an L3 local index. Current output covers 7 backend and 7 frontend modules plus Common knowledge, with 324 chunks. M1.1 records SHA-256 content fingerprints for area, module, document, chunk, metadata, and manifest isolation.
+The generator produces L1 Markdown/facts, L2 OpenAI semantic documents with graceful degradation, and an L3 local index. Current output covers 7 backend and 7 frontend modules plus Common knowledge; the current chunk count is reported in `llm-knowledge/overview.md`. M1.1 records SHA-256 content fingerprints for area, module, document, chunk, metadata, and manifest isolation.
 
 `frontier-kb-refresh-check` includes freshness guidance and a read-only metadata/source/index check:
 
@@ -255,11 +255,9 @@ These templates make future Skill and Agent outputs stable and parseable.
 
 ## Next Implementation Steps
 
-M0, M1, and M1.1 are complete. The authoritative records are `docs/harness-m0-m1/REPORT.md` and `docs/harness-m1-1-source-fingerprint/REPORT.md`.
+M0 through M3 implementation and quality gates are complete; M3 delivery remains active pending explicit approval. The latest runtime records are `docs/harness-m2-state-runtime/REPORT.md` and `docs/harness-m3-agent-dispatcher/REPORT.md`.
 
-The next independent capability is a controlled live L2 semantic-enrichment acceptance using the configured OpenAI environment key. It must verify source-file traceability, model metadata, success output, and graceful degradation without reading or printing credentials or changing business code.
-
-After that acceptance, implement M2 deterministic state runtime: active-run initialization, atomic transitions, evidence gates, locking, blocking/resume, and a single-story recovery test. Do not implement automatic Agent dispatch or parallel Worktree execution before M2 and the single-story vertical slice are stable.
+The next independent capability is M4 Codex Skill/Agent Runtime integration. A constrained worker should consume the M3 task schema and return the M3 result schema while M2/M3 retain transition and validation authority. Do not add parallel Worktree execution or real publishing in the same milestone.
 
 ## Safety Boundaries
 

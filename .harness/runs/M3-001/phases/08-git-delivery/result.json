@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "45400d10-3819-430e-a0d9-e2b06c0e5b4c",
+  "storyId": "M3-001",
+  "phase": "git-delivery",
+  "status": "completed",
+  "summary": "M3 delivery summary is ready; state completion and Git actions require explicit user approval.",
+  "outputs": [
+    {
+      "path": ".harness/runs/M3-001/phases/08-git-delivery/delivery-report.md"
+    }
+  ],
+  "records": []
+}
