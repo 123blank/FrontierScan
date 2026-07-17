@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "45c1d4f4-c650-4064-806d-ecdd675153ee",
+  "storyId": "M4-A-001",
+  "phase": "git-delivery",
+  "status": "completed",
+  "summary": "M4-A delivery evidence is complete and the user approved a local Git commit; push and PR remain unapproved.",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/08-git-delivery/delivery-report.md"
+    }
+  ],
+  "records": []
+}

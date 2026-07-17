@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M4-A-001",
+  "phase": "unit-test",
+  "dispatchId": "a6f56154-5620-413e-a5ee-c924f285c668",
+  "adapter": "harness-state-tests",
+  "executable": "D:\\Node\\node.exe",
+  "args": [
+    "D:\\ProjectStudy\\FrontierScan\\.harness\\scripts\\tests\\state-runtime.test.mjs"
+  ],
+  "cwd": "D:/ProjectStudy/FrontierScan",
+  "status": "passed",
+  "exitCode": 0,
+  "startedAt": "2026-07-17T07:36:58.424Z",
+  "finishedAt": "2026-07-17T07:37:14.665Z",
+  "durationMs": 16241,
+  "stdout": "state-runtime tests passed\n",
+  "stderr": ""
+}

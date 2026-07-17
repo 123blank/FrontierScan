@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "1.0",
+  "roleCount": 12,
+  "workflowOwnerCount": 8,
+  "mappingStatus": "design-only",
+  "roles": [
+    {
+      "name": "product-analyst",
+      "category": "planning",
+      "usedByE2eWorkflow": false,
+      "futureWorkerWriteBoundary": "none; orchestrator writes approved product outputs",
+      "forbiddenCapabilities": ["business-write", "publish", "git-delivery"]
+    },
+    {
+      "name": "requirement-analyst",
+      "category": "planning",
+      "usedByE2eWorkflow": true,
+      "futureWorkerWriteBoundary": "current run requirement and technical-design outputs",
+      "forbiddenCapabilities": ["business-write", "publish", "git-delivery"]
+    },
+    {
+      "name": "task-planner",
+      "category": "planning",
+      "usedByE2eWorkflow": true,
+      "futureWorkerWriteBoundary": "current run task-dag output",
+      "forbiddenCapabilities": ["business-write", "publish", "git-delivery"]
+    },
+    {
+      "name": "backend-developer",
+      "category": "execution",
+      "usedByE2eWorkflow": true,
+      "futureWorkerWriteBoundary": "task-owned backend source and current run implementation output",
+      "forbiddenCapabilities": ["frontend-write", "state-transition", "publish", "git-delivery"]
+    },
+    {
+      "name": "frontend-developer",
+      "category": "execution",
+      "usedByE2eWorkflow": false,
+      "futureWorkerWriteBoundary": "task-owned frontend source and current run implementation output",
+      "forbiddenCapabilities": ["backend-write", "state-transition", "publish", "git-delivery"]
+    },
+    {
+      "name": "code-fixer",
+      "category": "execution",
+      "usedByE2eWorkflow": false,
+      "futureWorkerWriteBoundary": "files owned by accepted review/test findings only",
+      "forbiddenCapabilities": ["unrelated-write", "state-transition", "publish", "git-delivery"]
+    },
+    {
+      "name": "unit-tester",
+      "category": "verification",
+      "usedByE2eWorkflow": true,
+      "futureWorkerWriteBoundary": "test sources and current run test report; no production source",
+      "forbiddenCapabilities": ["production-write", "state-transition", "publish", "git-delivery"]
+    },
+    {
+      "name": "test-case-designer",
+      "category": "verification",
+      "usedByE2eWorkflow": false,
+      "futureWorkerWriteBoundary": "current run verification case design only",
+      "forbiddenCapabilities": ["business-write", "state-transition", "publish", "git-delivery"]
+    },
+    {
+      "name": "interface-verifier",
+      "category": "verification",
+      "usedByE2eWorkflow": true,
+      "futureWorkerWriteBoundary": "none; orchestrator writes returned verification report",
+      "forbiddenCapabilities": ["business-write", "state-transition", "publish", "git-delivery"]
+    },
+    {
+      "name": "code-reviewer",
+      "category": "review",
+      "usedByE2eWorkflow": true,
+      "futureWorkerWriteBoundary": "none; orchestrator writes returned review report",
+      "forbiddenCapabilities": ["business-write", "state-transition", "publish", "git-delivery"]
+    },
+    {
+      "name": "publisher",
+      "category": "integration",
+      "usedByE2eWorkflow": true,
+      "futureWorkerWriteBoundary": "none; M3 fixed adapters and orchestrator write build report",
+      "forbiddenCapabilities": ["arbitrary-command", "state-transition", "publish-without-approval", "git-delivery"]
+    },
+    {
+      "name": "git-committer",
+      "category": "integration",
+      "usedByE2eWorkflow": true,
+      "futureWorkerWriteBoundary": "none; orchestrator writes delivery summary",
+      "forbiddenCapabilities": ["state-transition", "git-write-without-approval", "publish"]
+    }
+  ],
+  "codexMappingRecommendation": {
+    "identity": "one custom agent definition per registry role",
+    "minimumFields": ["name", "description", "developer_instructions"],
+    "policyFields": ["sandbox_mode", "permissions", "skills.config", "model"],
+    "runtimeAuthority": "M2/M3 remain the only state transition and gate authority"
+  },
+  "workerStarted": false
+}

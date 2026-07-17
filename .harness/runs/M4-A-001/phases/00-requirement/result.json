@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "f5a845f5-fa24-4c06-b7e8-cc9350313ff2",
+  "storyId": "M4-A-001",
+  "phase": "requirement",
+  "status": "completed",
+  "summary": "M4-A 已拆解为单一只读兼容性验证 Story，范围、验收标准和延期边界明确。",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/00-requirement/requirement-breakdown.md"
+    }
+  ],
+  "records": []
+}

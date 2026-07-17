@@ -20,6 +20,7 @@ required_directories:
   - docs/harness-m1-1-source-fingerprint
   - docs/harness-m2-state-runtime
   - docs/harness-m3-agent-dispatcher
+  - docs/harness-m4-runtime-compatibility
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -55,6 +56,7 @@ required_files:
   - .harness/scripts/tests/harness-status.test.mjs
   - .harness/scripts/tests/state-runtime.test.mjs
   - .harness/scripts/tests/story-runtime.test.mjs
+  - .harness/scripts/tests/task-dag.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
   - .harness/scripts/scan-knowledge-inputs.ps1
@@ -138,6 +140,9 @@ required_files:
   - docs/harness-m3-agent-dispatcher/DESIGN.md
   - docs/harness-m3-agent-dispatcher/PLAN.md
   - docs/harness-m3-agent-dispatcher/REPORT.md
+  - docs/harness-m4-runtime-compatibility/DESIGN.md
+  - docs/harness-m4-runtime-compatibility/PLAN.md
+  - docs/harness-m4-runtime-compatibility/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -145,6 +150,6 @@ status_notes:
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
   state_runtime: implemented-v1
-  agent_runtime: single-story-dispatcher-v1
+  agent_runtime: single-story-dispatcher-v1-m4a-cli-compatibility-verified
   deterministic_scripts: mixed-read-only-helpers-state-runtime-story-dispatcher-and-knowledge-writer
-  business_code_changes: none-required-for-m0-m3
+  business_code_changes: none-required-for-m0-m4a

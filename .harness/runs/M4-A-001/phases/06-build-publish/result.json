@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "647d32a6-c850-4f9a-9c4b-6aab91960784",
+  "storyId": "M4-A-001",
+  "phase": "build-publish",
+  "status": "completed",
+  "summary": "Harness structure and no-build-required checks passed; no publish or deployment was performed.",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/06-build-publish/build-report.md"
+    }
+  ],
+  "records": []
+}

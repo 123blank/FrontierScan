@@ -37,6 +37,6 @@ smoke-harness-flow.ps1
 - 生成器采用失败关闭策略处理摄取失败：读取源文件或共享资源失败时保留覆盖率诊断，并将受影响文档和索引指纹标记为 `partial`。
 - 缺少旧版指纹时需要执行一次基线刷新。公共源文件变化通过 `generate-kb.ps1 -Area all -Mode baseline` 修复。
 - `generate-kb.ps1 -WithEmbeddings` 为显式启用项，使用 `EMBEDDING_API_KEY`（未配置时回退到 `DASHSCOPE_API_KEY`），并支持通过 `EMBEDDING_BASE_URL` 和 `EMBEDDING_MODEL` 覆盖默认的阿里百炼端点与 `text-embedding-v4` 模型；`OPENAI_EMBEDDING_MODEL` 仅作为旧配置兼容项。缺少密钥或 API 调用失败时会报告 `pending` 或 `failed`，但不会阻塞基线文档和本地索引生成。
-- 回归测试位于 `tests/source-fingerprint.test.mjs`、`tests/harness-status.test.mjs`、`tests/generate-kb.test.mjs`、`tests/kb-query.test.ps1` 和 `tests/kb-freshness.test.ps1`。
+- 回归测试位于 `tests/source-fingerprint.test.mjs`、`tests/harness-status.test.mjs`、`tests/generate-kb.test.mjs`、`tests/kb-query.test.ps1`、`tests/kb-freshness.test.ps1` 和 `tests/task-dag.test.ps1`。DAG 测试覆盖 Windows PowerShell 对中文 UTF-8 任务 DAG 的校验、Worktree 计划和接口用例派生。
 - 禁止在此处放置业务逻辑。
 - 脚本应从仓库读取数据，并且只有在文档明确说明时才能写入 `.harness/` 产物。

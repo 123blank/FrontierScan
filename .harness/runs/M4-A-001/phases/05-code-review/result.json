@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "a7cdfdd7-7fab-4963-bad8-55683bee68b6",
+  "storyId": "M4-A-001",
+  "phase": "code-review",
+  "status": "completed",
+  "summary": "M4-A final review found no unresolved BLOCKER or WARNING.",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/05-code-review/code-review-report.md"
+    }
+  ],
+  "records": [
+    {
+      "type": "review",
+      "status": "passed",
+      "path": ".harness/runs/M4-A-001/phases/05-code-review/code-review-report.md",
+      "message": "M4-A compatibility and UTF-8 DAG review passed with no unresolved BLOCKER or WARNING.",
+      "actor": "code-reviewer"
+    }
+  ]
+}

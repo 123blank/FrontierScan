@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "45c1d4f4-c650-4064-806d-ecdd675153ee",
+  "storyId": "M4-A-001",
+  "phase": "git-delivery",
+  "ownerAgent": "git-committer",
+  "purpose": "Summarize owned changes and prepare commit/PR only after explicit confirmation.",
+  "preparedRevision": 16,
+  "preparedAt": "2026-07-17T07:55:12.321Z",
+  "expectedOutputs": [
+    ".harness/runs/M4-A-001/phases/08-git-delivery/delivery-report.md"
+  ],
+  "allowedAdapters": [],
+  "next": "done"
+}

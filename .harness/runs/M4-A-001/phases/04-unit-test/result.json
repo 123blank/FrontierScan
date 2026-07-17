@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "a6f56154-5620-413e-a5ee-c924f285c668",
+  "storyId": "M4-A-001",
+  "phase": "unit-test",
+  "status": "completed",
+  "summary": "M4-A 相关 Harness 回归、UTF-8 DAG、Smoke、知识、状态、结构和 no-build 门禁全部通过。",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/04-unit-test/test-report.md"
+    }
+  ],
+  "records": [
+    {
+      "type": "test",
+      "status": "passed",
+      "path": ".harness/runs/M4-A-001/phases/04-unit-test/evidence/m4a-direct-gates.json",
+      "message": "M4-A direct compatibility, UTF-8 DAG, smoke, state, knowledge and no-build gates passed.",
+      "actor": "unit-tester"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "647d32a6-c850-4f9a-9c4b-6aab91960784",
+  "storyId": "M4-A-001",
+  "phase": "build-publish",
+  "ownerAgent": "publisher",
+  "purpose": "Build and optionally publish after explicit confirmation.",
+  "preparedRevision": 14,
+  "preparedAt": "2026-07-17T07:50:41.718Z",
+  "expectedOutputs": [
+    ".harness/runs/M4-A-001/phases/06-build-publish/build-report.md"
+  ],
+  "allowedAdapters": [
+    "harness-structure",
+    "backend-package",
+    "frontend-build",
+    "no-build-required"
+  ],
+  "next": "interface-verification"
+}

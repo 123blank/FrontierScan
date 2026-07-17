@@ -9,7 +9,7 @@ if (-not (Test-Path -LiteralPath $TaskDagFile)) {
   throw "Task DAG file not found: ${TaskDagFile}"
 }
 
-$dag = Get-Content -LiteralPath $TaskDagFile -Raw | ConvertFrom-Json
+$dag = Get-Content -LiteralPath $TaskDagFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $cases = @()
 
 foreach ($node in $dag.nodes) {

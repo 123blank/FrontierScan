@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M4-A-001",
+  "phase": "unit-test",
+  "status": "passed",
+  "results": [
+    { "gate": "task-dag-utf8-regression", "status": "passed", "summary": "Task DAG validator tests passed." },
+    { "gate": "harness-smoke", "status": "passed", "summary": "Harness smoke flow completed with 20 directories, 121 required files and 13 Skills." },
+    { "gate": "knowledge-freshness", "status": "passed", "summary": "backend, frontend and common are fresh." },
+    { "gate": "active-state-validation", "status": "passed", "summary": "M4-A-001 E2E state passed validation." },
+    { "gate": "task-dag-validation", "status": "passed", "summary": "4 tasks, 3 edges and 4 waves passed validation." },
+    { "gate": "harness-status", "status": "passed", "summary": "Status contract passed after updating the Chinese equivalent and M4-A structure counts." },
+    { "gate": "no-build-required", "status": "passed", "summary": "No staged, unstaged or untracked backend/frontend changes." }
+  ],
+  "skipped": [
+    { "gate": "backend-tests", "reason": "No backend changes." },
+    { "gate": "frontend-build", "reason": "No frontend changes." },
+    { "gate": "real-model-call", "reason": "Explicitly outside M4-A scope." }
+  ]
+}
+

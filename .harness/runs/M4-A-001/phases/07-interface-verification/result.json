@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "8238623c-22fd-4945-bf6e-7cea548b2a7c",
+  "storyId": "M4-A-001",
+  "phase": "interface-verification",
+  "status": "completed",
+  "summary": "M4-A CLI and file-interface acceptance checks passed; product API/UI verification was not applicable.",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/07-interface-verification/interface-verification-report.md"
+    }
+  ],
+  "records": []
+}

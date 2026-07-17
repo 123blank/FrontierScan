@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-The repository now contains implemented structural contracts, deterministic helpers, 13 project-local Skill definitions, a 12-role Agent registry, and a layered knowledge generator. The knowledge generator and query helpers are implemented at V1 with M1.1 content-fingerprint freshness. The M2 deterministic state runtime and M3 file-based single-Story Dispatcher are implemented. A real Agent worker runtime, lifecycle hooks, Worktree execution, and the DevOps loop are not implemented.
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。知识生成与查询已达到 V1，并使用 M1.1 内容指纹判断新鲜度；M2 确定性状态运行时和 M3 单 Story 文件式 Dispatcher 已实现。M4-A 已验证 Windows `codex-cli 0.144.1` 能从现有 `.codex/skills` 稳定发现全部 13 个项目 Skill。真实受约束 Worker、生命周期 Hook、Worktree 执行和 DevOps 闭环仍未实现。
 
 ## Added Structure
 
@@ -24,6 +24,10 @@ llm-knowledge/
   common/
 docs/
   harness-m0-m1/
+    PLAN.md
+    REPORT.md
+  harness-m4-runtime-compatibility/
+    DESIGN.md
     PLAN.md
     REPORT.md
   harness-architecture-adaptation.md
@@ -132,7 +136,7 @@ frontier-build-publish
 frontier-git-delivery
 ```
 
-Knowledge generation, query, freshness, structural validation, M2 state transitions, and the M3 file-based single-Story dispatch loop have executable V1 implementations. Requirement, DAG, review, verification, build, and delivery Skills still provide guidance around deterministic helpers. Automatic Skill discovery and real Agent worker execution are not implemented.
+知识生成、查询、新鲜度检查、结构校验、M2 状态转换和 M3 单 Story 文件式派发均已有可执行 V1。需求、DAG、审核、验证、构建和交付 Skill 仍以确定性辅助脚本和流程指导为主。目标 Windows CLI 的项目 Skill 发现已通过 M4-A 验证，真实 Agent Worker 执行仍未实现。
 
 `frontier-state-runner` now documents and exposes the implemented M2 workflow runtime for:
 
@@ -253,11 +257,11 @@ The shared knowledge base also includes `llm-knowledge/common/conventions/delive
 
 These templates make future Skill and Agent outputs stable and parseable.
 
-## Next Implementation Steps
+## 下一步实施
 
-M0 through M3 implementation and quality gates are complete; M3 delivery remains active pending explicit approval. The latest runtime records are `docs/harness-m2-state-runtime/REPORT.md` and `docs/harness-m3-agent-dispatcher/REPORT.md`.
+M0-M3 已完成，M3 已提交并合并到本地 `dev`。M4-A 兼容性 Spike 证明目标 Windows CLI 能稳定发现 13 个项目 Skill，且仓库外负向对照不发现这些 Skill；当前不需要迁移目录或引入 Plugin。
 
-The next independent capability is M4 Codex Skill/Agent Runtime integration. A constrained worker should consume the M3 task schema and return the M3 result schema while M2/M3 retain transition and validation authority. Do not add parallel Worktree execution or real publishing in the same milestone.
+下一独立能力是 M4-B 受约束 Worker 纵向闭环。Worker 应消费 M3 task schema、返回 M3 result schema，M2/M3 保留状态转换和门禁权。M4-B 先使用测试注入的 mock provider，不同时加入 Worktree 并行、真实发布或 Git 自动写入。
 
 ## Safety Boundaries
 

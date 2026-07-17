@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "47d6eee2-90eb-4d87-9718-15441d70b9bb",
+  "storyId": "M4-A-001",
+  "phase": "task-dag",
+  "status": "completed",
+  "summary": "M4-A 已拆分为四个串行任务，不包含并行、Worktree 或业务源码修改。",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/02-task-dag/task-dag.json"
+    }
+  ],
+  "records": []
+}

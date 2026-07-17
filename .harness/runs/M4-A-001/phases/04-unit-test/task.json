@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "a6f56154-5620-413e-a5ee-c924f285c668",
+  "storyId": "M4-A-001",
+  "phase": "unit-test",
+  "ownerAgent": "unit-tester",
+  "purpose": "Run selected backend/frontend tests and record results.",
+  "preparedRevision": 7,
+  "preparedAt": "2026-07-17T07:36:25.425Z",
+  "expectedOutputs": [
+    ".harness/runs/M4-A-001/phases/04-unit-test/test-report.md"
+  ],
+  "allowedAdapters": [
+    "harness-state-tests",
+    "harness-m3-tests",
+    "harness-structure",
+    "backend-tests",
+    "frontend-build"
+  ],
+  "next": "code-review"
+}

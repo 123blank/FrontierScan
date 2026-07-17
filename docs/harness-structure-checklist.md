@@ -17,7 +17,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
 | State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
 | Story Dispatcher entry | `.harness/scripts/run-story.ps1` | M3 `prepare/status/run-adapter/apply` 文件式派发闭环已实现 V1 |
-| Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | Basic read-only validation done |
+| Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | Read-only validation done；中文 UTF-8 DAG 已覆盖 Windows PowerShell 回归 |
 | KB query script | `.harness/scripts/kb-query.ps1` | Index-first query with Markdown fallback implemented V1 |
 | KB generate script | `.harness/scripts/generate-kb.ps1` + `lib/generate-kb.mjs` + `lib/source-fingerprint.mjs` | Knowledge Reliability V2 plus M1.1 deterministic content fingerprints |
 | KB regression tests | `.harness/scripts/tests/` | Source-fingerprint, generator, query, freshness, and status tests implemented |
@@ -60,10 +60,11 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M1.1 business plan/report | `docs/harness-m1-1-source-fingerprint/PLAN.md`, `docs/harness-m1-1-source-fingerprint/REPORT.md` | Done |
 | M2 state runtime plan/report | `docs/harness-m2-state-runtime/`, `.harness/scripts/run-state.ps1` | Implemented V1 |
 | M3 Dispatcher plan/report | `docs/harness-m3-agent-dispatcher/`, `.harness/scripts/run-story.ps1` | Implemented V1 |
+| M4-A runtime compatibility plan/report | `docs/harness-m4-runtime-compatibility/` | Windows `codex-cli 0.144.1` 连续三次发现 13 个项目 Skill，仓库外负向对照为 0 |
 
 ## Deferred Functional Work
 
-- Verify and package project Skills through a supported Codex runtime integration mechanism for M4.
+- 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - Implement constrained Agent workers that consume M3 task/result schemas without owning state transitions.
 - Strengthen DAG validation for wave topology, file collisions, shared files, and global changes.
 - Implement write-capable worktree orchestration only after explicit approval.
@@ -85,7 +86,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 19 directories, 117 required files, and 13 Skill files.
+Current verified structure: 20 directories, 121 required files, and 13 Skill files.
 
 ## Knowledge Query
 

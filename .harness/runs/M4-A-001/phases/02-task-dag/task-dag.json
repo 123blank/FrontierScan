@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M4-A-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "固化 M4-A 兼容性方案",
+      "type": "docs",
+      "status": "pending",
+      "predictedFiles": [
+        "docs/harness-m4-runtime-compatibility/DESIGN.md",
+        "docs/harness-m4-runtime-compatibility/PLAN.md"
+      ],
+      "acceptanceCriteria": [
+        "设计和计划明确 CLI 目标、正负对照、决策规则、范围和审核门槛。"
+      ],
+      "ownerAgent": "requirement-analyst"
+    },
+    {
+      "taskId": "T2",
+      "title": "完成 Skill 发现和 Agent 映射取证",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/runs/M4-A-001/phases/03-implementation/evidence/**",
+        ".harness/runs/M4-A-001/phases/03-implementation/implementation-notes.md"
+      ],
+      "acceptanceCriteria": [
+        "三次正向 CLI 检查均发现同一组 13 个项目 Skill。",
+        "仓库外负向对照不发现项目 Skill。",
+        "13 个 Skill 和 12 个 Agent 注册信息均完成一致性检查与映射。"
+      ],
+      "ownerAgent": "requirement-analyst"
+    },
+    {
+      "taskId": "T3",
+      "title": "形成兼容性报告并同步交接资料",
+      "type": "docs",
+      "status": "pending",
+      "predictedFiles": [
+        "docs/harness-m4-runtime-compatibility/REPORT.md",
+        "docs/AI-handover.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        ".harness/structure-manifest.yaml"
+      ],
+      "acceptanceCriteria": [
+        "报告给出有证据的 Skill/Plugin 选择和 12 角色 Worker 映射结论。",
+        "交接和架构文档不再把 M4-A 描述为未验证，也不声称 Worker 已实现。"
+      ],
+      "ownerAgent": "requirement-analyst"
+    },
+    {
+      "taskId": "T4",
+      "title": "完成验证和审核闭环",
+      "type": "test",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/runs/M4-A-001/phases/04-unit-test/**",
+        ".harness/runs/M4-A-001/phases/05-code-review/**",
+        ".harness/reports/code-review-report.md"
+      ],
+      "acceptanceCriteria": [
+        "Harness 结构、Smoke、知识新鲜度、no-build 和文档一致性门禁通过。",
+        "最终审核无影响稳定性、可用性和近期扩展的未解决 BLOCKER/WARNING。"
+      ],
+      "ownerAgent": "code-reviewer"
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "取证必须遵循已固化的解析和决策规则。"
+    },
+    {
+      "from": "T2",
+      "to": "T3",
+      "reason": "报告和交接结论依赖真实兼容性证据。"
+    },
+    {
+      "from": "T3",
+      "to": "T4",
+      "reason": "最终门禁和审核必须覆盖完整 owned diff。"
+    }
+  ],
+  "waves": [
+    ["T1"],
+    ["T2"],
+    ["T3"],
+    ["T4"]
+  ],
+  "globalChanges": [
+    "新增 Harness M4-A 文档目录并登记到结构清单。",
+    "更新项目交接和 Harness 架构状态说明。"
+  ],
+  "risks": [
+    "Codex CLI 后续版本、IDE、桌面端和非 Windows 平台未纳入本 Story 强验收。"
+  ]
+}
+

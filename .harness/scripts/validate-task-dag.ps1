@@ -71,7 +71,7 @@ if (-not (Test-Path -LiteralPath $TaskDagFile)) {
 }
 
 try {
-  $dag = Get-Content -LiteralPath $TaskDagFile -Raw | ConvertFrom-Json
+  $dag = Get-Content -LiteralPath $TaskDagFile -Raw -Encoding UTF8 | ConvertFrom-Json
 } catch {
   throw "Invalid JSON in task DAG file '${TaskDagFile}': $($_.Exception.Message)"
 }
