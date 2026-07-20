@@ -236,7 +236,7 @@ async function testPrepareRejectsTaskOrCheckpointContractMismatch() {
     await write(taskFixture.root, prepared.taskFile, `${JSON.stringify(task, null, 2)}\n`);
     await assert.rejects(
       runStoryCommand(storyOptions(taskFixture.root, { command: "prepare" })),
-      /workflow contract/i,
+      /workflow contract|expectedOutputs/i,
     );
   } finally {
     await rm(taskFixture.root, { recursive: true, force: true });

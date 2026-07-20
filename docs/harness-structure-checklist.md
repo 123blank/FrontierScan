@@ -12,11 +12,13 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Output templates | `.harness/templates/*.md` | Done |
 | Task DAG example template | `.harness/templates/task-dag.example.json` | Done |
 | Report/output folders | `.harness/reports/`, `.harness/outputs/` | Done |
-| Deterministic script area | `.harness/scripts/` | M2 state runtime and M3 single-Story Dispatcher implemented V1 |
+| Deterministic script area | `.harness/scripts/` | M2 状态运行时、M3 单 Story Dispatcher 和 M4-B 受约束 Mock Worker 已实现 V1 |
 | Structure validation script | `.harness/scripts/validate-structure.ps1` | Done |
 | State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
 | State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
 | Story Dispatcher entry | `.harness/scripts/run-story.ps1` | M3 `prepare/status/run-adapter/apply` 文件式派发闭环已实现 V1 |
+| Mock Worker runtime | `.harness/scripts/lib/worker-runtime.mjs` | M4-B 显式 context、角色权限、2/8 MiB 限额、30 秒超时、result-last 和重试恢复已实现 |
+| Worker policy registry | `.codex/agents/worker-policies.json` | 12 角色与 `agents.yaml` 名称、类别一一对应；无 shell、网络、状态、发布或 Git 能力 |
 | Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | Read-only validation done；中文 UTF-8 DAG 已覆盖 Windows PowerShell 回归 |
 | KB query script | `.harness/scripts/kb-query.ps1` | Index-first query with Markdown fallback implemented V1 |
 | KB generate script | `.harness/scripts/generate-kb.ps1` + `lib/generate-kb.mjs` + `lib/source-fingerprint.mjs` | Knowledge Reliability V2 plus M1.1 deterministic content fingerprints |
@@ -29,8 +31,8 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Interface case derivation script | `.harness/scripts/derive-interface-cases.ps1` | Basic read-only acceptance-case draft done |
 | Build plan script | `.harness/scripts/plan-build.ps1` | Basic read-only build/publish plan done |
 | Delivery summary script | `.harness/scripts/summarize-delivery.ps1` | Basic read-only owned/unrelated change summary done |
-| Harness smoke flow script | `.harness/scripts/smoke-harness-flow.ps1` | Non-destructive M2 init/validate and M3 prepare/status smoke implemented; not business E2E |
-| Agent registry | `.codex/agents/agents.yaml` | 12 roles feed M3 task owners; real Agent worker execution deferred |
+| Harness smoke flow script | `.harness/scripts/smoke-harness-flow.ps1` | 非破坏性 M2 初始化、M3 prepare/apply 和 M4-B mock Worker 临时闭环已实现；不是业务 E2E |
+| Agent registry | `.codex/agents/agents.yaml` | 12 角色已映射受约束 Mock Worker 策略；真实 Agent 执行仍延期 |
 | Project Skill area | `.codex/skills/` | Done |
 | MVP Skill placeholders | `.codex/skills/frontier-*` | Replaced by basic guidance |
 | State runner Skill | `.codex/skills/frontier-state-runner/` | M2 deterministic runtime guidance and executable entry implemented V1 |
@@ -61,11 +63,12 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M2 state runtime plan/report | `docs/harness-m2-state-runtime/`, `.harness/scripts/run-state.ps1` | Implemented V1 |
 | M3 Dispatcher plan/report | `docs/harness-m3-agent-dispatcher/`, `.harness/scripts/run-story.ps1` | Implemented V1 |
 | M4-A runtime compatibility plan/report | `docs/harness-m4-runtime-compatibility/` | Windows `codex-cli 0.144.1` 连续三次发现 13 个项目 Skill，仓库外负向对照为 0 |
+| M4-B constrained Worker plan/report | `docs/harness-m4-worker-runtime/` | Mock provider 的 task/result、权限、超时、原子写入与恢复闭环已实现 |
 
 ## Deferred Functional Work
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
-- Implement constrained Agent workers that consume M3 task/result schemas without owning state transitions.
+- 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
 - Strengthen DAG validation for wave topology, file collisions, shared files, and global changes.
 - Implement write-capable worktree orchestration only after explicit approval.
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
@@ -86,7 +89,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 20 directories, 121 required files, and 13 Skill files.
+Current verified structure: 21 directories, 129 required files, and 13 Skill files.
 
 ## Knowledge Query
 

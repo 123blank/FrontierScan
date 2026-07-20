@@ -3,6 +3,11 @@ import { execFile } from "node:child_process";
 import { lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  isDispatchRecordStatusAllowed,
+  validateDispatchResultStructure,
+  validateDispatchTaskStructure,
+} from "./dispatch-contract.mjs";
 import { readWorkflowDefinition, runStateCommand } from "./state-runtime.mjs";
 
 const PHASE_ADAPTERS = {
@@ -150,8 +155,7 @@ function phaseOutputs(root, phase, expectedPhaseRoot) {
 }
 
 function validateTask(root, task, state, phase, expectedPhaseRoot) {
-  if (!task || typeof task !== "object") throw new Error("Dispatch task must be an object.");
-  if (task.schemaVersion !== "1.0" || !task.dispatchId) throw new Error("Dispatch task identity is invalid.");
+  validateDispatchTaskStructure(task);
   if (task.storyId !== state.storyId || task.phase !== state.phase) {
     throw new Error("Dispatch task does not match the current story phase.");
   }
@@ -365,16 +369,8 @@ async function runAdapter(root, options) {
   return { command: "run-adapter", status: "passed", evidencePath, evidence };
 }
 
-function recordStatusAllowed(type, status) {
-  const allowed = {
-    test: ["passed", "failed", "skipped"],
-    review: ["passed", "BLOCKER", "resolved"],
-    note: ["recorded"],
-  };
-  return allowed[type]?.includes(status);
-}
-
 async function validateResult(root, result, task, state, phaseRoot) {
+  validateDispatchResultStructure(result);
   if (!result || typeof result !== "object"
       || result.schemaVersion !== "1.0"
       || result.dispatchId !== task.dispatchId
@@ -419,7 +415,7 @@ async function validateResult(root, result, task, state, phaseRoot) {
     }
   }
   for (const record of result.records) {
-    if (!record || !recordStatusAllowed(record.type, record.status)
+    if (!record || !isDispatchRecordStatusAllowed(record.type, record.status)
         || typeof record.message !== "string") {
       throw new Error("Dispatch result contains an invalid record.");
     }

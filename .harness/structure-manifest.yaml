@@ -21,6 +21,7 @@ required_directories:
   - docs/harness-m2-state-runtime
   - docs/harness-m3-agent-dispatcher
   - docs/harness-m4-runtime-compatibility
+  - docs/harness-m4-worker-runtime
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -29,6 +30,7 @@ required_files:
   - .harness/schemas/task-dag.schema.json
   - .harness/schemas/dispatch-task.schema.json
   - .harness/schemas/dispatch-result.schema.json
+  - .harness/schemas/worker-policies.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
   - .harness/workflows/e2e-development.yaml
@@ -49,6 +51,8 @@ required_files:
   - .harness/scripts/lib/source-fingerprint.mjs
   - .harness/scripts/lib/state-runtime.mjs
   - .harness/scripts/lib/story-runtime.mjs
+  - .harness/scripts/lib/dispatch-contract.mjs
+  - .harness/scripts/lib/worker-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
@@ -56,6 +60,7 @@ required_files:
   - .harness/scripts/tests/harness-status.test.mjs
   - .harness/scripts/tests/state-runtime.test.mjs
   - .harness/scripts/tests/story-runtime.test.mjs
+  - .harness/scripts/tests/worker-runtime.test.mjs
   - .harness/scripts/tests/task-dag.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
@@ -69,6 +74,7 @@ required_files:
   - .harness/scripts/run-state.ps1
   - .harness/scripts/run-story.ps1
   - .codex/agents/agents.yaml
+  - .codex/agents/worker-policies.json
   - .codex/skills/README.md
   - .codex/skills/skill-registry.yaml
   - .codex/skills/frontier-common/SKILL.md
@@ -143,6 +149,9 @@ required_files:
   - docs/harness-m4-runtime-compatibility/DESIGN.md
   - docs/harness-m4-runtime-compatibility/PLAN.md
   - docs/harness-m4-runtime-compatibility/REPORT.md
+  - docs/harness-m4-worker-runtime/DESIGN.md
+  - docs/harness-m4-worker-runtime/PLAN.md
+  - docs/harness-m4-worker-runtime/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -150,6 +159,6 @@ status_notes:
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
   state_runtime: implemented-v1
-  agent_runtime: single-story-dispatcher-v1-m4a-cli-compatibility-verified
+  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1
   deterministic_scripts: mixed-read-only-helpers-state-runtime-story-dispatcher-and-knowledge-writer
-  business_code_changes: none-required-for-m0-m4a
+  business_code_changes: none-required-for-m0-m4b

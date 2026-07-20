@@ -18,16 +18,18 @@ assert.match(overview, /L1.*fresh/i);
 assert.match(overview, /L2.*pending/i);
 assert.match(overview, /M2 deterministic phase advancement/i);
 assert.match(overview, /M3 provides a file-based single-Story Dispatcher/i);
+assert.match(overview, /M4-B.*constrained Mock Worker/i);
 
 const adaptation = await read("docs/harness-architecture-adaptation.md");
 assert.doesNotMatch(adaptation, /current step creates structure only/i);
 assert.match(adaptation, /(?:knowledge generator.*implemented|知识生成.*V1)/i);
 assert.match(adaptation, /(?:M2 deterministic state runtime.*implemented|M2 确定性状态运行时.*已实现)/i);
 assert.match(adaptation, /(?:real Agent worker runtime.*not implemented|真实 Agent Worker.*仍未实现)/i);
+assert.match(adaptation, /M4-B.*受约束 Mock Worker.*已实现/i);
 
 const checklist = await read("docs/harness-structure-checklist.md");
 assert.doesNotMatch(checklist, /freshness still scaffold/i);
-assert.match(checklist, /20.*121.*13/);
+assert.match(checklist, /21.*129.*13/);
 
 const registry = await read(".codex/skills/skill-registry.yaml");
 assert.match(registry, /status: mixed-runtime-readiness/);
@@ -39,14 +41,19 @@ const manifest = await read(".harness/structure-manifest.yaml");
 assert.match(manifest, /structure: implemented/);
 assert.match(manifest, /knowledge_generation: implemented-v1/);
 assert.match(manifest, /knowledge_semantic: mock-verified-current-pending/);
-assert.match(manifest, /agent_runtime: single-story-dispatcher-v1/);
+assert.match(manifest, /agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1/);
 assert.match(manifest, /harness-status\.test\.mjs/);
 assert.match(manifest, /kb-freshness\.test\.ps1/);
 assert.match(manifest, /task-dag\.test\.ps1/);
+assert.match(manifest, /worker-runtime\.mjs/);
+assert.match(manifest, /worker-runtime\.test\.mjs/);
+assert.match(manifest, /worker-policies\.schema\.json/);
+assert.match(manifest, /worker-policies\.json/);
 assert.match(manifest, /docs\/harness-m0-m1\/PLAN\.md/);
 assert.match(manifest, /docs\/harness-m0-m1\/REPORT\.md/);
 assert.match(manifest, /docs\/harness-m3-agent-dispatcher\/REPORT\.md/);
 assert.match(manifest, /docs\/harness-m4-runtime-compatibility\/REPORT\.md/);
+assert.match(manifest, /docs\/harness-m4-worker-runtime\/REPORT\.md/);
 
 const businessPlan = await read("docs/harness-m0-m1/PLAN.md");
 assert.match(businessPlan, /M0: Baseline Consolidation/);

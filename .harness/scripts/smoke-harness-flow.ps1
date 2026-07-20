@@ -33,15 +33,45 @@ Invoke-Step -Name "State Runtime" -Action {
   try {
     New-Item -ItemType Directory -Path (Join-Path $temporaryRoot ".harness\states") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $temporaryRoot ".harness\workflows") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $temporaryRoot ".codex\agents") -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $Root ".harness\states\e2e-state.template.json") -Destination (Join-Path $temporaryRoot ".harness\states\e2e-state.template.json")
     Copy-Item -LiteralPath (Join-Path $Root ".harness\workflows\e2e-development.yaml") -Destination (Join-Path $temporaryRoot ".harness\workflows\e2e-development.yaml")
+    Copy-Item -LiteralPath (Join-Path $Root ".codex\agents\agents.yaml") -Destination (Join-Path $temporaryRoot ".codex\agents\agents.yaml")
+    Copy-Item -LiteralPath (Join-Path $Root ".codex\agents\worker-policies.json") -Destination (Join-Path $temporaryRoot ".codex\agents\worker-policies.json")
     $stateRunner = Join-Path $Root ".harness\scripts\run-state.ps1"
     $storyRunner = Join-Path $Root ".harness\scripts\run-story.ps1"
     & $stateRunner -Command init -Root $temporaryRoot -StoryId "SMOKE-M3" -Summary "验证单 Story Dispatcher" -Json | Out-Null
     & $stateRunner -Command status -Root $temporaryRoot -Json | Out-Null
     & $stateRunner -Command validate -Root $temporaryRoot -Json | Out-Null
-    & $storyRunner -Command prepare -Root $temporaryRoot -Json | Out-Null
+    $prepared = (& $storyRunner -Command prepare -Root $temporaryRoot -Json | Out-String) | ConvertFrom-Json
     & $storyRunner -Command status -Root $temporaryRoot -Json | Out-Null
+
+    $workerModuleUri = ([System.Uri]::new((Resolve-Path (Join-Path $Root ".harness\scripts\lib\worker-runtime.mjs")).Path)).AbsoluteUri
+    $workerSource = @"
+import { runWorkerTask } from '$workerModuleUri';
+const root = process.argv[1];
+const taskFile = process.argv[2];
+await runWorkerTask({
+  root,
+  taskFile,
+  provider: ({ task }) => ({
+    files: task.expectedOutputs.map((output) => ({ path: output, content: '# Smoke requirement\n', capability: 'phase-output' })),
+    result: {
+      schemaVersion: '1.0',
+      dispatchId: task.dispatchId,
+      storyId: task.storyId,
+      phase: task.phase,
+      status: 'completed',
+      summary: 'Smoke mock worker completed.',
+      outputs: task.expectedOutputs.map((output) => ({ path: output })),
+      records: []
+    }
+  })
+});
+"@
+    & node --input-type=module --eval $workerSource $temporaryRoot $prepared.taskFile
+    if ($LASTEXITCODE -ne 0) { throw "M4-B worker smoke failed with exit code $LASTEXITCODE" }
+    & $storyRunner -Command apply -Root $temporaryRoot -Json | Out-Null
   } finally {
     if (Test-Path -LiteralPath $temporaryRoot) {
       Remove-Item -LiteralPath $temporaryRoot -Recurse -Force

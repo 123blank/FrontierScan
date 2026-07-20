@@ -257,11 +257,15 @@ The shared knowledge base also includes `llm-knowledge/common/conventions/delive
 
 These templates make future Skill and Agent outputs stable and parseable.
 
+## M4-B 受约束 Mock Worker
+
+M4-B 受约束 Mock Worker 已实现。`worker-runtime.mjs` 消费 M3 task Schema `1.0`，按 12 角色 JSON 策略加载显式 context，通过测试注入 provider 获取候选文件，并在身份、Schema、权限、路径和 2/8 MiB 限额全部通过后最后写入 `result.json`。provider 异常、最多 30 秒超时、越权或非法结果不会调用 M2/M3；只有显式 `apply` 才推进状态。
+
+M4-B 不提供 mock CLI，不启动真实 Agent，也不把同进程 provider 声称为操作系统安全沙箱。M2/M3 继续独占固定 Adapter、证据门禁和状态推进。
+
 ## 下一步实施
 
-M0-M3 已完成，M3 已提交并合并到本地 `dev`。M4-A 兼容性 Spike 证明目标 Windows CLI 能稳定发现 13 个项目 Skill，且仓库外负向对照不发现这些 Skill；当前不需要迁移目录或引入 Plugin。
-
-下一独立能力是 M4-B 受约束 Worker 纵向闭环。Worker 应消费 M3 task schema、返回 M3 result schema，M2/M3 保留状态转换和门禁权。M4-B 先使用测试注入的 mock provider，不同时加入 Worktree 并行、真实发布或 Git 自动写入。
+M0-M4-B 已完成基本纵向能力。下一阶段在获得新方案确认前不进入 M5 的 Worktree/DAG 波次/Fork-Join，也不进入 M6 的真实模型、发布、部署或 Git 自动交付。真实 Agent provider 接入时必须重新验证 Codex custom agent、sandbox 和工具权限。
 
 ## Safety Boundaries
 

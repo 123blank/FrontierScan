@@ -1573,4 +1573,14 @@ M4-A 兼容性结论位于 `docs/harness-m4-runtime-compatibility/`：目标 CLI
 - 没有真实发布、部署、API/UI 环境执行或 Git 写入；这些属于 M6 且继续需要用户批准。
 - 本批未修改业务源码，未使用 API 密钥，未执行暂存、提交、推送或合并。
 
-下一阶段只进入 M4-B：用测试注入的 mock provider 验证受约束 Worker 消费 M3 task schema 并返回 result schema，M2/M3 继续拥有状态与门禁权。不要同时引入 Worktree 并行、真实模型、发布或 Git 自动写入。
+M4-B 受约束 Mock Worker 当前实现：
+
+- `worker-runtime.mjs` 以内部模块形式消费 M3 `task.json`，没有 mock CLI。
+- `.codex/agents/worker-policies.json` 与 `agents.yaml` 的 12 个角色名称、类别一一对应，只声明 `phase-output`、backend/frontend 写入和 backend 测试写入四类固定能力。
+- context 仅加载显式仓库相对普通 UTF-8 文件；单文件 2 MiB，task/策略/context 合计 8 MiB。
+- provider 默认且最多运行 30 秒，只接收克隆的 task、当前角色策略、context 和 AbortSignal，不接收 shell、网络、Git、Adapter 或状态命令。
+- 候选文件和 M3 result 在落盘前完成身份、结构、输出、record、权限、路径和 2/8 MiB 限额校验；阶段文件先写，`result.json` 最后写。
+- provider 超时或产物写入后中断可使用同一 dispatch 显式重试；Worker 完成后 revision 不变，只有调用方执行 M3 `apply` 才推进。
+- 同进程 mock provider 不是恶意代码安全沙箱；真实 Agent 仍未启动，后续必须结合 Codex custom agent 和 sandbox 重新验收。
+
+下一阶段在新方案确认前不要进入 M5 Worktree/并行或 M6 真实模型、发布、部署和 Git 自动写入。本批未修改业务源码，也未执行暂存、提交、推送或合并。

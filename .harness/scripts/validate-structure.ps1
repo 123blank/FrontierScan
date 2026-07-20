@@ -78,6 +78,8 @@ foreach ($file in $files) {
   ".harness/schemas/task-dag.schema.json",
   ".harness/schemas/dispatch-task.schema.json",
   ".harness/schemas/dispatch-result.schema.json",
+  ".harness/schemas/worker-policies.schema.json",
+  ".codex/agents/worker-policies.json",
   ".harness/states/product-state.template.json",
   ".harness/states/e2e-state.template.json"
 ) | ForEach-Object {

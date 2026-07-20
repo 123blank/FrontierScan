@@ -28,7 +28,9 @@ smoke-harness-flow.ps1
 - 状态运行时核心与回归测试分别位于 `lib/state-runtime.mjs` 和 `tests/state-runtime.test.mjs`。
 - `run-story.ps1` 是 M3 单 Story 文件式 Dispatcher 入口，支持 `prepare/status/run-adapter/apply`。`prepare` 按 M2 当前 phase 生成结构化任务；`run-adapter` 只运行代码内固定本地命令，stdout 和 stderr 各使用 16 MiB 有界缓冲，并将证据 SHA-256 写入 checkpoint；`no-build-required` 会确认 backend/frontend 不存在 Git 差异；`apply` 复核证据文件、哈希和派发身份后，只通过 M2 推进、阻塞或完成状态，并可对账推进后尚未写完的 checkpoint。
 - Dispatcher 的 task、result、checkpoint、阶段产物和命令证据位于 `.harness/runs/<storyId>/phases/`；核心与回归测试分别位于 `lib/story-runtime.mjs` 和 `tests/story-runtime.test.mjs`。
-- M3 不启动真实 Agent，不接受任意 shell 命令，也不执行发布、部署、Git、PR 或 Worktree 操作。
+- `lib/worker-runtime.mjs` 是 M4-B 受约束 Mock Worker 内部模块，不提供 CLI。它读取 M3 task、按 `.codex/agents/worker-policies.json` 限制显式 context 和候选写入，使用测试注入 provider，并在全量校验后最后写入 `result.json`；测试位于 `tests/worker-runtime.test.mjs`。
+- `lib/dispatch-contract.mjs` 是 M3 与 M4-B 共用的 task/result Schema `1.0` 结构和 record 状态校验，M3 继续负责 workflow、证据及状态语义。
+- M4-B 不启动真实 Agent，不接受任意 shell/网络/Git/发布/状态能力，也不执行发布、部署、PR 或 Worktree 操作。
 - `generate-kb.ps1` 是可写的知识生成器。它只写入 `llm-knowledge/`，支持试运行，保留 `custom/` 说明，并在缺少 `OPENAI_API_KEY` 时降级 OpenAI 语义增强。
 - `generate-kb.ps1 -Area backend -Module article -Mode baseline` 可以刷新单个模块，同时保留无关文档、元数据、日志和索引分块。
 - `check-kb-freshness.ps1 -WriteRefreshTask` 会为过期区域或模块显式写入 `.harness/outputs/kb-refresh-task.json`，但不会执行该任务。

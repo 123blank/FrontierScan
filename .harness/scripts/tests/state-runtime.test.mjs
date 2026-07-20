@@ -11,6 +11,7 @@ const RUN_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 const RUN_STORY_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "run-story.ps1");
 const STATE_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "state-runtime.mjs");
 const STORY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "story-runtime.mjs");
+const DISPATCH_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "dispatch-contract.mjs");
 const VALIDATE_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "validate-state.ps1");
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -1389,6 +1390,7 @@ async function testPowerShellEntryPointsResolveDefaultRootFromScriptLocation() {
       [RUN_STORY_SCRIPT, ".harness/scripts/run-story.ps1"],
       [STATE_RUNTIME_MODULE, ".harness/scripts/lib/state-runtime.mjs"],
       [STORY_RUNTIME_MODULE, ".harness/scripts/lib/story-runtime.mjs"],
+      [DISPATCH_CONTRACT_MODULE, ".harness/scripts/lib/dispatch-contract.mjs"],
     ]) {
       await write(root, target, await readFile(source, "utf8"));
     }
