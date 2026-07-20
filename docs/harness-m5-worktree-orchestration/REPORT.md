@@ -2,9 +2,9 @@
 
 > Story：`M5-A-001`
 > 日期：2026-07-20
-> 状态：实现、完整测试和最终只读审核完成
+> 状态：实现、完整测试、最终只读审核和本地 Git 提交完成
 
-Harness 工作流在 revision 12 进入 `git-delivery`，随后只追加测试和审核证据；当前 revision 以状态运行时为准。未记录 Git 批准，未进入 `done`。
+Harness 工作流在 revision 12 进入 `git-delivery`，随后追加测试和审核证据；用户批准本地 `git add/commit` 后，M5-A 业务修改提交为 `28e009c66a3d801208ad931037d659067e0e10ce`。状态运行时已在 revision 19 进入 `done/completed`。本次收尾已获得执行 `git push origin dev` 的明确批准，远程同步结果以 Git 引用核验为准；PR、合并、分支删除和 Worktree 清理仍未获批准或执行。
 
 ## 1. 实现结论
 

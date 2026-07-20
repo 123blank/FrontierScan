@@ -4,7 +4,7 @@
 >
 > 最后更新：2026-07-20
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 的 M0-M4-B 已完成；M5-A 单 Worktree 的严格 DAG 校验、确定性计划、Git 事实状态、批准创建、测试和审核已完成，Story 停留在 `git-delivery` 等待批准。14 个业务模块的 L1/L3 与 backend、frontend、common 知识均为 `fresh`；真实 Agent、多 Worktree 波次、Fork-Join、合并/删除、真实发布和 Git 自动交付仍未实现。
+> 当前重点：Harness 的 M0-M4-B 已完成；M5-A 单 Worktree 的严格 DAG 校验、确定性计划、Git 事实状态、批准创建、测试、审核和本地提交已完成，Story 为 `done/completed`。14 个业务模块的 L1/L3 与 backend、frontend、common 知识均为 `fresh`；真实 Agent、多 Worktree 波次、Fork-Join、合并/删除、真实发布和 Git 自动交付仍未实现。
 
 ---
 
@@ -1593,5 +1593,6 @@ M4-B 受约束 Mock Worker 当前实现：
 - `Create` 同时要求用户逐次批准和 `-ConfirmCreate`，使用无 shell Git argv、30 秒超时、独占锁与原子状态写入。
 - 临时 Git 仓库已覆盖真实创建、幂等复用、匹配分支续接、创建后状态中断恢复、篡改/漂移/占用拒绝；正式 FrontierScan 仓库未创建 Worktree。
 - Runtime 不调用 M2/M3，纵向 fixture 前后 Harness state 完全一致。
+- `M5-A-001` 已在 revision 19 进入 `done/completed`，业务修改以本地提交 `28e009c66a3d801208ad931037d659067e0e10ce` 交付；本次收尾已获 `git push origin dev` 批准，远程同步结果以 `origin/dev` 引用为准。
 
-下一阶段在独立方案确认前不要进入 M5-B 多 Worktree 波次、Worker 执行/结果收集、merge/remove 或 Fork-Join，也不要进入 M6 真实模型、发布、部署和 Git 自动交付。本批未修改业务源码，也未执行暂存、提交、推送或合并。
+下一阶段在独立方案确认前不要进入 M5-B 多 Worktree 波次、Worker 执行/结果收集、merge/remove 或 Fork-Join，也不要进入 M6 真实模型、发布、部署和 Git 自动交付。本批未修改业务源码；M5-A 本地提交已完成，本次收尾已获推送批准，未执行合并、发布或部署。
