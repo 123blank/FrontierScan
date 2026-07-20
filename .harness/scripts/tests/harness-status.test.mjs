@@ -12,6 +12,18 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
+function manifestItems(source, section) {
+  const lines = source.split(/\r?\n/);
+  const start = lines.indexOf(`${section}:`);
+  const items = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^[A-Za-z_]+:/.test(lines[index])) break;
+    const match = lines[index].match(/^\s+-\s+(.+)$/);
+    if (match) items.push(match[1].trim());
+  }
+  return items;
+}
+
 const overview = await read("llm-knowledge/overview.md");
 assert.doesNotMatch(overview, /only scaffolded|not implemented yet/i);
 assert.match(overview, /L1.*fresh/i);
@@ -19,6 +31,7 @@ assert.match(overview, /L2.*pending/i);
 assert.match(overview, /M2 deterministic phase advancement/i);
 assert.match(overview, /M3 provides a file-based single-Story Dispatcher/i);
 assert.match(overview, /M4-B.*constrained Mock Worker/i);
+assert.match(overview, /M5-A.*single-Worktree/i);
 
 const adaptation = await read("docs/harness-architecture-adaptation.md");
 assert.doesNotMatch(adaptation, /current step creates structure only/i);
@@ -26,10 +39,15 @@ assert.match(adaptation, /(?:knowledge generator.*implemented|知识生成.*V1)/
 assert.match(adaptation, /(?:M2 deterministic state runtime.*implemented|M2 确定性状态运行时.*已实现)/i);
 assert.match(adaptation, /(?:real Agent worker runtime.*not implemented|真实 Agent Worker.*仍未实现)/i);
 assert.match(adaptation, /M4-B.*受约束 Mock Worker.*已实现/i);
+assert.match(adaptation, /M5-A.*单 Worktree/i);
 
+const manifest = await read(".harness/structure-manifest.yaml");
 const checklist = await read("docs/harness-structure-checklist.md");
 assert.doesNotMatch(checklist, /freshness still scaffold/i);
-assert.match(checklist, /21.*129.*13/);
+const directories = manifestItems(manifest, "required_directories");
+const files = manifestItems(manifest, "required_files");
+const skills = files.filter((item) => item.endsWith("/SKILL.md"));
+assert.match(checklist, new RegExp(`${directories.length}.*${files.length}.*${skills.length}`));
 
 const registry = await read(".codex/skills/skill-registry.yaml");
 assert.match(registry, /status: mixed-runtime-readiness/);
@@ -37,7 +55,6 @@ assert.match(registry, /name: frontier-kb-generate[\s\S]*?status: implemented-v1
 assert.match(registry, /name: frontier-kb-query[\s\S]*?status: implemented-v1/);
 assert.match(registry, /name: frontier-state-runner[\s\S]*?status: implemented-v1/);
 
-const manifest = await read(".harness/structure-manifest.yaml");
 assert.match(manifest, /structure: implemented/);
 assert.match(manifest, /knowledge_generation: implemented-v1/);
 assert.match(manifest, /knowledge_semantic: mock-verified-current-pending/);
@@ -49,11 +66,16 @@ assert.match(manifest, /worker-runtime\.mjs/);
 assert.match(manifest, /worker-runtime\.test\.mjs/);
 assert.match(manifest, /worker-policies\.schema\.json/);
 assert.match(manifest, /worker-policies\.json/);
+assert.match(manifest, /worktree-runtime\.mjs/);
+assert.match(manifest, /worktree-runtime\.test\.mjs/);
+assert.match(manifest, /worktree-plan\.schema\.json/);
+assert.match(manifest, /worktree-status\.schema\.json/);
 assert.match(manifest, /docs\/harness-m0-m1\/PLAN\.md/);
 assert.match(manifest, /docs\/harness-m0-m1\/REPORT\.md/);
 assert.match(manifest, /docs\/harness-m3-agent-dispatcher\/REPORT\.md/);
 assert.match(manifest, /docs\/harness-m4-runtime-compatibility\/REPORT\.md/);
 assert.match(manifest, /docs\/harness-m4-worker-runtime\/REPORT\.md/);
+assert.match(manifest, /docs\/harness-m5-worktree-orchestration\/REPORT\.md/);
 
 const businessPlan = await read("docs/harness-m0-m1/PLAN.md");
 assert.match(businessPlan, /M0: Baseline Consolidation/);

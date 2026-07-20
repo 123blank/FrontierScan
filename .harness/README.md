@@ -17,6 +17,8 @@ Directory layout:
     product-state.schema.json
     e2e-state.schema.json
     task-dag.schema.json
+    worktree-plan.schema.json
+    worktree-status.schema.json
   states/
     product-state.template.json
     e2e-state.template.json
@@ -31,6 +33,7 @@ Directory layout:
     validate-structure.ps1
     validate-state.ps1
     validate-task-dag.ps1
+    run-worktree.ps1
     kb-query.ps1
 ```
 
@@ -60,8 +63,11 @@ Additional read-only checks:
 .\.harness\scripts\kb-query.ps1 -Query "Spring Boot" -Mode knowledge-qa -Area backend
 ```
 
-`validate-task-dag.ps1` expects a concrete DAG output file. It checks task shape, edge references,
-wave references, duplicate task IDs, and cycles.
+`validate-task-dag.ps1` 需要具体 DAG 文件，并通过共享 Node 契约校验任务结构、唯一 wave
+归属、依赖顺序、Windows 路径冲突、全局变更串行和无环性。
+
+`run-worktree.ps1` 是 M5-A 单 Worktree 入口，支持 `Plan/Status/Create`。`Create` 必须有用户逐次批准并显式传入
+`-ConfirmCreate`；它不启动 Worker，不合并或删除 Worktree，也不推进 M2/M3 状态。
 
 `kb-query.ps1` is a read-only keyword search over `llm-knowledge/`. Treat empty results as missing
 knowledge and verify source files directly before implementation.

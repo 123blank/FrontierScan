@@ -12,14 +12,14 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Output templates | `.harness/templates/*.md` | Done |
 | Task DAG example template | `.harness/templates/task-dag.example.json` | Done |
 | Report/output folders | `.harness/reports/`, `.harness/outputs/` | Done |
-| Deterministic script area | `.harness/scripts/` | M2 状态运行时、M3 单 Story Dispatcher 和 M4-B 受约束 Mock Worker 已实现 V1 |
+| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker 和 M5-A 单 Worktree Runtime 已实现 V1 |
 | Structure validation script | `.harness/scripts/validate-structure.ps1` | Done |
 | State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
 | State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
 | Story Dispatcher entry | `.harness/scripts/run-story.ps1` | M3 `prepare/status/run-adapter/apply` 文件式派发闭环已实现 V1 |
 | Mock Worker runtime | `.harness/scripts/lib/worker-runtime.mjs` | M4-B 显式 context、角色权限、2/8 MiB 限额、30 秒超时、result-last 和重试恢复已实现 |
 | Worker policy registry | `.codex/agents/worker-policies.json` | 12 角色与 `agents.yaml` 名称、类别一一对应；无 shell、网络、状态、发布或 Git 能力 |
-| Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | Read-only validation done；中文 UTF-8 DAG 已覆盖 Windows PowerShell 回归 |
+| Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | 共享 Node 契约覆盖 UTF-8、唯一 wave、依赖顺序、路径冲突和 globalChanges 串行 |
 | KB query script | `.harness/scripts/kb-query.ps1` | Index-first query with Markdown fallback implemented V1 |
 | KB generate script | `.harness/scripts/generate-kb.ps1` + `lib/generate-kb.mjs` + `lib/source-fingerprint.mjs` | Knowledge Reliability V2 plus M1.1 deterministic content fingerprints |
 | KB regression tests | `.harness/scripts/tests/` | Source-fingerprint, generator, query, freshness, and status tests implemented |
@@ -27,7 +27,8 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Test selection script | `.harness/scripts/select-tests.ps1` | Basic read-only path-based gate selection done |
 | Knowledge input scan script | `.harness/scripts/scan-knowledge-inputs.ps1` | Basic read-only source structure scan done |
 | Knowledge freshness script | `.harness/scripts/check-kb-freshness.ps1` | Backend/frontend/Common baseline, semantic, index, and content-fingerprint freshness check implemented |
-| Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | Basic read-only DAG-to-worktree plan done |
+| Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | 旧版只读 DAG-to-worktree 计划保持兼容 |
+| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | M5-A `Plan/Status/Create`、SHA 绑定、事实对账、批准门禁、幂等和恢复已实现 |
 | Interface case derivation script | `.harness/scripts/derive-interface-cases.ps1` | Basic read-only acceptance-case draft done |
 | Build plan script | `.harness/scripts/plan-build.ps1` | Basic read-only build/publish plan done |
 | Delivery summary script | `.harness/scripts/summarize-delivery.ps1` | Basic read-only owned/unrelated change summary done |
@@ -64,19 +65,20 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M3 Dispatcher plan/report | `docs/harness-m3-agent-dispatcher/`, `.harness/scripts/run-story.ps1` | Implemented V1 |
 | M4-A runtime compatibility plan/report | `docs/harness-m4-runtime-compatibility/` | Windows `codex-cli 0.144.1` 连续三次发现 13 个项目 Skill，仓库外负向对照为 0 |
 | M4-B constrained Worker plan/report | `docs/harness-m4-worker-runtime/` | Mock provider 的 task/result、权限、超时、原子写入与恢复闭环已实现 |
+| M5-A single Worktree plan/report | `docs/harness-m5-worktree-orchestration/` | 单 Worktree 的 DAG 安全契约、计划、状态和批准创建已实现 |
 
 ## Deferred Functional Work
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
-- Strengthen DAG validation for wave topology, file collisions, shared files, and global changes.
-- Implement write-capable worktree orchestration only after explicit approval.
+- 实现 M5-B 多 Worktree 波次、Worker 执行、结果收集和冲突停止；M5-A 仅覆盖单 Worktree 创建前边界。
+- merge/remove、Fork-Join 和自动清理继续需要独立方案与明确批准。
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
 
 ## Safety Notes
 
 - Preserve unrelated working-tree files; do not delete or stage them as part of Harness work.
-- Current helpers do not execute publish, push, commit, deployment, or Worktree creation.
+- `run-worktree.ps1 Create` 只能在用户逐次批准并显式传入 `-ConfirmCreate` 后创建一个 Worktree；其他脚本不应隐式调用它。
 - Publish, commit, push, deployment, and destructive git scripts are not implemented.
 
 ## Structure Validation
@@ -89,7 +91,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 21 directories, 129 required files, and 13 Skill files.
+Current verified structure: 22 directories, 138 required files, and 13 Skill files.
 
 ## Knowledge Query
 

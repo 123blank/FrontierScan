@@ -79,6 +79,8 @@ foreach ($file in $files) {
   ".harness/schemas/dispatch-task.schema.json",
   ".harness/schemas/dispatch-result.schema.json",
   ".harness/schemas/worker-policies.schema.json",
+  ".harness/schemas/worktree-plan.schema.json",
+  ".harness/schemas/worktree-status.schema.json",
   ".codex/agents/worker-policies.json",
   ".harness/states/product-state.template.json",
   ".harness/states/e2e-state.template.json"

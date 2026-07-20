@@ -20,3 +20,4 @@ frontend/.vite/
 .harness/states/*.tmp
 .harness/states/*.lock
 .harness/states/*.events.jsonl
+.harness/worktrees/

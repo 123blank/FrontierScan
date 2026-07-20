@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-17
+> 最后更新：2026-07-20
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 的 M0-M3 已完成，M3 已提交并合并到本地 `dev`。M4-A 已验证 Windows `codex-cli 0.144.1` 能从现有 `.codex/skills` 稳定发现全部 13 个项目 Skill，下一独立能力是 M4-B 受约束 Worker 纵向闭环。14 个业务模块的 L1/L3 与 backend、frontend、common 知识均为 `fresh`，`backend/article` 已完成真实 L2 语义增强，其余模块仍为 `pending`；Embedding、Worktree 并行、真实发布和 Git 自动写入仍未实现。
+> 当前重点：Harness 的 M0-M4-B 已完成；M5-A 单 Worktree 的严格 DAG 校验、确定性计划、Git 事实状态、批准创建、测试和审核已完成，Story 停留在 `git-delivery` 等待批准。14 个业务模块的 L1/L3 与 backend、frontend、common 知识均为 `fresh`；真实 Agent、多 Worktree 波次、Fork-Join、合并/删除、真实发布和 Git 自动交付仍未实现。
 
 ---
 
@@ -1583,4 +1583,15 @@ M4-B 受约束 Mock Worker 当前实现：
 - provider 超时或产物写入后中断可使用同一 dispatch 显式重试；Worker 完成后 revision 不变，只有调用方执行 M3 `apply` 才推进。
 - 同进程 mock provider 不是恶意代码安全沙箱；真实 Agent 仍未启动，后续必须结合 Codex custom agent 和 sandbox 重新验收。
 
-下一阶段在新方案确认前不要进入 M5 Worktree/并行或 M6 真实模型、发布、部署和 Git 自动写入。本批未修改业务源码，也未执行暂存、提交、推送或合并。
+### 16.17 2026-07-20 当前状态：M5-A 单 Worktree 受控编排
+
+权威设计、计划和报告位于 `docs/harness-m5-worktree-orchestration/`。
+
+- `lib/task-dag-contract.mjs` 统一校验任务唯一 wave、依赖顺序、精确/`/**` 路径范围冲突和 `globalChanges` 串行；`validate-task-dag.ps1` 保持兼容入口。
+- `run-worktree.ps1` 提供 `Plan/Status/Create`，计划绑定活动 Story、DAG SHA、`dev` commit、固定任务分支和 `.harness/worktrees/<story>/<task>` 路径。
+- `Status` 读取 `git worktree list --porcelain` 和引用事实；缓存 JSON 不作为创建决策依据。
+- `Create` 同时要求用户逐次批准和 `-ConfirmCreate`，使用无 shell Git argv、30 秒超时、独占锁与原子状态写入。
+- 临时 Git 仓库已覆盖真实创建、幂等复用、匹配分支续接、创建后状态中断恢复、篡改/漂移/占用拒绝；正式 FrontierScan 仓库未创建 Worktree。
+- Runtime 不调用 M2/M3，纵向 fixture 前后 Harness state 完全一致。
+
+下一阶段在独立方案确认前不要进入 M5-B 多 Worktree 波次、Worker 执行/结果收集、merge/remove 或 Fork-Join，也不要进入 M6 真实模型、发布、部署和 Git 自动交付。本批未修改业务源码，也未执行暂存、提交、推送或合并。
