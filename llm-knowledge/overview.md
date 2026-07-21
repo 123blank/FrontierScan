@@ -38,6 +38,7 @@ Current limitations:
 - M3 provides a file-based single-Story Dispatcher with structured task/result/checkpoint artifacts and fixed local command adapters. It does not launch real Agent workers or provide multi-Agent concurrency.
 - M4-B provides a constrained Mock Worker that consumes M3 tasks, validates explicit context and role-scoped candidate files, and writes `result.json` last. It does not launch a real Agent or grant runtime tools.
 - M5-A provides a single-Worktree `plan/status/create` Harness runtime with strict DAG wave/conflict validation, pinned `dev` commits, Git-fact reconciliation, explicit create confirmation, and temporary-repository recovery tests. It does not run Workers, merge, remove, or parallelize Worktrees.
+- M5-B1 provides an internal single-task Worktree Worker orchestrator with explicit input snapshots, M3 checkpoint binding, Git-fact output reconciliation, and `ready-for-apply`/`ready-for-integration` collection. It does not integrate business code, call M3 `apply`, expose a mock CLI, or support multiple tasks or Worktrees.
 
 Trust rule:
 

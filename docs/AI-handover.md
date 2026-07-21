@@ -1596,3 +1596,18 @@ M4-B 受约束 Mock Worker 当前实现：
 - `M5-A-001` 已在 revision 19 进入 `done/completed`，业务修改以本地提交 `28e009c66a3d801208ad931037d659067e0e10ce` 交付；本次收尾已获 `git push origin dev` 批准，远程同步结果以 `origin/dev` 引用为准。
 
 下一阶段在独立方案确认前不要进入 M5-B 多 Worktree 波次、Worker 执行/结果收集、merge/remove 或 Fork-Join，也不要进入 M6 真实模型、发布、部署和 Git 自动交付。本批未修改业务源码；M5-A 本地提交已完成，本次收尾已获推送批准，未执行合并、发布或部署。
+
+### 16.18 2026-07-21 当前状态：M5-B1 Worktree 内 Worker 执行与分级回收
+
+权威设计、计划和报告位于 `docs/harness-m5b-worktree-worker/`。
+
+- `lib/worktree-worker-runtime.mjs` 只消费 M5-A 已创建 Worktree，并在执行前绑定 M3 prepared checkpoint、单任务 DAG、owner、base commit 和 Git status。
+- 当前 run Harness 输入按 manifest 复制到 Worktree；已提交源码和文档直接使用固定 base Worktree，主工作树未提交业务源码不会被复制。
+- Worker 输出必须同时通过 M4-B 候选门禁和 M5-B1 Git 完整变更对账。
+- Worker 可更新作为 `worktree-base` 上下文读取且明确声明为候选的现有业务文件；`main-run` 输入和未声明候选的上下文仍不可修改。
+- 仅 phase output 返回 `ready-for-apply`，但 Runtime 不调用 M3 `apply`；调用方显式 apply 后才推进 revision。
+- 存在 backend/frontend 写入时返回 `ready-for-integration`，主工作树业务代码和 M3 正式 result 均不变化。
+- receipt 支持幂等复用；Provider 失败可复用已验证输入；phase-output 回收中断可恢复。无 durable candidate list 的业务写入中断恢复失败关闭。
+- M5-B1 不提供 CLI，不创建、合并、删除 Worktree，不启动真实 Agent，也不实现多任务或多 Worktree。
+
+下一阶段应独立规划 M5-B2 的业务代码集成、task-level dispatch、多任务聚合和多 Worktree 波次。未经批准不要进入 merge/remove、Fork-Join、真实模型、发布、部署或 Git 自动交付。

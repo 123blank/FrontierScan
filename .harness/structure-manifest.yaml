@@ -23,6 +23,7 @@ required_directories:
   - docs/harness-m4-runtime-compatibility
   - docs/harness-m4-worker-runtime
   - docs/harness-m5-worktree-orchestration
+  - docs/harness-m5b-worktree-worker
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -34,6 +35,8 @@ required_files:
   - .harness/schemas/worker-policies.schema.json
   - .harness/schemas/worktree-plan.schema.json
   - .harness/schemas/worktree-status.schema.json
+  - .harness/schemas/worktree-worker-input-manifest.schema.json
+  - .harness/schemas/worktree-worker-receipt.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
   - .harness/workflows/e2e-development.yaml
@@ -58,6 +61,7 @@ required_files:
   - .harness/scripts/lib/worker-runtime.mjs
   - .harness/scripts/lib/task-dag-contract.mjs
   - .harness/scripts/lib/worktree-runtime.mjs
+  - .harness/scripts/lib/worktree-worker-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
@@ -67,6 +71,7 @@ required_files:
   - .harness/scripts/tests/story-runtime.test.mjs
   - .harness/scripts/tests/worker-runtime.test.mjs
   - .harness/scripts/tests/worktree-runtime.test.mjs
+  - .harness/scripts/tests/worktree-worker-runtime.test.mjs
   - .harness/scripts/tests/task-dag.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
@@ -162,6 +167,9 @@ required_files:
   - docs/harness-m5-worktree-orchestration/DESIGN.md
   - docs/harness-m5-worktree-orchestration/PLAN.md
   - docs/harness-m5-worktree-orchestration/REPORT.md
+  - docs/harness-m5b-worktree-worker/DESIGN.md
+  - docs/harness-m5b-worktree-worker/PLAN.md
+  - docs/harness-m5b-worktree-worker/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -169,6 +177,6 @@ status_notes:
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
   state_runtime: implemented-v1
-  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-single-worktree-runtime-v1
-  deterministic_scripts: mixed-read-only-helpers-state-story-worktree-runtimes-and-knowledge-writer
-  business_code_changes: none-required-for-m0-m5a
+  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-single-worktree-runtime-v1-worktree-worker-collection-v1
+  deterministic_scripts: mixed-read-only-helpers-state-story-worktree-worker-runtimes-and-knowledge-writer
+  business_code_changes: none-required-for-m0-m5b1

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-worker-receipt.schema.json",
+  "title": "FrontierScan Harness Worktree Worker Execution Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion", "storyId", "runId", "taskId", "dispatchId", "phase", "ownerAgent",
+    "baseCommit", "headCommit", "outcome", "planSha256", "statusSha256", "inputManifestSha256",
+    "resultEvidenceFile", "resultSha256", "files", "completedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "phase": { "type": "string", "minLength": 1 },
+    "ownerAgent": { "type": "string", "minLength": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "headCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "outcome": { "enum": ["ready-for-apply", "ready-for-integration"] },
+    "planSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "statusSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "inputManifestSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "resultEvidenceFile": { "type": "string", "minLength": 1 },
+    "resultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "bytes", "kind"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0, "maximum": 2097152 },
+          "kind": { "enum": ["phase-output", "backend", "frontend"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "completedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

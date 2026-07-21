@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时已实现，M3 文件式 Dispatcher、M4-B 受约束 Mock Worker 和 M5-A 单 Worktree 计划/状态/批准创建也已实现。真实 Agent、多 Worktree 波次、Fork-Join、合并/删除和 DevOps 闭环仍未实现。
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree 创建和 M5-B1 Worktree 内 Worker 分级回收均已实现。真实 Agent、多任务/多 Worktree 波次、业务代码集成、Fork-Join、合并/删除和 DevOps 闭环仍未实现。
 
 ## Added Structure
 
@@ -263,11 +263,15 @@ M4-B 受约束 Mock Worker 已实现。`worker-runtime.mjs` 消费 M3 task Schem
 
 M4-B 不提供 mock CLI，不启动真实 Agent，也不把同进程 provider 声称为操作系统安全沙箱。M2/M3 继续独占固定 Adapter、证据门禁和状态推进。
 
+## M5-B1 Worktree 内 Worker
+
+M5-B1 通过内部 `runWorktreeWorker` 组合 M5-A 与 M4-B。它绑定当前 M3 prepared checkpoint、单任务 DAG 和 owner，按 manifest 把当前 run Harness 输入复制到已创建 Worktree，并直接使用固定 base 上的源码/文档上下文。Worker 完成后重新对账 Git 事实：只有 phase output 时写入主工作树正式 result 并返回 `ready-for-apply`；存在 backend/frontend 写入时不复制业务代码、不写正式 result，只返回 `ready-for-integration` 独立证据。
+
+M5-B1 支持已授权 base context 的同路径候选更新、receipt 幂等复用、Provider 失败后的输入快照复用和 phase-output 回收恢复；`main-run` 与未声明候选的上下文保持不可变。没有 durable candidate list 的业务写入中断恢复失败关闭。Runtime 不提供 CLI，不创建/合并/删除 Worktree，也不调用 M3 `apply`。
+
 ## 下一步实施
 
-M5-A 已完成单 Worktree 的最小受控边界：共享 DAG 契约、固定 `dev` SHA 的 plan、Git 事实 status 和双重批准 create。Runtime 不启动 Worker、不调用 M2/M3，也不合并或删除 Worktree。
-
-下一阶段需要独立设计 M5-B 的 Worker 执行、结果收集和多 Worktree 波次；在该方案确认前不进入 Fork-Join、merge/remove，也不进入 M6 的真实模型、发布、部署或 Git 自动交付。
+下一阶段需要独立设计 M5-B2 的业务代码集成、task-level dispatch、多任务聚合和多 Worktree 波次；在该方案确认前不进入 Fork-Join、merge/remove，也不进入 M6 的真实模型、发布、部署或 Git 自动交付。
 
 ## Safety Boundaries
 

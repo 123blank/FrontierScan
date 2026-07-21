@@ -19,6 +19,8 @@ Directory layout:
     task-dag.schema.json
     worktree-plan.schema.json
     worktree-status.schema.json
+    worktree-worker-input-manifest.schema.json
+    worktree-worker-receipt.schema.json
   states/
     product-state.template.json
     e2e-state.template.json
@@ -68,6 +70,10 @@ Additional read-only checks:
 
 `run-worktree.ps1` 是 M5-A 单 Worktree 入口，支持 `Plan/Status/Create`。`Create` 必须有用户逐次批准并显式传入
 `-ConfirmCreate`；它不启动 Worker，不合并或删除 Worktree，也不推进 M2/M3 状态。
+
+`scripts/lib/worktree-worker-runtime.mjs` 是 M5-B1 内部编排接口，不提供 CLI。它只消费 M5-A 已创建的单 Worktree，
+在 Worktree 内运行测试注入的 M4-B Provider，并把结果分为 `ready-for-apply` 与 `ready-for-integration`；它不创建、
+合并或删除 Worktree，也不调用 M3 `apply`。
 
 `kb-query.ps1` is a read-only keyword search over `llm-knowledge/`. Treat empty results as missing
 knowledge and verify source files directly before implementation.
