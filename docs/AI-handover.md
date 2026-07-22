@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-21
+> 最后更新：2026-07-22
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 的 M0-M5-B1 已完成；M5-B2 单 Worktree 业务候选的内容寻址计划、事实状态、批准集成、恢复和 M3 显式交接已实现，最终交付状态以 `.harness/states/e2e-M5-B2-001.json` 为准。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、多任务/多 Worktree 波次、Fork-Join、合并/删除、真实发布和 Git 自动交付仍未实现。
+> 当前重点：Harness 的 M0-M5-B2 已完成并交付至 `origin/dev`；M5-B2 单 Worktree 业务候选的内容寻址计划、事实状态、批准集成、恢复和 M3 显式交接已实现，最终状态为 `done/completed`、revision 29，以 `.harness/states/e2e-M5-B2-001.json` 为准。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、多任务/多 Worktree 波次、Fork-Join、Worktree 生命周期清理、真实发布和 Git 自动交付仍未实现。
 
 ---
 
@@ -1624,6 +1624,6 @@ M4-B 受约束 Mock Worker 当前实现：
 - 逐文件中断和 result 后中断可显式恢复；重复 M5-B2 Apply 复用匹配 receipt。Runtime 不自动回滚、不调用 M3 apply。
 - 临时 Git fixture 覆盖已有文件更新、新文件创建、符号链接、HEAD/证据/bundle 漂移、CLI、恢复和 M3 单次显式推进；正式业务源码没有被测试修改。
 - 当前 M3 `already-applied` 只处理状态已推进但 checkpoint 尚未完成的中断窗口；正常完成后的第二次 apply 不是公开幂等入口。
-- `M5-B2-001` 已完成测试、Review、no-build 和接口验证，当前停留在 `git-delivery`、revision 21，等待独立 Git 批准；尚未提交或标记 `done`。
+- `M5-B2-001` 已完成测试、Review、no-build 和接口验证；用户随后批准 Git 交付，业务 Runtime 以 `d557e540d78033a317601de8edc516f859fdcd83` 提交，运行资产忽略规则以 `9e380e9eb2a6bbb7124258c426ea2678c28d68e6` 提交，均已推送至 `origin/dev`。Story 最终为 `done/completed`、revision 29。
 
-下一阶段应先形成 M5-C Worktree 生命周期收尾或 M5-B3 多任务协议的独立方案。未经确认不要执行正式仓库 Apply、merge/remove、Worktree 清理、Git 自动交付、真实模型、发布或部署。
+下一阶段应先形成 M5-C Worktree 生命周期收尾的独立方案，再评估 M5-B3 多任务协议。未经确认不要执行正式仓库 Apply、merge/remove、Worktree 清理、Git 自动交付、真实模型、发布或部署。

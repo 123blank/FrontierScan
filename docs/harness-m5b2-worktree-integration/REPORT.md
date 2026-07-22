@@ -54,4 +54,4 @@ Task DAG 最初预计文件未列出 `.harness/structure-manifest.yaml`，文档
 
 ## 7. Harness 最终状态
 
-Story 在交付前已完成 requirement、technical-design、task-dag、implementation、unit-test、code-review、build-publish 和 interface-verification，并到达 `git-delivery/active` revision 26。用户随后批准本地 Git 提交；提交结果与最终 Harness 状态分别以 Git 历史和 `.harness/states/e2e-M5-B2-001.json` 为准，推送、PR、合并、发布和部署仍未获批准。
+Story 已完成 requirement、technical-design、task-dag、implementation、unit-test、code-review、build-publish、interface-verification 和 git-delivery，并在 `.harness/states/e2e-M5-B2-001.json` 中进入 `done/completed`、revision 29。用户批准后，业务 Runtime 以 `d557e540d78033a317601de8edc516f859fdcd83` 提交，运行资产忽略规则以 `9e380e9eb2a6bbb7124258c426ea2678c28d68e6` 提交，均已推送至 `origin/dev`。未创建 PR，未执行 Worktree 或分支删除、发布和部署。

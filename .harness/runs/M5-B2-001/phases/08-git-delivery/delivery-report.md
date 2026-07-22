@@ -1,11 +1,12 @@
 # M5-B2-001 Git 交付报告
 
-## 当前状态
+## 最终状态
 
-- 交付状态：`approved-for-local-commit`
-- Story phase：`git-delivery`
-- Runtime status：`active`
-- 批准前 Revision：26
+- 交付状态：`completed-and-pushed`
+- Story phase：`done`
+- Runtime status：`completed`
+- 批准前 Revision：26；最终 Revision：29
+- Git：`d557e540d78033a317601de8edc516f859fdcd83`（M5-B2 Runtime）与 `9e380e9eb2a6bbb7124258c426ea2678c28d68e6`（本地运行资产忽略规则）均已推送至 `origin/dev`
 - 测试：M5-B2 24/24，M5-B1 19/19，M5-A 11/11，M2-M4 与全部 PowerShell 门禁通过
 - Review：无未解决 `BLOCKER/WARNING`
 - 构建：`no-build-required`，未发布
@@ -29,13 +30,19 @@
 
 `summarize-delivery.ps1` 未发现无关 dirty files，`backend/src/**`、`frontend/src/**` 无差异。
 
-## 建议提交信息
+## 已执行 Git 交付
 
 ```text
 feat(harness): add controlled worktree integration runtime
 ```
 
-## 建议 MR 摘要
+后续维护提交：
+
+```text
+chore(harness): ignore local runtime artifacts
+```
+
+## 交付摘要
 
 - 新增单 Worktree `Plan/Status/Apply`，以内容寻址 bundle、Git 逻辑 base 和 candidate 哈希安全集成 M5-B1 业务候选。
 - 增加双重批准、result-last、逐文件恢复、竞态复核、严格 receipt 和 PowerShell 入口。
@@ -45,4 +52,4 @@ feat(harness): add controlled worktree integration runtime
 
 ## 批准边界
 
-用户已明确批准暂存本报告列出的 owned files 并执行一次本地提交。本次批准不包含 `git push`、PR、合并、分支/Worktree 删除、发布或部署；提交和 Harness 状态完成结果分别以 Git 历史与状态文件为准。
+用户已明确批准本报告列出的 owned files 的 Git 提交与向 `origin/dev` 推送。本次批准不包含 PR、分支/Worktree 删除、发布或部署；提交和 Harness 状态完成结果分别以 Git 历史与状态文件为准。
