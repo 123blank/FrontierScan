@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-integration-plan.schema.json",
+  "title": "FrontierScan Harness Worktree Integration Plan",
+  "type": "object",
+  "required": [
+    "schemaVersion", "storyId", "runId", "taskId", "dispatchId", "phase", "ownerAgent",
+    "stateFile", "preparedRevision", "baseCommit", "worktreePath", "taskDagFile", "taskDagSha256",
+    "taskFile", "taskSha256", "checkpointFile", "checkpointSha256", "worktreePlanFile",
+    "worktreePlanSha256", "inputManifestFile", "inputManifestSha256", "executionReceiptFile",
+    "executionReceiptSha256", "workerResultEvidenceFile", "workerResultSha256", "resultFile",
+    "artifacts", "plannedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "phase": { "type": "string", "minLength": 1 },
+    "ownerAgent": { "type": "string", "minLength": 1 },
+    "stateFile": { "type": "string", "minLength": 1 },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "worktreePath": { "type": "string", "minLength": 1 },
+    "taskDagFile": { "type": "string", "minLength": 1 },
+    "taskDagSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "taskFile": { "type": "string", "minLength": 1 },
+    "taskSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "checkpointFile": { "type": "string", "minLength": 1 },
+    "checkpointSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "worktreePlanFile": { "type": "string", "minLength": 1 },
+    "worktreePlanSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "inputManifestFile": { "type": "string", "minLength": 1 },
+    "inputManifestSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "executionReceiptFile": { "type": "string", "minLength": 1 },
+    "executionReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "workerResultEvidenceFile": { "type": "string", "minLength": 1 },
+    "workerResultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "resultFile": { "type": "string", "minLength": 1 },
+    "artifacts": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "baseSha256", "candidateSha256", "bytes", "bundlePath"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["backend", "frontend", "phase-output", "result"] },
+          "baseSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+          "candidateSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0, "maximum": 2097152 },
+          "bundlePath": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "plannedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

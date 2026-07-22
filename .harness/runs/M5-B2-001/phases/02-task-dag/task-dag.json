@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-B2-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "实现单 Worktree 业务变更受控集成闭环",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-integration-runtime.mjs",
+        ".harness/scripts/run-worktree-integration.ps1",
+        ".harness/scripts/tests/worktree-integration-runtime.test.mjs",
+        ".harness/schemas/worktree-integration-plan.schema.json",
+        ".harness/schemas/worktree-integration-status.schema.json",
+        ".harness/schemas/worktree-integration-receipt.schema.json",
+        ".harness/scripts/validate-structure.ps1",
+        ".harness/scripts/README.md",
+        "docs/harness-m5b2-worktree-integration/**",
+        "docs/harness-structure-checklist.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/AI-handover.md",
+        "llm-knowledge/overview.md"
+      ],
+      "acceptanceCriteria": [
+        "ready-for-integration 候选可在批准后安全写入并最后生成正式 result",
+        "失败和中断可通过哈希事实关闭或恢复且不推进 M2/M3 状态"
+      ],
+      "ownerAgent": "backend-developer"
+    }
+  ],
+  "edges": [],
+  "waves": [
+    [
+      "T1"
+    ]
+  ],
+  "globalChanges": [],
+  "risks": [
+    "真实 Apply 只在临时 Git fixture 执行，正式仓库业务源码不得作为测试目标。",
+    "多文件不提供全局事务；部分完成后按 base/candidate 哈希显式恢复。"
+  ]
+}

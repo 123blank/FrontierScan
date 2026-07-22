@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-20
+> 最后更新：2026-07-21
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 的 M0-M4-B 已完成；M5-A 单 Worktree 的严格 DAG 校验、确定性计划、Git 事实状态、批准创建、测试、审核和本地提交已完成，Story 为 `done/completed`。14 个业务模块的 L1/L3 与 backend、frontend、common 知识均为 `fresh`；真实 Agent、多 Worktree 波次、Fork-Join、合并/删除、真实发布和 Git 自动交付仍未实现。
+> 当前重点：Harness 的 M0-M5-B1 已完成；M5-B2 单 Worktree 业务候选的内容寻址计划、事实状态、批准集成、恢复和 M3 显式交接已实现，最终交付状态以 `.harness/states/e2e-M5-B2-001.json` 为准。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、多任务/多 Worktree 波次、Fork-Join、合并/删除、真实发布和 Git 自动交付仍未实现。
 
 ---
 
@@ -1611,3 +1611,19 @@ M4-B 受约束 Mock Worker 当前实现：
 - M5-B1 不提供 CLI，不创建、合并、删除 Worktree，不启动真实 Agent，也不实现多任务或多 Worktree。
 
 下一阶段应独立规划 M5-B2 的业务代码集成、task-level dispatch、多任务聚合和多 Worktree 波次。未经批准不要进入 merge/remove、Fork-Join、真实模型、发布、部署或 Git 自动交付。
+
+### 16.19 2026-07-21 当前状态：M5-B2 单 Worktree 业务候选受控集成
+
+权威设计、计划和报告位于 `docs/harness-m5b2-worktree-integration/`。
+
+- `lib/worktree-integration-runtime.mjs` 提供 `plan/status/apply`，PowerShell 入口为 `run-worktree-integration.ps1`。
+- Plan 只接受 M5-B1 `ready-for-integration`，绑定当前 state、M3 prepared task/checkpoint、单 pending DAG task、M5-A plan/status 和 M5-B1 receipt/manifest/result。
+- 候选以 SHA-256 bundle 固化；单文件 2 MiB、总量 8 MiB。重复 Plan 必须重验 receipt、base 和固定 result 路径，不能只信任旧 plan。
+- Status 要求主工作树 HEAD 等于 `baseCommit`，业务 Git 差异全部可由 plan 解释，并按 Git 逻辑 base/candidate 哈希分类；`core.autocrlf` 等 checkout filter 不会把 Git 状态干净的文件误判为漂移。
+- Apply 需要真实用户批准和 `-ConfirmApply`，写入顺序为业务文件、phase output、正式 result、integration receipt；遗留锁和未知目标内容失败关闭。
+- 逐文件中断和 result 后中断可显式恢复；重复 M5-B2 Apply 复用匹配 receipt。Runtime 不自动回滚、不调用 M3 apply。
+- 临时 Git fixture 覆盖已有文件更新、新文件创建、符号链接、HEAD/证据/bundle 漂移、CLI、恢复和 M3 单次显式推进；正式业务源码没有被测试修改。
+- 当前 M3 `already-applied` 只处理状态已推进但 checkpoint 尚未完成的中断窗口；正常完成后的第二次 apply 不是公开幂等入口。
+- `M5-B2-001` 已完成测试、Review、no-build 和接口验证，当前停留在 `git-delivery`、revision 21，等待独立 Git 批准；尚未提交或标记 `done`。
+
+下一阶段应先形成 M5-C Worktree 生命周期收尾或 M5-B3 多任务协议的独立方案。未经确认不要执行正式仓库 Apply、merge/remove、Worktree 清理、Git 自动交付、真实模型、发布或部署。

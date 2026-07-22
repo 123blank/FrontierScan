@@ -39,6 +39,7 @@ Current limitations:
 - M4-B provides a constrained Mock Worker that consumes M3 tasks, validates explicit context and role-scoped candidate files, and writes `result.json` last. It does not launch a real Agent or grant runtime tools.
 - M5-A provides a single-Worktree `plan/status/create` Harness runtime with strict DAG wave/conflict validation, pinned `dev` commits, Git-fact reconciliation, explicit create confirmation, and temporary-repository recovery tests. It does not run Workers, merge, remove, or parallelize Worktrees.
 - M5-B1 provides an internal single-task Worktree Worker orchestrator with explicit input snapshots, M3 checkpoint binding, Git-fact output reconciliation, and `ready-for-apply`/`ready-for-integration` collection. It does not integrate business code, call M3 `apply`, expose a mock CLI, or support multiple tasks or Worktrees.
+- M5-B2 provides approval-gated `plan/status/apply` for one `ready-for-integration` result, using content-addressed bundles, base/candidate hash reconciliation, result-last writes, and per-file recovery. It does not call M3 `apply`, merge or remove Worktrees, execute Git writes, or support multiple tasks or Worktrees.
 
 Trust rule:
 

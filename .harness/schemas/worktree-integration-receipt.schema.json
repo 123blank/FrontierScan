@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-integration-receipt.schema.json",
+  "title": "FrontierScan Harness Worktree Integration Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion", "storyId", "runId", "taskId", "dispatchId", "phase", "ownerAgent",
+    "baseCommit", "planSha256", "resultFile", "resultSha256", "appliedFiles", "completedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "phase": { "type": "string", "minLength": 1 },
+    "ownerAgent": { "type": "string", "minLength": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "planSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "resultFile": { "type": "string", "minLength": 1 },
+    "resultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "appliedFiles": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "sha256", "bytes"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["backend", "frontend", "phase-output"] },
+          "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0, "maximum": 2097152 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "completedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

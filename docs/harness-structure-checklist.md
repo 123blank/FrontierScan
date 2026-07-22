@@ -12,7 +12,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Output templates | `.harness/templates/*.md` | Done |
 | Task DAG example template | `.harness/templates/task-dag.example.json` | Done |
 | Report/output folders | `.harness/reports/`, `.harness/outputs/` | Done |
-| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree 和 M5-B1 Worker 回收 Runtime 已实现 V1 |
+| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker 回收和 M5-B2 受控集成 Runtime 已实现 V1 |
 | Structure validation script | `.harness/scripts/validate-structure.ps1` | Done |
 | State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
 | State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
@@ -30,6 +30,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | 旧版只读 DAG-to-worktree 计划保持兼容 |
 | Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | M5-A `Plan/Status/Create`、SHA 绑定、事实对账、批准门禁、幂等和恢复已实现 |
 | Worktree Worker runtime | `.harness/scripts/lib/worktree-worker-runtime.mjs` | M5-B1 单任务执行、输入快照、Git 对账、分级回收、幂等和显式重试已实现；无 CLI |
+| Worktree integration runtime | `.harness/scripts/run-worktree-integration.ps1` + `lib/worktree-integration-runtime.mjs` | M5-B2 单任务 `Plan/Status/Apply`、内容寻址 bundle、批准门禁、result-last 和逐文件恢复已实现；不调用 M3 apply |
 | Interface case derivation script | `.harness/scripts/derive-interface-cases.ps1` | Basic read-only acceptance-case draft done |
 | Build plan script | `.harness/scripts/plan-build.ps1` | Basic read-only build/publish plan done |
 | Delivery summary script | `.harness/scripts/summarize-delivery.ps1` | Basic read-only owned/unrelated change summary done |
@@ -68,12 +69,13 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M4-B constrained Worker plan/report | `docs/harness-m4-worker-runtime/` | Mock provider 的 task/result、权限、超时、原子写入与恢复闭环已实现 |
 | M5-A single Worktree plan/report | `docs/harness-m5-worktree-orchestration/` | 单 Worktree 的 DAG 安全契约、计划、状态和批准创建已实现 |
 | M5-B1 Worktree Worker plan/report | `docs/harness-m5b-worktree-worker/` | 已创建单 Worktree 的受约束 Worker 执行、输入快照和分级结果回收已实现 |
+| M5-B2 Worktree integration plan/report | `docs/harness-m5b2-worktree-integration/` | 单 Worktree 业务候选的内容寻址计划、事实状态、批准集成和 M3 显式交接已实现 |
 
 ## Deferred Functional Work
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
-- M5-B2 再实现业务代码集成、多任务聚合、多 Worktree 波次和冲突停止；M5-B1 只生成 `ready-for-integration` 证据。
+- M5-B2 已实现单任务业务代码集成；多任务聚合、多 Worktree 波次和跨任务冲突停止继续延期。
 - merge/remove、Fork-Join 和自动清理继续需要独立方案与明确批准。
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
 
@@ -93,7 +95,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 23 directories, 145 required files, and 13 Skill files.
+Current verified structure: 24 directories, 154 required files, and 13 Skill files.
 
 ## Knowledge Query
 
