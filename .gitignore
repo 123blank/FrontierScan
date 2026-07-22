@@ -21,3 +21,9 @@ frontend/.vite/
 .harness/states/*.lock
 .harness/states/*.events.jsonl
 .harness/worktrees/
+
+# Harness per-run transient assets
+.harness/runs/**/task.json
+.harness/runs/**/result.json
+.harness/runs/**/checkpoint.json
+.harness/runs/**/evidence/
