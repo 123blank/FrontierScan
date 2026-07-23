@@ -1642,3 +1642,12 @@ M4-B 受约束 Mock Worker 当前实现：
 - 临时 fixture 已通过公开 Runtime 跑通 M5-A→M5-B1→M5-B2→M3→M2→M5-C 全链路，并确认 Retire 前后完成态 state、已集成业务候选和正式 `result.json` 字节不变；M5-C 测试为 15/15。
 
 本 Story 的完整回归、结构校验和 M5-C owned diff 审核证据记录在 `REPORT.md`。完成 Git 交付前，下一阶段只能评估 M5-B3 多任务协议；不得自动进入多 Worktree、Fork-Join、分支清理、真实 Agent、发布、部署或 Git 自动交付。
+
+### 16.21 2026-07-23 当前状态：M5-B3-A 多任务协议兼容性验证
+
+权威设计、计划和报告位于 `docs/harness-m5b3-multi-task-protocol/`。
+
+- 已确认 M3 v1.0 是 phase 级单 dispatch：固定 `task.json`、`result.json` 和 checkpoint 不能被多个 task 安全复用，首次 `apply` 还会推进全局 phase。
+- M5-B1 对多节点 DAG 的拒绝、M5-B2 的单 task 集成和 M5-C 的单 task 回收均是当前正确边界，不应被批次循环绕过。
+- 推荐 M5-B3-B 引入兼容的 task-scoped dispatch v1.1、batch-scoped Worktree 和独立 serial batch ledger；每项 task 独立保存凭据，一次只执行一项，批次不能自行推进 M2/M3 状态，M5-C 只在 Story 完成后回收 batch Worktree。
+- 未实现多任务 Runtime、并行、多 Worktree、Fork-Join、自动 merge/cleanup、真实 Agent、发布、部署或 Git 自动交付。

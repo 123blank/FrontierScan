@@ -287,9 +287,15 @@ Retire 先重新验证 M5-A plan/history status、M5-B1 manifest/execution recei
 
 移除成功后写入不可扩展的 `retirement-receipt.json`；若 Git 已移除但 receipt 未写入，重试只会在分支仍指向原 `baseCommit` 且所有历史证据仍一致时补写 `recovered: true` receipt。M5-A `status.json` 是会随观测时间更新的当前事实，因此 Retire 校验其身份、created 状态和 plan 绑定，但不要求其当前哈希等于 M5-B1 receipt 的历史哈希；M5-B2 plan 另以路径和 SHA-256 绑定 execution receipt。该能力不删除任务分支、不执行 `git worktree prune`、不合并、不调用 M3 `apply`，也不修改 M2/M3 的 phase 或 revision。临时 Git fixture 已真实跑通 M5-A→M5-B1→M5-B2→M3→M2→M5-C，并覆盖真实移除、锁内重检、证据漂移拒绝、重复调用和中断恢复；正式仓库回收仍须逐次审批。
 
+## M5-B3-A 多任务协议兼容性验证
+
+M5-B3-A 已确认当前 M3 phase 级 dispatch 只能处理单 task：`task.json`、`result.json` 和 checkpoint 没有 task 身份，首次 M3 apply 会推进全局 phase；M5-B1 也刻意拒绝多节点 DAG，M5-B2/M5-C 的证据链按单 task 保存。直接循环现有接口会覆盖产物或越过状态边界，不能采用。
+
+后续 M5-B3-B 应先增加兼容的 task-scoped dispatch v1.1、batch-scoped Worktree plan 与独立 serial batch ledger：每项 task 有独立 dispatch、结果、checkpoint 和 M5-B1/B2 receipt；一次只执行一项；全部选中任务完成后才允许受控 phase 推进，M5-C 只在目标 Story 完成后回收 batch Worktree。该设计保留 M2/M3 的唯一状态权，不自动进入并行、多 Worktree 或 Fork-Join。
+
 ## 下一步实施
 
-M5-C 完成后，再独立设计 M5-B3 的多任务协议或多 Worktree 波次。后续不得默认引入并行执行、分支删除、自动 `prune`、Fork-Join、真实模型、发布、部署或 Git 自动交付。
+M5-B3-A 完成后，M5-B3-B 必须先按上述协议制定独立实施计划，再开始任何 Runtime 修改。后续不得默认引入并行执行、分支删除、自动 `prune`、Fork-Join、真实模型、发布、部署或 Git 自动交付。
 
 ## Safety Boundaries
 

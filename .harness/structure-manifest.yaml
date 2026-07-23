@@ -26,6 +26,7 @@ required_directories:
   - docs/harness-m5b-worktree-worker
   - docs/harness-m5b2-worktree-integration
   - docs/harness-m5c-worktree-lifecycle
+  - docs/harness-m5b3-multi-task-protocol
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -186,6 +187,9 @@ required_files:
   - docs/harness-m5c-worktree-lifecycle/DESIGN.md
   - docs/harness-m5c-worktree-lifecycle/PLAN.md
   - docs/harness-m5c-worktree-lifecycle/REPORT.md
+  - docs/harness-m5b3-multi-task-protocol/DESIGN.md
+  - docs/harness-m5b3-multi-task-protocol/PLAN.md
+  - docs/harness-m5b3-multi-task-protocol/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
