@@ -40,6 +40,7 @@ Current limitations:
 - M5-A provides a single-Worktree `plan/status/create` Harness runtime with strict DAG wave/conflict validation, pinned `dev` commits, Git-fact reconciliation, explicit create confirmation, and temporary-repository recovery tests. It does not run Workers, merge, remove, or parallelize Worktrees.
 - M5-B1 provides an internal single-task Worktree Worker orchestrator with explicit input snapshots, M3 checkpoint binding, Git-fact output reconciliation, and `ready-for-apply`/`ready-for-integration` collection. It does not integrate business code, call M3 `apply`, expose a mock CLI, or support multiple tasks or Worktrees.
 - M5-B2 provides approval-gated `plan/status/apply` for one `ready-for-integration` result, using content-addressed bundles, base/candidate hash reconciliation, result-last writes, and per-file recovery. It does not call M3 `apply`, merge or remove Worktrees, execute Git writes, or support multiple tasks or Worktrees.
+- M5-C provides approval-gated `retire` for one completed M5-B2 Worktree. It revalidates M5-A/M5-B1/M5-B2 evidence, main-tree and Worktree Git facts, and lifecycle locks before `git worktree remove --force`; it preserves the task branch and does not advance M2/M3 state. Multi-Worktree retirement, branch deletion, `prune`, and cleanup remain deferred.
 
 Trust rule:
 

@@ -33,7 +33,7 @@ smoke-harness-flow.ps1
 - `lib/worker-runtime.mjs` 是 M4-B 受约束 Mock Worker 内部模块，不提供 CLI。它读取 M3 task、按 `.codex/agents/worker-policies.json` 限制显式 context 和候选写入，使用测试注入 provider，并在全量校验后最后写入 `result.json`；测试位于 `tests/worker-runtime.test.mjs`。
 - `lib/dispatch-contract.mjs` 是 M3 与 M4-B 共用的 task/result Schema `1.0` 结构和 record 状态校验，M3 继续负责 workflow、证据及状态语义。
 - M4-B 不启动真实 Agent，不接受任意 shell/网络/Git/发布/状态能力，也不执行发布、部署、PR 或 Worktree 操作。
-- `run-worktree.ps1` 是 M5-A 单 Worktree 受控入口，支持 `Plan/Status/Create`。核心 `lib/worktree-runtime.mjs` 固化 `dev` SHA、校验绑定 DAG、从 Git 事实对账、使用原子 JSON 和独占锁，并要求用户批准与 `-ConfirmCreate`；不提供 merge/remove、Worker 启动或状态推进。
+- `run-worktree.ps1` 是单 Worktree 生命周期受控入口，支持 `Plan/Status/Create/Retire`。核心 `lib/worktree-runtime.mjs` 固化 `dev` SHA、校验绑定 DAG、从 Git 事实对账、使用原子 JSON 和独占锁。`Create` 需要用户批准与 `-ConfirmCreate`；`Retire` 只接受已完成的 M5-B2 目标 Story，并在用户批准与 `-ConfirmRetire` 后验证 M5-A/M5-B1/M5-B2 证据、主树和 Worktree 变更集，再安全移除 Worktree。Retire 保留分支，不执行 `prune`、合并或状态推进。
 - `lib/worktree-worker-runtime.mjs` 是 M5-B1 内部编排模块，不提供 CLI。它重新核验 M5-A 已创建 Worktree，复制当前 run Harness 输入、复用 base 上下文并调用 M4-B Worker；仅 phase output 时返回 `ready-for-apply`，存在业务写入时只生成独立证据并返回 `ready-for-integration`，两者都不调用 M3 `apply`。
 - `run-worktree-integration.ps1` 是 M5-B2 单 Worktree 业务候选受控集成入口，支持 `Plan/Status/Apply`。核心 `lib/worktree-integration-runtime.mjs` 绑定 M3、M5-A 和 M5-B1 证据，以 SHA-256 bundle 固化候选，使用 Git 逻辑差异与 candidate 哈希对账，并要求用户批准与 `-ConfirmApply` 后才按业务文件、phase output、正式 result、receipt 的顺序写入。Runtime 不调用 M3 `apply`，不执行 Git 写操作、merge/remove 或 Worktree 清理。
 - `lib/task-dag-contract.mjs` 是 DAG 校验和 Worktree Runtime 共用契约，覆盖唯一 wave、依赖顺序、精确/`/**` 路径范围冲突和 `globalChanges` 串行。
@@ -45,6 +45,6 @@ smoke-harness-flow.ps1
 - 生成器采用失败关闭策略处理摄取失败：读取源文件或共享资源失败时保留覆盖率诊断，并将受影响文档和索引指纹标记为 `partial`。
 - 缺少旧版指纹时需要执行一次基线刷新。公共源文件变化通过 `generate-kb.ps1 -Area all -Mode baseline` 修复。
 - `generate-kb.ps1 -WithEmbeddings` 为显式启用项，使用 `EMBEDDING_API_KEY`（未配置时回退到 `DASHSCOPE_API_KEY`），并支持通过 `EMBEDDING_BASE_URL` 和 `EMBEDDING_MODEL` 覆盖默认的阿里百炼端点与 `text-embedding-v4` 模型；`OPENAI_EMBEDDING_MODEL` 仅作为旧配置兼容项。缺少密钥或 API 调用失败时会报告 `pending` 或 `failed`，但不会阻塞基线文档和本地索引生成。
-- 回归测试位于 `tests/source-fingerprint.test.mjs`、`tests/harness-status.test.mjs`、`tests/generate-kb.test.mjs`、`tests/kb-query.test.ps1`、`tests/kb-freshness.test.ps1`、`tests/task-dag.test.ps1`、`tests/worktree-runtime.test.mjs`、`tests/worktree-worker-runtime.test.mjs` 和 `tests/worktree-integration-runtime.test.mjs`。DAG 测试覆盖 UTF-8、wave/依赖/冲突；Worktree 测试在临时 Git 仓库覆盖计划、门禁、真实创建、Worker 执行、分级回收、内容寻址集成、幂等和恢复。
+- 回归测试位于 `tests/source-fingerprint.test.mjs`、`tests/harness-status.test.mjs`、`tests/generate-kb.test.mjs`、`tests/kb-query.test.ps1`、`tests/kb-freshness.test.ps1`、`tests/task-dag.test.ps1`、`tests/worktree-runtime.test.mjs`、`tests/worktree-worker-runtime.test.mjs`、`tests/worktree-integration-runtime.test.mjs` 和 `tests/worktree-lifecycle-runtime.test.mjs`。DAG 测试覆盖 UTF-8、wave/依赖/冲突；Worktree 测试在临时 Git 仓库覆盖计划、门禁、真实创建、Worker 执行、分级回收、内容寻址集成、单 Worktree 回收、幂等和恢复。
 - 禁止在此处放置业务逻辑。
 - 脚本应从仓库读取数据，并且只有在文档明确说明时才能写入 `.harness/` 产物。

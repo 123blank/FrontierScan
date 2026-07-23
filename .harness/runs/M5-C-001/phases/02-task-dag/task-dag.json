@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-C-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "实现受控单 Worktree 收尾 Runtime",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/lib/worktree-worker-runtime.mjs",
+        ".harness/scripts/lib/worktree-integration-runtime.mjs",
+        ".harness/scripts/run-worktree.ps1",
+        ".harness/schemas/worktree-retirement-receipt.schema.json",
+        ".harness/scripts/tests/worktree-lifecycle-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-integration-runtime.test.mjs",
+        ".harness/README.md",
+        ".harness/structure-manifest.yaml",
+        ".harness/scripts/README.md",
+        "docs/harness-m5c-worktree-lifecycle/**",
+        "docs/AI-handover.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        "llm-knowledge/overview.md"
+      ],
+      "acceptanceCriteria": [
+        "已完成 M5-B2 Worktree 仅在批准和 ConfirmRetire 后可被安全移除。",
+        "未知 Worktree 改动、凭据漂移、锁和身份不一致均在 Git 移除前失败关闭。",
+        "移除后分支保留，目标 M2/M3 状态不变，receipt 支持幂等恢复。"
+      ],
+      "ownerAgent": "code-fixer",
+      "knowledgeUsed": [
+        "docs/harness-m5-worktree-orchestration/DESIGN.md",
+        "docs/harness-m5b-worktree-worker/DESIGN.md",
+        "docs/harness-m5b2-worktree-integration/DESIGN.md"
+      ],
+      "risk": "强制移除可能丢弃未知未提交内容，必须由 manifest 和 receipts 证明变更集合。"
+    }
+  ],
+  "edges": [],
+  "waves": [["T1"]],
+  "globalChanges": [],
+  "risks": [
+    "M5-C 扩展共享 M5-A Runtime，必须完整回归 M5-A/M5-B1/M5-B2。",
+    "正式仓库 Worktree 回收只允许在后续逐次用户批准时执行。"
+  ]
+}

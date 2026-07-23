@@ -21,6 +21,7 @@ Directory layout:
     worktree-status.schema.json
     worktree-worker-input-manifest.schema.json
     worktree-worker-receipt.schema.json
+    worktree-retirement-receipt.schema.json
   states/
     product-state.template.json
     e2e-state.template.json
@@ -68,8 +69,10 @@ Additional read-only checks:
 `validate-task-dag.ps1` 需要具体 DAG 文件，并通过共享 Node 契约校验任务结构、唯一 wave
 归属、依赖顺序、Windows 路径冲突、全局变更串行和无环性。
 
-`run-worktree.ps1` 是 M5-A 单 Worktree 入口，支持 `Plan/Status/Create`。`Create` 必须有用户逐次批准并显式传入
-`-ConfirmCreate`；它不启动 Worker，不合并或删除 Worktree，也不推进 M2/M3 状态。
+`run-worktree.ps1` 是单 Worktree 生命周期入口，支持 `Plan/Status/Create/Retire`。`Create` 必须有用户逐次批准并显式传入
+`-ConfirmCreate`。`Retire` 只接受已完成且已完成 M5-B2 集成的目标 Story，必须有用户逐次批准并显式传入
+`-ConfirmRetire`；它验证 M5-A/M5-B1/M5-B2 证据、主工作树和 Worktree Git 事实后才执行 `git worktree remove --force`。
+Retire 保留任务分支，不执行 `prune`、合并或状态推进。
 
 `scripts/lib/worktree-worker-runtime.mjs` 是 M5-B1 内部编排接口，不提供 CLI。它只消费 M5-A 已创建的单 Worktree，
 在 Worktree 内运行测试注入的 M4-B Provider，并把结果分为 `ready-for-apply` 与 `ready-for-integration`；它不创建、

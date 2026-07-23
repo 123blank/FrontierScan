@@ -110,6 +110,11 @@ async function acquireExecutionLock(lockPath, options) {
   await handle.close();
 }
 
+async function assertRetirementLockAbsent(lockPath) {
+  const info = await lstat(lockPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (info) throw new Error(`Worktree retirement lock already exists: ${lockPath}`);
+}
+
 async function runGit(root, args) {
   return execFileAsync("git", args, {
     cwd: root,
@@ -462,6 +467,7 @@ export async function runWorktreeWorker(options = {}) {
   const lockPath = resolveInsideRoot(root, lockFile, "Worker execution lock").fullPath;
   await acquireExecutionLock(lockPath, options);
   try {
+    await assertRetirementLockAbsent(path.join(path.dirname(lockPath), "retire.lock"));
     const recovered = await recoverWorkerResult(root, worktreeRoot, inspected, state, task, options);
     if (recovered) {
       await validateWorkerChanges(worktreeRoot, recovered.prepared, recovered.workerResult);

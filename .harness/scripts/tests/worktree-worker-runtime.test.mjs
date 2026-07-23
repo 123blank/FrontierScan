@@ -518,6 +518,32 @@ test("rejects an existing execution lock without calling the Provider", async ()
   assert.equal(await readFile(lockFile, "utf8"), "stale\n");
 });
 
+test("rejects a retirement lock after acquiring the execution lock", async () => {
+  const fixture = await createFixture();
+  const retirementLock = path.join(fixture.root, `.harness/runs/${fixture.runId}/worktrees/${fixture.taskId}/retire.lock`);
+  const executionLock = path.join(fixture.root, `.harness/runs/${fixture.runId}/worktrees/${fixture.taskId}/execute.lock`);
+  await writeFile(retirementLock, "retiring\n", "utf8");
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: fixture.taskId,
+      taskFile: fixture.taskFile,
+      provider: async () => {
+        providerCalls += 1;
+        throw new Error("Provider must not run while retirement is active.");
+      },
+    }),
+    /retirement lock/i,
+  );
+
+  assert.equal(providerCalls, 0);
+  assert.equal(await readFile(retirementLock, "utf8"), "retiring\n");
+  await assert.rejects(readFile(executionLock), /ENOENT/);
+});
+
 test("advances exactly once only after the caller explicitly applies a ready result", async () => {
   const fixture = await createFixture();
   const collected = await runWorktreeWorker({

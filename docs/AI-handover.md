@@ -1627,3 +1627,18 @@ M4-B 受约束 Mock Worker 当前实现：
 - `M5-B2-001` 已完成测试、Review、no-build 和接口验证；用户随后批准 Git 交付，业务 Runtime 以 `d557e540d78033a317601de8edc516f859fdcd83` 提交，运行资产忽略规则以 `9e380e9eb2a6bbb7124258c426ea2678c28d68e6` 提交，均已推送至 `origin/dev`。Story 最终为 `done/completed`、revision 29。
 
 下一阶段应先形成 M5-C Worktree 生命周期收尾的独立方案，再评估 M5-B3 多任务协议。未经确认不要执行正式仓库 Apply、merge/remove、Worktree 清理、Git 自动交付、真实模型、发布或部署。
+
+### 16.20 2026-07-22 当前状态：M5-C 单 Worktree 生命周期回收
+
+权威设计、计划和报告位于 `docs/harness-m5c-worktree-lifecycle/`。
+
+- `run-worktree.ps1` 和 `lib/worktree-runtime.mjs` 已扩展 `Retire`；入口只接受已完成的目标 M5-B2 Story，`stateFile` 指向待回收目标，而不是 M5-C 自身状态。
+- Retire 同时要求真实用户逐次批准与 `-ConfirmRetire`，并在执行 `git worktree remove --force` 前重新验证 M5-A plan/history status、M5-B1 manifest/execution receipt/Worker result、M5-B2 plan/receipt、主工作树候选和正式 `result.json` 的 SHA-256。
+- Runtime 还核对目标 Worktree 的 branch/HEAD、可解释 Git 变更集、主工作树清洁性和 `create/execute/integrate/retire` 锁。锁协议为双向互斥：Retire 持锁后重检其他锁，Create、Worker 和 Apply 持有自身锁后也检查 `retire.lock`，后加锁的一方在副作用前退出。
+- M5-B2 `appliedFiles` 必须完整覆盖 M5-B1 候选，ignored 文件也必须在允许集合中；普通文本和 JSON 两种 Retire CLI 输出均已回归验证。
+- M5-B2 计划会合法刷新 M5-A `status.json` 的观测时间；Retire 不再将其当前哈希与 M5-B1 receipt 的历史 `statusSha256` 强制比较，而是校验当前 created/身份/plan 绑定及 M5-B2 plan 对 execution receipt 的不可变 SHA-256 绑定。
+- 成功后写入 `retirement-receipt.json`；Git 已移除但 receipt 未写入时，只在证据和分支仍一致时补写 `recovered: true` receipt。重复 Retire 复用匹配 receipt。
+- Retire 保留 `harness/...` 分支，不执行 `prune`、分支删除、合并、状态推进、Git 提交、推送、发布或部署。真实 FrontierScan 仓库尚未执行回收，测试仅操作临时 Git 仓库。
+- 临时 fixture 已通过公开 Runtime 跑通 M5-A→M5-B1→M5-B2→M3→M2→M5-C 全链路，并确认 Retire 前后完成态 state、已集成业务候选和正式 `result.json` 字节不变；M5-C 测试为 15/15。
+
+本 Story 的完整回归、结构校验和 M5-C owned diff 审核证据记录在 `REPORT.md`。完成 Git 交付前，下一阶段只能评估 M5-B3 多任务协议；不得自动进入多 Worktree、Fork-Join、分支清理、真实 Agent、发布、部署或 Git 自动交付。

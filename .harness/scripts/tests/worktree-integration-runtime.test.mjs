@@ -305,6 +305,23 @@ test("apply requires explicit confirmation before acquiring the integration lock
   await assert.rejects(access(path.join(fixture.root, fixture.integrationLockFile)), /ENOENT/);
 });
 
+test("apply rejects a retirement lock after acquiring the integration lock", async () => {
+  const fixture = await createFixture();
+  await runWorktreeIntegration(fixture.input);
+  const retirementLock = path.join(fixture.root, `.harness/runs/${fixture.runId}/worktrees/${fixture.taskId}/retire.lock`);
+  const before = await readFile(path.join(fixture.root, fixture.existingFile), "utf8");
+  await writeFile(retirementLock, "retiring\n", "utf8");
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...fixture.input, command: "apply", confirmApply: true }),
+    /retirement lock/i,
+  );
+
+  assert.equal(await readFile(path.join(fixture.root, fixture.existingFile), "utf8"), before);
+  assert.equal(await readFile(retirementLock, "utf8"), "retiring\n");
+  await assert.rejects(access(path.join(fixture.root, fixture.integrationLockFile)), /ENOENT/);
+});
+
 test("status rejects main HEAD drift and unexplained business changes", async () => {
   const driftedHead = await createFixture();
   await runWorktreeIntegration(driftedHead.input);

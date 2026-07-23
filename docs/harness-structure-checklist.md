@@ -12,7 +12,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Output templates | `.harness/templates/*.md` | Done |
 | Task DAG example template | `.harness/templates/task-dag.example.json` | Done |
 | Report/output folders | `.harness/reports/`, `.harness/outputs/` | Done |
-| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker 回收和 M5-B2 受控集成 Runtime 已实现 V1 |
+| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker 回收、M5-B2 受控集成和 M5-C 生命周期回收 Runtime 已实现 V1 |
 | Structure validation script | `.harness/scripts/validate-structure.ps1` | Done |
 | State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
 | State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
@@ -28,7 +28,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Knowledge input scan script | `.harness/scripts/scan-knowledge-inputs.ps1` | Basic read-only source structure scan done |
 | Knowledge freshness script | `.harness/scripts/check-kb-freshness.ps1` | Backend/frontend/Common baseline, semantic, index, and content-fingerprint freshness check implemented |
 | Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | 旧版只读 DAG-to-worktree 计划保持兼容 |
-| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | M5-A `Plan/Status/Create`、SHA 绑定、事实对账、批准门禁、幂等和恢复已实现 |
+| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | M5-A `Plan/Status/Create` 与 M5-C `Retire`、SHA 绑定、事实对账、批准门禁、幂等和恢复已实现；Retire 只回收已完成 M5-B2 Worktree 并保留分支 |
 | Worktree Worker runtime | `.harness/scripts/lib/worktree-worker-runtime.mjs` | M5-B1 单任务执行、输入快照、Git 对账、分级回收、幂等和显式重试已实现；无 CLI |
 | Worktree integration runtime | `.harness/scripts/run-worktree-integration.ps1` + `lib/worktree-integration-runtime.mjs` | M5-B2 单任务 `Plan/Status/Apply`、内容寻址 bundle、批准门禁、result-last 和逐文件恢复已实现；不调用 M3 apply |
 | Interface case derivation script | `.harness/scripts/derive-interface-cases.ps1` | Basic read-only acceptance-case draft done |
@@ -70,19 +70,20 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M5-A single Worktree plan/report | `docs/harness-m5-worktree-orchestration/` | 单 Worktree 的 DAG 安全契约、计划、状态和批准创建已实现 |
 | M5-B1 Worktree Worker plan/report | `docs/harness-m5b-worktree-worker/` | 已创建单 Worktree 的受约束 Worker 执行、输入快照和分级结果回收已实现 |
 | M5-B2 Worktree integration plan/report | `docs/harness-m5b2-worktree-integration/` | 单 Worktree 业务候选的内容寻址计划、事实状态、批准集成和 M3 显式交接已实现 |
+| M5-C Worktree lifecycle plan/report | `docs/harness-m5c-worktree-lifecycle/` | 已完成 M5-B2 Worktree 的证据校验、双重确认、强制移除、回执和中断恢复已实现 |
 
 ## Deferred Functional Work
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
 - M5-B2 已实现单任务业务代码集成；多任务聚合、多 Worktree 波次和跨任务冲突停止继续延期。
-- merge/remove、Fork-Join 和自动清理继续需要独立方案与明确批准。
+- 多任务/多 Worktree 回收、分支删除、`git worktree prune`、Fork-Join 和自动清理继续需要独立方案与明确批准。
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
 
 ## Safety Notes
 
 - Preserve unrelated working-tree files; do not delete or stage them as part of Harness work.
-- `run-worktree.ps1 Create` 只能在用户逐次批准并显式传入 `-ConfirmCreate` 后创建一个 Worktree；其他脚本不应隐式调用它。
+- `run-worktree.ps1 Create` 只能在用户逐次批准并显式传入 `-ConfirmCreate` 后创建一个 Worktree；`Retire` 只能在已完成目标 Story、用户逐次批准并显式传入 `-ConfirmRetire` 后回收它。其他脚本不应隐式调用这些命令。
 - Publish, commit, push, deployment, and destructive git scripts are not implemented.
 
 ## Structure Validation
@@ -95,7 +96,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 24 directories, 154 required files, and 13 Skill files.
+Current verified structure: 25 directories, 159 required files, and 13 Skill files.
 
 ## Knowledge Query
 

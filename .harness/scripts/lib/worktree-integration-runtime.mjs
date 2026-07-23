@@ -135,6 +135,11 @@ async function acquireIntegrationLock(lockPath, options) {
   await handle.close();
 }
 
+async function assertRetirementLockAbsent(lockPath) {
+  const info = await lstat(lockPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (info) throw new Error(`Worktree retirement lock already exists: ${lockPath}`);
+}
+
 async function runGit(root, args) {
   return execFileAsync("git", args, {
     cwd: root,
@@ -495,6 +500,7 @@ async function applyPlan(root, context, existing, options) {
   const lockPath = resolveInsideRoot(root, context.paths.lockFile, "Integration lock").fullPath;
   await acquireIntegrationLock(lockPath, options);
   try {
+    await assertRetirementLockAbsent(path.join(path.dirname(path.dirname(lockPath)), "retire.lock"));
     const inspected = await inspectIntegrationStatus(root, context, existing, options);
     if (inspected.status.state === "inconsistent") {
       throw new Error("Integration targets are inconsistent; no additional files were written.");

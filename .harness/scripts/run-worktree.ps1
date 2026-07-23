@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("Plan", "Status", "Create")]
+  [ValidateSet("Plan", "Status", "Create", "Retire")]
   [string]$Command,
 
   [Parameter(Mandatory = $true)]
@@ -14,6 +14,7 @@ param(
   [string]$BaseRef = "dev",
   [string]$Root,
   [switch]$ConfirmCreate,
+  [switch]$ConfirmRetire,
   [switch]$Json
 )
 
@@ -26,6 +27,7 @@ $runtime = Join-Path $PSScriptRoot "lib\worktree-runtime.mjs"
 $arguments = @($runtime, $Command.ToLowerInvariant(), "--root", $Root, "--state-file", $StateFile, "--task-id", $TaskId, "--base-ref", $BaseRef)
 if (-not [string]::IsNullOrWhiteSpace($TaskDagFile)) { $arguments += @("--task-dag-file", $TaskDagFile) }
 if ($ConfirmCreate) { $arguments += "--confirm-create" }
+if ($ConfirmRetire) { $arguments += "--confirm-retire" }
 if ($Json) { $arguments += "--json" }
 
 & node @arguments

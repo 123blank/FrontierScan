@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-retirement-receipt.schema.json",
+  "title": "FrontierScan Harness Worktree Retirement Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion", "storyId", "runId", "taskId", "branch", "worktreePath", "baseCommit",
+    "planSha256", "statusSha256", "executionReceiptSha256", "integrationPlanSha256",
+    "integrationReceiptSha256", "resultFile", "resultSha256", "retiredAt", "recovered"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "branch": { "type": "string", "minLength": 1 },
+    "worktreePath": { "type": "string", "minLength": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "planSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "statusSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "executionReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "integrationPlanSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "integrationReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "resultFile": { "type": "string", "minLength": 1 },
+    "resultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "retiredAt": { "type": "string", "format": "date-time" },
+    "recovered": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

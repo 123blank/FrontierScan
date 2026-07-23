@@ -285,6 +285,18 @@ test("create rejects a stale lock, another Story worktree and a linked parent", 
     /create lock already exists/,
   );
 
+  const retiring = await createFixture({ storyId: "M5-A-RETIRING" });
+  const retiringPlan = await runWorktreeCommand({ root: retiring.root, command: "plan", stateFile: retiring.stateFile, taskDagFile: retiring.taskDagFile, taskId: "T1" });
+  const retirementLock = path.join(retiring.root, path.dirname(retiringPlan.planFile), "retire.lock");
+  const createLock = path.join(retiring.root, path.dirname(retiringPlan.planFile), "create.lock");
+  await writeFile(retirementLock, "retiring\n", "utf8");
+  await assert.rejects(
+    runWorktreeCommand({ root: retiring.root, command: "create", stateFile: retiring.stateFile, taskId: "T1", confirmCreate: true }),
+    /retirement lock/i,
+  );
+  assert.equal(await readFile(retirementLock, "utf8"), "retiring\n");
+  await assert.rejects(readFile(createLock), /ENOENT/);
+
   const second = await createFixture({ storyId: "M5-A-SINGLE" });
   const secondPlan = await runWorktreeCommand({ root: second.root, command: "plan", stateFile: second.stateFile, taskDagFile: second.taskDagFile, taskId: "T1" });
   const otherPath = path.join(second.root, ".harness/worktrees/M5-A-SINGLE/T2");

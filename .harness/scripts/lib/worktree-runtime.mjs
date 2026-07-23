@@ -14,6 +14,11 @@ const PLAN_FIELDS = [
   "taskDagFile", "taskDagSha256", "baseRef", "baseCommit", "branch", "worktreePath",
   "predictedFiles", "plannedAt",
 ];
+const RETIREMENT_RECEIPT_FIELDS = [
+  "schemaVersion", "storyId", "runId", "taskId", "branch", "worktreePath", "baseCommit",
+  "planSha256", "statusSha256", "executionReceiptSha256", "integrationPlanSha256",
+  "integrationReceiptSha256", "resultFile", "resultSha256", "retiredAt", "recovered",
+];
 
 function normalizePath(value) {
   return value.replaceAll("\\", "/");
@@ -118,6 +123,17 @@ function validateState(state) {
   if (state.runtime?.status !== "active") throw new Error("Worktree planning requires an active Story.");
 }
 
+function validateRetirementState(state) {
+  if (!state || state.schemaVersion !== "1.0" || typeof state.storyId !== "string" || !state.storyId) {
+    throw new Error("Harness state has an invalid identity.");
+  }
+  assertIdentifier(state.storyId, "Story ID");
+  assertIdentifier(state.runtime?.runId, "Run ID");
+  if (state.phase !== "done" || state.runtime?.status !== "completed") {
+    throw new Error("Worktree retirement requires a completed Story.");
+  }
+}
+
 function slug(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "task";
 }
@@ -132,6 +148,18 @@ function outputPaths(root, state, taskId) {
     planPath: resolveInsideRoot(root, `${directory}/plan.json`, "Worktree plan file").fullPath,
     statusPath: resolveInsideRoot(root, `${directory}/status.json`, "Worktree status file").fullPath,
     lockPath: resolveInsideRoot(root, `${directory}/create.lock`, "Worktree lock file").fullPath,
+  };
+}
+
+function retirementPaths(root, state, taskId) {
+  const directory = `.harness/runs/${state.runtime.runId}/worktrees/${taskId}`;
+  const receiptFile = `${directory}/retirement-receipt.json`;
+  const lockFile = `${directory}/retire.lock`;
+  return {
+    receiptFile,
+    lockFile,
+    receiptPath: resolveInsideRoot(root, receiptFile, "Worktree retirement receipt").fullPath,
+    lockPath: resolveInsideRoot(root, lockFile, "Worktree retirement lock").fullPath,
   };
 }
 
@@ -266,6 +294,20 @@ async function loadContext(root, options) {
   return { state, stateFile: stateLocation.relative, ...outputs };
 }
 
+async function loadRetirementContext(root, options) {
+  await assertRepositoryRoot(root, options);
+  const stateLocation = resolveInsideRoot(root, options.stateFile, "State file");
+  await assertSafeTargetParents(root, stateLocation.fullPath);
+  const state = await readJsonFile(stateLocation.fullPath, "State file");
+  validateRetirementState(state);
+  assertIdentifier(options.taskId, "Task ID");
+  const outputs = outputPaths(root, state, options.taskId);
+  const retirement = retirementPaths(root, state, options.taskId);
+  await assertSafeTargetParents(root, outputs.planPath);
+  await assertSafeTargetParents(root, retirement.receiptPath);
+  return { state, stateFile: stateLocation.relative, ...outputs, ...retirement };
+}
+
 async function acquireLock(lockPath, options) {
   await mkdir(path.dirname(lockPath), { recursive: true });
   let handle;
@@ -277,6 +319,294 @@ async function acquireLock(lockPath, options) {
   }
   await handle.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: (options.now ?? (() => new Date().toISOString()))() })}\n`, "utf8");
   await handle.close();
+}
+
+async function assertLocksAbsent(lockPaths) {
+  for (const lockPath of lockPaths) {
+    const info = await lstat(lockPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+    if (info) throw new Error(`Worktree lifecycle lock already exists: ${normalizePath(lockPath)}`);
+  }
+}
+
+async function assertRetirementLockAbsent(lockPath) {
+  const info = await lstat(lockPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (info) throw new Error(`Worktree retirement lock already exists: ${normalizePath(lockPath)}`);
+}
+
+async function readRegularBuffer(filePath, label) {
+  const info = await lstat(filePath).catch((error) => {
+    if (error?.code === "ENOENT") throw new Error(`${label} not found: ${normalizePath(filePath)}`);
+    throw error;
+  });
+  if (!info.isFile() || info.isSymbolicLink()) throw new Error(`${label} must be a regular file.`);
+  const buffer = await readFile(filePath);
+  return { buffer, sha256: `sha256:${createHash("sha256").update(buffer).digest("hex")}`, bytes: buffer.length };
+}
+
+function assertReceiptIdentity(receipt, state, plan, label) {
+  if (!receipt || receipt.schemaVersion !== "1.0" || receipt.storyId !== state.storyId
+      || receipt.runId !== state.runtime.runId || receipt.taskId !== plan.taskId
+      || receipt.baseCommit !== plan.baseCommit || typeof receipt.dispatchId !== "string"
+      || typeof receipt.phase !== "string" || typeof receipt.ownerAgent !== "string") {
+    throw new Error(`${label} does not match the completed Story and Worktree plan.`);
+  }
+}
+
+function parsePorcelainPaths(source) {
+  const entries = [];
+  const tokens = source.split("\0").filter(Boolean);
+  for (const token of tokens) {
+    if (token.length < 4) throw new Error("Worktree Git status contains an invalid record.");
+    const status = token.slice(0, 2);
+    const relative = normalizePath(token.slice(3));
+    if (!relative || status.includes("R") || status.includes("C") || status.includes("D")) {
+      throw new Error("Worktree contains a rename, copy, deletion, or invalid path.");
+    }
+    entries.push({ status, relative });
+  }
+  return entries;
+}
+
+async function validateRetirementEvidence(root, context, plan, verifyWorktree = true) {
+  const historicalStatus = await readJsonFile(context.statusPath, "M5-A Worktree status");
+  if (historicalStatus.state !== "created" || historicalStatus.storyId !== context.state.storyId
+      || historicalStatus.runId !== context.state.runtime.runId || historicalStatus.taskId !== plan.taskId
+      || historicalStatus.planSha256 !== await fileSha256(context.planPath)) {
+    throw new Error("M5-A historical Worktree status does not prove a created Worktree.");
+  }
+
+  const directory = `.harness/runs/${context.state.runtime.runId}/worktrees/${plan.taskId}`;
+  const manifestFile = `${directory}/input-manifest.json`;
+  const executionReceiptFile = `${directory}/execution-receipt.json`;
+  const integrationPlanFile = `${directory}/integration/plan.json`;
+  const integrationReceiptFile = `${directory}/integration/integration-receipt.json`;
+  const manifest = await readJsonFile(resolveInsideRoot(root, manifestFile, "M5-B1 input manifest").fullPath, "M5-B1 input manifest");
+  const executionReceipt = await readJsonFile(resolveInsideRoot(root, executionReceiptFile, "M5-B1 execution receipt").fullPath, "M5-B1 execution receipt");
+  const integrationPlan = await readJsonFile(resolveInsideRoot(root, integrationPlanFile, "M5-B2 integration plan").fullPath, "M5-B2 integration plan");
+  const integrationReceipt = await readJsonFile(resolveInsideRoot(root, integrationReceiptFile, "M5-B2 integration receipt").fullPath, "M5-B2 integration receipt");
+
+  assertReceiptIdentity(executionReceipt, context.state, plan, "M5-B1 execution receipt");
+  if (executionReceipt.outcome !== "ready-for-integration" || !Array.isArray(executionReceipt.files)
+      || executionReceipt.planSha256 !== await fileSha256(context.planPath)
+      || executionReceipt.inputManifestSha256 !== await fileSha256(resolveInsideRoot(root, manifestFile, "M5-B1 input manifest").fullPath)) {
+    throw new Error("M5-B1 execution receipt evidence does not match the Worktree plan.");
+  }
+  if (!manifest || manifest.schemaVersion !== "1.0" || manifest.storyId !== context.state.storyId
+      || manifest.runId !== context.state.runtime.runId || manifest.taskId !== plan.taskId
+      || manifest.baseCommit !== plan.baseCommit || manifest.worktreePath !== plan.worktreePath
+      || !Array.isArray(manifest.inputs)) {
+    throw new Error("M5-B1 input manifest does not match the Worktree plan.");
+  }
+  if (typeof executionReceipt.resultEvidenceFile !== "string" || typeof executionReceipt.resultSha256 !== "string") {
+    throw new Error("M5-B1 execution receipt is missing Worker result evidence.");
+  }
+  const workerResult = await readRegularBuffer(
+    resolveInsideRoot(root, executionReceipt.resultEvidenceFile, "M5-B1 Worker result evidence").fullPath,
+    "M5-B1 Worker result evidence",
+  );
+  if (workerResult.sha256 !== executionReceipt.resultSha256) {
+    throw new Error("Worker result evidence hash drifted from the M5-B1 receipt.");
+  }
+  assertReceiptIdentity(integrationPlan, context.state, plan, "M5-B2 integration plan");
+  assertReceiptIdentity(integrationReceipt, context.state, plan, "M5-B2 integration receipt");
+  if (integrationPlan.executionReceiptFile !== executionReceiptFile
+      || integrationPlan.executionReceiptSha256 !== await fileSha256(resolveInsideRoot(root, executionReceiptFile, "M5-B1 execution receipt").fullPath)
+      || !Array.isArray(integrationReceipt.appliedFiles) || integrationReceipt.resultFile !== `${path.posix.dirname(manifest.inputs[0]?.targetPath ?? "")}/result.json`
+      || integrationReceipt.planSha256 !== await fileSha256(resolveInsideRoot(root, integrationPlanFile, "M5-B2 integration plan").fullPath)) {
+    throw new Error("M5-B2 integration receipt does not match the collected Worker result.");
+  }
+  const expectedCandidates = new Map();
+  for (const file of executionReceipt.files) {
+    if (!file || typeof file.path !== "string" || typeof file.kind !== "string"
+        || typeof file.sha256 !== "string" || !Number.isInteger(file.bytes)) {
+      throw new Error("M5-B1 execution receipt contains an invalid file entry.");
+    }
+    const key = pathKey(file.path);
+    if (expectedCandidates.has(key)) throw new Error(`M5-B1 execution receipt contains a duplicate candidate: ${file.path}`);
+    expectedCandidates.set(key, file);
+  }
+  if (integrationReceipt.appliedFiles.length !== expectedCandidates.size) {
+    throw new Error("M5-B2 integration receipt does not cover every Worker candidate.");
+  }
+  const integratedCandidates = new Set();
+  for (const file of integrationReceipt.appliedFiles) {
+    const expected = file && typeof file.path === "string" ? expectedCandidates.get(pathKey(file.path)) : null;
+    if (!expected || integratedCandidates.has(pathKey(file.path))
+        || file.kind !== expected.kind || file.sha256 !== expected.sha256 || file.bytes !== expected.bytes) {
+      throw new Error("M5-B2 integration receipt candidate mapping does not match the Worker receipt.");
+    }
+    integratedCandidates.add(pathKey(file.path));
+  }
+
+  if (verifyWorktree) {
+    const worktreeRoot = resolveInsideRoot(root, plan.worktreePath, "Worktree path").fullPath;
+    for (const input of manifest.inputs) {
+      if (!input || input.source !== "main-run" || typeof input.targetPath !== "string" || typeof input.sha256 !== "string") continue;
+      const current = await readRegularBuffer(resolveInsideRoot(worktreeRoot, input.targetPath, "Worktree main-run input").fullPath, "Worktree main-run input");
+      if (current.sha256 !== input.sha256 || current.bytes !== input.bytes) {
+        throw new Error(`Worktree main-run input hash drifted: ${input.targetPath}`);
+      }
+    }
+    for (const file of executionReceipt.files) {
+      if (!file || typeof file.path !== "string" || typeof file.sha256 !== "string") {
+        throw new Error("M5-B1 execution receipt contains an invalid file entry.");
+      }
+      const current = await readRegularBuffer(resolveInsideRoot(worktreeRoot, file.path, "Worktree candidate").fullPath, "Worktree candidate");
+      if (current.sha256 !== file.sha256 || current.bytes !== file.bytes) {
+        throw new Error(`Worktree candidate hash drifted: ${file.path}`);
+      }
+    }
+    const worktreeResult = await readRegularBuffer(resolveInsideRoot(worktreeRoot, integrationReceipt.resultFile, "Worktree result").fullPath, "Worktree result");
+    if (worktreeResult.sha256 !== executionReceipt.resultSha256) throw new Error("Worktree result hash drifted from the M5-B1 receipt.");
+  }
+
+  for (const file of integrationReceipt.appliedFiles) {
+    if (!file || typeof file.path !== "string" || typeof file.sha256 !== "string") {
+      throw new Error("M5-B2 integration receipt contains an invalid file entry.");
+    }
+    const current = await readRegularBuffer(resolveInsideRoot(root, file.path, "Integrated candidate").fullPath, "Integrated candidate");
+    if (current.sha256 !== file.sha256 || current.bytes !== file.bytes) {
+      throw new Error(`Integrated candidate hash drifted: ${file.path}`);
+    }
+  }
+  const result = await readRegularBuffer(resolveInsideRoot(root, integrationReceipt.resultFile, "Integrated result").fullPath, "Integrated result");
+  if (result.sha256 !== integrationReceipt.resultSha256) throw new Error("Integrated result hash drifted from the M5-B2 receipt.");
+
+  const allowed = new Set([
+    ...manifest.inputs.filter((input) => input?.source === "main-run").map((input) => pathKey(input.targetPath)),
+    ...executionReceipt.files.map((file) => pathKey(file.path)),
+    pathKey(integrationReceipt.resultFile),
+  ]);
+  if (verifyWorktree) {
+    const worktreeRoot = resolveInsideRoot(root, plan.worktreePath, "Worktree path").fullPath;
+    const status = await executeGit(worktreeRoot, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {});
+    for (const entry of parsePorcelainPaths(String(status.stdout ?? ""))) {
+      if (!allowed.has(pathKey(entry.relative))) throw new Error(`Worktree contains an unexplained change: ${entry.relative}`);
+    }
+    const ignored = await executeGit(worktreeRoot, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"], {});
+    for (const relative of String(ignored.stdout ?? "").split("\0").filter(Boolean).map(normalizePath)) {
+      if (!allowed.has(pathKey(relative))) throw new Error(`Worktree contains an unexplained ignored file: ${relative}`);
+    }
+  }
+  return {
+    executionReceiptFile,
+    integrationPlanFile,
+    integrationReceiptFile,
+    resultFile: integrationReceipt.resultFile,
+    resultSha256: result.sha256,
+  };
+}
+
+async function inspectRetirementWorktree(root, plan, options) {
+  const list = await executeGit(root, ["worktree", "list", "--porcelain"], options);
+  const targetPath = resolveInsideRoot(root, plan.worktreePath, "Worktree path").fullPath;
+  const worktree = parseWorktreeList(String(list.stdout ?? "")).find((item) => pathKey(item.worktree ?? "") === pathKey(targetPath));
+  const branchResult = await tryGit(root, ["show-ref", "--verify", "--hash", `refs/heads/${plan.branch}`], options);
+  const branchCommit = branchResult.ok ? branchResult.stdout.trim() : null;
+  const pathInfo = await lstat(targetPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (!branchCommit || branchCommit !== plan.baseCommit) throw new Error("Worktree branch no longer points to the planned base commit.");
+  if (!worktree) {
+    if (pathInfo) throw new Error("Worktree path is occupied but not registered by Git.");
+    return { state: "absent", targetPath };
+  }
+  if (worktree.branch !== `refs/heads/${plan.branch}` || worktree.HEAD !== plan.baseCommit) {
+    throw new Error("Worktree branch or HEAD drifted from the retirement plan.");
+  }
+  return { state: "created", targetPath };
+}
+
+function validateRetirementReceipt(receipt, context, plan, evidence) {
+  const fields = receipt && typeof receipt === "object" && !Array.isArray(receipt) ? Object.keys(receipt) : [];
+  if (!receipt || fields.length !== RETIREMENT_RECEIPT_FIELDS.length || RETIREMENT_RECEIPT_FIELDS.some((field) => !Object.hasOwn(receipt, field))
+      || receipt.schemaVersion !== "1.0" || receipt.storyId !== context.state.storyId
+      || receipt.runId !== context.state.runtime.runId || receipt.taskId !== plan.taskId
+      || receipt.branch !== plan.branch || receipt.worktreePath !== plan.worktreePath
+      || receipt.baseCommit !== plan.baseCommit || receipt.planSha256 !== evidence.planSha256
+      || receipt.statusSha256 !== evidence.statusSha256 || receipt.executionReceiptSha256 !== evidence.executionReceiptSha256
+      || receipt.integrationPlanSha256 !== evidence.integrationPlanSha256
+      || receipt.integrationReceiptSha256 !== evidence.integrationReceiptSha256
+      || receipt.resultFile !== evidence.resultFile || receipt.resultSha256 !== evidence.resultSha256
+      || typeof receipt.retiredAt !== "string" || typeof receipt.recovered !== "boolean") {
+    throw new Error("Existing retirement receipt does not match the completed Worktree evidence.");
+  }
+}
+
+async function buildRetirementEvidence(root, evidenceFiles) {
+  return {
+    planSha256: await fileSha256(evidenceFiles.planPath),
+    statusSha256: await fileSha256(evidenceFiles.statusPath),
+    executionReceiptSha256: await fileSha256(resolveInsideRoot(root, evidenceFiles.executionReceiptFile, "M5-B1 execution receipt").fullPath),
+    integrationPlanSha256: await fileSha256(resolveInsideRoot(root, evidenceFiles.integrationPlanFile, "M5-B2 integration plan").fullPath),
+    integrationReceiptSha256: await fileSha256(resolveInsideRoot(root, evidenceFiles.integrationReceiptFile, "M5-B2 integration receipt").fullPath),
+    resultFile: evidenceFiles.resultFile,
+    resultSha256: evidenceFiles.resultSha256,
+  };
+}
+
+async function retire(root, options) {
+  if (options.confirmRetire !== true) throw new Error("Worktree retirement requires explicit approval and ConfirmRetire.");
+  const context = await loadRetirementContext(root, options);
+  const plan = await validateStoredPlan(root, await readJsonFile(context.planPath, "Worktree plan"), context.state, options.taskId);
+  await assertSafeTargetParents(root, context.lockPath);
+  await assertLocksAbsent([
+    context.lockPath,
+    context.lockPath.replace(/retire\.lock$/, "create.lock"),
+    context.lockPath.replace(/retire\.lock$/, "execute.lock"),
+    context.lockPath.replace(/retire\.lock$/, "integration/integrate.lock"),
+  ]);
+  await assertMainRepositoryClean(root, context, plan, options);
+  const observed = await inspectRetirementWorktree(root, plan, options);
+  let evidenceFiles = await validateRetirementEvidence(root, context, plan, observed.state === "created");
+  let evidence = await buildRetirementEvidence(root, { ...evidenceFiles, planPath: context.planPath, statusPath: context.statusPath });
+  const existing = await readJsonOptional(context.receiptPath, "Worktree retirement receipt");
+  if (existing) {
+    validateRetirementReceipt(existing, context, plan, evidence);
+    if (observed.state !== "absent") throw new Error("Existing retirement receipt requires an absent Worktree.");
+    return { command: "retire", reused: true, receiptFile: context.receiptFile, receipt: existing };
+  }
+
+  await acquireLock(context.lockPath, options);
+  try {
+    if (options.afterRetireLock) await options.afterRetireLock();
+    await assertLocksAbsent([
+      context.lockPath.replace(/retire\.lock$/, "create.lock"),
+      context.lockPath.replace(/retire\.lock$/, "execute.lock"),
+      context.lockPath.replace(/retire\.lock$/, "integration/integrate.lock"),
+    ]);
+    const current = await inspectRetirementWorktree(root, plan, options);
+    await assertMainRepositoryClean(root, context, plan, options);
+    evidenceFiles = await validateRetirementEvidence(root, context, plan, current.state === "created");
+    evidence = await buildRetirementEvidence(root, { ...evidenceFiles, planPath: context.planPath, statusPath: context.statusPath });
+    let recovered = current.state === "absent";
+    if (current.state === "created") {
+      try {
+        await executeGit(root, ["worktree", "remove", "--force", current.targetPath], options);
+      } catch (error) {
+        const diagnostic = String(error?.stderr ?? error?.message ?? "unknown Git error").trim();
+        throw new Error(`git worktree remove failed: ${diagnostic}`);
+      }
+      if (options.afterRetireRemove) await options.afterRetireRemove();
+      recovered = false;
+    }
+    const receipt = {
+      schemaVersion: "1.0",
+      storyId: context.state.storyId,
+      runId: context.state.runtime.runId,
+      taskId: plan.taskId,
+      branch: plan.branch,
+      worktreePath: plan.worktreePath,
+      baseCommit: plan.baseCommit,
+      ...evidence,
+      retiredAt: (options.now ?? (() => new Date().toISOString()))(),
+      recovered,
+    };
+    await writeAtomicJson(context.receiptPath, receipt);
+    return { command: "retire", reused: false, receiptFile: context.receiptFile, receipt };
+  } finally {
+    await unlink(context.lockPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
 }
 
 async function assertSafeTargetParents(root, targetPath) {
@@ -299,7 +629,7 @@ async function assertMainRepositoryClean(root, context, plan, options) {
     `:(top,glob,exclude).harness/runs/${plan.runId}/**`,
   ];
   const result = await executeGit(root, ["status", "--porcelain=v1", "--untracked-files=all", "--", ".", ...excluded], options);
-  if (String(result.stdout ?? "").trim()) throw new Error("The main repository must be clean before creating a Worktree.");
+  if (String(result.stdout ?? "").trim()) throw new Error("The main repository must be clean before creating or retiring a Worktree.");
 }
 
 async function assertNoOtherStoryWorktree(root, plan, options) {
@@ -370,6 +700,7 @@ async function create(root, options) {
   const worktreePlan = await validateStoredPlan(root, await readJsonFile(context.planPath, "Worktree plan"), context.state, options.taskId);
   await acquireLock(context.lockPath, options);
   try {
+    await assertRetirementLockAbsent(context.lockPath.replace(/create\.lock$/, "retire.lock"));
     const current = await inspectStatus(root, worktreePlan, context.planPath, context.statusPath, options);
     if (current.state === "created") {
       return { command: "create", reused: true, planFile: context.planFile, statusFile: context.statusFile, plan: worktreePlan, status: current };
@@ -416,6 +747,7 @@ export async function runWorktreeCommand(options = {}) {
   if (options.command === "plan") return plan(root, options);
   if (options.command === "status") return status(root, options);
   if (options.command === "create") return create(root, options);
+  if (options.command === "retire") return retire(root, options);
   throw new Error(`Unsupported worktree command: ${options.command ?? "(missing)"}`);
 }
 
@@ -427,6 +759,7 @@ function parseCliArguments(argv) {
     const token = tokens[index];
     if (token === "--json") { options.json = true; continue; }
     if (token === "--confirm-create") { options.confirmCreate = true; continue; }
+    if (token === "--confirm-retire") { options.confirmRetire = true; continue; }
     const key = keyMap[token];
     if (!key || index + 1 >= tokens.length) throw new Error(`Unsupported or incomplete argument: ${token}`);
     options[key] = tokens[++index];
@@ -439,7 +772,8 @@ async function runCli() {
   try {
     options = parseCliArguments(process.argv.slice(2));
     const result = await runWorktreeCommand(options);
-    console.log(options.json ? JSON.stringify(result) : `Worktree command '${result.command}' completed for ${result.plan.taskId}.`);
+    const taskId = result.plan?.taskId ?? result.receipt?.taskId;
+    console.log(options.json ? JSON.stringify(result) : `Worktree command '${result.command}' completed for ${taskId}.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(options.json ? JSON.stringify({ error: message }) : `Worktree command failed: ${message}`);
