@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-batch-receipt.schema.json",
+  "title": "FrontierScan Harness Serial Batch Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion", "storyId", "runId", "phase", "batchId", "taskDagSha256", "baseCommit", "taskCount", "tasks", "finalizationArtifacts", "finalizedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "phase": { "const": "implementation" },
+    "batchId": { "type": "string", "pattern": "^batch-[a-f0-9]{16}$" },
+    "taskDagSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "taskCount": { "type": "integer", "minimum": 2 },
+    "tasks": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "taskId", "dispatchId", "executionReceiptFile", "executionReceiptSha256", "integrationReceiptFile", "integrationReceiptSha256"
+        ],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "dispatchId": { "type": "string", "format": "uuid" },
+          "executionReceiptFile": { "type": "string", "minLength": 1 },
+          "executionReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "integrationReceiptFile": { "type": "string", "minLength": 1 },
+          "integrationReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "finalizationArtifacts": {
+      "type": "object",
+      "required": [
+        "taskFile", "taskSha256", "resultFile", "resultSha256", "notesFile", "notesSha256"
+      ],
+      "properties": {
+        "taskFile": { "type": "string", "minLength": 1 },
+        "taskSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "resultFile": { "type": "string", "minLength": 1 },
+        "resultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "notesFile": { "type": "string", "minLength": 1 },
+        "notesSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "finalizedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

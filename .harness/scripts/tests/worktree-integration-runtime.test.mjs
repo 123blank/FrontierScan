@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { access, copyFile, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, test } from "node:test";
+import { claimBatchTask, prepareSerialBatch } from "../lib/batch-runtime.mjs";
 import { runWorktreeIntegration } from "../lib/worktree-integration-runtime.mjs";
 import { runWorktreeWorker } from "../lib/worktree-worker-runtime.mjs";
-import { runWorktreeCommand } from "../lib/worktree-runtime.mjs";
+import { resolveBatchBase, runWorktreeCommand } from "../lib/worktree-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -210,12 +211,559 @@ async function createFixture(options = {}) {
   };
 }
 
+async function createBatchIntegrationFixture(options = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "frontierscan-m5b3-integration-"));
+  temporaryRoots.push(root);
+  await git(root, "init", "-b", "dev");
+  await git(root, "config", "user.email", "m5b3-integration@example.test");
+  await git(root, "config", "user.name", "M5-B3 Integration Test");
+  await copyFile(path.join(repositoryRoot, ".gitignore"), path.join(root, ".gitignore"));
+  await mkdir(path.join(root, ".codex/agents"), { recursive: true });
+  await copyFile(path.join(repositoryRoot, ".codex/agents/agents.yaml"), path.join(root, ".codex/agents/agents.yaml"));
+  await copyFile(path.join(repositoryRoot, ".codex/agents/worker-policies.json"), path.join(root, ".codex/agents/worker-policies.json"));
+  await mkdir(path.join(root, "backend/src/service"), { recursive: true });
+  await writeFile(path.join(root, "backend/src/service/SharedService.java"), "class SharedService {}\n", "utf8");
+  await git(root, "add", ".gitignore", ".codex/agents", "backend/src/service/SharedService.java");
+  await git(root, "commit", "-m", "batch integration fixture");
+
+  const storyId = "M5-B3-B-INTEGRATION-FIXTURE";
+  const runId = storyId;
+  const stateFile = ".harness/states/e2e-fixture.json";
+  const taskDagFile = `.harness/runs/${runId}/phases/02-task-dag/task-dag.json`;
+  const state = {
+    schemaVersion: "1.0",
+    storyId,
+    phase: "implementation",
+    runtime: { runId, status: "active", revision: 4 },
+  };
+  const nodes = [
+    {
+      taskId: "T1",
+      title: "Implement the first backend candidate",
+      type: "backend",
+      status: "pending",
+      predictedFiles: ["backend/src/service/**"],
+      acceptanceCriteria: ["The first candidate is integrated safely."],
+      ownerAgent: "backend-developer",
+    },
+    {
+      taskId: "T2",
+      title: "Implement the second backend candidate",
+      type: "backend",
+      status: "pending",
+      predictedFiles: ["backend/src/service/**"],
+      acceptanceCriteria: ["The second candidate is integrated safely."],
+      ownerAgent: "backend-developer",
+    },
+  ];
+  const edges = [{ from: "T1", to: "T2", reason: "T2 follows the first integration." }];
+  const waves = [["T1"], ["T2"]];
+  if (options.includeThirdTask) {
+    nodes.push({
+      taskId: "T3",
+      title: "Implement a distinct backend candidate",
+      type: "backend",
+      status: "pending",
+      predictedFiles: ["backend/src/service/**"],
+      acceptanceCriteria: ["The distinct candidate is integrated safely."],
+      ownerAgent: "backend-developer",
+    });
+    edges.push({ from: "T2", to: "T3", reason: "T3 follows the replacement integration." });
+    waves.push(["T3"]);
+  }
+  const dag = {
+    schemaVersion: "1.0",
+    storyId,
+    nodes,
+    edges,
+    waves,
+    globalChanges: [],
+    risks: [],
+  };
+  await writeJson(path.join(root, stateFile), state);
+  await writeJson(path.join(root, taskDagFile), dag);
+  const prepared = await prepareSerialBatch({
+    root,
+    stateFile,
+    taskDagFile,
+    base: await resolveBatchBase({ root }),
+    now: () => "2026-07-27T05:00:00.000Z",
+  });
+  await runWorktreeCommand({ root, command: "batch-plan", stateFile, now: () => "2026-07-27T05:00:01.000Z" });
+  await runWorktreeCommand({ root, command: "batch-create", stateFile, confirmCreate: true, now: () => "2026-07-27T05:00:02.000Z" });
+  return { root, storyId, runId, stateFile, taskDagFile, prepared };
+}
+
+function batchWorkerResponse(task, businessFile, content) {
+  const candidates = Array.isArray(businessFile)
+    ? businessFile
+    : [{ path: businessFile, content }];
+  return {
+    files: [
+      { path: task.expectedOutputs[0], content: `# ${task.taskId} report\n`, capability: "phase-output" },
+      ...candidates.map((candidate) => ({
+        path: candidate.path,
+        content: candidate.content,
+        capability: "backend-write",
+      })),
+    ],
+    result: {
+      schemaVersion: "1.1",
+      dispatchId: task.dispatchId,
+      storyId: task.storyId,
+      phase: task.phase,
+      batchId: task.batchId,
+      taskId: task.taskId,
+      taskRoot: task.taskRoot,
+      status: "completed",
+      summary: `${task.taskId} completed its candidate.`,
+      outputs: task.expectedOutputs.map((output) => ({ path: output })),
+      records: [],
+    },
+  };
+}
+
+async function prepareReadyBatchTask(fixture, taskId, businessFile, content) {
+  const claimed = await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId,
+  });
+  const completed = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId,
+    taskFile: claimed.task.taskFile,
+    provider: ({ task }) => batchWorkerResponse(task, businessFile, content),
+  });
+  return completed.task;
+}
+
+function batchIntegrationInput(fixture, task) {
+  return {
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  };
+}
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
 test("exports the M5-B2 integration entry", () => {
   assert.equal(typeof runWorktreeIntegration, "function");
+});
+
+test("batch integration applies a ready task and only advances its ledger", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/FirstService.java";
+  const businessContent = "class FirstService {}\n";
+  const task = await prepareReadyBatchTask(fixture, "T1", businessFile, businessContent);
+  const before = await readJson(fixture.root, fixture.stateFile);
+  const input = batchIntegrationInput(fixture, task);
+
+  const planned = await runWorktreeIntegration({ ...input, command: "plan" });
+  const applied = await runWorktreeIntegration({ ...input, command: "apply", confirmApply: true });
+
+  assert.equal(planned.plan.taskId, task.taskId);
+  assert.equal(applied.outcome, "integrated");
+  assert.equal(await readFile(path.join(fixture.root, businessFile), "utf8"), businessContent);
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "integrated");
+  const after = await readJson(fixture.root, fixture.stateFile);
+  assert.equal(after.phase, before.phase);
+  assert.equal(after.runtime.revision, before.runtime.revision);
+  await assert.rejects(
+    access(path.join(fixture.root, `.harness/runs/${fixture.runId}/phases/03-implementation/result.json`)),
+    /ENOENT/,
+  );
+});
+
+test("batch integration rejects an untracked candidate path that already exists in the main repository", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/UntrackedService.java";
+  const task = await prepareReadyBatchTask(fixture, "T1", businessFile, "class UntrackedService {}\n");
+  await writeFile(path.join(fixture.root, businessFile), "class ExistingUntrackedService {}\n", "utf8");
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...batchIntegrationInput(fixture, task), command: "plan" }),
+    /new business target already exists|business target.*base/i,
+  );
+  await assert.rejects(
+    access(path.join(fixture.root, path.posix.dirname(task.integrationReceiptFile), "integration-plan.json")),
+    /ENOENT/,
+  );
+});
+
+test("batch integration rejects an untracked candidate that appears after planning", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/PostPlanCandidate.java";
+  const candidate = "class PostPlanCandidate {}\n";
+  const task = await prepareReadyBatchTask(fixture, "T1", businessFile, candidate);
+  const input = batchIntegrationInput(fixture, task);
+  await runWorktreeIntegration({ ...input, command: "plan" });
+  await writeFile(path.join(fixture.root, businessFile), candidate, "utf8");
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...input, command: "apply", confirmApply: true }),
+    /controlled apply marker|unexplained.*candidate/i,
+  );
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+  await assert.rejects(access(path.join(fixture.root, task.integrationReceiptFile)), /ENOENT/);
+});
+
+test("batch integration rejects an ignored candidate path that already exists in the main repository", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/IgnoredService.java";
+  const task = await prepareReadyBatchTask(fixture, "T1", businessFile, "class IgnoredService {}\n");
+  await writeFile(path.join(fixture.root, ".git/info/exclude"), `${businessFile}\n`, "utf8");
+  await writeFile(path.join(fixture.root, businessFile), "class ExistingIgnoredService {}\n", "utf8");
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...batchIntegrationInput(fixture, task), command: "plan" }),
+    /new business target already exists|business target.*base/i,
+  );
+  await assert.rejects(
+    access(path.join(fixture.root, path.posix.dirname(task.integrationReceiptFile), "integration-plan.json")),
+    /ENOENT/,
+  );
+});
+
+test("batch integration rejects a deleted base target before planning a replacement candidate", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/SharedService.java";
+  const task = await prepareReadyBatchTask(fixture, "T1", businessFile, "class SharedService { void replacement() {} }\n");
+  await rm(path.join(fixture.root, businessFile));
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...batchIntegrationInput(fixture, task), command: "plan" }),
+    /Integration must not delete business files|missing from the batch base|business target.*base/i,
+  );
+  await assert.rejects(
+    access(path.join(fixture.root, path.posix.dirname(task.integrationReceiptFile), "integration-plan.json")),
+    /ENOENT/,
+  );
+});
+
+test("batch integration accepts a later replacement and rejects drift from the latest candidate", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/SharedService.java";
+  const first = await prepareReadyBatchTask(fixture, "T1", businessFile, "class SharedService { void first() {} }\n");
+  const firstInput = batchIntegrationInput(fixture, first);
+  await runWorktreeIntegration({ ...firstInput, command: "plan" });
+  await runWorktreeIntegration({ ...firstInput, command: "apply", confirmApply: true });
+
+  const second = await prepareReadyBatchTask(fixture, "T2", businessFile, "class SharedService { void second() {} }\n");
+  const secondInput = batchIntegrationInput(fixture, second);
+  const planned = await runWorktreeIntegration({ ...secondInput, command: "plan" });
+  const applied = await runWorktreeIntegration({ ...secondInput, command: "apply", confirmApply: true });
+
+  assert.equal(planned.plan.artifacts.find((artifact) => artifact.path === businessFile).baseSha256,
+    sha256(Buffer.from("class SharedService { void first() {} }\n", "utf8")));
+  assert.equal(applied.outcome, "integrated");
+  assert.equal(await readFile(path.join(fixture.root, businessFile), "utf8"), "class SharedService { void second() {} }\n");
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.deepEqual(ledger.tasks.map((task) => task.status), ["integrated", "integrated"]);
+
+  await writeFile(path.join(fixture.root, businessFile), "class SharedService { void tampered() {} }\n", "utf8");
+  await assert.rejects(
+    runWorktreeIntegration({ ...secondInput, command: "apply", confirmApply: true }),
+    /integration target.*hash|latest.*integration/i,
+  );
+});
+
+test("batch integration permits a distinct third task after a legal same-file replacement", async () => {
+  const fixture = await createBatchIntegrationFixture({ includeThirdTask: true });
+  const sharedFile = "backend/src/service/SharedService.java";
+  const first = await prepareReadyBatchTask(fixture, "T1", sharedFile, "class SharedService { void first() {} }\n");
+  const firstInput = batchIntegrationInput(fixture, first);
+  await runWorktreeIntegration({ ...firstInput, command: "plan" });
+  await runWorktreeIntegration({ ...firstInput, command: "apply", confirmApply: true });
+
+  const second = await prepareReadyBatchTask(fixture, "T2", sharedFile, "class SharedService { void second() {} }\n");
+  const secondInput = batchIntegrationInput(fixture, second);
+  await runWorktreeIntegration({ ...secondInput, command: "plan" });
+  await runWorktreeIntegration({ ...secondInput, command: "apply", confirmApply: true });
+
+  const thirdFile = "backend/src/service/ThirdService.java";
+  const third = await prepareReadyBatchTask(fixture, "T3", thirdFile, "class ThirdService {}\n");
+  const thirdInput = batchIntegrationInput(fixture, third);
+  const planned = await runWorktreeIntegration({ ...thirdInput, command: "plan" });
+  const applied = await runWorktreeIntegration({ ...thirdInput, command: "apply", confirmApply: true });
+
+  assert.equal(planned.plan.taskId, "T3");
+  assert.equal(applied.outcome, "integrated");
+  assert.equal(await readFile(path.join(fixture.root, sharedFile), "utf8"), "class SharedService { void second() {} }\n");
+  assert.equal(await readFile(path.join(fixture.root, thirdFile), "utf8"), "class ThirdService {}\n");
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.deepEqual(ledger.tasks.map((task) => task.status), ["integrated", "integrated", "integrated"]);
+});
+
+test("batch integration rejects a reused plan that omits a Worker candidate before writing", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const firstFile = "backend/src/service/FirstService.java";
+  const secondFile = "backend/src/service/SecondService.java";
+  const task = await prepareReadyBatchTask(fixture, "T1", [
+    { path: firstFile, content: "class FirstService {}\n" },
+    { path: secondFile, content: "class SecondService {}\n" },
+  ]);
+  const input = batchIntegrationInput(fixture, task);
+  const planned = await runWorktreeIntegration({ ...input, command: "plan" });
+  const plan = await readJson(fixture.root, planned.planFile);
+  plan.artifacts = plan.artifacts.filter((artifact) => artifact.path !== secondFile);
+  await writeJson(path.join(fixture.root, planned.planFile), plan);
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...input, command: "apply", confirmApply: true }),
+    /does not cover.*Worker|Worker.*candidate/i,
+  );
+  await assert.rejects(access(path.join(fixture.root, firstFile)), /ENOENT/);
+  await assert.rejects(access(path.join(fixture.root, secondFile)), /ENOENT/);
+  await assert.rejects(access(path.join(fixture.root, task.integrationReceiptFile)), /ENOENT/);
+});
+
+test("batch integration rejects a reused plan with a forged initial baseline before writing", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/SharedService.java";
+  const candidateContent = "class SharedService { void candidate() {} }\n";
+  const untrustedContent = "class SharedService { void untrusted() {} }\n";
+  const task = await prepareReadyBatchTask(fixture, "T1", businessFile, candidateContent);
+  const input = batchIntegrationInput(fixture, task);
+  const planned = await runWorktreeIntegration({ ...input, command: "plan" });
+  await writeFile(path.join(fixture.root, businessFile), untrustedContent, "utf8");
+  const plan = await readJson(fixture.root, planned.planFile);
+  plan.artifacts.find((artifact) => artifact.path === businessFile).baseSha256 = sha256(Buffer.from(untrustedContent, "utf8"));
+  await writeJson(path.join(fixture.root, planned.planFile), plan);
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...input, command: "apply", confirmApply: true }),
+    /baseline.*changed|batch base/i,
+  );
+  assert.equal(await readFile(path.join(fixture.root, businessFile), "utf8"), untrustedContent);
+  await assert.rejects(access(path.join(fixture.root, task.integrationReceiptFile)), /ENOENT/);
+});
+
+test("batch integration preserves a verified predecessor while integrating a distinct business file", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const firstFile = "backend/src/service/FirstService.java";
+  const secondFile = "backend/src/service/SecondService.java";
+  const first = await prepareReadyBatchTask(fixture, "T1", firstFile, "class FirstService {}\n");
+  const firstInput = batchIntegrationInput(fixture, first);
+  await runWorktreeIntegration({ ...firstInput, command: "plan" });
+  await runWorktreeIntegration({ ...firstInput, command: "apply", confirmApply: true });
+
+  const second = await prepareReadyBatchTask(fixture, "T2", secondFile, "class SecondService {}\n");
+  const secondInput = batchIntegrationInput(fixture, second);
+  await runWorktreeIntegration({ ...secondInput, command: "plan" });
+  await runWorktreeIntegration({ ...secondInput, command: "apply", confirmApply: true });
+
+  assert.equal(await readFile(path.join(fixture.root, firstFile), "utf8"), "class FirstService {}\n");
+  assert.equal(await readFile(path.join(fixture.root, secondFile), "utf8"), "class SecondService {}\n");
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.deepEqual(ledger.tasks.map((task) => task.status), ["integrated", "integrated"]);
+});
+
+test("batch integration recovers after receipt creation before its ledger transition", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const task = await prepareReadyBatchTask(
+    fixture,
+    "T1",
+    "backend/src/service/FirstService.java",
+    "class FirstService {}\n",
+  );
+  const input = batchIntegrationInput(fixture, task);
+  await runWorktreeIntegration({ ...input, command: "plan" });
+
+  await assert.rejects(
+    runWorktreeIntegration({
+      ...input,
+      command: "apply",
+      confirmApply: true,
+      testHooks: { beforeRecordIntegration: async () => { throw new Error("injected ledger interruption"); } },
+    }),
+    /injected ledger interruption/i,
+  );
+  const receiptFile = task.integrationReceiptFile;
+  await access(path.join(fixture.root, receiptFile));
+  let ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+
+  const recovered = await runWorktreeIntegration({ ...input, command: "apply", confirmApply: true });
+  assert.equal(recovered.outcome, "integrated");
+  assert.equal(recovered.reused, false);
+  ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "integrated");
+});
+
+test("batch integration recovers a marked candidate write before receipt creation", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/MarkedRecoveryService.java";
+  const task = await prepareReadyBatchTask(fixture, "T1", businessFile, "class MarkedRecoveryService {}\n");
+  const input = batchIntegrationInput(fixture, task);
+  await runWorktreeIntegration({ ...input, command: "plan" });
+
+  await assert.rejects(
+    runWorktreeIntegration({
+      ...input,
+      command: "apply",
+      confirmApply: true,
+      testHooks: { beforeReceiptWrite: async () => { throw new Error("injected receipt interruption"); } },
+    }),
+    /injected receipt interruption/i,
+  );
+  await access(path.join(fixture.root, path.posix.dirname(task.integrationReceiptFile), "apply-marker.json"));
+  await assert.rejects(access(path.join(fixture.root, task.integrationReceiptFile)), /ENOENT/);
+  let ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+
+  const recovered = await runWorktreeIntegration({ ...input, command: "apply", confirmApply: true });
+  assert.equal(recovered.outcome, "integrated");
+  ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "integrated");
+});
+
+test("batch integration recovers a later same-file replacement after receipt creation before ledger transition", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/SharedService.java";
+  const first = await prepareReadyBatchTask(fixture, "T1", businessFile, "class SharedService { void first() {} }\n");
+  const firstInput = batchIntegrationInput(fixture, first);
+  await runWorktreeIntegration({ ...firstInput, command: "plan" });
+  await runWorktreeIntegration({ ...firstInput, command: "apply", confirmApply: true });
+
+  const second = await prepareReadyBatchTask(fixture, "T2", businessFile, "class SharedService { void second() {} }\n");
+  const secondInput = batchIntegrationInput(fixture, second);
+  await runWorktreeIntegration({ ...secondInput, command: "plan" });
+  await assert.rejects(
+    runWorktreeIntegration({
+      ...secondInput,
+      command: "apply",
+      confirmApply: true,
+      testHooks: { beforeRecordIntegration: async () => { throw new Error("injected later-task ledger interruption"); } },
+    }),
+    /injected later-task ledger interruption/i,
+  );
+
+  const recovered = await runWorktreeIntegration({ ...secondInput, command: "apply", confirmApply: true });
+  assert.equal(recovered.outcome, "integrated");
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.deepEqual(ledger.tasks.map((task) => task.status), ["integrated", "integrated"]);
+});
+
+test("batch integration rejects a junctioned bundle directory before writing evidence", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const task = await prepareReadyBatchTask(
+    fixture,
+    "T1",
+    "backend/src/service/FirstService.java",
+    "class FirstService {}\n",
+  );
+  const bundleDirectory = path.join(fixture.root, path.posix.dirname(task.integrationReceiptFile), "integration-bundle");
+  const outsideDirectory = path.join(fixture.root, "outside-bundle");
+  await mkdir(outsideDirectory);
+  await symlink(outsideDirectory, bundleDirectory, "junction");
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...batchIntegrationInput(fixture, task), command: "plan" }),
+    /bundle.*symbolic link|symbolic link.*bundle/i,
+  );
+  assert.deepEqual(await readdir(outsideDirectory), []);
+});
+
+test("batch integration rejects an unexplained main business change before planning", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const task = await prepareReadyBatchTask(
+    fixture,
+    "T1",
+    "backend/src/service/FirstService.java",
+    "class FirstService {}\n",
+  );
+  await writeFile(path.join(fixture.root, "backend/src/service/UnexpectedService.java"), "class UnexpectedService {}\n", "utf8");
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...batchIntegrationInput(fixture, task), command: "plan" }),
+    /unexplained batch business change/i,
+  );
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch integration rejects a persisted task result that drifts after integration", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const task = await prepareReadyBatchTask(
+    fixture,
+    "T1",
+    "backend/src/service/FirstService.java",
+    "class FirstService {}\n",
+  );
+  const input = batchIntegrationInput(fixture, task);
+  await runWorktreeIntegration({ ...input, command: "plan" });
+  await runWorktreeIntegration({ ...input, command: "apply", confirmApply: true });
+  await writeFile(path.join(fixture.root, task.resultFile), "{\"tampered\":true}\n", "utf8");
+
+  await assert.rejects(
+    runWorktreeIntegration({ ...input, command: "apply", confirmApply: true }),
+    /Worker result|result.*hash|integration.*receipt/i,
+  );
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "integrated");
+});
+
+test("batch integration rejects an applied target that drifts after its receipt is written", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const businessFile = "backend/src/service/FirstService.java";
+  const task = await prepareReadyBatchTask(fixture, "T1", businessFile, "class FirstService {}\n");
+  const input = batchIntegrationInput(fixture, task);
+  await runWorktreeIntegration({ ...input, command: "plan" });
+
+  await assert.rejects(
+    runWorktreeIntegration({
+      ...input,
+      command: "apply",
+      confirmApply: true,
+      testHooks: {
+        beforeRecordIntegration: async () => {
+          await writeFile(path.join(fixture.root, businessFile), "class TamperedService {}\n", "utf8");
+        },
+      },
+    }),
+    /integration.*target|applied.*hash|receipt.*hash/i,
+  );
+
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch integration rejects a task result that drifts after its receipt is written", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const task = await prepareReadyBatchTask(
+    fixture,
+    "T1",
+    "backend/src/service/FirstService.java",
+    "class FirstService {}\n",
+  );
+  const input = batchIntegrationInput(fixture, task);
+  await runWorktreeIntegration({ ...input, command: "plan" });
+
+  await assert.rejects(
+    runWorktreeIntegration({
+      ...input,
+      command: "apply",
+      confirmApply: true,
+      testHooks: {
+        beforeRecordIntegration: async () => {
+          await writeFile(path.join(fixture.root, task.resultFile), "{\"tampered\":true}\n", "utf8");
+        },
+      },
+    }),
+    /Worker result|result.*hash|integration.*receipt/i,
+  );
+
+  const ledger = await readJson(fixture.root, fixture.prepared.batchFile);
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
 });
 
 test("rejects a task identifier containing path syntax before reading integration evidence", async () => {
@@ -600,6 +1148,40 @@ test("PowerShell entry plans checks and applies only with confirmation", async (
     { windowsHide: true },
   );
   assert.equal(JSON.parse(applied.stdout).status.state, "ready-for-apply");
+});
+
+test("PowerShell batch entry plans checks and applies only with confirmation", async () => {
+  const fixture = await createBatchIntegrationFixture();
+  const task = await prepareReadyBatchTask(
+    fixture,
+    "T1",
+    "backend/src/service/FirstService.java",
+    "class FirstService {}\n",
+  );
+  const script = path.join(repositoryRoot, ".harness/scripts/run-worktree-integration.ps1");
+  const baseArguments = [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
+    "-Root", fixture.root,
+    "-StateFile", fixture.stateFile,
+    "-TaskId", task.taskId,
+    "-BatchFile", fixture.prepared.batchFile,
+    "-Json",
+  ];
+
+  const planned = await execFileAsync("powershell.exe", [...baseArguments, "-Command", "Plan"], { windowsHide: true });
+  assert.equal(JSON.parse(planned.stdout).command, "plan");
+  const status = await execFileAsync("powershell.exe", [...baseArguments, "-Command", "Status"], { windowsHide: true });
+  assert.equal(JSON.parse(status.stdout).status.state, "planned");
+  await assert.rejects(
+    execFileAsync("powershell.exe", [...baseArguments, "-Command", "Apply"], { windowsHide: true }),
+    /confirm/i,
+  );
+  const applied = await execFileAsync(
+    "powershell.exe",
+    [...baseArguments, "-Command", "Apply", "-ConfirmApply"],
+    { windowsHide: true },
+  );
+  assert.equal(JSON.parse(applied.stdout).outcome, "integrated");
 });
 
 test("vertical flow advances exactly once only after explicit M3 apply", async () => {

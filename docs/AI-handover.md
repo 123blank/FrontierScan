@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-22
+> 最后更新：2026-07-29
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 的 M0-M5-B2 已完成并交付至 `origin/dev`；M5-B2 单 Worktree 业务候选的内容寻址计划、事实状态、批准集成、恢复和 M3 显式交接已实现，最终状态为 `done/completed`、revision 29，以 `.harness/states/e2e-M5-B2-001.json` 为准。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、多任务/多 Worktree 波次、Fork-Join、Worktree 生命周期清理、真实发布和 Git 自动交付仍未实现。
+> 当前重点：Harness 已完成至 M5-B3-B；同一 Story 的 `implementation` phase 可在单 Worktree 中按 v1.1 task-scoped dispatch 严格串行执行多个 backend/frontend 任务，并保留 M2/M3 唯一状态推进权。`M5-B3-B-001` 当前等待最终质量门禁后进入 `git-delivery`，未执行 `git add`、`git commit`、`git push`、正式仓库 Worktree 操作、发布或部署。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、同 wave 并行、多 Worktree、Fork-Join、分支清理、真实发布和 Git 自动交付仍未实现。
 
 ---
 
@@ -1651,3 +1651,16 @@ M4-B 受约束 Mock Worker 当前实现：
 - M5-B1 对多节点 DAG 的拒绝、M5-B2 的单 task 集成和 M5-C 的单 task 回收均是当前正确边界，不应被批次循环绕过。
 - 推荐 M5-B3-B 引入兼容的 task-scoped dispatch v1.1、batch-scoped Worktree 和独立 serial batch ledger；每项 task 独立保存凭据，一次只执行一项，批次不能自行推进 M2/M3 状态，M5-C 只在 Story 完成后回收 batch Worktree。
 - 未实现多任务 Runtime、并行、多 Worktree、Fork-Join、自动 merge/cleanup、真实 Agent、发布、部署或 Git 自动交付。
+
+### 16.22 2026-07-28 当前状态：M5-B3-B 单 Worktree 串行多任务批次运行时
+
+权威设计、实施计划和报告位于 `docs/harness-m5b3-batch-runtime/`。
+
+- v1.0 phase 级单任务 dispatch 保持兼容；active Story 的 `implementation` phase 只有包含至少两个 backend/frontend 节点时才可用 `prepare-batch` 生成 v1.1 task-scoped dispatch。每项任务独立拥有 `task.json`、`result.json`、checkpoint、`task-report.md`、Worker execution receipt 与 integration receipt，并严格绑定 `batchId/taskId/taskRoot`。
+- `batch-runtime.mjs` 只维护 serial batch ledger、顺序、锁、继承快照和回执状态，不执行 Git 或 M2/M3 状态命令；`batch-base-contract.mjs` 使用固定 Git argv 得到并验证 `dev` 基准。每次只允许 claim 一个任务，Provider 异常与非法输出不会推进任务状态。
+- `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 仅从 ledger 派生 Worktree 身份、分支、路径和基准，拒绝外部路径、任务和基准参数。正式 Create、Apply、Retire 继续分别要求真实用户逐次批准及 `-ConfirmCreate`、`-ConfirmApply`、`-ConfirmRetire`。
+- M5-B1 只允许当前任务写入其 `predictedFiles`，并验证前序集成候选的继承快照；M5-B2 按逐项 integration receipt 与当前主树哈希进行内容寻址集成。所有任务 `integrated` 前不能生成正式 phase result；`finalize-batch` 不推进状态，既有 M3 `apply` 是唯一推进入口且只推进一次。
+- 批次收尾把正式 implementation 的 `task.json`、`result.json` 和 `implementation-notes.md` 的路径与 SHA-256 固定进 `batch-receipt.json.finalizationArtifacts`，再由 ledger 固定 receipt 哈希；`apply` 与 `batch-retire` 均复核该可信链。`finalize-batch` 以 `batch-finalization.lock` 串行化 ledger 收尾和 checkpoint binding，并发调用明确拒绝、完成后允许显式重试。receipt 已写但 ledger 未落盘、以及 ledger 已完成但 binding 未落盘均已在临时 Git fixture 通过受控中断恢复验证。
+- 临时 Git fixture 已跑通两任务的 prepare、batch Worktree、T1 集成、T2 Provider 异常后的同 dispatch 重试、收尾、一次 M3 apply、目标 Story 完成、batch Retire 中断恢复与 receipt 复用。正式 FrontierScan 仓库未创建或回收 Worktree，未修改 `backend/src/**`、`frontend/src/**`，未进行 Git 交付、发布或部署。
+
+后续只能在独立方案中评估同 wave 并行、多 Worktree 波次、Fork-Join、自动 merge、分支删除、`git worktree prune`、真实 Agent、发布、部署和 Git 自动交付；不得把当前单 batch 串行能力扩展为自动并行。

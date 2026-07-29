@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-batch-retirement-receipt.schema.json",
+  "title": "FrontierScan Harness Serial Batch Worktree Retirement Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion", "storyId", "runId", "batchId", "branch", "worktreePath", "baseCommit",
+    "stateFile", "stateSha256", "stateEventsFile", "stateEventsSha256", "stateBackupFile", "stateBackupSha256",
+    "batchPlanFile", "batchPlanSha256", "worktreeStatusFile", "worktreeStatusSha256",
+    "ledgerFile", "ledgerSha256", "batchReceiptFile", "batchReceiptSha256",
+    "implementationTaskFile", "implementationTaskSha256", "implementationResultFile", "implementationResultSha256",
+    "implementationCheckpointFile", "implementationCheckpointSha256", "tasks", "appliedFiles", "retiredAt", "recovered"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "batchId": { "type": "string", "pattern": "^batch-[a-f0-9]{16}$" },
+    "branch": { "type": "string", "minLength": 1 },
+    "worktreePath": { "type": "string", "minLength": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "stateFile": { "type": "string", "minLength": 1 },
+    "stateSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "stateEventsFile": { "type": "string", "minLength": 1 },
+    "stateEventsSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "stateBackupFile": { "type": "string", "minLength": 1 },
+    "stateBackupSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "batchPlanFile": { "type": "string", "minLength": 1 },
+    "batchPlanSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "worktreeStatusFile": { "type": "string", "minLength": 1 },
+    "worktreeStatusSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "ledgerFile": { "type": "string", "minLength": 1 },
+    "ledgerSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "batchReceiptFile": { "type": "string", "minLength": 1 },
+    "batchReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "implementationTaskFile": { "type": "string", "minLength": 1 },
+    "implementationTaskSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "implementationResultFile": { "type": "string", "minLength": 1 },
+    "implementationResultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "implementationCheckpointFile": { "type": "string", "minLength": 1 },
+    "implementationCheckpointSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "tasks": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["taskId", "executionReceiptFile", "executionReceiptSha256", "integrationReceiptFile", "integrationReceiptSha256"],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "executionReceiptFile": { "type": "string", "minLength": 1 },
+          "executionReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "integrationReceiptFile": { "type": "string", "minLength": 1 },
+          "integrationReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "appliedFiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "sha256", "bytes"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "enum": ["backend", "frontend", "phase-output"] },
+          "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "retiredAt": { "type": "string", "format": "date-time" },
+    "recovered": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

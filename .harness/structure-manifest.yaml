@@ -27,6 +27,7 @@ required_directories:
   - docs/harness-m5b2-worktree-integration
   - docs/harness-m5c-worktree-lifecycle
   - docs/harness-m5b3-multi-task-protocol
+  - docs/harness-m5b3-batch-runtime
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -35,6 +36,9 @@ required_files:
   - .harness/schemas/task-dag.schema.json
   - .harness/schemas/dispatch-task.schema.json
   - .harness/schemas/dispatch-result.schema.json
+  - .harness/schemas/dispatch-task-v1.1.schema.json
+  - .harness/schemas/dispatch-result-v1.1.schema.json
+  - .harness/schemas/serial-batch-ledger.schema.json
   - .harness/schemas/worker-policies.schema.json
   - .harness/schemas/worktree-plan.schema.json
   - .harness/schemas/worktree-status.schema.json
@@ -44,6 +48,10 @@ required_files:
   - .harness/schemas/worktree-integration-status.schema.json
   - .harness/schemas/worktree-integration-receipt.schema.json
   - .harness/schemas/worktree-retirement-receipt.schema.json
+  - .harness/schemas/worktree-batch-plan.schema.json
+  - .harness/schemas/worktree-batch-status.schema.json
+  - .harness/schemas/worktree-batch-receipt.schema.json
+  - .harness/schemas/worktree-batch-retirement-receipt.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
   - .harness/workflows/e2e-development.yaml
@@ -70,6 +78,9 @@ required_files:
   - .harness/scripts/lib/worktree-runtime.mjs
   - .harness/scripts/lib/worktree-worker-runtime.mjs
   - .harness/scripts/lib/worktree-integration-runtime.mjs
+  - .harness/scripts/lib/batch-base-contract.mjs
+  - .harness/scripts/lib/batch-finalization-contract.mjs
+  - .harness/scripts/lib/batch-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
@@ -82,6 +93,8 @@ required_files:
   - .harness/scripts/tests/worktree-worker-runtime.test.mjs
   - .harness/scripts/tests/worktree-integration-runtime.test.mjs
   - .harness/scripts/tests/worktree-lifecycle-runtime.test.mjs
+  - .harness/scripts/tests/batch-runtime.test.mjs
+  - .harness/scripts/tests/serial-batch-runtime.test.mjs
   - .harness/scripts/tests/task-dag.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
@@ -190,6 +203,9 @@ required_files:
   - docs/harness-m5b3-multi-task-protocol/DESIGN.md
   - docs/harness-m5b3-multi-task-protocol/PLAN.md
   - docs/harness-m5b3-multi-task-protocol/REPORT.md
+  - docs/harness-m5b3-batch-runtime/DESIGN.md
+  - docs/harness-m5b3-batch-runtime/PLAN.md
+  - docs/harness-m5b3-batch-runtime/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -197,6 +213,6 @@ status_notes:
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
   state_runtime: implemented-v1
-  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-single-worktree-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1
-  deterministic_scripts: mixed-read-only-helpers-state-story-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
-  business_code_changes: none-required-for-m0-m5c
+  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.1-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1
+  deterministic_scripts: mixed-read-only-helpers-state-story-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
+  business_code_changes: none-required-for-m0-m5b3b

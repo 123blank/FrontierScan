@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
   "generated_by": "frontier-kb-generate",
-  "generated_at": "2026-07-16T15:13:11.540Z",
-  "git_hash": "2b15e640d9f0f6e5be179dee838b3cb70784470e",
+  "generated_at": "2026-07-28T16:41:12.137Z",
+  "git_hash": "b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a",
   "area": "backend",
   "parsed_files": [
     "backend/src/main/java/com/frontierscan/article/Article.java",

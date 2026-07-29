@@ -1,6 +1,6 @@
 import { createHash, randomUUID as createRandomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -8,6 +8,12 @@ import {
   validateDispatchResultStructure,
   validateDispatchTaskStructure,
 } from "./dispatch-contract.mjs";
+import {
+  BATCH_FINALIZATION_FIELDS,
+  finalizationArtifactPathsFor,
+  validateBatchFinalizationBinding,
+  validateBatchReceiptFinalizationArtifacts,
+} from "./batch-finalization-contract.mjs";
 import { readWorkflowDefinition, runStateCommand } from "./state-runtime.mjs";
 
 const PHASE_ADAPTERS = {
@@ -111,15 +117,348 @@ async function readJsonOptional(filePath, label) {
   }
 }
 
-async function writeAtomicJson(filePath, value) {
+async function writeAtomicJson(filePath, value, options = {}) {
   await mkdir(path.dirname(filePath), { recursive: true });
-  const temporary = `${filePath}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  await rename(temporary, filePath);
+  const temporary = `${filePath}.tmp-${process.pid}-${createRandomUUID()}`;
+  try {
+    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    if (options.beforeRename) await options.beforeRename({ filePath, temporary });
+    await rename(temporary, filePath);
+  } catch (error) {
+    await unlink(temporary).catch(() => {});
+    throw error;
+  }
 }
 
-async function fileSha256(filePath) {
-  return `sha256:${createHash("sha256").update(await readFile(filePath)).digest("hex")}`;
+async function writeAtomicText(filePath, value) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const temporary = `${filePath}.tmp-${process.pid}-${createRandomUUID()}`;
+  try {
+    await writeFile(temporary, value, "utf8");
+    await rename(temporary, filePath);
+  } catch (error) {
+    await unlink(temporary).catch(() => {});
+    throw error;
+  }
+}
+
+async function readRegularFile(filePath, label = "File") {
+  const info = await lstat(filePath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (!info?.isFile() || info.isSymbolicLink()) {
+    throw new Error(`${label} must be a regular file: ${normalizePath(filePath)}`);
+  }
+  return readFile(filePath);
+}
+
+function sha256Buffer(value) {
+  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+async function fileSha256(filePath, label) {
+  return sha256Buffer(await readRegularFile(filePath, label));
+}
+
+async function batchFinalizationArtifacts(root, batch, located, phase) {
+  if (batch.ledger.status !== "finalized" || !batch.receiptSha256) {
+    throw new Error("Serial batch must be finalized before it can bind the implementation phase.");
+  }
+  const receiptPath = resolveInsideRoot(root, batch.ledger.batchReceiptFile, "Serial batch receipt").fullPath;
+  const receipt = await readJsonOptional(receiptPath, "Serial batch receipt");
+  if (!receipt || !receipt.finalizationArtifacts) {
+    throw new Error("Finalized serial batch receipt is missing formal implementation artifacts.");
+  }
+  const artifacts = validateBatchReceiptFinalizationArtifacts(receipt.finalizationArtifacts);
+  const expectedPaths = finalizationArtifactPathsFor(located.state.runtime.runId);
+  if (phase.id !== "implementation"
+      || artifacts.taskFile !== expectedPaths.taskFile
+      || artifacts.resultFile !== expectedPaths.resultFile
+      || artifacts.notesFile !== expectedPaths.notesFile) {
+    throw new Error("Finalized serial batch receipt formal artifact paths do not match the implementation phase.");
+  }
+  const [taskSha256, resultSha256, notesSha256] = await Promise.all([
+    fileSha256(resolveInsideRoot(root, artifacts.taskFile, "Finalized implementation task").fullPath, "Finalized implementation task"),
+    fileSha256(resolveInsideRoot(root, artifacts.resultFile, "Finalized implementation result").fullPath, "Finalized implementation result"),
+    fileSha256(resolveInsideRoot(root, artifacts.notesFile, "Finalized implementation notes").fullPath, "Finalized implementation notes"),
+  ]);
+  if (taskSha256 !== artifacts.taskSha256 || resultSha256 !== artifacts.resultSha256 || notesSha256 !== artifacts.notesSha256) {
+    throw new Error("Finalized serial batch receipt formal artifacts drifted from the implementation phase.");
+  }
+  return artifacts;
+}
+
+async function inspectCurrentSerialBatchIfPresent(root, located) {
+  const directory = resolveInsideRoot(
+    root,
+    `.harness/runs/${located.state.runtime.runId}/batches`,
+    "Serial batch directory",
+  ).fullPath;
+  const info = await lstat(directory).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (!info) return null;
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error("Serial batch directory must be a real directory.");
+  }
+  const { inspectCurrentSerialBatch } = await import("./batch-runtime.mjs");
+  const batch = await inspectCurrentSerialBatch({ root, stateFile: located.stateFile });
+  if (!batch) throw new Error("Serial batch directory exists without a valid ledger.");
+  return batch;
+}
+
+function sameFinalizedBatch(left, right) {
+  return Boolean(left && right
+    && left.batchFile === right.batchFile
+    && left.ledger?.batchId === right.ledger?.batchId
+    && left.ledgerSha256 === right.ledgerSha256
+    && left.receiptSha256 === right.receiptSha256);
+}
+
+function implementationPreparationLockPath(root, state) {
+  return resolveInsideRoot(
+    root,
+    `.harness/runs/${state.runtime.runId}/phases/03-implementation/batch-preparation.lock`,
+    "Batch preparation lock",
+  ).fullPath;
+}
+
+function implementationFinalizationLockPath(root, state) {
+  return resolveInsideRoot(
+    root,
+    `.harness/runs/${state.runtime.runId}/phases/03-implementation/batch-finalization.lock`,
+    "Batch finalization lock",
+  ).fullPath;
+}
+
+async function acquireImplementationLock(lockPath, label) {
+  await mkdir(path.dirname(lockPath), { recursive: true });
+  let handle;
+  try {
+    handle = await open(lockPath, "wx");
+  } catch (error) {
+    if (error?.code === "EEXIST") throw new Error(`${label} already exists; inspect it before retrying.`);
+    throw error;
+  }
+  try {
+    await handle.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })}\n`, "utf8");
+    await handle.close();
+  } catch (error) {
+    await handle.close().catch(() => {});
+    await unlink(lockPath).catch(() => {});
+    throw error;
+  }
+}
+
+async function withImplementationLock(lockPath, label, operation) {
+  await acquireImplementationLock(lockPath, label);
+  try {
+    return await operation();
+  } finally {
+    await unlink(lockPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
+}
+
+async function withImplementationPreparationLock(root, state, operation) {
+  return withImplementationLock(
+    implementationPreparationLockPath(root, state),
+    "Batch preparation lock",
+    operation,
+  );
+}
+
+async function withImplementationFinalizationLock(root, state, operation) {
+  return withImplementationLock(
+    implementationFinalizationLockPath(root, state),
+    "Batch finalization lock",
+    operation,
+  );
+}
+
+async function assertFinalizedBatchStillOwnsImplementation(root, located, verifiedBatch) {
+  if (!verifiedBatch || verifiedBatch.ledger?.status !== "finalized" || !verifiedBatch.receiptSha256) {
+    throw new Error("A finalized serial batch is required to prepare its implementation artifacts.");
+  }
+  const ledgerPath = resolveInsideRoot(root, verifiedBatch.batchFile, "Serial batch ledger").fullPath;
+  const ledger = await readJsonOptional(ledgerPath, "Serial batch ledger");
+  if (!ledger || ledger.status !== "finalized"
+      || ledger.storyId !== located.state.storyId
+      || ledger.stateFile !== located.stateFile
+      || ledger.phase !== "implementation"
+      || ledger.preparedRevision !== located.state.runtime.revision
+      || ledger.batchId !== verifiedBatch.ledger.batchId
+      || ledger.batchReceiptFile !== verifiedBatch.ledger.batchReceiptFile
+      || await fileSha256(ledgerPath, "Serial batch ledger") !== verifiedBatch.ledgerSha256) {
+    throw new Error("Finalized serial batch changed before implementation artifacts were prepared.");
+  }
+  const receiptPath = resolveInsideRoot(root, ledger.batchReceiptFile, "Serial batch receipt").fullPath;
+  if (await fileSha256(receiptPath, "Serial batch receipt") !== verifiedBatch.receiptSha256) {
+    throw new Error("Finalized serial batch receipt changed before implementation artifacts were prepared.");
+  }
+}
+
+async function assertReadyBatchStillOwnsImplementation(root, located, verifiedBatch) {
+  if (!verifiedBatch || verifiedBatch.ledger?.status !== "ready-for-finalization") {
+    throw new Error("A ready serial batch is required to stage its implementation artifacts.");
+  }
+  const ledgerPath = resolveInsideRoot(root, verifiedBatch.batchFile, "Serial batch ledger").fullPath;
+  const ledger = await readJsonOptional(ledgerPath, "Serial batch ledger");
+  if (!ledger || ledger.status !== "ready-for-finalization"
+      || ledger.storyId !== located.state.storyId
+      || ledger.stateFile !== located.stateFile
+      || ledger.phase !== "implementation"
+      || ledger.preparedRevision !== located.state.runtime.revision
+      || ledger.batchId !== verifiedBatch.ledger.batchId
+      || await fileSha256(ledgerPath, "Serial batch ledger") !== verifiedBatch.ledgerSha256) {
+    throw new Error("Ready serial batch changed before implementation artifacts were staged.");
+  }
+}
+
+async function assertBatchDoesNotBlockPrepare(root, located, phase, verifiedBatch, preparationLockHeld = false, allowReadyBatchStaging = false) {
+  if (phase.id !== "implementation") return;
+  if (preparationLockHeld) {
+    const directory = resolveInsideRoot(
+      root,
+      `.harness/runs/${located.state.runtime.runId}/batches`,
+      "Serial batch directory",
+    ).fullPath;
+    const info = await lstat(directory).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+    if (!info) return;
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new Error("Serial batch directory must be a real directory.");
+    }
+    const entries = await readdir(directory, { withFileTypes: true });
+    if (entries.some((entry) => entry.isSymbolicLink())) {
+      throw new Error("Serial batch directory contains a symbolic link.");
+    }
+    if (!verifiedBatch) {
+      throw new Error("A serial batch already owns the implementation phase; ordinary prepare is not allowed.");
+    }
+    if (verifiedBatch.ledger.status === "finalized") {
+      await assertFinalizedBatchStillOwnsImplementation(root, located, verifiedBatch);
+      return;
+    }
+    if (allowReadyBatchStaging && verifiedBatch.ledger.status === "ready-for-finalization") {
+      await assertReadyBatchStillOwnsImplementation(root, located, verifiedBatch);
+      return;
+    }
+    throw new Error("A serial batch already owns the implementation phase; ordinary prepare is not allowed.");
+  }
+  const batch = await inspectCurrentSerialBatchIfPresent(root, located);
+  if (!batch) return;
+  if (batch.ledger.status !== "finalized" || !sameFinalizedBatch(batch, verifiedBatch)) {
+    throw new Error("A serial batch already owns the implementation phase; ordinary prepare is not allowed.");
+  }
+}
+
+async function batchFinalizationBinding(root, batch, located, phase) {
+  const artifacts = await batchFinalizationArtifacts(root, batch, located, phase);
+  return {
+    schemaVersion: "1.0",
+    storyId: located.state.storyId,
+    runId: located.state.runtime.runId,
+    stateFile: located.stateFile,
+    phase: phase.id,
+    preparedRevision: located.state.runtime.revision,
+    batchId: batch.ledger.batchId,
+    ledgerFile: batch.batchFile,
+    ledgerSha256: batch.ledgerSha256,
+    receiptFile: batch.ledger.batchReceiptFile,
+    receiptSha256: batch.receiptSha256,
+    taskSha256: artifacts.taskSha256,
+    resultSha256: artifacts.resultSha256,
+    notesSha256: artifacts.notesSha256,
+  };
+}
+
+async function assertBatchFinalizationBeforeApply(root, located, phase, task, checkpoint) {
+  if (phase.id !== "implementation") return;
+  if (!checkpoint.batchFinalization) {
+    const batch = await inspectCurrentSerialBatchIfPresent(root, located);
+    if (!batch) return;
+    if (batch.ledger.status !== "finalized") {
+      throw new Error("A serial batch must be finalized before apply can advance the implementation phase.");
+    }
+    throw new Error("Finalized serial batch requires a matching checkpoint batch binding before apply.");
+  }
+  validateBatchFinalizationBinding(checkpoint.batchFinalization);
+  if (checkpoint.batchFinalization.preparedRevision !== task.preparedRevision) {
+    throw new Error("Checkpoint batch binding does not match the finalized serial batch.");
+  }
+  if (located.state.runtime.revision > task.preparedRevision) {
+    if (!new Set(["result-received", "failed"]).has(checkpoint.status)) {
+      throw new Error("Checkpoint batch binding does not match the finalized serial batch.");
+    }
+    await assertBatchFinalizationBeforeRecovery(root, located, phase, task, checkpoint);
+    return;
+  }
+  if (located.state.runtime.revision < task.preparedRevision) {
+    throw new Error("Checkpoint batch binding does not match the finalized serial batch.");
+  }
+  const batch = await inspectCurrentSerialBatchIfPresent(root, located);
+  if (!batch) throw new Error("Checkpoint batch binding exists but no serial batch ledger is present.");
+  if (batch.ledger.status !== "finalized") {
+    throw new Error("A serial batch must be finalized before apply can advance the implementation phase.");
+  }
+  const expected = await batchFinalizationBinding(root, batch, located, phase);
+  if (BATCH_FINALIZATION_FIELDS.some((field) => checkpoint.batchFinalization[field] !== expected[field])
+      || task.preparedRevision !== expected.preparedRevision) {
+    throw new Error("Checkpoint batch binding does not match the finalized serial batch.");
+  }
+}
+
+async function serialBatchDirectoryExists(root, state) {
+  const directory = resolveInsideRoot(
+    root,
+    `.harness/runs/${state.runtime.runId}/batches`,
+    "Serial batch directory",
+  ).fullPath;
+  const info = await lstat(directory).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (!info) return false;
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error("Serial batch directory must be a real directory.");
+  }
+  return true;
+}
+
+async function assertBatchFinalizationBeforeRecovery(root, located, previousPhase, task, checkpoint) {
+  if (previousPhase.id !== "implementation") return;
+  if (!checkpoint.batchFinalization) {
+    if (await serialBatchDirectoryExists(root, located.state)) {
+      throw new Error("Finalized serial batch requires a checkpoint batch binding before recovery.");
+    }
+    return;
+  }
+  validateBatchFinalizationBinding(checkpoint.batchFinalization);
+  const binding = checkpoint.batchFinalization;
+  if (binding.storyId !== located.state.storyId
+      || binding.runId !== located.state.runtime.runId
+      || binding.stateFile !== located.stateFile
+      || binding.phase !== previousPhase.id
+      || binding.preparedRevision !== task.preparedRevision) {
+    throw new Error("Checkpoint batch binding does not match the recovered implementation phase.");
+  }
+  const { inspectFinalizedSerialBatchForRecovery } = await import("./batch-runtime.mjs");
+  const batch = await inspectFinalizedSerialBatchForRecovery({
+    root,
+    stateFile: located.stateFile,
+    state: located.state,
+    preparedRevision: task.preparedRevision,
+    batchFile: binding.ledgerFile,
+  });
+  const historicalLocated = {
+    ...located,
+    state: {
+      ...located.state,
+      phase: previousPhase.id,
+      runtime: {
+        ...located.state.runtime,
+        revision: task.preparedRevision,
+      },
+    },
+  };
+  const expected = await batchFinalizationBinding(root, batch, historicalLocated, previousPhase);
+  if (BATCH_FINALIZATION_FIELDS.some((field) => binding[field] !== expected[field])) {
+    throw new Error("Finalized serial batch no longer matches the checkpoint binding before recovery.");
+  }
 }
 
 function executeAdapter(specification) {
@@ -187,6 +526,9 @@ function validateCheckpoint(checkpoint, task) {
       || !["prepared", "result-received", "failed", "blocked", "completed"].includes(checkpoint.status)) {
     throw new Error("Dispatch checkpoint does not match the current task.");
   }
+  if (Object.hasOwn(checkpoint, "batchFinalization")) {
+    validateBatchFinalizationBinding(checkpoint.batchFinalization);
+  }
 }
 
 async function currentContext(root, stateFile) {
@@ -215,13 +557,14 @@ async function dispatchStatus(root, located, phase) {
   };
 }
 
-async function prepare(root, options) {
-  const { located, phase } = await currentContext(root, options.stateFile);
+async function prepareFromContext(root, options, verifiedBatch, context, preparationLockHeld = false, allowReadyBatchStaging = false) {
+  const { located, phase } = context;
   if (located.state.runtime.status !== "active" || ["blocked", "done"].includes(located.state.phase)) {
     throw new Error(`Cannot prepare a ${located.state.runtime.status} run in phase '${located.state.phase}'.`);
   }
   if (!phase) throw new Error(`Workflow does not define current phase '${located.state.phase}'.`);
   if (phase.next.length !== 1) throw new Error(`Workflow phase '${phase.id}' must define exactly one next phase.`);
+  await assertBatchDoesNotBlockPrepare(root, located, phase, verifiedBatch, preparationLockHeld, allowReadyBatchStaging);
 
   const phaseRoot = phaseDirectory(located.state, phase);
   const expectedOutputs = phaseOutputs(root, phase, phaseRoot);
@@ -277,6 +620,248 @@ async function prepare(root, options) {
   await writeAtomicJson(taskPath, task);
   await writeAtomicJson(checkpointPath, checkpoint);
   return { command: "prepare", reused: false, taskFile, resultFile, checkpointFile, task, checkpoint };
+}
+
+async function prepare(root, options, verifiedBatch = null) {
+  const initial = await currentContext(root, options.stateFile);
+  if (initial.phase?.id !== "implementation") {
+    return prepareFromContext(root, options, verifiedBatch, initial);
+  }
+  return withImplementationPreparationLock(root, initial.located.state, async () => {
+    const locked = await currentContext(root, options.stateFile);
+    return prepareFromContext(root, options, verifiedBatch, locked, true);
+  });
+}
+
+async function prepareBatch(root, options) {
+  if (options.baseRef !== undefined && options.baseRef !== "dev") {
+    throw new Error("Batch preparation only supports base ref 'dev'.");
+  }
+  const { located, phase } = await currentContext(root, options.stateFile);
+  if (located.state.runtime.status !== "active" || phase?.id !== "implementation") {
+    throw new Error("Batch preparation requires an active implementation phase.");
+  }
+  const { resolveBatchBase } = await import("./worktree-runtime.mjs");
+  const { prepareSerialBatch } = await import("./batch-runtime.mjs");
+  const prepared = await prepareSerialBatch({
+    root,
+    stateFile: located.stateFile,
+    taskDagFile: options.taskDagFile,
+    resolveBase: () => resolveBatchBase({
+      root,
+      baseRef: "dev",
+      executeGit: options.executeGit,
+    }),
+    now: options.now,
+    randomUUID: options.randomUUID,
+  });
+  return { ...prepared, command: "prepare-batch" };
+}
+
+function batchRecordKey(record) {
+  return JSON.stringify({
+    type: record.type,
+    status: record.status,
+    message: record.message,
+    actor: record.actor ?? null,
+  });
+}
+
+async function collectBatchArtifacts(root, ledger) {
+  const records = [];
+  const recordKeys = new Set();
+  const reports = [];
+
+  for (const batchTask of ledger.tasks) {
+    const resultPath = resolveInsideRoot(root, batchTask.resultFile, "Batch task result").fullPath;
+    const executionReceiptPath = resolveInsideRoot(root, batchTask.executionReceiptFile, "M5-B1 execution receipt").fullPath;
+    const integrationReceiptPath = resolveInsideRoot(root, batchTask.integrationReceiptFile, "M5-B2 integration receipt").fullPath;
+    const executionReceipt = await readJsonOptional(executionReceiptPath, "M5-B1 execution receipt");
+    const integrationReceipt = await readJsonOptional(integrationReceiptPath, "M5-B2 integration receipt");
+    if (!executionReceipt || !integrationReceipt) {
+      throw new Error(`Batch task '${batchTask.taskId}' is missing receipt evidence.`);
+    }
+    const resultSha256 = await fileSha256(resultPath, "Batch task result");
+    if (executionReceipt.resultSha256 !== resultSha256 || integrationReceipt.resultSha256 !== resultSha256) {
+      throw new Error(`Batch task '${batchTask.taskId}' result hash drifted from its receipts.`);
+    }
+    const result = await readJsonOptional(resultPath, "Batch task result");
+    if (!result) throw new Error(`Batch task '${batchTask.taskId}' result is missing.`);
+    validateDispatchResultStructure(result);
+    if (result.schemaVersion !== "1.1"
+        || result.dispatchId !== batchTask.dispatchId
+        || result.storyId !== ledger.storyId
+        || result.phase !== ledger.phase
+        || result.batchId !== ledger.batchId
+        || result.taskId !== batchTask.taskId
+        || result.taskRoot !== batchTask.taskRoot
+        || result.status !== "completed"
+        || JSON.stringify(result.outputs.map((output) => output.path)) !== JSON.stringify(batchTask.expectedOutputs)) {
+      throw new Error(`Batch task '${batchTask.taskId}' result does not match the finalized ledger.`);
+    }
+    for (const record of result.records) {
+      if (record.path) {
+        throw new Error("Batch task records with an evidence path cannot be materialized into the phase result.");
+      }
+      const key = batchRecordKey(record);
+      if (recordKeys.has(key)) continue;
+      recordKeys.add(key);
+      records.push({ ...record });
+    }
+
+    const reportPath = resolveInsideRoot(root, batchTask.reportFile, "Batch task report").fullPath;
+    const reportBytes = await readRegularFile(reportPath, "Batch task report");
+    const reportSha256 = sha256Buffer(reportBytes);
+    const executionReport = executionReceipt.files?.find((file) => file?.path === batchTask.reportFile);
+    const integrationReport = integrationReceipt.appliedFiles?.find((file) => file?.path === batchTask.reportFile);
+    if (executionReport?.sha256 !== reportSha256 || integrationReport?.sha256 !== reportSha256) {
+      throw new Error(`Batch task '${batchTask.taskId}' report hash drifted from its receipts.`);
+    }
+    reports.push({ task: batchTask, report: reportBytes.toString("utf8") });
+  }
+
+  return { records, reports };
+}
+
+function implementationNotesForBatch(ledger, reports) {
+  const lines = [
+    "# 实施批次汇总",
+    "",
+    `- 批次：${ledger.batchId}`,
+    `- 基准提交：${ledger.baseCommit}`,
+    `- 批次回执：${ledger.batchReceiptFile}`,
+    "",
+  ];
+  for (const { task, report } of reports) {
+    lines.push(`## ${task.taskId} ${task.title}`, "", report.trimEnd(), "");
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+async function materializeBatchFinalizationPhaseArtifacts(root, options, context, batch, artifacts) {
+  const { located, phase } = context;
+  let prepared;
+  try {
+    prepared = await prepareFromContext(root, options, batch, context, true, true);
+  } catch (error) {
+    if (batch.ledger.status === "ready-for-finalization") {
+      throw new Error(`Existing phase artifact prevents batch finalization: ${error.message}`);
+    }
+    throw error;
+  }
+  const phaseRoot = phaseDirectory(located.state, phase);
+  const notesFile = `${phaseRoot}/implementation-notes.md`;
+  const notesPath = resolveInsideRoot(root, notesFile, "Implementation notes").fullPath;
+  const notes = implementationNotesForBatch(batch.ledger, artifacts.reports);
+  const existingNotes = await lstat(notesPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (existingNotes) {
+    if (!existingNotes.isFile() || existingNotes.isSymbolicLink() || await readFile(notesPath, "utf8") !== notes) {
+      throw new Error("Existing implementation notes do not match the finalized batch.");
+    }
+  } else {
+    await writeAtomicText(notesPath, notes);
+  }
+
+  const result = {
+    schemaVersion: "1.0",
+    dispatchId: prepared.task.dispatchId,
+    storyId: prepared.task.storyId,
+    phase: prepared.task.phase,
+    status: "completed",
+    summary: `Serial batch '${batch.ledger.batchId}' completed ${batch.ledger.tasks.length} task(s).`,
+    outputs: [{ path: notesFile }],
+    records: artifacts.records,
+  };
+  const resultPath = resolveInsideRoot(root, prepared.resultFile, "Phase result").fullPath;
+  const existingResult = await readJsonOptional(resultPath, "Phase result");
+  if (existingResult) {
+    if (JSON.stringify(existingResult) !== JSON.stringify(result)) {
+      throw new Error("Existing phase result does not match the finalized batch.");
+    }
+  } else {
+    await writeAtomicJson(resultPath, result);
+  }
+  return prepared;
+}
+
+async function finalizeBatch(root, options) {
+  const { located, phase } = await currentContext(root, options.stateFile);
+  if (located.state.runtime.status !== "active" || phase?.id !== "implementation") {
+    throw new Error("Batch finalization requires an active implementation phase.");
+  }
+  if (typeof options.batchFile !== "string" || !options.batchFile.trim()) {
+    throw new Error("Batch finalization requires a serial batch ledger path.");
+  }
+
+  const {
+    finalizeSerialBatch,
+    inspectCurrentSerialBatch,
+  } = await import("./batch-runtime.mjs");
+  const initialBatch = await inspectCurrentSerialBatch({ root, stateFile: located.stateFile });
+  if (!initialBatch || initialBatch.batchFile !== options.batchFile) {
+    throw new Error("Serial batch ledger does not match the current implementation phase.");
+  }
+  if (!new Set(["ready-for-finalization", "finalized"]).has(initialBatch.ledger.status)) {
+    throw new Error("Serial batch finalization requires every task integration receipt.");
+  }
+  const staged = await withImplementationPreparationLock(root, located.state, async () => {
+    const locked = await currentContext(root, options.stateFile);
+    if (locked.located.state.runtime.status !== "active" || locked.phase?.id !== "implementation") {
+      throw new Error("Batch finalization requires an active implementation phase.");
+    }
+    const batch = initialBatch;
+    const artifacts = await collectBatchArtifacts(root, batch.ledger);
+    const prepared = await materializeBatchFinalizationPhaseArtifacts(root, options, locked, batch, artifacts);
+    return { locked, batch, prepared };
+  });
+  return withImplementationFinalizationLock(root, located.state, async () => {
+    const shouldFinalizeLedger = staged.batch.ledger.status === "ready-for-finalization";
+    const finalized = shouldFinalizeLedger
+      ? await finalizeSerialBatch({
+        root,
+        stateFile: staged.locked.located.stateFile,
+        batchFile: options.batchFile,
+        now: options.now,
+      })
+      : { batchFile: staged.batch.batchFile, receiptFile: staged.batch.ledger.batchReceiptFile };
+    if (shouldFinalizeLedger && options.testHooks?.afterLedgerFinalizedBeforeCheckpointBinding) {
+      await options.testHooks.afterLedgerFinalizedBeforeCheckpointBinding();
+    }
+    const current = await currentContext(root, options.stateFile);
+    if (current.located.state.runtime.status !== "active" || current.phase?.id !== "implementation") {
+      throw new Error("Batch finalization cannot bind artifacts after the implementation phase changes.");
+    }
+    const verifiedBatch = await inspectCurrentSerialBatch({ root, stateFile: current.located.stateFile });
+    if (!verifiedBatch || verifiedBatch.batchFile !== finalized.batchFile) {
+      throw new Error("Finalized serial batch cannot be reloaded from the active implementation phase.");
+    }
+    const checkpointPath = resolveInsideRoot(root, staged.prepared.checkpointFile, "Phase checkpoint").fullPath;
+    const checkpoint = await readJsonOptional(checkpointPath, "Phase checkpoint");
+    if (!checkpoint) throw new Error("Batch finalization did not create a phase checkpoint.");
+    validateCheckpoint(checkpoint, staged.prepared.task);
+    const binding = await batchFinalizationBinding(root, verifiedBatch, current.located, current.phase);
+    if (checkpoint.batchFinalization
+      && BATCH_FINALIZATION_FIELDS.some((field) => checkpoint.batchFinalization[field] !== binding[field])) {
+      throw new Error("Existing checkpoint batch binding does not match the finalized serial batch.");
+    }
+    if (!checkpoint.batchFinalization) {
+      checkpoint.batchFinalization = binding;
+      await writeAtomicJson(checkpointPath, checkpoint, {
+        beforeRename: options.testHooks?.beforeCheckpointBindingRename,
+      });
+    }
+    return {
+      command: "finalize-batch",
+      status: "ready-for-apply",
+      stateFile: current.located.stateFile,
+      batchFile: finalized.batchFile,
+      receiptFile: finalized.receiptFile,
+      taskFile: staged.prepared.taskFile,
+      resultFile: staged.prepared.resultFile,
+      checkpointFile: staged.prepared.checkpointFile,
+      task: staged.prepared.task,
+    };
+  });
 }
 
 async function runAdapter(root, options) {
@@ -550,6 +1135,7 @@ async function reconcileAdvancedResult(root, located, workflow, options) {
   validateTask(root, task, previousState, previousPhase, phaseRoot);
   validateCheckpoint(checkpoint, task);
   await validateResult(root, result, task, previousState, phaseRoot);
+  await assertBatchFinalizationBeforeRecovery(root, located, previousPhase, task, checkpoint);
   if (result.status !== "completed") return null;
 
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
@@ -587,6 +1173,7 @@ async function applyResult(root, options) {
   validateTask(root, task, located.state, phase, phaseRoot);
   validateCheckpoint(checkpoint, task);
   await validateResult(root, result, task, located.state, phaseRoot);
+  await assertBatchFinalizationBeforeApply(root, located, phase, task, checkpoint);
 
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
   checkpoint.status = "result-received";
@@ -638,6 +1225,8 @@ async function applyResult(root, options) {
 export async function runStoryCommand(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   if (options.command === "prepare") return prepare(root, options);
+  if (options.command === "prepare-batch") return prepareBatch(root, options);
+  if (options.command === "finalize-batch") return finalizeBatch(root, options);
   if (options.command === "run-adapter") return runAdapter(root, options);
   if (options.command === "apply") return applyResult(root, options);
   if (options.command === "status") {
@@ -655,6 +1244,8 @@ function parseCliArguments(argv) {
     "--state-file": "stateFile",
     "--adapter": "adapter",
     "--result-file": "resultFile",
+    "--task-dag-file": "taskDagFile",
+    "--batch-file": "batchFile",
   };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];

@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { copyFile, mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, test } from "node:test";
+import { claimBatchTask, prepareSerialBatch, recordBatchIntegration } from "../lib/batch-runtime.mjs";
 import { runWorktreeWorker } from "../lib/worktree-worker-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
-import { runWorktreeCommand } from "../lib/worktree-runtime.mjs";
+import { resolveBatchBase, runWorktreeCommand } from "../lib/worktree-runtime.mjs";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -16,6 +18,10 @@ const temporaryRoots = [];
 
 async function git(root, ...args) {
   return execFileAsync("git", args, { cwd: root, windowsHide: true });
+}
+
+function sha256(buffer) {
+  return `sha256:${createHash("sha256").update(buffer).digest("hex")}`;
 }
 
 async function createFixture(options = {}) {
@@ -138,6 +144,206 @@ async function createFixture(options = {}) {
   return { root, storyId, runId, taskId, stateFile, taskDagFile, taskFile, checkpointFile, runContextFile, state, dag, task };
 }
 
+async function createBatchWorkerFixture(options = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "frontierscan-m5b3-worker-"));
+  temporaryRoots.push(root);
+  await git(root, "init", "-b", "dev");
+  await git(root, "config", "user.email", "m5b3-worker@example.test");
+  await git(root, "config", "user.name", "M5-B3 Worker Test");
+  await copyFile(path.join(repositoryRoot, ".gitignore"), path.join(root, ".gitignore"));
+  await mkdir(path.join(root, ".codex/agents"), { recursive: true });
+  await copyFile(path.join(repositoryRoot, ".codex/agents/agents.yaml"), path.join(root, ".codex/agents/agents.yaml"));
+  await copyFile(path.join(repositoryRoot, ".codex/agents/worker-policies.json"), path.join(root, ".codex/agents/worker-policies.json"));
+  await mkdir(path.join(root, "backend/src/service"), { recursive: true });
+  await writeFile(path.join(root, "backend/src/service/SharedService.java"), "class SharedService {}\n", "utf8");
+  await git(root, "add", ".gitignore", ".codex/agents", "backend/src/service/SharedService.java");
+  await git(root, "commit", "-m", "fixture");
+
+  const storyId = options.storyId ?? "M5-B3-B-WORKER-FIXTURE";
+  const runId = options.runId ?? storyId;
+  const secondType = options.secondType ?? "backend";
+  const secondOwner = options.secondOwner ?? (secondType === "frontend" ? "frontend-developer" : "backend-developer");
+  const secondPredictedFiles = options.secondPredictedFiles
+    ?? (secondType === "frontend" ? ["frontend/src/views/**"] : ["backend/src/service/**"]);
+  const stateFile = ".harness/states/e2e-fixture.json";
+  const taskDagFile = `.harness/runs/${runId}/phases/02-task-dag/task-dag.json`;
+  const state = {
+    schemaVersion: "1.0",
+    storyId,
+    phase: "implementation",
+    runtime: { runId, status: "active", revision: 4 },
+  };
+  const dag = {
+    schemaVersion: "1.0",
+    storyId,
+    nodes: [
+      {
+        taskId: "T1",
+        title: "Implement shared backend change",
+        type: "backend",
+        status: "pending",
+        predictedFiles: ["backend/src/service/**"],
+        acceptanceCriteria: ["The first backend candidate is ready."],
+        ownerAgent: "backend-developer",
+      },
+      {
+        taskId: "T2",
+        title: `Refine shared ${secondType} change`,
+        type: secondType,
+        status: "pending",
+        predictedFiles: secondPredictedFiles,
+        acceptanceCriteria: [`The inherited ${secondType} candidate is refined.`],
+        ownerAgent: secondOwner,
+      },
+    ],
+    edges: [{ from: "T1", to: "T2", reason: "T2 consumes T1 output." }],
+    waves: [["T1"], ["T2"]],
+    globalChanges: [],
+    risks: [],
+  };
+  await mkdir(path.join(root, path.dirname(stateFile)), { recursive: true });
+  await mkdir(path.join(root, path.dirname(taskDagFile)), { recursive: true });
+  await writeFile(path.join(root, stateFile), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await writeFile(path.join(root, taskDagFile), `${JSON.stringify(dag, null, 2)}\n`, "utf8");
+  const prepared = await prepareSerialBatch({
+    root,
+    stateFile,
+    taskDagFile,
+    base: await resolveBatchBase({ root }),
+    now: () => "2026-07-24T00:00:00.000Z",
+  });
+  await runWorktreeCommand({ root, command: "batch-plan", stateFile, now: () => "2026-07-24T00:01:00.000Z" });
+  if (options.createWorktree !== false) {
+    await runWorktreeCommand({ root, command: "batch-create", stateFile, confirmCreate: true });
+  }
+  return { root, storyId, runId, stateFile, taskDagFile, state, dag, prepared };
+}
+
+function batchWorkerResponse(task, businessFile, content, capability = "backend-write") {
+  return {
+    files: [
+      { path: task.expectedOutputs[0], content: `# ${task.taskId} report\n`, capability: "phase-output" },
+      { path: businessFile, content, capability },
+    ],
+    result: {
+      schemaVersion: "1.1",
+      dispatchId: task.dispatchId,
+      storyId: task.storyId,
+      phase: task.phase,
+      batchId: task.batchId,
+      taskId: task.taskId,
+      taskRoot: task.taskRoot,
+      status: "completed",
+      summary: `${task.taskId} completed its backend candidate.`,
+      outputs: task.expectedOutputs.map((output) => ({ path: output })),
+      records: [],
+    },
+  };
+}
+
+function batchWorkerFailureResponse(task, status) {
+  const response = batchWorkerResponse(
+    task,
+    "backend/src/service/SharedService.java",
+    "class SharedService { void failed() {} }\n",
+  );
+  response.result.status = status;
+  response.result.summary = `${task.taskId} reported ${status}.`;
+  if (status === "blocked") {
+    response.result.blocker = {
+      reason: "The mock Worker requires an external decision.",
+      owner: "user",
+      suggestedAction: "Resolve the fixture blocker and retry a new batch.",
+    };
+  }
+  return response;
+}
+
+async function integrateBatchTask(fixture, task) {
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  const currentTask = ledger.tasks.find((candidate) => candidate.taskId === task.taskId);
+  const execution = JSON.parse(await readFile(path.join(fixture.root, currentTask.executionReceiptFile), "utf8"));
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  for (const file of execution.files) {
+    const target = path.join(fixture.root, file.path);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, await readFile(path.join(worktreeRoot, file.path)));
+  }
+  const planFile = `${path.posix.dirname(currentTask.integrationReceiptFile)}/integration-plan.json`;
+  const plan = {
+    schemaVersion: "1.0",
+    storyId: fixture.storyId,
+    runId: fixture.runId,
+    batchId: ledger.batchId,
+    taskId: currentTask.taskId,
+    taskRoot: currentTask.taskRoot,
+    dispatchId: currentTask.dispatchId,
+    phase: "implementation",
+    ownerAgent: currentTask.ownerAgent,
+    baseCommit: ledger.baseCommit,
+    resultFile: currentTask.resultFile,
+    executionReceiptFile: currentTask.executionReceiptFile,
+    executionReceiptSha256: currentTask.executionReceiptSha256,
+    workerResultEvidenceFile: currentTask.resultFile,
+    workerResultSha256: execution.resultSha256,
+  };
+  const planBuffer = Buffer.from(`${JSON.stringify(plan, null, 2)}\n`, "utf8");
+  await mkdir(path.dirname(path.join(fixture.root, planFile)), { recursive: true });
+  await writeFile(path.join(fixture.root, planFile), planBuffer);
+  const receipt = {
+    schemaVersion: "1.0",
+    storyId: fixture.storyId,
+    runId: fixture.runId,
+    taskId: currentTask.taskId,
+    dispatchId: currentTask.dispatchId,
+    phase: "implementation",
+    ownerAgent: currentTask.ownerAgent,
+    baseCommit: ledger.baseCommit,
+    planSha256: sha256(planBuffer),
+    resultFile: currentTask.resultFile,
+    resultSha256: execution.resultSha256,
+    appliedFiles: execution.files.map(({ path: filePath, kind, sha256, bytes }) => ({ path: filePath, kind, sha256, bytes })),
+    completedAt: "2026-07-24T00:03:00.000Z",
+  };
+  await writeFile(path.join(fixture.root, currentTask.integrationReceiptFile), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+  return recordBatchIntegration({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: currentTask.taskId,
+    integrationReceiptFile: currentTask.integrationReceiptFile,
+  });
+}
+
+async function prepareSecondBatchTask(fixture) {
+  const firstTask = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: firstTask.taskId,
+  });
+  await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: firstTask.taskId,
+    taskFile: firstTask.taskFile,
+    provider: ({ task }) => batchWorkerResponse(
+      task,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void first() {} }\n",
+    ),
+  });
+  await integrateBatchTask(fixture, firstTask);
+  return (await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: "T2",
+  })).task;
+}
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -176,6 +382,1409 @@ test("rejects a multi-task DAG before calling the Provider", async () => {
     /exactly one task/i,
   );
   assert.equal(providerCalls, 0);
+});
+
+test("batch Worker rejects missing ledger, identity drift, unclaimed tasks, and absent batch Worktrees before the Provider", async () => {
+  const missingLedger = await createBatchWorkerFixture({ createWorktree: false });
+  const missingTask = missingLedger.prepared.ledger.tasks[0];
+  await rm(path.join(missingLedger.root, missingLedger.prepared.batchFile));
+  let providerCalls = 0;
+  await assert.rejects(
+    runWorktreeWorker({
+      root: missingLedger.root,
+      stateFile: missingLedger.stateFile,
+      taskId: missingTask.taskId,
+      taskFile: missingTask.taskFile,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /serial batch.*ledger|batch.*ledger/i,
+  );
+  assert.equal(providerCalls, 0);
+
+  const identityDrift = await createBatchWorkerFixture({ createWorktree: false });
+  const identityTask = identityDrift.prepared.ledger.tasks[0];
+  const taskPath = path.join(identityDrift.root, identityTask.taskFile);
+  const task = JSON.parse(await readFile(taskPath, "utf8"));
+  task.ownerAgent = "frontend-developer";
+  await writeFile(taskPath, `${JSON.stringify(task, null, 2)}\n`, "utf8");
+  await assert.rejects(
+    runWorktreeWorker({
+      root: identityDrift.root,
+      stateFile: identityDrift.stateFile,
+      taskId: identityTask.taskId,
+      taskFile: identityTask.taskFile,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /task dispatch.*ledger|dispatch.*identity/i,
+  );
+  assert.equal(providerCalls, 0);
+
+  const unclaimed = await createBatchWorkerFixture();
+  const unclaimedTask = unclaimed.prepared.ledger.tasks[0];
+  await assert.rejects(
+    runWorktreeWorker({
+      root: unclaimed.root,
+      stateFile: unclaimed.stateFile,
+      taskId: unclaimedTask.taskId,
+      taskFile: unclaimedTask.taskFile,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /running task|claim/i,
+  );
+  assert.equal(providerCalls, 0);
+
+  const mismatchedTaskId = await createBatchWorkerFixture();
+  const mismatchedTask = mismatchedTaskId.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: mismatchedTaskId.root,
+    stateFile: mismatchedTaskId.stateFile,
+    batchFile: mismatchedTaskId.prepared.batchFile,
+    taskId: mismatchedTask.taskId,
+  });
+  await assert.rejects(
+    runWorktreeWorker({
+      root: mismatchedTaskId.root,
+      stateFile: mismatchedTaskId.stateFile,
+      taskId: "T2",
+      taskFile: mismatchedTask.taskFile,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /taskId.*task file|task file.*taskId|task identity/i,
+  );
+  assert.equal(providerCalls, 0);
+
+  const absent = await createBatchWorkerFixture({ createWorktree: false });
+  const absentTask = absent.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: absent.root,
+    stateFile: absent.stateFile,
+    batchFile: absent.prepared.batchFile,
+    taskId: absentTask.taskId,
+  });
+  await assert.rejects(
+    runWorktreeWorker({
+      root: absent.root,
+      stateFile: absent.stateFile,
+      taskId: absentTask.taskId,
+      taskFile: absentTask.taskFile,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /batch Worktree.*created|must be created/i,
+  );
+  assert.equal(providerCalls, 0);
+});
+
+test("batch Worker rejects a caller-supplied readiness-transition lock bypass", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      allowReadyTransitionLock: true,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /allowReadyTransitionLock.*internal|internal.*allowReadyTransitionLock/i,
+  );
+
+  assert.equal(providerCalls, 0);
+});
+
+test("batch Worker executes one claimed task into task-scoped evidence and only advances the ledger", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  const beforeState = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+
+  const completed = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider: ({ task: workerTask }) => batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void first() {} }\n",
+    ),
+  });
+
+  assert.equal(completed.outcome, "ready-for-integration");
+  assert.equal(completed.receiptFile, task.executionReceiptFile);
+  assert.equal(completed.resultFile, task.resultFile);
+  const receipt = JSON.parse(await readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"));
+  assert.equal(receipt.resultEvidenceFile, task.resultFile);
+  assert.match(receipt.inheritedSnapshotSha256, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(JSON.parse(await readFile(path.join(fixture.root, task.resultFile), "utf8")).taskId, task.taskId);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+  assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), beforeState);
+});
+
+test("batch Worker removes a failed collected-result temporary file before retrying", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const resultPath = path.join(fixture.root, task.resultFile);
+  const resultDirectory = path.dirname(resultPath);
+  const temporaryPrefix = `${path.basename(resultPath)}.tmp-`;
+  let providerCalls = 0;
+  const provider = ({ task: workerTask }) => {
+    providerCalls += 1;
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void retryAfterCollectionFailure() {} }\n",
+    );
+  };
+
+  await mkdir(resultPath, { recursive: true });
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+    }),
+    /rename|EPERM|EEXIST|EISDIR/i,
+  );
+  assert.equal((await readdir(resultDirectory)).some((file) => file.startsWith(temporaryPrefix)), false);
+
+  await rm(resultPath, { recursive: true, force: true });
+  const retried = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider,
+  });
+  assert.equal(retried.outcome, "ready-for-integration");
+  assert.equal(providerCalls, 1);
+});
+
+test("batch Worker clears its execution lock when lock initialization fails", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const lockPath = path.join(fixture.root, path.dirname(task.executionReceiptFile), "execute.lock");
+  let providerCalls = 0;
+  const provider = ({ task: workerTask }) => {
+    providerCalls += 1;
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void retryAfterLockFailure() {} }\n",
+    );
+  };
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+      now: () => { throw new Error("simulated batch execution lock initialization failure"); },
+    }),
+    /simulated batch execution lock initialization failure/,
+  );
+  assert.equal(providerCalls, 0);
+  await assert.rejects(readFile(lockPath, "utf8"), /ENOENT/);
+
+  const retried = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider,
+  });
+  assert.equal(retried.outcome, "ready-for-integration");
+  assert.equal(providerCalls, 1);
+});
+
+test("batch Worker rejects unauthorized explicit context before writing inputs and supports a clean retry", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  const manifestFile = path.join(fixture.root, path.dirname(task.executionReceiptFile), "task-start-manifest.json");
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      contextFiles: [".gitignore"],
+      provider: async () => { providerCalls += 1; },
+    }),
+    /context file.*read policy|read policy.*\.gitignore/i,
+  );
+
+  assert.equal(providerCalls, 0);
+  await assert.rejects(readFile(manifestFile, "utf8"), /ENOENT/);
+  await assert.rejects(readFile(path.join(worktreeRoot, task.taskFile), "utf8"), /ENOENT/);
+  await assert.rejects(readFile(path.join(worktreeRoot, task.checkpointFile), "utf8"), /ENOENT/);
+  let ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+
+  const retried = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider: ({ task: workerTask }) => batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void retried() {} }\n",
+    ),
+  });
+
+  assert.equal(retried.outcome, "ready-for-integration");
+  ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch Worker accepts a Windows case-variant context allowed by its read policy", {
+  skip: process.platform !== "win32",
+}, async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  const manifestFile = path.join(fixture.root, path.dirname(task.executionReceiptFile), "task-start-manifest.json");
+  let providerCalls = 0;
+  const completed = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    contextFiles: ["BACKEND/src/service/SharedService.java"],
+    provider: ({ task: workerTask }) => {
+      providerCalls += 1;
+      return batchWorkerResponse(
+        workerTask,
+        "backend/src/service/RetryService.java",
+        "class RetryService { void caseVariant() {} }\n",
+      );
+    },
+  });
+
+  assert.equal(completed.outcome, "ready-for-integration");
+  assert.equal(providerCalls, 1);
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  assert.equal(manifest.inputs.find((input) => input.sourcePath === "BACKEND/src/service/SharedService.java")?.source, "worktree-base");
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch Worker reads a Windows case-variant current-run context from the main run", {
+  skip: process.platform !== "win32",
+}, async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  const contextFile = `.harness/runs/${fixture.runId}/phases/03-implementation/main-run-context.md`;
+  const caseVariantContext = contextFile.toUpperCase();
+  await mkdir(path.dirname(path.join(fixture.root, contextFile)), { recursive: true });
+  await writeFile(path.join(fixture.root, contextFile), "main-run-only context\n", "utf8");
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let receivedContext;
+
+  const completed = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    contextFiles: [caseVariantContext],
+    provider: ({ task: workerTask, context }) => {
+      receivedContext = context;
+      return batchWorkerResponse(
+        workerTask,
+        "backend/src/service/MainRunContextService.java",
+        "class MainRunContextService {}\n",
+      );
+    },
+  });
+
+  assert.equal(completed.outcome, "ready-for-integration");
+  assert.deepEqual(receivedContext, [{ path: caseVariantContext, content: "main-run-only context\n" }]);
+  const manifest = JSON.parse(await readFile(path.join(fixture.root, path.dirname(task.executionReceiptFile), "task-start-manifest.json"), "utf8"));
+  assert.equal(manifest.inputs.find((input) => input.sourcePath === caseVariantContext)?.source, "main-run");
+});
+
+test("batch Worker rejects oversized context before writing inputs and supports a clean retry", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const contextFiles = Array.from(
+    { length: 5 },
+    (_, index) => `.harness/runs/${fixture.runId}/phases/03-implementation/oversized-context-${index}.txt`,
+  );
+  for (const contextFile of contextFiles) {
+    const target = path.join(fixture.root, contextFile);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, Buffer.alloc(1_700_000, "x"));
+  }
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  const manifestFile = path.join(fixture.root, path.dirname(task.executionReceiptFile), "task-start-manifest.json");
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      contextFiles,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /context exceeds the 8 MiB total limit/i,
+  );
+
+  assert.equal(providerCalls, 0);
+  await assert.rejects(readFile(manifestFile, "utf8"), /ENOENT/);
+  await assert.rejects(readFile(path.join(worktreeRoot, task.taskFile), "utf8"), /ENOENT/);
+  await assert.rejects(readFile(path.join(worktreeRoot, task.checkpointFile), "utf8"), /ENOENT/);
+  let ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+
+  const retried = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider: ({ task: workerTask }) => batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void retriedAfterLimit() {} }\n",
+    ),
+  });
+
+  assert.equal(retried.outcome, "ready-for-integration");
+  ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch Worker binds a distinct active run ID through its ledger and task root", async () => {
+  const fixture = await createBatchWorkerFixture({
+    runId: "M5-B3-B-RUN-42",
+  });
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+
+  const completed = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider: ({ task: workerTask }) => batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void distinctRun() {} }\n",
+    ),
+  });
+
+  assert.equal(task.taskRoot.startsWith(`.harness/runs/${fixture.runId}/`), true);
+  assert.equal(completed.outcome, "ready-for-integration");
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.runId, fixture.runId);
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch Worker rejects main-root inherited drift before calling the Provider", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const firstTask = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: firstTask.taskId,
+  });
+  await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: firstTask.taskId,
+    taskFile: firstTask.taskFile,
+    provider: ({ task }) => batchWorkerResponse(
+      task,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void first() {} }\n",
+    ),
+  });
+  await integrateBatchTask(fixture, firstTask);
+  const secondTask = (await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: "T2",
+  })).task;
+  await writeFile(
+    path.join(fixture.root, "backend/src/service/SharedService.java"),
+    "class SharedService { void manualDrift() {} }\n",
+    "utf8",
+  );
+  const beforeState = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: secondTask.taskId,
+      taskFile: secondTask.taskFile,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /inherited main.*hash drifted|main.*inherited.*drift/i,
+  );
+
+  assert.equal(providerCalls, 0);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "integrated");
+  assert.equal(ledger.tasks[1].status, "running");
+  assert.equal(ledger.tasks[1].executionReceiptSha256, null);
+  assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), beforeState);
+  await assert.rejects(readFile(path.join(fixture.root, secondTask.executionReceiptFile), "utf8"), /ENOENT/);
+});
+
+test("batch Worker gives a later task the integrated inherited file and permits its declared rewrite", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const firstTask = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: firstTask.taskId,
+  });
+  await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: firstTask.taskId,
+    taskFile: firstTask.taskFile,
+    provider: ({ task }) => batchWorkerResponse(
+      task,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void first() {} }\n",
+    ),
+  });
+  await integrateBatchTask(fixture, firstTask);
+  const secondTask = (await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: "T2",
+  })).task;
+  let inheritedContent;
+
+  const completed = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: secondTask.taskId,
+    taskFile: secondTask.taskFile,
+    provider: ({ task, context }) => {
+      inheritedContent = context.find((file) => file.path === "backend/src/service/SharedService.java")?.content;
+      return batchWorkerResponse(
+        task,
+        "backend/src/service/SharedService.java",
+        "class SharedService { void second() {} }\n",
+      );
+    },
+  });
+
+  assert.equal(inheritedContent, "class SharedService { void first() {} }\n");
+  assert.equal(completed.outcome, "ready-for-integration");
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  assert.equal(
+    await readFile(path.join(fixture.root, status.plan.worktreePath, "backend/src/service/SharedService.java"), "utf8"),
+    "class SharedService { void second() {} }\n",
+  );
+});
+
+test("batch Worker filters inherited context for a later frontend task without weakening snapshot verification", async () => {
+  const fixture = await createBatchWorkerFixture({
+    secondType: "frontend",
+    secondOwner: "frontend-developer",
+  });
+  const secondTask = await prepareSecondBatchTask(fixture);
+  let receivedContext;
+
+  const completed = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: secondTask.taskId,
+    taskFile: secondTask.taskFile,
+    provider: ({ task, context }) => {
+      receivedContext = context;
+      return batchWorkerResponse(
+        task,
+        "frontend/src/views/BatchView.vue",
+        "<template><main>batch</main></template>\n",
+        "frontend-write",
+      );
+    },
+  });
+
+  assert.equal(completed.outcome, "ready-for-integration");
+  assert.equal(receivedContext.some((file) => file.path === "backend/src/service/SharedService.java"), false);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[1].status, "ready-for-integration");
+  assert.match(ledger.tasks[1].inheritedSnapshotSha256, /^sha256:[a-f0-9]{64}$/);
+});
+
+test("batch Worker rejects an inherited rewrite outside the later task predicted files before landing", async () => {
+  const fixture = await createBatchWorkerFixture({
+    secondPredictedFiles: ["backend/src/service/SecondOnly.java"],
+  });
+  const secondTask = await prepareSecondBatchTask(fixture);
+  const beforeState = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: secondTask.taskId,
+      taskFile: secondTask.taskFile,
+      provider: ({ task }) => {
+        providerCalls += 1;
+        return batchWorkerResponse(
+          task,
+          "backend/src/service/SharedService.java",
+          "class SharedService { void forbiddenSecond() {} }\n",
+        );
+      },
+    }),
+    /outside the task predicted files/i,
+  );
+
+  assert.equal(providerCalls, 1);
+  assert.equal(
+    await readFile(path.join(fixture.root, "backend/src/service/SharedService.java"), "utf8"),
+    "class SharedService { void first() {} }\n",
+  );
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[1].status, "running");
+  assert.equal(ledger.tasks[1].executionReceiptSha256, null);
+  assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), beforeState);
+  await assert.rejects(readFile(path.join(fixture.root, secondTask.resultFile), "utf8"), /ENOENT/);
+  await assert.rejects(readFile(path.join(fixture.root, secondTask.executionReceiptFile), "utf8"), /ENOENT/);
+});
+
+for (const mutation of [
+  {
+    label: "renamed",
+    apply: async (worktreeRoot) => git(
+      worktreeRoot,
+      "mv",
+      "backend/src/service/SharedService.java",
+      "backend/src/service/RenamedService.java",
+    ),
+    expectedError: /must not rename or copy Worktree files/i,
+  },
+  {
+    label: "deleted",
+    apply: (worktreeRoot) => rm(path.join(worktreeRoot, "backend/src/service/SharedService.java")),
+    expectedError: /must not delete Worktree files/i,
+  },
+]) {
+  test(`batch Worker rejects a ${mutation.label} inherited file before calling the Provider`, async () => {
+    const fixture = await createBatchWorkerFixture();
+    const secondTask = await prepareSecondBatchTask(fixture);
+    const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+    const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+    const beforeState = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    await mutation.apply(worktreeRoot);
+    let providerCalls = 0;
+
+    await assert.rejects(
+      runWorktreeWorker({
+        root: fixture.root,
+        stateFile: fixture.stateFile,
+        taskId: secondTask.taskId,
+        taskFile: secondTask.taskFile,
+        provider: async () => { providerCalls += 1; },
+      }),
+      mutation.expectedError,
+    );
+
+    assert.equal(providerCalls, 0);
+    const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+    assert.equal(ledger.tasks[1].status, "running");
+    assert.equal(ledger.tasks[1].executionReceiptSha256, null);
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), beforeState);
+    await assert.rejects(readFile(path.join(fixture.root, secondTask.resultFile), "utf8"), /ENOENT/);
+    await assert.rejects(readFile(path.join(fixture.root, secondTask.executionReceiptFile), "utf8"), /ENOENT/);
+  });
+}
+
+for (const status of ["failed", "blocked"]) {
+  test(`batch Worker records a valid ${status} result as blocked without an execution receipt`, async () => {
+    const fixture = await createBatchWorkerFixture();
+    const task = fixture.prepared.ledger.tasks[0];
+    await claimBatchTask({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      batchFile: fixture.prepared.batchFile,
+      taskId: task.taskId,
+    });
+    const beforeState = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+
+    const outcome = await runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: ({ task: workerTask }) => batchWorkerFailureResponse(workerTask, status),
+    });
+
+    assert.equal(outcome.outcome, "blocked");
+    const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+    assert.equal(ledger.status, "blocked");
+    assert.equal(ledger.tasks[0].status, "blocked");
+    assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+    assert.equal(JSON.parse(await readFile(path.join(fixture.root, task.resultFile), "utf8")).status, status);
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), beforeState);
+    await assert.rejects(readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"), /ENOENT/);
+  });
+}
+
+test("batch Worker retries a claimed task after a Provider exception", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+  const provider = async ({ task: workerTask }) => {
+    providerCalls += 1;
+    if (providerCalls === 1) throw new Error("simulated batch Provider exception");
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void retry() {} }\n",
+    );
+  };
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+    }),
+    /simulated batch Provider exception/i,
+  );
+  const retried = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider,
+  });
+
+  assert.equal(retried.outcome, "ready-for-integration");
+  assert.equal(providerCalls, 2);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch Worker keeps a timed-out task retryable without a result, receipt, or lock", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+  let aborted = false;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      timeoutMs: 10,
+      provider: async ({ signal, task: workerTask }) => {
+        providerCalls += 1;
+        await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+        aborted = signal.aborted;
+        return batchWorkerResponse(
+          workerTask,
+          "backend/src/service/SharedService.java",
+          "class SharedService { void late() {} }\n",
+        );
+      },
+    }),
+    /timed out/i,
+  );
+
+  assert.equal(aborted, true);
+  let ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+  assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+  await assert.rejects(readFile(path.join(fixture.root, task.resultFile), "utf8"), /ENOENT/);
+  await assert.rejects(readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"), /ENOENT/);
+  await assert.rejects(readFile(path.join(fixture.root, path.dirname(task.executionReceiptFile), "execute.lock"), "utf8"), /ENOENT/);
+
+  const retried = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider: ({ task: workerTask }) => {
+      providerCalls += 1;
+      return batchWorkerResponse(
+        workerTask,
+        "backend/src/service/SharedService.java",
+        "class SharedService { void retry() {} }\n",
+      );
+    },
+  });
+
+  assert.equal(retried.outcome, "ready-for-integration");
+  assert.equal(providerCalls, 2);
+  ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch Worker collects a written result after interruption without rerunning the Provider", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+  const provider = async ({ task: workerTask }) => {
+    providerCalls += 1;
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void recoveredResult() {} }\n",
+    );
+  };
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+      afterWorker: () => { throw new Error("simulated result-to-receipt interruption"); },
+    }),
+    /simulated result-to-receipt interruption/i,
+  );
+  await assert.rejects(readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"), /ENOENT/);
+  assert.equal(providerCalls, 1);
+
+  const recovered = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider: async () => { throw new Error("Provider must not run during result recovery"); },
+  });
+
+  assert.equal(recovered.outcome, "ready-for-integration");
+  assert.equal(providerCalls, 1);
+  assert.equal(JSON.parse(await readFile(path.join(fixture.root, task.resultFile), "utf8")).status, "completed");
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch Worker does not retain an incomplete recovery receipt when its fixed task report is missing", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  let providerCalls = 0;
+  const provider = async ({ task: workerTask }) => {
+    providerCalls += 1;
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void missingReport() {} }\n",
+    );
+  };
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+      afterWorker: () => { throw new Error("simulated result-to-receipt interruption"); },
+    }),
+    /simulated result-to-receipt interruption/i,
+  );
+  await unlink(path.join(worktreeRoot, task.reportFile));
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: async () => { throw new Error("Provider must not run during incomplete result recovery"); },
+    }),
+    /phase outputs.*expected outputs|fixed task report|expected output/i,
+  );
+
+  assert.equal(providerCalls, 1);
+  await assert.rejects(readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"), /ENOENT/);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+});
+
+test("batch Worker reuses a receipt after collection completes before ledger readiness", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+  const provider = async ({ task: workerTask }) => {
+    providerCalls += 1;
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void receipt() {} }\n",
+    );
+  };
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+      beforeRecordWorkerReady: () => { throw new Error("simulated receipt-to-ledger interruption"); },
+    }),
+    /simulated receipt-to-ledger interruption/i,
+  );
+  assert.equal((await JSON.parse(await readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"))).outcome, "ready-for-integration");
+  let ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+
+  const recovered = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: task.taskId,
+    taskFile: task.taskFile,
+    provider,
+  });
+
+  assert.equal(recovered.reused, true);
+  assert.equal(recovered.outcome, "ready-for-integration");
+  assert.equal(providerCalls, 1);
+  ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "ready-for-integration");
+});
+
+test("batch Worker rechecks Worktree Git facts before reusing an interrupted receipt", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+  const provider = async ({ task: workerTask }) => {
+    providerCalls += 1;
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void interrupted() {} }\n",
+    );
+  };
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+      beforeRecordWorkerReady: () => { throw new Error("simulated receipt interruption before Git drift"); },
+    }),
+    /simulated receipt interruption before Git drift/i,
+  );
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  await git(worktreeRoot, "add", "backend/src/service/SharedService.java");
+  await git(worktreeRoot, "commit", "-m", "drift batch worktree");
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+    }),
+    /planned batch Worktree must be created|batch Worktree status/i,
+  );
+  assert.equal(providerCalls, 1);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+});
+
+test("batch Worker rechecks Worktree Git facts after collection before recording readiness", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: ({ task: workerTask }) => {
+        providerCalls += 1;
+        return batchWorkerResponse(
+          workerTask,
+          "backend/src/service/SharedService.java",
+          "class SharedService { void postCollectionDrift() {} }\n",
+        );
+      },
+      beforeRecordWorkerReady: async () => {
+        await git(worktreeRoot, "add", "backend/src/service/SharedService.java");
+        await git(worktreeRoot, "commit", "-m", "post-collection drift");
+      },
+    }),
+    /planned batch Worktree must be created|batch Worktree status/i,
+  );
+
+  assert.equal(providerCalls, 1);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+  assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+});
+
+test("batch Worker rechecks Worktree Git facts while holding the readiness transition lock", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: ({ task: workerTask }) => batchWorkerResponse(
+        workerTask,
+        "backend/src/service/SharedService.java",
+        "class SharedService { void transitionLockDrift() {} }\n",
+      ),
+      beforeReadyTransition: async () => {
+        await git(worktreeRoot, "add", "backend/src/service/SharedService.java");
+        await git(worktreeRoot, "commit", "-m", "readiness transition drift");
+      },
+    }),
+    /planned batch Worktree must be created|batch Worktree status/i,
+  );
+
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+  assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+});
+
+test("batch Worker rejects an interrupted receipt when persisted status evidence changes", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+  const provider = async ({ task: workerTask }) => {
+    providerCalls += 1;
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void statusEvidence() {} }\n",
+    );
+  };
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+      beforeRecordWorkerReady: () => { throw new Error("simulated status evidence interruption"); },
+    }),
+    /simulated status evidence interruption/i,
+  );
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const statusPath = path.join(fixture.root, status.statusFile);
+  const persisted = JSON.parse(await readFile(statusPath, "utf8"));
+  persisted.observedAt = "2026-07-24T00:10:00.000Z";
+  await writeFile(statusPath, `${JSON.stringify(persisted, null, 2)}\n`, "utf8");
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+    }),
+    /status evidence.*hash/i,
+  );
+  assert.equal(providerCalls, 1);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+});
+
+test("batch Worker refuses a receipt when collected result evidence drifts before ledger readiness", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: async ({ task: workerTask }) => {
+        providerCalls += 1;
+        return batchWorkerResponse(
+          workerTask,
+          "backend/src/service/SharedService.java",
+          "class SharedService { void resultDrift() {} }\n",
+        );
+      },
+      beforeRecordWorkerReady: async () => {
+        await writeFile(path.join(fixture.root, task.resultFile), "{\"tampered\":true}\n", "utf8");
+      },
+    }),
+    /result evidence.*hash/i,
+  );
+
+  assert.equal(providerCalls, 1);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+  assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+});
+
+test("batch Worker refuses a receipt when a candidate drifts before ledger readiness", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: async ({ task: workerTask }) => {
+        providerCalls += 1;
+        return batchWorkerResponse(
+          workerTask,
+          "backend/src/service/SharedService.java",
+          "class SharedService { void candidateDrift() {} }\n",
+        );
+      },
+      beforeRecordWorkerReady: async () => {
+        const receipt = JSON.parse(await readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"));
+        assert.equal(receipt.files.find((file) => file.path === "backend/src/service/SharedService.java")?.kind, "backend");
+        await writeFile(
+          path.join(worktreeRoot, "backend/src/service/SharedService.java"),
+          "class SharedService { void tamperedCandidate() {} }\n",
+          "utf8",
+        );
+        assert.equal(
+          await readFile(path.join(worktreeRoot, "backend/src/service/SharedService.java"), "utf8"),
+          "class SharedService { void tamperedCandidate() {} }\n",
+        );
+      },
+    }),
+    /candidate.*hash|receipt.*file/i,
+  );
+
+  assert.equal(providerCalls, 1);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+  assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+});
+
+test("batch Worker rejects a receipt when its task-start manifest hash drifted", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  let providerCalls = 0;
+  const provider = async ({ task: workerTask }) => {
+    providerCalls += 1;
+    return batchWorkerResponse(
+      workerTask,
+      "backend/src/service/SharedService.java",
+      "class SharedService { void manifest() {} }\n",
+    );
+  };
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+      beforeRecordWorkerReady: () => { throw new Error("simulated manifest receipt interruption"); },
+    }),
+    /simulated manifest receipt interruption/i,
+  );
+  const manifestFile = path.join(fixture.root, path.dirname(task.executionReceiptFile), "task-start-manifest.json");
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  manifest.createdAt = "2026-07-24T00:09:00.000Z";
+  await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider,
+    }),
+    /input manifest.*hash/i,
+  );
+  assert.equal(providerCalls, 1);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+});
+
+test("batch Worker rejects pre-existing Worktree drift before calling the Provider", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  await writeFile(
+    path.join(fixture.root, status.plan.worktreePath, "backend/src/service/SharedService.java"),
+    "class SharedService { void drifted() {} }\n",
+    "utf8",
+  );
+  const beforeState = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: async () => { providerCalls += 1; },
+    }),
+    /unexpected.*Worktree|Worktree.*drift|inherited.*hash/i,
+  );
+  assert.equal(providerCalls, 0);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+  assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+  assert.match(ledger.tasks[0].inheritedSnapshotSha256, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), beforeState);
+  await assert.rejects(readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"), /ENOENT/);
+});
+
+test("batch Worker rejects undeclared Worktree writes without creating a receipt", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  const beforeState = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: async ({ task: workerTask }) => {
+        providerCalls += 1;
+        await writeFile(path.join(worktreeRoot, "backend/src/service/Rogue.java"), "class Rogue {}\n", "utf8");
+        return batchWorkerResponse(
+          workerTask,
+          "backend/src/service/SharedService.java",
+          "class SharedService { void first() {} }\n",
+        );
+      },
+    }),
+    /unexpected.*Worktree|undeclared.*Worktree/i,
+  );
+  assert.equal(providerCalls, 1);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+  assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+  assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), beforeState);
+  await assert.rejects(readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"), /ENOENT/);
+});
+
+test("batch Worker rejects an ignored undeclared Worktree write without creating a receipt", async () => {
+  const fixture = await createBatchWorkerFixture();
+  const task = fixture.prepared.ledger.tasks[0];
+  await claimBatchTask({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile: fixture.prepared.batchFile,
+    taskId: task.taskId,
+  });
+  const status = await runWorktreeCommand({ root: fixture.root, command: "batch-status", stateFile: fixture.stateFile });
+  const worktreeRoot = path.join(fixture.root, status.plan.worktreePath);
+  let providerCalls = 0;
+
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: task.taskId,
+      taskFile: task.taskFile,
+      provider: async ({ task: workerTask }) => {
+        providerCalls += 1;
+        await writeFile(path.join(worktreeRoot, ".env"), "UNDECLARED=1\n", "utf8");
+        return batchWorkerResponse(
+          workerTask,
+          "backend/src/service/SharedService.java",
+          "class SharedService { void ignored() {} }\n",
+        );
+      },
+    }),
+    /unexpected.*Worktree|undeclared.*Worktree/i,
+  );
+
+  assert.equal(providerCalls, 1);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.prepared.batchFile), "utf8"));
+  assert.equal(ledger.tasks[0].status, "running");
+  assert.equal(ledger.tasks[0].executionReceiptSha256, null);
+  await assert.rejects(readFile(path.join(fixture.root, task.executionReceiptFile), "utf8"), /ENOENT/);
 });
 
 test("rejects an absent Worktree before calling the Provider", async () => {
@@ -250,6 +1859,43 @@ test("copies current-run inputs but reads committed context from the base Worktr
   assert.equal(manifest.inputs[1].source, "main-run");
   assert.equal(manifest.inputs[2].source, "worktree-base");
   assert.match(manifest.inputs[2].sha256, /^sha256:[a-f0-9]{64}$/);
+});
+
+test("reads a Windows case-variant current-run context from the main run", {
+  skip: process.platform !== "win32",
+}, async () => {
+  const fixture = await createFixture();
+  const caseVariantContext = fixture.runContextFile.toUpperCase();
+  let receivedContext;
+
+  await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: fixture.taskId,
+    taskFile: fixture.taskFile,
+    contextFiles: [caseVariantContext],
+    provider: async ({ task, context }) => {
+      receivedContext = context;
+      return {
+        files: [{ path: task.expectedOutputs[0], content: "implementation notes\n", capability: "phase-output" }],
+        result: {
+          schemaVersion: "1.0",
+          dispatchId: task.dispatchId,
+          storyId: task.storyId,
+          phase: task.phase,
+          status: "completed",
+          summary: "Worker completed the phase output.",
+          outputs: task.expectedOutputs.map((output) => ({ path: output })),
+          records: [],
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(receivedContext, [{ path: caseVariantContext, content: "current run context\n" }]);
+  const manifestFile = path.join(fixture.root, `.harness/runs/${fixture.runId}/worktrees/${fixture.taskId}/input-manifest.json`);
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  assert.equal(manifest.inputs.find((input) => input.targetPath === caseVariantContext)?.source, "main-run");
 });
 
 test("rejects an unexpected Worktree change made outside the Worker response", async () => {

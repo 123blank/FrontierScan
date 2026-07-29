@@ -96,6 +96,14 @@ try {
   $duplicateWave.waves = @(@("T1"), @("T1"))
   Assert-ValidationFails -Dag $duplicateWave -Pattern "exactly one wave"
 
+  $caseEquivalentTaskIds = Copy-Dag -Dag $dag
+  $caseEquivalentSecondNode = (($secondNode | ConvertTo-Json -Depth 12) | ConvertFrom-Json)
+  $caseEquivalentTaskIds.nodes = @($caseEquivalentTaskIds.nodes) + $caseEquivalentSecondNode
+  $caseEquivalentTaskIds.nodes[1].taskId = "t1"
+  $caseEquivalentTaskIds.nodes[1].predictedFiles = @("docs/case-equivalent.md")
+  $caseEquivalentTaskIds.waves = @(@("T1"), @("t1"))
+  Assert-ValidationFails -Dag $caseEquivalentTaskIds -Pattern "case-insensitive"
+
   $reverseDependency = Copy-Dag -Dag $dag
   $reverseDependency.nodes = @($reverseDependency.nodes) + $secondNode
   $reverseDependency.edges = @(@{ from = "T1"; to = "T2"; reason = "T2 depends on T1." })

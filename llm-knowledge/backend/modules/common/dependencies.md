@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: common
 doc_type: dependencies
-git_hash: 2b15e640d9f0f6e5be179dee838b3cb70784470e
+git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
 source_fingerprint: sha256:854b810c1118d4fbf129a57c0d1d9b541762b554577a3eb592e62c00173c2f11
-generated_at: 2026-07-16T15:13:11.540Z
+generated_at: 2026-07-28T16:41:12.137Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-batch-plan.schema.json",
+  "title": "FrontierScan Harness Serial Batch Worktree Plan",
+  "type": "object",
+  "required": ["schemaVersion", "storyId", "runId", "batchId", "ledgerFile", "taskDagFile", "taskDagSha256", "baseRef", "baseCommit", "branch", "worktreePath", "plannedAt"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "batchId": { "type": "string", "pattern": "^batch-[a-f0-9]{16}$" },
+    "ledgerFile": { "type": "string", "minLength": 1 },
+    "taskDagFile": { "type": "string", "minLength": 1 },
+    "taskDagSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "baseRef": { "type": "string", "minLength": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "branch": { "type": "string", "minLength": 1 },
+    "worktreePath": { "type": "string", "minLength": 1 },
+    "plannedAt": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

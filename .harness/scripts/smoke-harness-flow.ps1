@@ -79,6 +79,119 @@ await runWorkerTask({
   }
 }
 
+Invoke-Step -Name "Serial Batch Protocol" -Action {
+  $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) "frontierscan-harness-batch-smoke-$([guid]::NewGuid().ToString('N'))"
+  try {
+    New-Item -ItemType Directory -Path $temporaryRoot -Force | Out-Null
+    & git -C $temporaryRoot init -b dev | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Batch smoke git init failed with exit code $LASTEXITCODE" }
+    & git -C $temporaryRoot config user.email "batch-smoke@example.test"
+    if ($LASTEXITCODE -ne 0) { throw "Batch smoke git config email failed with exit code $LASTEXITCODE" }
+    & git -C $temporaryRoot config user.name "Batch Smoke"
+    if ($LASTEXITCODE -ne 0) { throw "Batch smoke git config name failed with exit code $LASTEXITCODE" }
+    Set-Content -LiteralPath (Join-Path $temporaryRoot "seed.txt") -Value "seed" -NoNewline -Encoding utf8
+    & git -C $temporaryRoot add seed.txt
+    if ($LASTEXITCODE -ne 0) { throw "Batch smoke git add failed with exit code $LASTEXITCODE" }
+    & git -C $temporaryRoot commit -m "batch smoke fixture" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Batch smoke git commit failed with exit code $LASTEXITCODE" }
+
+    $storyRuntimeUri = ([System.Uri]::new((Resolve-Path (Join-Path $Root ".harness\scripts\lib\story-runtime.mjs")).Path)).AbsoluteUri
+    $worktreeRuntimeUri = ([System.Uri]::new((Resolve-Path (Join-Path $Root ".harness\scripts\lib\worktree-runtime.mjs")).Path)).AbsoluteUri
+    $batchSource = @"
+import { execFile } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { runStoryCommand } from '$storyRuntimeUri';
+import { runWorktreeCommand } from '$worktreeRuntimeUri';
+
+const execFileAsync = promisify(execFile);
+const root = process.argv[1];
+const stateFile = '.harness/states/e2e-smoke-batch.json';
+const taskDagFile = '.harness/runs/SMOKE-BATCH/phases/02-task-dag/task-dag.json';
+const state = {
+  schemaVersion: '1.0',
+  storyId: 'SMOKE-BATCH',
+  phase: 'implementation',
+  runtime: {
+    runId: 'SMOKE-BATCH', status: 'active', revision: 4,
+    workflow: '.harness/workflows/e2e-development.yaml', records: [],
+  },
+};
+const dag = {
+  schemaVersion: '1.0',
+  storyId: state.storyId,
+  nodes: [
+    {
+      taskId: 'T1', title: 'Backend smoke candidate', type: 'backend', status: 'pending',
+      ownerAgent: 'backend-developer', predictedFiles: ['backend/src/**'], acceptanceCriteria: ['Backend candidate is planned.'],
+    },
+    {
+      taskId: 'T2', title: 'Frontend smoke candidate', type: 'frontend', status: 'pending',
+      ownerAgent: 'frontend-developer', predictedFiles: ['frontend/src/**'], acceptanceCriteria: ['Frontend candidate is planned.'],
+    },
+  ],
+  edges: [{ from: 'T1', to: 'T2', reason: 'The frontend task follows the backend task.' }],
+  waves: [['T1'], ['T2']],
+  globalChanges: [],
+  risks: [],
+};
+const executeGit = async (args) => {
+  if (args[0] === 'worktree' && (args[1] === 'add' || args[1] === 'remove')) {
+    throw new Error('Serial batch smoke must not create or remove a Worktree.');
+  }
+  return execFileAsync('git', args, { cwd: root, windowsHide: true });
+};
+await mkdir(path.dirname(path.join(root, stateFile)), { recursive: true });
+await mkdir(path.dirname(path.join(root, taskDagFile)), { recursive: true });
+await mkdir(path.dirname(path.join(root, state.runtime.workflow)), { recursive: true });
+await writeFile(path.join(root, stateFile), JSON.stringify(state, null, 2) + '\n', 'utf8');
+await writeFile(path.join(root, taskDagFile), JSON.stringify(dag, null, 2) + '\n', 'utf8');
+await writeFile(path.join(root, state.runtime.workflow),
+  'phases:\n'
+  + '  - id: implementation\n'
+  + '    order: 1\n'
+  + '    owner_agent: backend-developer\n'
+  + '    purpose: Serial batch smoke\n'
+  + '    required_outputs:\n'
+  + '    next:\n'
+  + '      - done\n',
+  'utf8');
+const before = await readFile(path.join(root, stateFile), 'utf8');
+const prepared = await runStoryCommand({
+  root,
+  command: 'prepare-batch',
+  stateFile,
+  taskDagFile,
+  executeGit,
+  now: () => '2026-07-28T02:00:00.000Z',
+});
+if (prepared.ledger.tasks.length !== 2) throw new Error('Serial batch smoke did not create two tasks.');
+const planned = await runWorktreeCommand({
+  root,
+  command: 'batch-plan',
+  stateFile,
+  executeGit,
+  now: () => '2026-07-28T02:00:01.000Z',
+});
+if (planned.plan.batchId !== prepared.ledger.batchId || planned.status.state !== 'absent') {
+  throw new Error('Serial batch smoke plan did not match the prepared ledger.');
+}
+const observed = await runWorktreeCommand({ root, command: 'batch-status', stateFile, executeGit });
+if (observed.status.state !== 'absent') throw new Error('Serial batch smoke unexpectedly created a Worktree.');
+if (await readFile(path.join(root, stateFile), 'utf8') !== before) {
+  throw new Error('Serial batch smoke changed the Harness state.');
+}
+"@
+    & node --input-type=module --eval $batchSource $temporaryRoot
+    if ($LASTEXITCODE -ne 0) { throw "Serial batch protocol smoke failed with exit code $LASTEXITCODE" }
+  } finally {
+    if (Test-Path -LiteralPath $temporaryRoot) {
+      Remove-Item -LiteralPath $temporaryRoot -Recurse -Force
+    }
+  }
+}
+
 Invoke-Step -Name "Task DAG" -Action {
   & (Join-Path $Root ".harness\scripts\validate-task-dag.ps1") -TaskDagFile $TaskDagFile
 }

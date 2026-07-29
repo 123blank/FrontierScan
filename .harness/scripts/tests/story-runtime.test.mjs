@@ -1,14 +1,37 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { access, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import {
+  claimBatchTask,
+  recordBatchInheritedSnapshot,
+  recordBatchIntegration,
+  recordBatchWorkerReady,
+} from "../lib/batch-runtime.mjs";
 import { runStateCommand } from "../lib/state-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
 
 const FIXED_NOW = "2026-07-16T00:00:00.000Z";
 const FIXED_DISPATCH_ID = "00000000-0000-4000-8000-000000000001";
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const execFileAsync = promisify(execFile);
+
+async function git(root, ...args) {
+  return execFileAsync("git", args, { cwd: root, windowsHide: true });
+}
+
+async function runStoryPowerShell(root, argumentsList) {
+  return execFileAsync("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", path.join(REPOSITORY_ROOT, ".harness/scripts/run-story.ps1"),
+    ...argumentsList,
+  ], { cwd: root, windowsHide: true });
+}
 
 async function write(root, relativePath, content) {
   const filePath = path.join(root, relativePath);
@@ -114,6 +137,1341 @@ async function setFixtureState(root, storyId, transform) {
   const state = await readJson(root, relativePath);
   transform(state);
   await write(root, relativePath, `${JSON.stringify(state, null, 2)}\n`);
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function waitForSignal(promise, label) {
+  let timeout;
+  const expired = new Promise((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${label}.`)), 2_000);
+  });
+  return Promise.race([promise, expired]).finally(() => clearTimeout(timeout));
+}
+
+async function createBatchPrepareFixture(storyId = "M3-BATCH-PREPARE") {
+  const fixture = await createFixture(storyId);
+  await git(fixture.root, "init", "-b", "dev");
+  await git(fixture.root, "config", "user.email", "m3-batch@example.test");
+  await git(fixture.root, "config", "user.name", "M3 Batch Test");
+  await write(fixture.root, "seed.txt", "seed\n");
+  await git(fixture.root, "add", "seed.txt");
+  await git(fixture.root, "commit", "-m", "fixture");
+
+  await write(fixture.root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
+name: frontier-e2e-development
+phases:
+  - id: implementation
+    order: 3
+    owner_agent: backend-developer
+    purpose: Implement changes.
+    required_outputs:
+      - .harness/runs/{runId}/phases/03-implementation/implementation-notes.md
+    next:
+      - unit-test
+  - id: unit-test
+    order: 4
+    owner_agent: unit-tester
+    purpose: Run tests.
+    required_outputs:
+      - .harness/runs/{runId}/phases/04-unit-test/test-report.md
+    next:
+      - done
+quality_gates: []
+`);
+  await setFixtureState(fixture.root, fixture.storyId, (state) => {
+    state.phase = "implementation";
+  });
+  const taskDagFile = `.harness/runs/${fixture.storyId}/phases/02-task-dag/task-dag.json`;
+  await write(fixture.root, taskDagFile, `${JSON.stringify({
+    schemaVersion: "1.0",
+    storyId: fixture.storyId,
+    nodes: [
+      {
+        taskId: "T1",
+        title: "Implement backend candidate",
+        type: "backend",
+        status: "pending",
+        ownerAgent: "backend-developer",
+        predictedFiles: ["backend/src/T1.java"],
+        acceptanceCriteria: ["Backend candidate is ready."],
+      },
+      {
+        taskId: "T2",
+        title: "Implement frontend candidate",
+        type: "frontend",
+        status: "pending",
+        ownerAgent: "frontend-developer",
+        predictedFiles: ["frontend/src/T2.ts"],
+        acceptanceCriteria: ["Frontend candidate is ready."],
+      },
+    ],
+    edges: [{ from: "T1", to: "T2", reason: "T2 follows T1." }],
+    waves: [["T1"], ["T2"]],
+    globalChanges: [],
+    risks: [],
+  }, null, 2)}\n`);
+  return {
+    ...fixture,
+    stateFile: `.harness/states/e2e-${fixture.storyId}.json`,
+    taskDagFile,
+  };
+}
+
+async function testPrepareBatchCreatesTaskScopedDispatchesWithoutPhaseRootArtifacts() {
+  const fixture = await createBatchPrepareFixture();
+  try {
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    const phaseRoot = `.harness/runs/${fixture.storyId}/phases/03-implementation`;
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    assert.equal(prepared.command, "prepare-batch");
+    assert.equal(prepared.ledger.tasks.length, 2);
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    for (const name of ["task.json", "result.json", "checkpoint.json"]) {
+      await assert.rejects(access(path.join(fixture.root, phaseRoot, name)), (error) => error?.code === "ENOENT");
+    }
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testBatchPreparationOwnsImplementationBeforeResolvingBase() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-PREPARATION-RACE");
+  let releaseBaseResolution;
+  let signalBaseResolution;
+  const baseResolutionPaused = new Promise((resolve) => {
+    signalBaseResolution = resolve;
+  });
+  const continueBaseResolution = new Promise((resolve) => {
+    releaseBaseResolution = resolve;
+  });
+  let pauseOnce = true;
+  try {
+    const batchPreparation = runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+      executeGit: async (args) => {
+        if (pauseOnce) {
+          pauseOnce = false;
+          signalBaseResolution();
+          await continueBaseResolution;
+        }
+        return execFileAsync("git", args, { cwd: fixture.root, windowsHide: true, shell: false });
+      },
+    }));
+    await baseResolutionPaused;
+
+    let ordinaryError = null;
+    try {
+      await runStoryCommand(storyOptions(fixture.root, {
+        command: "prepare",
+        stateFile: fixture.stateFile,
+      }));
+    } catch (error) {
+      ordinaryError = error;
+    }
+    releaseBaseResolution();
+    const prepared = await batchPreparation;
+
+    assert.ok(ordinaryError, "Ordinary prepare must not run while batch preparation owns implementation.");
+    assert.match(String(ordinaryError.message), /batch preparation lock/i);
+    assert.equal(prepared.ledger.tasks.length, 2);
+    const phaseRoot = `.harness/runs/${fixture.storyId}/phases/03-implementation`;
+    for (const name of ["task.json", "result.json", "checkpoint.json"]) {
+      await assert.rejects(access(path.join(fixture.root, phaseRoot, name)), (error) => error?.code === "ENOENT");
+    }
+  } finally {
+    releaseBaseResolution?.();
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testBatchCliArgumentsAndPowerShellEntryPointAreRegistered() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-CLI");
+  try {
+    const prepared = JSON.parse((await runStoryPowerShell(fixture.root, [
+      "-Command", "prepare-batch",
+      "-Root", fixture.root,
+      "-StateFile", fixture.stateFile,
+      "-TaskDagFile", fixture.taskDagFile,
+      "-Json",
+    ])).stdout);
+    assert.equal(prepared.command, "prepare-batch");
+    assert.equal(prepared.ledger.tasks.length, 2);
+
+    await readyFixtureBatch(fixture, prepared);
+    const finalized = JSON.parse((await runStoryPowerShell(fixture.root, [
+      "-Command", "finalize-batch",
+      "-Root", fixture.root,
+      "-StateFile", fixture.stateFile,
+      "-BatchFile", prepared.batchFile,
+      "-Json",
+    ])).stdout);
+    assert.equal(finalized.command, "finalize-batch");
+    assert.equal(finalized.status, "ready-for-apply");
+    assert.equal((await readJson(fixture.root, prepared.batchFile)).status, "finalized");
+    await readJson(fixture.root, finalized.receiptFile);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+
+  const invalidBase = await createBatchPrepareFixture("M3-BATCH-CLI-BASE");
+  try {
+    const script = path.join(REPOSITORY_ROOT, ".harness/scripts/lib/story-runtime.mjs");
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        script,
+        "prepare-batch",
+        "--root", invalidBase.root,
+        "--state-file", invalidBase.stateFile,
+        "--task-dag-file", invalidBase.taskDagFile,
+        "--base-ref", "HEAD",
+        "--json",
+      ], { cwd: invalidBase.root, windowsHide: true }),
+      (error) => /Unsupported or incomplete argument: --base-ref/.test(error?.stderr ?? ""),
+    );
+  } finally {
+    await rm(invalidBase.root, { recursive: true, force: true });
+  }
+}
+
+async function testPrepareBatchRejectsNonImplementationAndSingleNodeInputsWithoutArtifacts() {
+  const wrongPhase = await createBatchPrepareFixture("M3-BATCH-WRONG-PHASE");
+  try {
+    await setFixtureState(wrongPhase.root, wrongPhase.storyId, (state) => {
+      state.phase = "unit-test";
+    });
+    const stateBefore = await readFile(path.join(wrongPhase.root, wrongPhase.stateFile), "utf8");
+    await assert.rejects(
+      runStoryCommand(storyOptions(wrongPhase.root, {
+        command: "prepare-batch",
+        stateFile: wrongPhase.stateFile,
+        taskDagFile: wrongPhase.taskDagFile,
+      })),
+      /implementation/i,
+    );
+    assert.equal(await readFile(path.join(wrongPhase.root, wrongPhase.stateFile), "utf8"), stateBefore);
+    await assert.rejects(
+      access(path.join(wrongPhase.root, `.harness/runs/${wrongPhase.storyId}/batches`)),
+      (error) => error?.code === "ENOENT",
+    );
+  } finally {
+    await rm(wrongPhase.root, { recursive: true, force: true });
+  }
+
+  const singleTask = await createBatchPrepareFixture("M3-BATCH-SINGLE-TASK");
+  try {
+    const dag = await readJson(singleTask.root, singleTask.taskDagFile);
+    dag.nodes = [dag.nodes[0]];
+    dag.edges = [];
+    dag.waves = [["T1"]];
+    await write(singleTask.root, singleTask.taskDagFile, `${JSON.stringify(dag, null, 2)}\n`);
+    const stateBefore = await readFile(path.join(singleTask.root, singleTask.stateFile), "utf8");
+    await assert.rejects(
+      runStoryCommand(storyOptions(singleTask.root, {
+        command: "prepare-batch",
+        stateFile: singleTask.stateFile,
+        taskDagFile: singleTask.taskDagFile,
+      })),
+      /multiple|at least two/i,
+    );
+    assert.equal(await readFile(path.join(singleTask.root, singleTask.stateFile), "utf8"), stateBefore);
+  } finally {
+    await rm(singleTask.root, { recursive: true, force: true });
+  }
+
+  const customBase = await createBatchPrepareFixture("M3-BATCH-CUSTOM-BASE");
+  try {
+    await assert.rejects(
+      runStoryCommand(storyOptions(customBase.root, {
+        command: "prepare-batch",
+        stateFile: customBase.stateFile,
+        taskDagFile: customBase.taskDagFile,
+        baseRef: "HEAD",
+      })),
+      /base ref.*dev/i,
+    );
+  } finally {
+    await rm(customBase.root, { recursive: true, force: true });
+  }
+}
+
+async function testOrdinaryPrepareCannotBypassAnUnfinalizedBatch() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-PREPARE-BYPASS");
+  try {
+    await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    const phaseRoot = `.harness/runs/${fixture.storyId}/phases/03-implementation`;
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "prepare", stateFile: fixture.stateFile })),
+      /serial batch|batch.*final/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    for (const name of ["task.json", "result.json", "checkpoint.json", "implementation-notes.md"]) {
+      await assert.rejects(access(path.join(fixture.root, phaseRoot, name)), (error) => error?.code === "ENOENT");
+    }
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testPrepareBatchRejectsExistingOrdinaryImplementationArtifacts() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-REVERSE-BYPASS");
+  try {
+    await runStoryCommand(storyOptions(fixture.root, { command: "prepare", stateFile: fixture.stateFile }));
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "prepare-batch",
+        stateFile: fixture.stateFile,
+        taskDagFile: fixture.taskDagFile,
+      })),
+      /phase artifact|ordinary.*phase/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    await assert.rejects(
+      access(path.join(fixture.root, `.harness/runs/${fixture.storyId}/batches`)),
+      (error) => error?.code === "ENOENT",
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testOrdinaryApplyCannotBypassAnUnfinalizedBatch() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-APPLY-BYPASS");
+  try {
+    const ordinary = await runStoryCommand(storyOptions(fixture.root, { command: "prepare", stateFile: fixture.stateFile }));
+    await rm(path.join(fixture.root, ordinary.taskFile));
+    await rm(path.join(fixture.root, ordinary.checkpointFile));
+    await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await write(fixture.root, ordinary.taskFile, `${JSON.stringify(ordinary.task, null, 2)}\n`);
+    await write(fixture.root, ordinary.checkpointFile, `${JSON.stringify(ordinary.checkpoint, null, 2)}\n`);
+    await write(fixture.root, ordinary.task.expectedOutputs[0], "# Ordinary implementation\n");
+    await writePreparedResult(fixture.root, ordinary, dispatchResult(ordinary.task));
+
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    const checkpointBefore = await readFile(path.join(fixture.root, ordinary.checkpointFile), "utf8");
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /serial batch|batch.*final/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    assert.equal(await readFile(path.join(fixture.root, ordinary.checkpointFile), "utf8"), checkpointBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testOrdinaryM3FailsClosedOnAnInvalidBatchDirectory() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-INVALID-DIRECTORY");
+  try {
+    const batches = `.harness/runs/${fixture.storyId}/batches`;
+    await write(fixture.root, batches, "not a directory\n");
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "prepare", stateFile: fixture.stateFile })),
+      /serial batch directory/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizeBatchRejectsLedgerRevisionDriftBeforePhaseArtifacts() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-REVISION-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    await setFixtureState(fixture.root, fixture.storyId, (state) => {
+      state.runtime.revision += 1;
+    });
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "finalize-batch",
+        stateFile: fixture.stateFile,
+        batchFile: prepared.batchFile,
+      })),
+      /ledger|revision|state/i,
+    );
+    const phaseRoot = `.harness/runs/${fixture.storyId}/phases/03-implementation`;
+    await assert.rejects(access(path.join(fixture.root, phaseRoot, "task.json")), (error) => error?.code === "ENOENT");
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizeBatchRejectsNonImplementationPhaseWithoutStateChange() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-FINALIZE-WRONG-PHASE");
+  try {
+    await setFixtureState(fixture.root, fixture.storyId, (state) => {
+      state.phase = "unit-test";
+    });
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "finalize-batch",
+        stateFile: fixture.stateFile,
+        batchFile: `.harness/runs/${fixture.storyId}/batches/not-a-ledger/ledger.json`,
+      })),
+      /active implementation/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+const RECEIPT_PLACEHOLDER_SHA256 = `sha256:${"a".repeat(64)}`;
+
+async function batchFileSha256(root, relativePath) {
+  return `sha256:${createHash("sha256").update(await readFile(path.join(root, relativePath))).digest("hex")}`;
+}
+
+function batchInspectionOptions(fixture, batchFile) {
+  return {
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    batchFile,
+    now: () => FIXED_NOW,
+  };
+}
+
+function taskRecords(task) {
+  return [
+    { type: "note", status: "recorded", message: "shared batch observation", actor: "worker" },
+    { type: "note", status: "recorded", message: `${task.taskId} specific observation`, actor: "worker" },
+  ];
+}
+
+async function writeCompletedBatchTaskEvidence(fixture, ledger, task, records = taskRecords(task)) {
+  const report = `# ${task.taskId} report\n\n${task.title}\n`;
+  await write(fixture.root, task.reportFile, report);
+  const result = {
+    schemaVersion: "1.1",
+    dispatchId: task.dispatchId,
+    storyId: fixture.storyId,
+    phase: "implementation",
+    batchId: ledger.batchId,
+    taskId: task.taskId,
+    taskRoot: task.taskRoot,
+    status: "completed",
+    summary: `${task.taskId} completed`,
+    outputs: [{ path: task.reportFile }],
+    records,
+  };
+  await write(fixture.root, task.resultFile, `${JSON.stringify(result, null, 2)}\n`);
+
+  const reportBytes = Buffer.byteLength(report, "utf8");
+  const reportSha256 = await batchFileSha256(fixture.root, task.reportFile);
+  const resultSha256 = await batchFileSha256(fixture.root, task.resultFile);
+  const candidateContent = `${task.taskId}\n`;
+  await write(fixture.root, task.predictedFiles[0], candidateContent);
+  const candidate = {
+    path: task.predictedFiles[0],
+    kind: task.type,
+    sha256: await batchFileSha256(fixture.root, task.predictedFiles[0]),
+    bytes: Buffer.byteLength(candidateContent, "utf8"),
+  };
+  const reportFile = {
+    path: task.reportFile,
+    kind: "phase-output",
+    sha256: reportSha256,
+    bytes: reportBytes,
+  };
+  const executionReceipt = {
+    schemaVersion: "1.0",
+    storyId: fixture.storyId,
+    runId: fixture.storyId,
+    taskId: task.taskId,
+    dispatchId: task.dispatchId,
+    phase: "implementation",
+    ownerAgent: task.ownerAgent,
+    baseCommit: ledger.baseCommit,
+    headCommit: ledger.baseCommit,
+    outcome: "ready-for-integration",
+    planSha256: RECEIPT_PLACEHOLDER_SHA256,
+    statusSha256: RECEIPT_PLACEHOLDER_SHA256,
+    inputManifestSha256: RECEIPT_PLACEHOLDER_SHA256,
+    inheritedSnapshotSha256: task.inheritedSnapshotSha256,
+    resultEvidenceFile: task.resultFile,
+    resultSha256,
+    files: [candidate, reportFile],
+    completedAt: FIXED_NOW,
+  };
+  await write(fixture.root, task.executionReceiptFile, `${JSON.stringify(executionReceipt, null, 2)}\n`);
+}
+
+async function writeCompletedBatchIntegrationEvidence(fixture, ledger, task) {
+  const candidateContent = await readFile(path.join(fixture.root, task.predictedFiles[0]), "utf8");
+  const report = await readFile(path.join(fixture.root, task.reportFile), "utf8");
+  const resultSha256 = await batchFileSha256(fixture.root, task.resultFile);
+  const planFile = `${path.posix.dirname(task.integrationReceiptFile)}/integration-plan.json`;
+  const plan = {
+    schemaVersion: "1.0",
+    storyId: fixture.storyId,
+    runId: fixture.storyId,
+    batchId: ledger.batchId,
+    taskId: task.taskId,
+    taskRoot: task.taskRoot,
+    dispatchId: task.dispatchId,
+    phase: "implementation",
+    ownerAgent: task.ownerAgent,
+    baseCommit: ledger.baseCommit,
+    resultFile: task.resultFile,
+    executionReceiptFile: task.executionReceiptFile,
+    executionReceiptSha256: task.executionReceiptSha256,
+    workerResultEvidenceFile: task.resultFile,
+    workerResultSha256: resultSha256,
+  };
+  await write(fixture.root, planFile, `${JSON.stringify(plan, null, 2)}\n`);
+  const integrationReceipt = {
+    schemaVersion: "1.0",
+    storyId: fixture.storyId,
+    runId: fixture.storyId,
+    taskId: task.taskId,
+    dispatchId: task.dispatchId,
+    phase: "implementation",
+    ownerAgent: task.ownerAgent,
+    baseCommit: ledger.baseCommit,
+    planSha256: await batchFileSha256(fixture.root, planFile),
+    resultFile: task.resultFile,
+    resultSha256,
+    appliedFiles: [
+      {
+        path: task.predictedFiles[0],
+        kind: task.type,
+        sha256: await batchFileSha256(fixture.root, task.predictedFiles[0]),
+        bytes: Buffer.byteLength(candidateContent, "utf8"),
+      },
+      {
+        path: task.reportFile,
+        kind: "phase-output",
+        sha256: await batchFileSha256(fixture.root, task.reportFile),
+        bytes: Buffer.byteLength(report, "utf8"),
+      },
+    ],
+    completedAt: FIXED_NOW,
+  };
+  await write(fixture.root, task.integrationReceiptFile, `${JSON.stringify(integrationReceipt, null, 2)}\n`);
+}
+
+async function readyFixtureBatch(fixture, prepared, recordsForTask = taskRecords) {
+  let ledger = prepared.ledger;
+  for (const taskId of ledger.tasks.map((task) => task.taskId)) {
+    const claimed = await claimBatchTask({ ...batchInspectionOptions(fixture, prepared.batchFile), taskId });
+    const snapshot = await recordBatchInheritedSnapshot({
+      ...batchInspectionOptions(fixture, prepared.batchFile),
+      taskId,
+    });
+    const task = snapshot.task;
+    await writeCompletedBatchTaskEvidence(fixture, snapshot.ledger, task, recordsForTask(task));
+    const workerReady = await recordBatchWorkerReady({
+      ...batchInspectionOptions(fixture, prepared.batchFile),
+      taskId,
+      executionReceiptFile: task.executionReceiptFile,
+    });
+    await writeCompletedBatchIntegrationEvidence(fixture, workerReady.ledger, workerReady.task);
+    const integrated = await recordBatchIntegration({
+      ...batchInspectionOptions(fixture, prepared.batchFile),
+      taskId,
+      integrationReceiptFile: task.integrationReceiptFile,
+    });
+    assert.equal(workerReady.task.status, "ready-for-integration");
+    assert.equal(integrated.task.status, "integrated");
+    ledger = integrated.ledger;
+  }
+  assert.equal(ledger.status, "ready-for-finalization");
+  return ledger;
+}
+
+async function testFinalizeBatchMaterializesPhaseArtifactsAndLeavesStateForApply() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-FINALIZE");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    const result = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    const phaseRoot = `.harness/runs/${fixture.storyId}/phases/03-implementation`;
+    const task = await readJson(fixture.root, `${phaseRoot}/task.json`);
+    const phaseResult = await readJson(fixture.root, `${phaseRoot}/result.json`);
+    const checkpoint = await readJson(fixture.root, `${phaseRoot}/checkpoint.json`);
+    const notes = await readFile(path.join(fixture.root, phaseRoot, "implementation-notes.md"), "utf8");
+    const ledger = await readJson(fixture.root, prepared.batchFile);
+    const receipt = await readJson(fixture.root, result.receiptFile);
+
+    assert.equal(result.status, "ready-for-apply");
+    assert.equal(ledger.status, "finalized");
+    assert.equal(receipt.batchId, ledger.batchId);
+    assert.deepEqual(receipt.finalizationArtifacts, {
+      taskFile: `${phaseRoot}/task.json`,
+      taskSha256: await batchFileSha256(fixture.root, `${phaseRoot}/task.json`),
+      resultFile: `${phaseRoot}/result.json`,
+      resultSha256: await batchFileSha256(fixture.root, `${phaseRoot}/result.json`),
+      notesFile: `${phaseRoot}/implementation-notes.md`,
+      notesSha256: await batchFileSha256(fixture.root, `${phaseRoot}/implementation-notes.md`),
+    });
+    assert.equal(task.schemaVersion, "1.0");
+    assert.equal(phaseResult.schemaVersion, "1.0");
+    assert.equal(checkpoint.status, "prepared");
+    assert.deepEqual(checkpoint.batchFinalization, {
+      schemaVersion: "1.0",
+      storyId: fixture.storyId,
+      runId: fixture.storyId,
+      stateFile: fixture.stateFile,
+      phase: "implementation",
+      preparedRevision: 1,
+      batchId: ledger.batchId,
+      ledgerFile: prepared.batchFile,
+      ledgerSha256: await batchFileSha256(fixture.root, prepared.batchFile),
+      receiptFile: result.receiptFile,
+      receiptSha256: await batchFileSha256(fixture.root, result.receiptFile),
+      taskSha256: await batchFileSha256(fixture.root, `${phaseRoot}/task.json`),
+      resultSha256: await batchFileSha256(fixture.root, `${phaseRoot}/result.json`),
+      notesSha256: await batchFileSha256(fixture.root, `${phaseRoot}/implementation-notes.md`),
+    });
+    assert.equal(Object.hasOwn(task, "batchFinalization"), false);
+    assert.equal(Object.hasOwn(phaseResult, "batchFinalization"), false);
+    assert.deepEqual(phaseResult.outputs, [{ path: `${phaseRoot}/implementation-notes.md` }]);
+    assert.deepEqual(phaseResult.records, [
+      { type: "note", status: "recorded", message: "shared batch observation", actor: "worker" },
+      { type: "note", status: "recorded", message: "T1 specific observation", actor: "worker" },
+      { type: "note", status: "recorded", message: "T2 specific observation", actor: "worker" },
+    ]);
+    assert.match(notes, /# T1 report/);
+    assert.match(notes, /# T2 report/);
+    assert.match(notes, new RegExp(ledger.batchReceiptFile.replaceAll(".", "\\.")));
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+
+    const applied = await runStoryCommand(storyOptions(fixture.root, {
+      command: "apply",
+      stateFile: fixture.stateFile,
+    }));
+    assert.equal(applied.state.phase, "unit-test");
+    const stateAfterApply = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /prepare|result/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateAfterApply);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizedBatchReceiptDriftBlocksApplyWithoutMutation() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-RECEIPT-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const finalized = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    const receipt = await readFile(path.join(fixture.root, finalized.receiptFile), "utf8");
+    await write(fixture.root, finalized.receiptFile, `${receipt}\n`);
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    const checkpointBefore = await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /receipt.*drift|batch.*binding|finalized.*batch/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    assert.equal(await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8"), checkpointBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizeBatchRejectsLinkedImplementationPhaseBeforeExternalWrites() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-LINKED-PHASE");
+  const external = await mkdtemp(path.join(os.tmpdir(), "frontier-story-runtime-linked-phase-"));
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const phaseRoot = path.join(fixture.root, ".harness", "runs", fixture.storyId, "phases", "03-implementation");
+    await rm(phaseRoot, { recursive: true, force: true });
+    await mkdir(path.dirname(phaseRoot), { recursive: true });
+    await symlink(external, phaseRoot, "junction");
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "finalize-batch",
+        stateFile: fixture.stateFile,
+        batchFile: prepared.batchFile,
+      })),
+      /symbolic link|real directory|repository root/i,
+    );
+
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    for (const name of ["batch-preparation.lock", "task.json", "checkpoint.json", "implementation-notes.md", "result.json"]) {
+      await assert.rejects(access(path.join(external, name)), (error) => error?.code === "ENOENT", name);
+    }
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(external, { recursive: true, force: true });
+  }
+}
+
+async function testConcurrentFinalizeBatchRejectsOverlappingCheckpointBinding() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-CONCURRENT-FINALIZE");
+  const firstLedgerFinalized = deferred();
+  const releaseFirst = deferred();
+  const firstAtRename = deferred();
+  const releaseRename = deferred();
+  let firstFinalize;
+  let secondFinalize;
+  const hooks = {
+    afterLedgerFinalizedBeforeCheckpointBinding: async () => {
+      firstLedgerFinalized.resolve();
+      await releaseFirst.promise;
+    },
+    beforeCheckpointBindingRename: async () => {
+      firstAtRename.resolve();
+      await releaseRename.promise;
+    },
+  };
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const input = {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+      testHooks: hooks,
+    };
+    firstFinalize = runStoryCommand(storyOptions(fixture.root, input));
+    firstFinalize.catch((error) => firstLedgerFinalized.reject(error));
+    await waitForSignal(firstLedgerFinalized.promise, "the first finalized ledger");
+    releaseFirst.resolve();
+    await waitForSignal(firstAtRename.promise, "the first checkpoint temporary write");
+    secondFinalize = runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    await assert.rejects(secondFinalize, /batch finalization lock already exists/i);
+    releaseRename.resolve();
+
+    const first = await firstFinalize;
+    assert.equal(first.status, "ready-for-apply");
+    const repeated = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    assert.equal(repeated.status, "ready-for-apply");
+    const phaseRoot = path.join(fixture.root, ".harness", "runs", fixture.storyId, "phases", "03-implementation");
+    const checkpoint = await readJson(fixture.root, `.harness/runs/${fixture.storyId}/phases/03-implementation/checkpoint.json`);
+    assert.ok(checkpoint.batchFinalization);
+    assert.deepEqual((await readdir(phaseRoot)).filter((entry) => entry.includes(".tmp")), []);
+  } finally {
+    releaseFirst.resolve();
+    releaseRename.resolve();
+    await Promise.allSettled([firstFinalize, secondFinalize].filter(Boolean));
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testCoordinatedResultAndCheckpointHashDriftBlocksBatchApplyWithoutMutation() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-COORDINATED-RESULT-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const finalized = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    const resultFile = `.harness/runs/${fixture.storyId}/phases/03-implementation/result.json`;
+    const result = await readJson(fixture.root, resultFile);
+    result.summary = "tampered but still schema-valid";
+    await write(fixture.root, resultFile, `${JSON.stringify(result, null, 2)}\n`);
+    const checkpoint = await readJson(fixture.root, finalized.checkpointFile);
+    checkpoint.batchFinalization.resultSha256 = await batchFileSha256(fixture.root, resultFile);
+    await write(fixture.root, finalized.checkpointFile, `${JSON.stringify(checkpoint, null, 2)}\n`);
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    const checkpointBefore = await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /finalized.*batch|receipt.*artifact|batch.*binding/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    assert.equal(await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8"), checkpointBefore);
+    assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "implementation");
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testBatchApplyResumesAfterRecordBeforeAdvance() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-APPLY-RESUME");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const finalized = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "apply",
+        stateFile: fixture.stateFile,
+        beforeAdvance: async () => { throw new Error("simulated pre-advance interruption"); },
+      })),
+      /pre-advance interruption/i,
+    );
+    const interrupted = await readJson(fixture.root, fixture.stateFile);
+    assert.equal(interrupted.phase, "implementation");
+    assert.ok(interrupted.runtime.revision > finalized.task.preparedRevision);
+    assert.equal(interrupted.runtime.records.length, 3);
+    assert.equal((await readJson(fixture.root, finalized.checkpointFile)).status, "result-received");
+
+    const resumed = await runStoryCommand(storyOptions(fixture.root, {
+      command: "apply",
+      stateFile: fixture.stateFile,
+    }));
+    assert.equal(resumed.state.phase, "unit-test");
+    const completed = await readJson(fixture.root, fixture.stateFile);
+    assert.equal(completed.runtime.records.filter((record) => record.type === "note").length, 3);
+    assert.equal(completed.runtime.revision, interrupted.runtime.revision + 1);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testBatchRecoveryRejectsReceiptDriftAfterStateAdvance() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-RECOVERY-RECEIPT-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const finalized = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "apply",
+        stateFile: fixture.stateFile,
+        afterAdvance: async () => { throw new Error("simulated post-advance interruption"); },
+      })),
+      /post-advance interruption/i,
+    );
+    assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "unit-test");
+    assert.equal((await readJson(fixture.root, finalized.checkpointFile)).status, "result-received");
+
+    const receipt = await readFile(path.join(fixture.root, finalized.receiptFile), "utf8");
+    await write(fixture.root, finalized.receiptFile, `${receipt}\n`);
+    const checkpointBeforeRetry = await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /receipt.*drift|batch.*binding|finalized.*batch/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8"), checkpointBeforeRetry);
+    assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "unit-test");
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testBatchRecoveryRejectsLedgerAndBindingDriftAfterStateAdvance() {
+  const cases = [
+    {
+      suffix: "LEDGER",
+      mutate: async (fixture, prepared) => {
+        const ledger = await readFile(path.join(fixture.root, prepared.batchFile), "utf8");
+        await write(fixture.root, prepared.batchFile, `${ledger}\n`);
+      },
+      expected: /ledger.*drift|batch.*binding|finalized.*batch/i,
+    },
+    {
+      suffix: "BINDING",
+      mutate: async (fixture, _prepared, finalized) => {
+        const checkpoint = await readJson(fixture.root, finalized.checkpointFile);
+        checkpoint.batchFinalization.batchId = "batch-mismatched";
+        await write(fixture.root, finalized.checkpointFile, `${JSON.stringify(checkpoint, null, 2)}\n`);
+      },
+      expected: /binding|finalized.*batch/i,
+    },
+    {
+      suffix: "MISSING-BINDING",
+      mutate: async (fixture, _prepared, finalized) => {
+        const checkpoint = await readJson(fixture.root, finalized.checkpointFile);
+        delete checkpoint.batchFinalization;
+        await write(fixture.root, finalized.checkpointFile, `${JSON.stringify(checkpoint, null, 2)}\n`);
+      },
+      expected: /binding|finalized.*batch/i,
+    },
+    {
+      suffix: "COORDINATED-RECEIPT-BINDING",
+      mutate: async (fixture, _prepared, finalized) => {
+        const receipt = await readFile(path.join(fixture.root, finalized.receiptFile), "utf8");
+        await write(fixture.root, finalized.receiptFile, `${receipt}\n`);
+        const checkpoint = await readJson(fixture.root, finalized.checkpointFile);
+        checkpoint.batchFinalization.receiptSha256 = await batchFileSha256(fixture.root, finalized.receiptFile);
+        await write(fixture.root, finalized.checkpointFile, `${JSON.stringify(checkpoint, null, 2)}\n`);
+      },
+      expected: /receipt.*binding|receipt.*drift|finalized.*batch/i,
+    },
+  ];
+  for (const scenario of cases) {
+    const fixture = await createBatchPrepareFixture(`M3-BATCH-RECOVERY-${scenario.suffix}-DRIFT`);
+    try {
+      const prepared = await runStoryCommand(storyOptions(fixture.root, {
+        command: "prepare-batch",
+        stateFile: fixture.stateFile,
+        taskDagFile: fixture.taskDagFile,
+      }));
+      await readyFixtureBatch(fixture, prepared);
+      const finalized = await runStoryCommand(storyOptions(fixture.root, {
+        command: "finalize-batch",
+        stateFile: fixture.stateFile,
+        batchFile: prepared.batchFile,
+      }));
+      await assert.rejects(
+        runStoryCommand(storyOptions(fixture.root, {
+          command: "apply",
+          stateFile: fixture.stateFile,
+          afterAdvance: async () => { throw new Error("simulated post-advance interruption"); },
+        })),
+        /post-advance interruption/i,
+      );
+
+      await scenario.mutate(fixture, prepared, finalized);
+      const checkpointBeforeRetry = await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8");
+      await assert.rejects(
+        runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+        scenario.expected,
+      );
+      assert.equal(await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8"), checkpointBeforeRetry);
+      assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "unit-test");
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  }
+}
+
+async function testBatchRecoveryRejectsCoordinatedLedgerStateFileAndBindingDriftAfterStateAdvance() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-RECOVERY-COORDINATED-LEDGER-STATE-FILE-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const finalized = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "apply",
+        stateFile: fixture.stateFile,
+        afterAdvance: async () => { throw new Error("simulated post-advance interruption"); },
+      })),
+      /post-advance interruption/i,
+    );
+
+    const ledger = await readJson(fixture.root, prepared.batchFile);
+    ledger.stateFile = ".harness/states/tampered.json";
+    await write(fixture.root, prepared.batchFile, `${JSON.stringify(ledger, null, 2)}\n`);
+    const checkpoint = await readJson(fixture.root, finalized.checkpointFile);
+    checkpoint.batchFinalization.ledgerSha256 = await batchFileSha256(fixture.root, prepared.batchFile);
+    await write(fixture.root, finalized.checkpointFile, `${JSON.stringify(checkpoint, null, 2)}\n`);
+    const checkpointBeforeRetry = await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8");
+    const stateBeforeRetry = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /state.*file|active Story|ledger.*binding|finalized.*batch/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8"), checkpointBeforeRetry);
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBeforeRetry);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testOrdinaryImplementationRecoveryAfterStateAdvance() {
+  const fixture = await createBatchPrepareFixture("M3-ORDINARY-IMPLEMENTATION-RECOVERY");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare",
+      stateFile: fixture.stateFile,
+    }));
+    await write(fixture.root, prepared.task.expectedOutputs[0], "# Ordinary implementation\n");
+    await writePreparedResult(fixture.root, prepared, dispatchResult(prepared.task));
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "apply",
+        stateFile: fixture.stateFile,
+        afterAdvance: async () => { throw new Error("simulated post-advance interruption"); },
+      })),
+      /post-advance interruption/i,
+    );
+    assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "unit-test");
+    assert.equal((await readJson(fixture.root, prepared.checkpointFile)).status, "result-received");
+    await assert.rejects(
+      access(path.join(fixture.root, `.harness/runs/${fixture.storyId}/batches`)),
+      (error) => error?.code === "ENOENT",
+    );
+
+    const resumed = await runStoryCommand(storyOptions(fixture.root, {
+      command: "apply",
+      stateFile: fixture.stateFile,
+    }));
+    assert.equal(resumed.status, "already-applied");
+    assert.equal(resumed.state.phase, "unit-test");
+    assert.equal((await readJson(fixture.root, prepared.checkpointFile)).status, "completed");
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizedBatchRequiresAMatchingCheckpointBinding() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-BINDING");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const finalized = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    const checkpoint = await readJson(fixture.root, finalized.checkpointFile);
+    const binding = checkpoint.batchFinalization;
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+
+    delete checkpoint.batchFinalization;
+    await write(fixture.root, finalized.checkpointFile, `${JSON.stringify(checkpoint, null, 2)}\n`);
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /batch.*binding/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+
+    checkpoint.batchFinalization = {
+      ...binding,
+      batchId: "batch-mismatched",
+    };
+    await write(fixture.root, finalized.checkpointFile, `${JSON.stringify(checkpoint, null, 2)}\n`);
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /batch.*binding/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testBatchApplyRejectsCoordinatedFormalArtifactAndCheckpointDrift() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-FORMAL-ARTIFACT-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const finalized = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    const result = await readJson(fixture.root, finalized.resultFile);
+    result.summary = "tampered formal result";
+    await write(fixture.root, finalized.resultFile, `${JSON.stringify(result, null, 2)}\n`);
+    const notesFile = finalized.task.expectedOutputs[0];
+    const notes = await readFile(path.join(fixture.root, notesFile), "utf8");
+    await write(fixture.root, notesFile, `${notes}tampered formal notes\n`);
+    const checkpoint = await readJson(fixture.root, finalized.checkpointFile);
+    checkpoint.batchFinalization.resultSha256 = await batchFileSha256(fixture.root, finalized.resultFile);
+    checkpoint.batchFinalization.notesSha256 = await batchFileSha256(fixture.root, notesFile);
+    await write(fixture.root, finalized.checkpointFile, `${JSON.stringify(checkpoint, null, 2)}\n`);
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
+      /formal implementation artifact|finalized batch artifact/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizeBatchRejectsAnUnfinishedLedgerWithoutStateChange() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-UNFINISHED");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "finalize-batch",
+        stateFile: fixture.stateFile,
+        batchFile: prepared.batchFile,
+      })),
+      /integration receipt|finalized|complete/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizeBatchRejectsPreexistingPhaseArtifactsBeforeFinalizingLedger() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-PHASE-ARTIFACT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const phaseRoot = `.harness/runs/${fixture.storyId}/phases/03-implementation`;
+    await write(fixture.root, `${phaseRoot}/task.json`, "{}\n");
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "finalize-batch",
+        stateFile: fixture.stateFile,
+        batchFile: prepared.batchFile,
+      })),
+      /phase artifact|existing.*phase/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    const ledger = await readJson(fixture.root, prepared.batchFile);
+    assert.equal(ledger.status, "ready-for-finalization");
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizeBatchRejectsTaskScopedEvidenceRecordsBeforeFinalizingLedger() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-TASK-RECORD");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared, (task) => ([
+      {
+        type: "test",
+        status: "passed",
+        path: task.reportFile,
+        message: `${task.taskId} evidence remains task-scoped`,
+        actor: "worker",
+      },
+    ]));
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "finalize-batch",
+        stateFile: fixture.stateFile,
+        batchFile: prepared.batchFile,
+      })),
+      /evidence path.*phase result/i,
+    );
+    const ledger = await readJson(fixture.root, prepared.batchFile);
+    assert.equal(ledger.status, "ready-for-finalization");
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizeBatchRejectsTaskResultAndReportHashDriftBeforeFinalization() {
+  const resultFixture = await createBatchPrepareFixture("M3-BATCH-RESULT-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(resultFixture.root, {
+      command: "prepare-batch",
+      stateFile: resultFixture.stateFile,
+      taskDagFile: resultFixture.taskDagFile,
+    }));
+    await readyFixtureBatch(resultFixture, prepared);
+    const ledger = await readJson(resultFixture.root, prepared.batchFile);
+    const result = await readJson(resultFixture.root, ledger.tasks[0].resultFile);
+    result.summary = "tampered after integration";
+    await write(resultFixture.root, ledger.tasks[0].resultFile, `${JSON.stringify(result, null, 2)}\n`);
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(resultFixture.root, {
+        command: "finalize-batch",
+        stateFile: resultFixture.stateFile,
+        batchFile: prepared.batchFile,
+      })),
+      /result hash.*(?:drifted|does not match)/i,
+    );
+    assert.equal((await readJson(resultFixture.root, prepared.batchFile)).status, "ready-for-finalization");
+  } finally {
+    await rm(resultFixture.root, { recursive: true, force: true });
+  }
+
+  const reportFixture = await createBatchPrepareFixture("M3-BATCH-REPORT-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(reportFixture.root, {
+      command: "prepare-batch",
+      stateFile: reportFixture.stateFile,
+      taskDagFile: reportFixture.taskDagFile,
+    }));
+    await readyFixtureBatch(reportFixture, prepared);
+    const ledger = await readJson(reportFixture.root, prepared.batchFile);
+    await write(reportFixture.root, ledger.tasks[0].reportFile, "# tampered task report\n");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(reportFixture.root, {
+        command: "finalize-batch",
+        stateFile: reportFixture.stateFile,
+        batchFile: prepared.batchFile,
+      })),
+      /(?:report hash.*drifted|applied target hash.*does not match)/i,
+    );
+    assert.equal((await readJson(reportFixture.root, prepared.batchFile)).status, "ready-for-finalization");
+  } finally {
+    await rm(reportFixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testFinalizeBatchReusesFinalizedLedgerBeforeApply() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-FINALIZE-RETRY");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    await readyFixtureBatch(fixture, prepared);
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "finalize-batch",
+        stateFile: fixture.stateFile,
+        batchFile: prepared.batchFile,
+        testHooks: {
+          afterLedgerFinalizedBeforeCheckpointBinding: async () => {
+            throw new Error("injected ledger-to-checkpoint interruption");
+          },
+        },
+      })),
+      /injected ledger-to-checkpoint interruption/i,
+    );
+    const phaseRoot = `.harness/runs/${fixture.storyId}/phases/03-implementation`;
+    const ledgerBeforeRetry = await readFile(path.join(fixture.root, prepared.batchFile), "utf8");
+    const ledger = JSON.parse(ledgerBeforeRetry);
+    const receiptBeforeRetry = await readFile(path.join(fixture.root, ledger.batchReceiptFile), "utf8");
+    const taskBeforeRetry = await readFile(path.join(fixture.root, `${phaseRoot}/task.json`), "utf8");
+    const resultBeforeRetry = await readFile(path.join(fixture.root, `${phaseRoot}/result.json`), "utf8");
+    const notesBeforeRetry = await readFile(path.join(fixture.root, `${phaseRoot}/implementation-notes.md`), "utf8");
+    const checkpointBeforeRetry = await readJson(fixture.root, `${phaseRoot}/checkpoint.json`);
+    assert.equal(ledger.status, "finalized");
+    assert.equal(checkpointBeforeRetry.batchFinalization, undefined);
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+
+    const first = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    const second = await runStoryCommand(storyOptions(fixture.root, {
+      command: "finalize-batch",
+      stateFile: fixture.stateFile,
+      batchFile: prepared.batchFile,
+    }));
+    assert.equal(second.status, "ready-for-apply");
+    assert.equal(second.task.dispatchId, first.task.dispatchId);
+    assert.equal(await readFile(path.join(fixture.root, first.resultFile), "utf8"), resultBeforeRetry);
+    assert.equal(await readFile(path.join(fixture.root, prepared.batchFile), "utf8"), ledgerBeforeRetry);
+    assert.equal(await readFile(path.join(fixture.root, ledger.batchReceiptFile), "utf8"), receiptBeforeRetry);
+    assert.equal(await readFile(path.join(fixture.root, `${phaseRoot}/task.json`), "utf8"), taskBeforeRetry);
+    assert.equal(await readFile(path.join(fixture.root, `${phaseRoot}/implementation-notes.md`), "utf8"), notesBeforeRetry);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
 }
 
 async function testPrepareCreatesStructuredTaskAndCheckpoint() {
@@ -943,6 +2301,7 @@ async function testM3RuntimeIsRegisteredInHarnessContracts() {
     ".harness/schemas/dispatch-result.schema.json",
     ".harness/scripts/run-story.ps1",
     ".harness/scripts/lib/story-runtime.mjs",
+    ".harness/scripts/lib/batch-finalization-contract.mjs",
     ".harness/scripts/tests/story-runtime.test.mjs",
     "docs/harness-m3-agent-dispatcher",
   ]) {
@@ -954,6 +2313,15 @@ async function testM3RuntimeIsRegisteredInHarnessContracts() {
   assert.match(smoke, /run-story\.ps1/);
   assert.match(smoke, /-Command prepare/);
   assert.match(smoke, /-Command status/);
+  const batchSourceMatch = smoke.match(/\$batchSource = @"\r?\n([\s\S]*?)\r?\n"@/);
+  assert.ok(batchSourceMatch, "Serial batch smoke must embed its Node source.");
+  const batchSource = batchSourceMatch[1];
+  assert.match(batchSource, /import\s*\{\s*runStoryCommand\s*\}\s*from/);
+  assert.match(batchSource, /await runStoryCommand\(\{\s*root,\s*command:\s*'prepare-batch',\s*stateFile,\s*taskDagFile,\s*executeGit,/);
+  assert.match(batchSource, /const executeGit = async \(args\) => \{\s*if \(args\[0\] === 'worktree' && \(args\[1\] === 'add' \|\| args\[1\] === 'remove'\)\) \{\s*throw new Error\('Serial batch smoke must not create or remove a Worktree\.'\);\s*\}/);
+  assert.match(batchSource, /await runWorktreeCommand\(\{\s*root,\s*command:\s*'batch-plan',\s*stateFile,\s*executeGit,/);
+  assert.match(batchSource, /await runWorktreeCommand\(\{\s*root,\s*command:\s*'batch-status',\s*stateFile,\s*executeGit\s*\}\)/);
+  assert.doesNotMatch(batchSource, /\bprepareSerialBatch\b/);
 
   const readme = await readFile(path.join(REPOSITORY_ROOT, ".harness/scripts/README.md"), "utf8");
   assert.match(readme, /run-story\.ps1/);
@@ -965,6 +2333,33 @@ async function testM3RuntimeIsRegisteredInHarnessContracts() {
   assert.match(structureValidator, /\.harness\/schemas\/dispatch-result\.schema\.json/);
 }
 
+await testPrepareBatchCreatesTaskScopedDispatchesWithoutPhaseRootArtifacts();
+await testBatchPreparationOwnsImplementationBeforeResolvingBase();
+await testBatchCliArgumentsAndPowerShellEntryPointAreRegistered();
+await testPrepareBatchRejectsNonImplementationAndSingleNodeInputsWithoutArtifacts();
+await testOrdinaryPrepareCannotBypassAnUnfinalizedBatch();
+await testPrepareBatchRejectsExistingOrdinaryImplementationArtifacts();
+await testOrdinaryApplyCannotBypassAnUnfinalizedBatch();
+await testOrdinaryM3FailsClosedOnAnInvalidBatchDirectory();
+await testFinalizeBatchMaterializesPhaseArtifactsAndLeavesStateForApply();
+await testFinalizedBatchReceiptDriftBlocksApplyWithoutMutation();
+await testFinalizeBatchRejectsLinkedImplementationPhaseBeforeExternalWrites();
+await testConcurrentFinalizeBatchRejectsOverlappingCheckpointBinding();
+await testCoordinatedResultAndCheckpointHashDriftBlocksBatchApplyWithoutMutation();
+await testBatchApplyResumesAfterRecordBeforeAdvance();
+await testBatchRecoveryRejectsReceiptDriftAfterStateAdvance();
+await testBatchRecoveryRejectsLedgerAndBindingDriftAfterStateAdvance();
+await testBatchRecoveryRejectsCoordinatedLedgerStateFileAndBindingDriftAfterStateAdvance();
+await testOrdinaryImplementationRecoveryAfterStateAdvance();
+await testFinalizedBatchRequiresAMatchingCheckpointBinding();
+await testBatchApplyRejectsCoordinatedFormalArtifactAndCheckpointDrift();
+await testFinalizeBatchRejectsAnUnfinishedLedgerWithoutStateChange();
+await testFinalizeBatchRejectsPreexistingPhaseArtifactsBeforeFinalizingLedger();
+await testFinalizeBatchRejectsTaskScopedEvidenceRecordsBeforeFinalizingLedger();
+await testFinalizeBatchRejectsTaskResultAndReportHashDriftBeforeFinalization();
+await testFinalizeBatchRejectsLedgerRevisionDriftBeforePhaseArtifacts();
+await testFinalizeBatchRejectsNonImplementationPhaseWithoutStateChange();
+await testFinalizeBatchReusesFinalizedLedgerBeforeApply();
 await testPrepareCreatesStructuredTaskAndCheckpoint();
 await testPrepareReusesCurrentPhaseTask();
 await testStatusIsReadOnly();

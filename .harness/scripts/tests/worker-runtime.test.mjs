@@ -53,6 +53,44 @@ function dispatchResult(task, overrides = {}) {
   };
 }
 
+function dispatchTaskV11(overrides = {}) {
+  const taskRoot = ".harness/runs/M5-B3-TEST/phases/00-requirement/tasks/T1";
+  return {
+    schemaVersion: "1.1",
+    dispatchId: DISPATCH_ID,
+    storyId: "M5-B3-TEST",
+    phase: "requirement",
+    batchId: "requirement-a1b2c3d4e5f6",
+    taskId: "T1",
+    taskRoot,
+    ownerAgent: "requirement-analyst",
+    purpose: "Clarify the first task.",
+    preparedRevision: 1,
+    preparedAt: "2026-07-17T00:00:00.000Z",
+    expectedOutputs: [`${taskRoot}/requirement-breakdown.md`],
+    allowedAdapters: [],
+    next: "technical-design",
+    ...overrides,
+  };
+}
+
+function dispatchResultV11(task, overrides = {}) {
+  return {
+    schemaVersion: "1.1",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    phase: task.phase,
+    batchId: task.batchId,
+    taskId: task.taskId,
+    taskRoot: task.taskRoot,
+    status: "completed",
+    summary: "Mock worker completed the task.",
+    outputs: task.expectedOutputs.map((output) => ({ path: output })),
+    records: [],
+    ...overrides,
+  };
+}
+
 const AGENTS = `schema_version: "1.0"
 agents:
   - name: requirement-analyst
@@ -176,6 +214,72 @@ async function testDispatchContractsValidateSchemaShape() {
     () => validateDispatchResultStructure({ ...result, outputs: [...result.outputs, result.outputs[0]] }),
     /unique|duplicate/i,
   );
+
+  assert.throws(
+    () => validateDispatchTaskStructure({ ...task, taskId: "T1" }),
+    /unsupported field|additional/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({ ...result, taskId: "T1" }),
+    /unsupported field|additional/i,
+  );
+}
+
+async function testDispatchContractsValidateTaskScopedV11Shape() {
+  const task = dispatchTaskV11();
+  const result = dispatchResultV11(task);
+
+  assert.equal(validateDispatchTaskStructure(task), task);
+  assert.equal(validateDispatchResultStructure(result), result);
+
+  assert.throws(
+    () => validateDispatchTaskStructure({ ...task, taskId: "" }),
+    /taskId/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({ ...result, taskRoot: "../escape" }),
+    /taskRoot/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({
+      ...result,
+      outputs: [{ path: ".harness/runs/M5-B3-TEST/phases/00-requirement/result.md" }],
+    }),
+    /taskRoot|output/i,
+  );
+  assert.throws(
+    () => validateDispatchTaskStructure({
+      ...task,
+      expectedOutputs: [`${task.taskRoot}/../escaped.md`],
+    }),
+    /taskRoot|output/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({
+      ...result,
+      outputs: [{ path: `${task.taskRoot}/..\\escaped.md` }],
+    }),
+    /taskRoot|output/i,
+  );
+}
+
+async function testTaskScopedDispatchSchemasDescribeStrictV11Contracts() {
+  const taskSchema = JSON.parse(await readFile(
+    path.join(REPOSITORY_ROOT, ".harness/schemas/dispatch-task-v1.1.schema.json"),
+    "utf8",
+  ));
+  const resultSchema = JSON.parse(await readFile(
+    path.join(REPOSITORY_ROOT, ".harness/schemas/dispatch-result-v1.1.schema.json"),
+    "utf8",
+  ));
+  for (const schema of [taskSchema, resultSchema]) {
+    assert.equal(schema.properties.schemaVersion.const, "1.1");
+    assert.equal(schema.additionalProperties, false);
+    for (const field of ["batchId", "taskId", "taskRoot"]) {
+      assert.ok(schema.required.includes(field));
+      assert.ok(schema.properties[field]);
+    }
+  }
 }
 
 async function testRepositoryWorkerPoliciesMatchAgentRegistry() {
@@ -606,6 +710,122 @@ async function createBackendWorkerFixture() {
   return { root, task, taskFile };
 }
 
+async function createTaskScopedBackendWorkerFixture() {
+  const backendAgents = AGENTS.replace("requirement-analyst", "backend-developer").replace("category: planning", "category: execution");
+  const backendPolicy = {
+    ...policies().roles[0],
+    name: "backend-developer",
+    category: "execution",
+    readPathPrefixes: [".harness/", "backend/"],
+    writePathPrefixes: [".harness/runs/", "backend/src/"],
+    capabilities: ["phase-output", "backend-write"],
+  };
+  const root = await createPolicyFixture(policies({ roles: [backendPolicy, policies().roles[1]] }), backendAgents);
+  const task = dispatchTaskV11({ ownerAgent: "backend-developer" });
+  const taskFile = `${task.taskRoot}/task.json`;
+  await write(root, taskFile, `${JSON.stringify(task, null, 2)}\n`);
+  return { root, task, taskFile };
+}
+
+function taskScopedWorkerResponse(task, businessPath = "backend/src/main/TaskScopedWorker.java") {
+  return {
+    files: [
+      { path: task.expectedOutputs[0], content: "# Task scoped requirement\n", capability: "phase-output" },
+      { path: businessPath, content: "class TaskScopedWorker {}\n", capability: "backend-write" },
+    ],
+    result: dispatchResultV11(task),
+  };
+}
+
+async function testTaskScopedWorkerWritesResultIntoItsTaskRootAndEnforcesTaskIdentity() {
+  const fixture = await createTaskScopedBackendWorkerFixture();
+  try {
+    const completed = await runWorkerTask({
+      root: fixture.root,
+      taskFile: fixture.taskFile,
+      predictedFiles: ["backend/src/main/**"],
+      provider: ({ task }) => taskScopedWorkerResponse(task),
+    });
+    assert.equal(completed.resultFile, `${fixture.task.taskRoot}/result.json`);
+    assert.equal(await exists(fixture.root, completed.resultFile), true);
+    assert.equal(await exists(fixture.root, ".harness/runs/M5-B3-TEST/phases/00-requirement/result.json"), false);
+
+    const mismatch = await createTaskScopedBackendWorkerFixture();
+    try {
+      await assert.rejects(
+        runWorkerTask({
+          root: mismatch.root,
+          taskFile: mismatch.taskFile,
+          predictedFiles: ["backend/src/main/**"],
+          provider: ({ task }) => ({
+            ...taskScopedWorkerResponse(task, "backend/src/main/Mismatch.java"),
+            result: dispatchResultV11(task, { taskId: "T2" }),
+          }),
+        }),
+        /taskId|taskRoot|identity/i,
+      );
+      assert.equal(await exists(mismatch.root, "backend/src/main/Mismatch.java"), false);
+    } finally {
+      await rm(mismatch.root, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testTaskScopedWorkerRejectsBusinessCandidatesOutsidePredictedFilesBeforeWriting() {
+  const fixture = await createTaskScopedBackendWorkerFixture();
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root: fixture.root,
+        taskFile: fixture.taskFile,
+        predictedFiles: ["backend/src/main/**"],
+        provider: ({ task }) => taskScopedWorkerResponse(task, "backend/src/other/OutsidePrediction.java"),
+      }),
+      /predicted file|predictedFiles|outside.*predicted/i,
+    );
+    assert.equal(await exists(fixture.root, fixture.task.expectedOutputs[0]), false);
+    assert.equal(await exists(fixture.root, "backend/src/other/OutsidePrediction.java"), false);
+    assert.equal(await exists(fixture.root, `${fixture.task.taskRoot}/result.json`), false);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRejectsResultSchemaVersionThatDoesNotMatchItsDispatch() {
+  const fixture = await createWorkerFixture();
+  const taskRoot = `.harness/runs/${fixture.task.storyId}/phases/00-requirement/tasks/T1`;
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root: fixture.root,
+        taskFile: fixture.taskFile,
+        provider: ({ task }) => workerResponse(task, {
+          result: {
+            schemaVersion: "1.1",
+            dispatchId: task.dispatchId,
+            storyId: task.storyId,
+            phase: task.phase,
+            batchId: "batch-a1b2c3d4e5f6",
+            taskId: "T1",
+            taskRoot,
+            status: "failed",
+            summary: "Wrong result protocol version.",
+            outputs: [],
+            records: [],
+          },
+        }),
+      }),
+      /schemaVersion|protocol version|schema.*task/i,
+    );
+    assert.equal(await exists(fixture.root, fixture.task.expectedOutputs[0]), false);
+    assert.equal(await exists(fixture.root, `.harness/runs/${fixture.task.storyId}/phases/00-requirement/result.json`), false);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
 async function testWorkerRejectsResultsThatM3CannotApply() {
   const invalidStatus = await createWorkerFixture();
   try {
@@ -811,6 +1031,8 @@ async function testWorkerVerticalSliceLeavesStateToM3Apply() {
 }
 
 await testDispatchContractsValidateSchemaShape();
+await testDispatchContractsValidateTaskScopedV11Shape();
+await testTaskScopedDispatchSchemasDescribeStrictV11Contracts();
 await testRepositoryWorkerPoliciesMatchAgentRegistry();
 await testWorkerPolicyLoaderRejectsRegistryDrift();
 await testWorkerLoadsOnlyAllowedExplicitContext();
@@ -821,6 +1043,9 @@ await testWorkerRejectsInvalidTimeoutBeforeProvider();
 await testWorkerWritesValidatedFilesAndResultLast();
 await testWorkerRejectsInvalidCandidatesBeforeAnyWrite();
 await testWorkerRejectsCandidateTotalOverLimit();
+await testTaskScopedWorkerWritesResultIntoItsTaskRootAndEnforcesTaskIdentity();
+await testTaskScopedWorkerRejectsBusinessCandidatesOutsidePredictedFilesBeforeWriting();
+await testWorkerRejectsResultSchemaVersionThatDoesNotMatchItsDispatch();
 await testWorkerRejectsResultsThatM3CannotApply();
 await testWorkerRejectsCollidingCandidatePathsBeforeWrite();
 await testWorkerRecoversAfterFilesWrittenInterruption();

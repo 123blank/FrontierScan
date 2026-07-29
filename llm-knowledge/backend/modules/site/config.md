@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: site
 doc_type: config
-git_hash: 2b15e640d9f0f6e5be179dee838b3cb70784470e
+git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
 source_fingerprint: sha256:0f137b56d2824a635b53478d74f9373977fb4f93ef5ce7b80628079579343197
-generated_at: 2026-07-16T15:13:11.540Z
+generated_at: 2026-07-28T16:41:12.137Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

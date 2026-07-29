@@ -1,6 +1,7 @@
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { validateDispatchResultStructure, validateDispatchTaskStructure } from "./dispatch-contract.mjs";
+import { matchesPredictedFile } from "./task-dag-contract.mjs";
 
 const POLICY_FIELDS = ["name", "category", "readPathPrefixes", "writePathPrefixes", "capabilities"];
 const CATEGORIES = new Set(["planning", "execution", "verification", "review", "integration"]);
@@ -137,7 +138,9 @@ async function readBoundedUtf8(root, relativePath, label) {
 }
 
 function pathMatchesPrefix(relativePath, prefix) {
-  return prefix.endsWith("/") ? relativePath.startsWith(prefix) : relativePath === prefix;
+  const normalizedPath = filesystemPathKey(relativePath);
+  const normalizedPrefix = filesystemPathKey(prefix);
+  return normalizedPrefix.endsWith("/") ? normalizedPath.startsWith(normalizedPrefix) : normalizedPath === normalizedPrefix;
 }
 
 function filesystemPathKey(relativePath) {
@@ -145,6 +148,29 @@ function filesystemPathKey(relativePath) {
 }
 
 function phaseRootForTask(taskFile, task) {
+  if (task.schemaVersion === "1.1") {
+    const expectedTaskFile = `${task.taskRoot}/task.json`;
+    const taskSegments = task.taskRoot.split("/");
+    const [harnessDirectory, runsDirectory, runId, phasesDirectory, phaseDirectory, tasksDirectory, taskId] = taskSegments;
+    if (taskFile !== expectedTaskFile
+        || taskSegments.length !== 7
+        || harnessDirectory !== ".harness"
+        || runsDirectory !== "runs"
+        || !runId
+        || phasesDirectory !== "phases"
+        || !/^\d{2}-/.test(phaseDirectory)
+        || phaseDirectory.slice(3) !== task.phase
+        || tasksDirectory !== "tasks"
+        || taskId !== task.taskId) {
+      throw new Error("Worker task file path does not match its task-scoped dispatch identity.");
+    }
+    for (const output of task.expectedOutputs) {
+      if (!output.startsWith(`${task.taskRoot}/`)) {
+        throw new Error("Worker task expected output is outside its current task directory.");
+      }
+    }
+    return task.taskRoot;
+  }
   const phaseRoot = path.posix.dirname(taskFile);
   const expectedRunRoot = `.harness/runs/${task.storyId}/phases/`;
   const directoryName = path.posix.basename(phaseRoot);
@@ -171,7 +197,7 @@ async function assertWritableTarget(root, fullPath, label) {
   if (info && (!info.isFile() || info.isSymbolicLink())) throw new Error(`${label} must be a regular file target.`);
 }
 
-function validateProviderResponse(response, task, policy, phaseRoot) {
+function validateProviderResponse(response, task, policy, phaseRoot, predictedFiles) {
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     throw new Error("Worker provider response must be an object.");
   }
@@ -206,6 +232,9 @@ function validateProviderResponse(response, task, policy, phaseRoot) {
       if (!task.expectedOutputs.includes(relative)) throw new Error(`Worker phase-output candidate is not expected: ${relative}`);
     } else if (!relative.startsWith(CAPABILITY_PREFIXES[candidate.capability])) {
       throw new Error(`Worker candidate path does not match capability '${candidate.capability}': ${relative}`);
+    } else if (task.schemaVersion === "1.1"
+        && !predictedFiles.some((predictedFile) => matchesPredictedFile(predictedFile, relative))) {
+      throw new Error(`Worker candidate path is outside the task predicted files: ${relative}`);
     }
     const bytes = Buffer.byteLength(candidate.content, "utf8");
     if (bytes > FILE_LIMIT_BYTES) throw new Error(`Worker candidate exceeds the 2 MiB file limit: ${relative}`);
@@ -221,8 +250,15 @@ function validateProviderResponse(response, task, policy, phaseRoot) {
 
   const result = structuredClone(response.result);
   validateDispatchResultStructure(result);
+  if (result.schemaVersion !== task.schemaVersion) {
+    throw new Error("Worker result schemaVersion must match the current task dispatch.");
+  }
   if (result.dispatchId !== task.dispatchId || result.storyId !== task.storyId || result.phase !== task.phase) {
     throw new Error("Worker result identity does not match the current task.");
+  }
+  if (task.schemaVersion === "1.1"
+      && (result.batchId !== task.batchId || result.taskId !== task.taskId || result.taskRoot !== task.taskRoot)) {
+    throw new Error("Worker result task-scoped identity does not match the current task.");
   }
   if (result.status === "blocked" && !result.blocker) throw new Error("Blocked worker result requires blocker details.");
   const outputPaths = result.outputs.map((output) => resolveRepositoryPath(".", output.path, "Worker result output").relative);
@@ -355,6 +391,7 @@ export async function runWorkerTask({
   provider,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   contextFiles = [],
+  predictedFiles,
   afterFilesWritten,
 } = {}) {
   if (typeof provider !== "function") throw new Error("Worker provider must be a function.");
@@ -374,6 +411,9 @@ export async function runWorkerTask({
   }
   validateDispatchTaskStructure(task);
   const phaseRoot = phaseRootForTask(taskSource.relative, task);
+  if (task.schemaVersion === "1.1" && (!Array.isArray(predictedFiles) || !predictedFiles.length)) {
+    throw new Error("Task-scoped Worker execution requires non-empty predictedFiles.");
+  }
   const resultPath = resolveRepositoryPath(root, `${phaseRoot}/result.json`, "Worker result file").fullPath;
   const existingResult = await lstat(resultPath).catch((error) => {
     if (error?.code === "ENOENT") return null;
@@ -422,6 +462,6 @@ export async function runWorkerTask({
   } finally {
     clearTimeout(timer);
   }
-  const validated = validateProviderResponse(response, task, policy, phaseRoot);
+  const validated = validateProviderResponse(response, task, policy, phaseRoot, predictedFiles ?? []);
   return writeValidatedResponse(root, task, taskSource.relative, validated, afterFilesWritten);
 }

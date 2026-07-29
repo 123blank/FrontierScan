@@ -41,7 +41,7 @@ Current limitations:
 - M5-B1 provides an internal single-task Worktree Worker orchestrator with explicit input snapshots, M3 checkpoint binding, Git-fact output reconciliation, and `ready-for-apply`/`ready-for-integration` collection. It does not integrate business code, call M3 `apply`, expose a mock CLI, or support multiple tasks or Worktrees.
 - M5-B2 provides approval-gated `plan/status/apply` for one `ready-for-integration` result, using content-addressed bundles, base/candidate hash reconciliation, result-last writes, and per-file recovery. It does not call M3 `apply`, merge or remove Worktrees, execute Git writes, or support multiple tasks or Worktrees.
 - M5-C provides approval-gated `retire` for one completed M5-B2 Worktree. It revalidates M5-A/M5-B1/M5-B2 evidence, main-tree and Worktree Git facts, and lifecycle locks before `git worktree remove --force`; it preserves the task branch and does not advance M2/M3 state. Multi-Worktree retirement, branch deletion, `prune`, and cleanup remain deferred.
-- M5-B3-A records the compatibility conclusion for future serial multi-task execution: current M3/M5 artifacts are single-task scoped, so M5-B3-B must introduce task-scoped dispatch, a batch-scoped Worktree lifecycle and a serial batch ledger before it can execute multiple DAG tasks. No multi-task Runtime exists yet.
+- M5-B3-B 已实现同一 Story 的 `implementation` phase 单 Worktree 严格串行多任务批次：v1.1 task-scoped dispatch、serial batch ledger、继承快照、逐项 Worker/集成、批次收尾和 batch Retire 均受证据、哈希、锁与逐次审批约束。M3 `apply` 仍是唯一 phase 推进入口；同 wave 并行、多 Worktree、Fork-Join、分支清理、真实 Agent 和正式仓库 Worktree 操作仍未实现。
 
 Trust rule:
 

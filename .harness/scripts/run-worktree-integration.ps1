@@ -1,3 +1,4 @@
+[CmdletBinding(DefaultParameterSetName = "SingleTask")]
 param(
   [Parameter(Mandatory = $true)]
   [ValidateSet("Plan", "Status", "Apply")]
@@ -9,8 +10,11 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$TaskId,
 
-  [Parameter(Mandatory = $true)]
+  [Parameter(Mandatory = $true, ParameterSetName = "SingleTask")]
   [string]$TaskFile,
+
+  [Parameter(Mandatory = $true, ParameterSetName = "Batch")]
+  [string]$BatchFile,
 
   [string]$Root,
   [switch]$ConfirmApply,
@@ -28,9 +32,13 @@ $arguments = @(
   $Command.ToLowerInvariant(),
   "--root", $Root,
   "--state-file", $StateFile,
-  "--task-id", $TaskId,
-  "--task-file", $TaskFile
+  "--task-id", $TaskId
 )
+if ($PSCmdlet.ParameterSetName -eq "Batch") {
+  $arguments += "--batch-file", $BatchFile
+} else {
+  $arguments += "--task-file", $TaskFile
+}
 if ($ConfirmApply) { $arguments += "--confirm-apply" }
 if ($Json) { $arguments += "--json" }
 

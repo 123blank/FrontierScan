@@ -12,6 +12,7 @@ const RUN_STORY_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 const STATE_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "state-runtime.mjs");
 const STORY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "story-runtime.mjs");
 const DISPATCH_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "dispatch-contract.mjs");
+const BATCH_FINALIZATION_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "batch-finalization-contract.mjs");
 const VALIDATE_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "validate-state.ps1");
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -1384,6 +1385,27 @@ async function testStateValidatorRequiresRuntimeMetadata() {
 async function testPowerShellEntryPointsResolveDefaultRootFromScriptLocation() {
   const { root } = await createFixture(REPOSITORY_ROOT);
   try {
+    await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
+name: frontier-e2e-development
+phases:
+  - id: requirement
+    order: 0
+    owner_agent: requirement-analyst
+    purpose: Clarify the story.
+    required_outputs:
+      - .harness/runs/{runId}/phases/00-requirement/requirement-breakdown.md
+    next:
+      - technical-design
+  - id: technical-design
+    order: 1
+    owner_agent: requirement-analyst
+    purpose: Design the change.
+    required_outputs:
+      - .harness/runs/{runId}/phases/01-technical-design/technical-design.md
+    next:
+      - done
+quality_gates: []
+`);
     await runStateCommand({ root, command: "init", storyId: "M3-DEFAULT-ROOT", summary: "default root", now: () => FIXED_NOW });
     for (const [source, target] of [
       [RUN_STATE_SCRIPT, ".harness/scripts/run-state.ps1"],
@@ -1391,6 +1413,7 @@ async function testPowerShellEntryPointsResolveDefaultRootFromScriptLocation() {
       [STATE_RUNTIME_MODULE, ".harness/scripts/lib/state-runtime.mjs"],
       [STORY_RUNTIME_MODULE, ".harness/scripts/lib/story-runtime.mjs"],
       [DISPATCH_CONTRACT_MODULE, ".harness/scripts/lib/dispatch-contract.mjs"],
+      [BATCH_FINALIZATION_CONTRACT_MODULE, ".harness/scripts/lib/batch-finalization-contract.mjs"],
     ]) {
       await write(root, target, await readFile(source, "utf8"));
     }
@@ -1408,6 +1431,30 @@ async function testPowerShellEntryPointsResolveDefaultRootFromScriptLocation() {
     );
     assert.equal(storyStatus.exitCode, 0, storyStatus.stderr);
     assert.equal(JSON.parse(storyStatus.stdout).state.storyId, "M3-DEFAULT-ROOT");
+
+    const storyPrepare = await execPowerShellScript(
+      path.join(root, ".harness/scripts/run-story.ps1"),
+      ["-Command", "prepare", "-Json"],
+    );
+    assert.equal(storyPrepare.exitCode, 0, storyPrepare.stderr);
+    const prepared = JSON.parse(storyPrepare.stdout);
+    await write(root, prepared.task.expectedOutputs[0], "# Requirement\n");
+    await write(root, prepared.resultFile, `${JSON.stringify({
+      schemaVersion: "1.0",
+      dispatchId: prepared.task.dispatchId,
+      storyId: prepared.task.storyId,
+      phase: prepared.task.phase,
+      status: "completed",
+      summary: "fixture requirement completed",
+      outputs: prepared.task.expectedOutputs.map((outputPath) => ({ path: outputPath })),
+      records: [],
+    }, null, 2)}\n`);
+    const storyApply = await execPowerShellScript(
+      path.join(root, ".harness/scripts/run-story.ps1"),
+      ["-Command", "apply", "-Json"],
+    );
+    assert.equal(storyApply.exitCode, 0, storyApply.stderr);
+    assert.equal(JSON.parse(storyApply.stdout).state.phase, "technical-design");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

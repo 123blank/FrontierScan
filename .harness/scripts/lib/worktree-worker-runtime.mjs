@@ -3,9 +3,15 @@ import { execFile } from "node:child_process";
 import { lstat, mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import {
+  inspectBatchWorktreePlan,
+  recordBatchInheritedSnapshot,
+  recordBatchWorkerBlocked,
+  recordBatchWorkerReady,
+} from "./batch-runtime.mjs";
 import { validateDispatchResultStructure, validateDispatchTaskStructure } from "./dispatch-contract.mjs";
-import { loadTaskDag } from "./task-dag-contract.mjs";
-import { runWorkerTask } from "./worker-runtime.mjs";
+import { loadTaskDag, matchesPredictedFile } from "./task-dag-contract.mjs";
+import { loadWorkerPolicies, runWorkerTask } from "./worker-runtime.mjs";
 import { runWorktreeCommand } from "./worktree-runtime.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -13,6 +19,11 @@ const FILE_LIMIT_BYTES = 2 * 1024 * 1024;
 const CONTEXT_LIMIT_BYTES = 8 * 1024 * 1024;
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_MAX_BUFFER_BYTES = 4 * 1024 * 1024;
+const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const BATCH_MANIFEST_FIELDS = [
+  "schemaVersion", "storyId", "runId", "phase", "batchId", "taskId", "dispatchId", "taskRoot", "baseCommit",
+  "inheritedSnapshotSha256", "inheritedFiles", "inputs", "createdAt",
+];
 
 function resolveInsideRoot(root, relativeFile, label) {
   if (typeof relativeFile !== "string" || !relativeFile.trim() || path.isAbsolute(relativeFile)) {
@@ -89,8 +100,13 @@ async function readInput(root, relativeFile, label) {
 async function writeAtomic(filePath, content) {
   await mkdir(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.tmp-${process.pid}-${randomUUID()}`;
-  await writeFile(temporary, content);
-  await rename(temporary, filePath);
+  try {
+    await writeFile(temporary, content);
+    await rename(temporary, filePath);
+  } catch (error) {
+    await unlink(temporary).catch(() => {});
+    throw error;
+  }
 }
 
 async function writeAtomicJson(filePath, value) {
@@ -106,8 +122,14 @@ async function acquireExecutionLock(lockPath, options) {
     if (error?.code === "EEXIST") throw new Error("Worker execution lock already exists; inspect it before retrying.");
     throw error;
   }
-  await handle.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: (options.now ?? (() => new Date().toISOString()))() })}\n`, "utf8");
-  await handle.close();
+  try {
+    await handle.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: (options.now ?? (() => new Date().toISOString()))() })}\n`, "utf8");
+    await handle.close();
+  } catch (error) {
+    await handle.close().catch(() => {});
+    await unlink(lockPath).catch(() => {});
+    throw error;
+  }
 }
 
 async function assertRetirementLockAbsent(lockPath) {
@@ -133,8 +155,25 @@ function normalizePath(value) {
   return value.replaceAll("\\", "/");
 }
 
+function pathMatchesPrefix(relativeFile, prefix) {
+  const normalizedFile = pathKey(normalizePath(relativeFile));
+  const normalizedPrefix = pathKey(normalizePath(prefix));
+  return normalizedPrefix.endsWith("/") ? normalizedFile.startsWith(normalizedPrefix) : normalizedFile === normalizedPrefix;
+}
+
+function assertExactFields(value, fields, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+  const keys = Object.keys(value);
+  if (keys.length !== fields.length || fields.some((field) => !Object.hasOwn(value, field))
+      || keys.some((field) => !fields.includes(field))) {
+    throw new Error(`${label} contains unsupported fields or is missing required fields.`);
+  }
+}
+
 async function listWorktreeChanges(worktreeRoot) {
-  const result = await runGit(worktreeRoot, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
+  const result = await runGit(worktreeRoot, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching"]);
   const tokens = String(result.stdout ?? "").split("\0").filter(Boolean);
   const changes = [];
   for (let index = 0; index < tokens.length; index += 1) {
@@ -375,7 +414,7 @@ async function prepareInputs(root, worktreeRoot, inspected, state, task, options
   const mainRunPrefix = `.harness/runs/${state.runtime.runId}/`;
   const entries = [{ path: options.taskFile, source: "main-run" }, ...normalized.map((relative) => ({
     path: relative,
-    source: relative.startsWith(mainRunPrefix) ? "main-run" : "worktree-base",
+    source: pathMatchesPrefix(relative, mainRunPrefix) ? "main-run" : "worktree-base",
   }))];
   for (const entry of entries) {
     const sourceRoot = entry.source === "main-run" ? root : worktreeRoot;
@@ -424,11 +463,794 @@ async function prepareInputs(root, worktreeRoot, inspected, state, task, options
   return { contextFiles: normalized, manifest, manifestFile };
 }
 
+function assertBatchTaskIdentity(root, state, task, taskFile, ledger) {
+  const batchTask = ledger.tasks.find((candidate) => candidate.taskId === task.taskId);
+  if (!batchTask) throw new Error(`Serial batch ledger does not contain task '${task.taskId}'.`);
+  const resultFile = `${task.taskRoot}/result.json`;
+  if (task.schemaVersion !== "1.1" || task.batchId !== ledger.batchId || task.storyId !== state.storyId
+      || task.phase !== ledger.phase || task.ownerAgent !== batchTask.ownerAgent || task.taskRoot !== batchTask.taskRoot
+      || taskFile !== batchTask.taskFile || resultFile !== batchTask.resultFile
+      || JSON.stringify(task.expectedOutputs) !== JSON.stringify(batchTask.expectedOutputs)
+      || task.dispatchId !== batchTask.dispatchId) {
+    throw new Error("Task dispatch identity does not match the serial batch ledger.");
+  }
+  return batchTask;
+}
+
+function assertBatchCheckpoint(checkpoint, task, batchTask) {
+  if (checkpoint.schemaVersion !== "1.0" || checkpoint.dispatchId !== task.dispatchId
+      || checkpoint.storyId !== task.storyId || checkpoint.phase !== task.phase
+      || checkpoint.status !== "prepared" || checkpoint.preparedAt !== task.preparedAt
+      || checkpoint.updatedAt !== task.preparedAt || batchTask.checkpointFile !== `${task.taskRoot}/checkpoint.json`) {
+    throw new Error("Task checkpoint identity does not match the serial batch dispatch.");
+  }
+}
+
+async function loadBatchWorkerContext(root, state, task, taskFile, options, allowReadyTransitionLock = false) {
+  if (options.taskId !== task.taskId) {
+    throw new Error("Batch Worker taskId must match the Worker task file identity.");
+  }
+  if (state.runtime?.status !== "active" || state.storyId !== task.storyId
+      || state.phase !== task.phase
+      || state.runtime?.revision !== task.preparedRevision) {
+    throw new Error("M3 task identity must match the active Story and phase.");
+  }
+  const batch = await inspectBatchWorktreePlan({
+    root,
+    stateFile: options.stateFile,
+    allowReadyTransitionLock,
+  });
+  if (state.runtime?.runId !== batch.ledger.runId) {
+    throw new Error("M3 task runtime runId must match the serial batch ledger.");
+  }
+  const batchTask = assertBatchTaskIdentity(root, state, task, taskFile, batch.ledger);
+  const checkpoint = await readJson(root, batchTask.checkpointFile, "Task checkpoint");
+  assertBatchCheckpoint(checkpoint, task, batchTask);
+  if (batchTask.status !== "running") throw new Error("Only a claimed running task may execute the batch Worker.");
+  const inspected = await runWorktreeCommand({
+    root,
+    command: "batch-status",
+    stateFile: options.stateFile,
+    allowReadyTransitionLock,
+  });
+  if (inspected.status.state !== "created") throw new Error("The planned batch Worktree must be created before Worker execution.");
+  if (inspected.plan.batchId !== batch.ledger.batchId || inspected.plan.baseCommit !== batch.ledger.baseCommit
+      || inspected.plan.branch !== batch.plan.branch || inspected.plan.worktreePath !== batch.plan.worktreePath
+      || inspected.status.branch !== batch.plan.branch || inspected.status.worktreePath !== batch.plan.worktreePath
+      || inspected.status.baseCommit !== batch.ledger.baseCommit || inspected.status.headCommit !== batch.ledger.baseCommit) {
+    throw new Error("Batch Worktree status does not match the verified serial batch plan.");
+  }
+  return { batch, batchTask, checkpoint, inspected };
+}
+
+function batchExecutionLockFile(task) {
+  return `${path.posix.dirname(task.executionReceiptFile)}/execute.lock`;
+}
+
+function batchInputManifestFile(task) {
+  return `${path.posix.dirname(task.executionReceiptFile)}/task-start-manifest.json`;
+}
+
+function batchPreviousArtifacts(ledger, task) {
+  const index = ledger.tasks.indexOf(task);
+  if (index < 0) throw new Error("Serial batch task is not part of its ledger.");
+  return ledger.tasks.slice(0, index).flatMap((previous) => [
+    previous.taskFile,
+    previous.checkpointFile,
+    previous.reportFile,
+    previous.resultFile,
+  ]);
+}
+
+function uniqueRepositoryPaths(root, values, label) {
+  const paths = [];
+  const keys = new Set();
+  for (const value of values) {
+    const resolved = resolveInsideRoot(root, value, label);
+    const key = pathKey(resolved.relative);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    paths.push(resolved.relative);
+  }
+  return paths;
+}
+
+async function assertRegularWritableTarget(root, relativeFile, label) {
+  const target = resolveInsideRoot(root, relativeFile, label);
+  await assertNoSymlink(root, target.fullPath, label);
+  const info = await lstat(target.fullPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (info && (!info.isFile() || info.isSymbolicLink())) throw new Error(`${label} must be a regular file target.`);
+  return target;
+}
+
+async function readBatchSnapshot(root, batchTask) {
+  const source = await readInput(root, batchTask.inheritedSnapshotFile, "Batch inherited snapshot");
+  let snapshot;
+  try {
+    snapshot = JSON.parse(source.content);
+  } catch {
+    throw new Error("Batch inherited snapshot contains invalid JSON.");
+  }
+  if (source.sha256 !== batchTask.inheritedSnapshotSha256
+      || snapshot.taskId !== batchTask.taskId
+      || snapshot.dispatchId !== batchTask.dispatchId
+      || snapshot.taskRoot !== batchTask.taskRoot
+      || !Array.isArray(snapshot.inheritedFiles)) {
+    throw new Error("Batch inherited snapshot does not match the claimed task.");
+  }
+  return { source, snapshot };
+}
+
+async function readRootArtifactHashes(root, relativeFiles) {
+  const hashes = new Map();
+  for (const relativeFile of relativeFiles) {
+    const source = await readInput(root, relativeFile, "Prior task artifact");
+    hashes.set(pathKey(relativeFile), { path: relativeFile, sha256: source.sha256 });
+  }
+  return hashes;
+}
+
+async function validateBatchWorktreeChanges({
+  root,
+  worktreeRoot,
+  ledger,
+  batchTask,
+  snapshot,
+  immutableInputs = [],
+  candidatePaths = [],
+  allowResult = false,
+  allowMissingImmutableInputs = false,
+}) {
+  const inherited = new Map(snapshot.inheritedFiles.map((file) => [pathKey(file.path), file]));
+  const priorArtifacts = await readRootArtifactHashes(root, batchPreviousArtifacts(ledger, batchTask));
+  const immutable = new Map(immutableInputs.map((file) => [pathKey(file.path), file]));
+  const allowed = new Set([
+    ...inherited.keys(),
+    ...priorArtifacts.keys(),
+    ...immutable.keys(),
+    ...candidatePaths.map(pathKey),
+  ]);
+  if (allowResult) allowed.add(pathKey(batchTask.resultFile));
+
+  for (const relativeFile of await listWorktreeChanges(worktreeRoot)) {
+    if (!allowed.has(pathKey(relativeFile))) {
+      throw new Error(`Unexpected batch Worktree change: ${relativeFile}`);
+    }
+  }
+  for (const artifact of priorArtifacts.values()) {
+    const current = await readInput(worktreeRoot, artifact.path, "Prior task artifact in batch Worktree");
+    if (current.sha256 !== artifact.sha256) {
+      throw new Error(`Batch Worktree changed a prior task artifact: ${artifact.path}`);
+    }
+  }
+  for (const input of immutable.values()) {
+    const location = resolveInsideRoot(worktreeRoot, input.path, "Batch Worker input");
+    const info = await lstat(location.fullPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+    if (!info && allowMissingImmutableInputs) continue;
+    const current = await readInput(worktreeRoot, input.path, "Batch Worker input");
+    if (current.sha256 !== input.sha256) {
+      throw new Error(`Batch Worktree changed an immutable Worker input: ${input.path}`);
+    }
+  }
+  const candidates = new Set(candidatePaths.map(pathKey));
+  for (const inheritedFile of inherited.values()) {
+    const mainCurrent = await readInput(root, inheritedFile.path, "Inherited main repository file");
+    if (mainCurrent.sha256 !== inheritedFile.sha256 || mainCurrent.bytes !== inheritedFile.bytes) {
+      throw new Error(`Inherited main repository file hash drifted: ${inheritedFile.path}`);
+    }
+    const current = await readInput(worktreeRoot, inheritedFile.path, "Inherited batch Worktree file");
+    if ((current.sha256 !== inheritedFile.sha256 || current.bytes !== inheritedFile.bytes)
+        && !candidates.has(pathKey(inheritedFile.path))) {
+      throw new Error(`Inherited batch Worktree file hash drifted: ${inheritedFile.path}`);
+    }
+  }
+}
+
+async function prepareBatchWorkerInputs(root, worktreeRoot, state, ledger, batchTask, snapshot, options) {
+  const context = await batchContextFiles(root, worktreeRoot, state, batchTask, snapshot, options);
+  const { contextFiles, inheritedPaths, inputPaths, mainRunPrefix } = context;
+  const inheritedKeys = new Set(inheritedPaths.map(pathKey));
+  const inputs = [];
+  const immutableInputs = [];
+
+  for (const relativeFile of inputPaths) {
+    const sourceRoot = relativeFile === batchTask.taskFile || relativeFile === batchTask.checkpointFile || pathMatchesPrefix(relativeFile, mainRunPrefix)
+      ? root
+      : worktreeRoot;
+    const source = await readInput(sourceRoot, relativeFile, "Batch Worker input");
+    const target = await assertRegularWritableTarget(worktreeRoot, relativeFile, "Batch Worker input target");
+    if (sourceRoot === root) await writeAtomic(target.fullPath, source.buffer);
+    const input = {
+      source: sourceRoot === root ? "main-run" : "worktree-base",
+      sourcePath: relativeFile,
+      targetPath: target.relative,
+      sha256: source.sha256,
+      bytes: source.bytes,
+    };
+    inputs.push(input);
+    if (!inheritedKeys.has(pathKey(target.relative))) immutableInputs.push({ path: target.relative, sha256: source.sha256 });
+  }
+
+  const manifestFile = batchInputManifestFile(batchTask);
+  const manifest = {
+    schemaVersion: "1.0",
+    storyId: state.storyId,
+    runId: state.runtime.runId,
+    phase: ledger.phase,
+    batchId: ledger.batchId,
+    taskId: batchTask.taskId,
+    dispatchId: batchTask.dispatchId,
+    taskRoot: batchTask.taskRoot,
+    baseCommit: ledger.baseCommit,
+    inheritedSnapshotSha256: batchTask.inheritedSnapshotSha256,
+    inheritedFiles: snapshot.inheritedFiles,
+    inputs,
+    createdAt: (options.now ?? (() => new Date().toISOString()))(),
+  };
+  await writeAtomicJson(resolveInsideRoot(root, manifestFile, "Batch Worker input manifest").fullPath, manifest);
+  return { contextFiles, immutableInputs, manifest, manifestFile };
+}
+
+async function batchContextFiles(root, worktreeRoot, state, batchTask, snapshot, options) {
+  const requestedContext = options.contextFiles ?? [];
+  if (!Array.isArray(requestedContext)) throw new Error("Worker contextFiles must be an array.");
+  const normalizedContext = uniqueRepositoryPaths(root, requestedContext, "Worker context file");
+  const inheritedPaths = uniqueRepositoryPaths(root, snapshot.inheritedFiles.map((file) => file.path), "Inherited snapshot file");
+  const policy = (await loadWorkerPolicies({ root: worktreeRoot })).get(batchTask.ownerAgent);
+  if (!policy) throw new Error(`Batch Worker owner '${batchTask.ownerAgent}' has no policy.`);
+  for (const relativeFile of normalizedContext) {
+    if (!policy.readPathPrefixes.some((prefix) => pathMatchesPrefix(relativeFile, prefix))) {
+      throw new Error(`Worker context file is not allowed by the '${policy.name}' read policy: ${relativeFile}`);
+    }
+  }
+  const readableInheritedPaths = inheritedPaths.filter((relativeFile) => (
+    policy.readPathPrefixes.some((prefix) => pathMatchesPrefix(relativeFile, prefix))
+  ));
+  const contextFiles = uniqueRepositoryPaths(root, [...readableInheritedPaths, ...normalizedContext], "Worker context file");
+  const mainRunPrefix = `.harness/runs/${state.runtime.runId}/`;
+  const explicitContext = new Set(normalizedContext.map(pathKey));
+  let contextBytes = (await readInput(root, batchTask.taskFile, "Batch Worker task file")).bytes
+    + Buffer.byteLength(JSON.stringify(policy), "utf8");
+  for (const relativeFile of contextFiles) {
+    const sourceRoot = explicitContext.has(pathKey(relativeFile)) && pathMatchesPrefix(relativeFile, mainRunPrefix)
+      ? root
+      : worktreeRoot;
+    contextBytes += (await readInput(sourceRoot, relativeFile, "Batch Worker context file")).bytes;
+    if (contextBytes > CONTEXT_LIMIT_BYTES) throw new Error("Worker context exceeds the 8 MiB total limit.");
+  }
+  return {
+    normalizedContext,
+    inheritedPaths,
+    contextFiles,
+    inputPaths: uniqueRepositoryPaths(root, [batchTask.taskFile, batchTask.checkpointFile, ...normalizedContext], "Batch Worker input"),
+    mainRunPrefix,
+  };
+}
+
+async function declaredBatchImmutableInputs(root, worktreeRoot, state, batchTask, snapshot, options) {
+  const { inheritedPaths, inputPaths, mainRunPrefix } = await batchContextFiles(
+    root,
+    worktreeRoot,
+    state,
+    batchTask,
+    snapshot,
+    options,
+  );
+  const inheritedKeys = new Set(inheritedPaths.map(pathKey));
+  const immutableInputs = [];
+  for (const relativeFile of inputPaths) {
+    const sourceRoot = relativeFile === batchTask.taskFile || relativeFile === batchTask.checkpointFile
+        || pathMatchesPrefix(relativeFile, mainRunPrefix)
+      ? root
+      : worktreeRoot;
+    const source = await readInput(sourceRoot, relativeFile, "Declared batch Worker input");
+    if (!inheritedKeys.has(pathKey(relativeFile))) {
+      immutableInputs.push({ path: relativeFile, sha256: source.sha256 });
+    }
+  }
+  return immutableInputs;
+}
+
+async function reuseBatchWorkerInputs(root, worktreeRoot, state, ledger, batchTask, snapshot, options) {
+  const manifestFile = batchInputManifestFile(batchTask);
+  const manifest = await readJsonOptional(root, manifestFile, "Batch Worker input manifest");
+  if (!manifest) return null;
+  assertExactFields(manifest, BATCH_MANIFEST_FIELDS, "Batch Worker input manifest");
+  if (manifest.schemaVersion !== "1.0" || manifest.storyId !== state.storyId || manifest.runId !== state.runtime.runId
+      || manifest.phase !== ledger.phase || manifest.batchId !== ledger.batchId || manifest.taskId !== batchTask.taskId
+      || manifest.dispatchId !== batchTask.dispatchId || manifest.taskRoot !== batchTask.taskRoot
+      || manifest.baseCommit !== ledger.baseCommit || manifest.inheritedSnapshotSha256 !== batchTask.inheritedSnapshotSha256
+      || JSON.stringify(manifest.inheritedFiles) !== JSON.stringify(snapshot.inheritedFiles)
+      || typeof manifest.createdAt !== "string" || Number.isNaN(Date.parse(manifest.createdAt)) || !Array.isArray(manifest.inputs)) {
+    throw new Error("Existing batch Worker input manifest does not match the claimed task.");
+  }
+  const expected = await batchContextFiles(root, worktreeRoot, state, batchTask, snapshot, options);
+  if (manifest.inputs.length !== expected.inputPaths.length) {
+    throw new Error("Existing batch Worker input manifest does not match the requested context files.");
+  }
+  const inheritedKeys = new Set(snapshot.inheritedFiles.map((file) => pathKey(file.path)));
+  const immutableInputs = [];
+  for (let index = 0; index < manifest.inputs.length; index += 1) {
+    const input = manifest.inputs[index];
+    assertExactFields(input, ["source", "sourcePath", "targetPath", "sha256", "bytes"], "Batch Worker input manifest entry");
+    const expectedPath = expected.inputPaths[index];
+    const expectedSource = expectedPath === batchTask.taskFile || expectedPath === batchTask.checkpointFile
+        || pathMatchesPrefix(expectedPath, expected.mainRunPrefix) ? "main-run" : "worktree-base";
+    if (input.source !== expectedSource || input.sourcePath !== expectedPath || input.targetPath !== expectedPath
+        || !SHA256_PATTERN.test(input.sha256) || !Number.isInteger(input.bytes) || input.bytes < 0) {
+      throw new Error("Existing batch Worker input manifest does not match the requested context files.");
+    }
+    const current = await readInput(worktreeRoot, input.targetPath, "Existing batch Worker input");
+    if (current.sha256 !== input.sha256 || current.bytes !== input.bytes) {
+      throw new Error(`Existing batch Worker input hash does not match: ${input.targetPath}`);
+    }
+    if (input.source === "main-run") {
+      const source = await readInput(root, input.sourcePath, "Main batch Worker input");
+      if (source.sha256 !== input.sha256 || source.bytes !== input.bytes) {
+        throw new Error(`Main batch Worker input hash does not match: ${input.sourcePath}`);
+      }
+    }
+    if (!inheritedKeys.has(pathKey(input.targetPath))) {
+      immutableInputs.push({ path: input.targetPath, sha256: input.sha256 });
+    }
+  }
+  return { contextFiles: expected.contextFiles, immutableInputs, manifest, manifestFile };
+}
+
+function validateBatchWorkerResult(ledger, batchTask, result) {
+  validateDispatchResultStructure(result);
+  if (result.schemaVersion !== "1.1" || result.storyId !== ledger.storyId || result.phase !== ledger.phase
+      || result.batchId !== ledger.batchId || result.taskId !== batchTask.taskId || result.taskRoot !== batchTask.taskRoot
+      || result.dispatchId !== batchTask.dispatchId) {
+    throw new Error("Batch Worker result does not match the claimed task.");
+  }
+  if (result.status === "completed" && JSON.stringify(result.outputs.map((output) => output.path)) !== JSON.stringify(batchTask.expectedOutputs)) {
+    throw new Error("Completed batch Worker result outputs do not match the task output set.");
+  }
+  if (result.status === "blocked" && !result.blocker) throw new Error("Blocked batch Worker result requires blocker details.");
+  for (const output of result.outputs) {
+    if (!batchTask.expectedOutputs.includes(output.path)) {
+      throw new Error(`Batch Worker result output is outside the task: ${output.path}`);
+    }
+  }
+  return result;
+}
+
+function assertRecoveredCandidatePath(batchTask, relativeFile) {
+  const kind = workerFileKind(batchTask, relativeFile);
+  if (kind !== "phase-output" && !batchTask.predictedFiles.some((predicted) => matchesPredictedFile(predicted, relativeFile))) {
+    throw new Error(`Recovered batch Worker candidate is outside the task predicted files: ${relativeFile}`);
+  }
+  return kind;
+}
+
+async function recoveredBatchCandidatePaths(root, worktreeRoot, ledger, batchTask, snapshot, immutableInputs) {
+  const inherited = new Map(snapshot.inheritedFiles.map((file) => [pathKey(file.path), file]));
+  const priorArtifacts = new Set(batchPreviousArtifacts(ledger, batchTask).map(pathKey));
+  const immutable = new Set(immutableInputs.map((file) => pathKey(file.path)));
+  const candidates = [];
+  for (const relativeFile of await listWorktreeChanges(worktreeRoot)) {
+    const key = pathKey(relativeFile);
+    if (key === pathKey(batchTask.resultFile) || priorArtifacts.has(key) || immutable.has(key)) continue;
+    const inheritedFile = inherited.get(key);
+    if (inheritedFile) {
+      const current = await readInput(worktreeRoot, relativeFile, "Recovered inherited batch Worktree file");
+      if (current.sha256 === inheritedFile.sha256 && current.bytes === inheritedFile.bytes) continue;
+    }
+    assertRecoveredCandidatePath(batchTask, relativeFile);
+    candidates.push(relativeFile);
+  }
+  return candidates;
+}
+
+async function recoverBatchWorkerResult(root, worktreeRoot, ledger, batchTask, snapshot, prepared) {
+  const result = await readJsonOptional(worktreeRoot, batchTask.resultFile, "Batch Worker result");
+  if (!result) return null;
+  validateBatchWorkerResult(ledger, batchTask, result);
+  const files = await recoveredBatchCandidatePaths(root, worktreeRoot, ledger, batchTask, snapshot, prepared.immutableInputs);
+  await validateBatchWorktreeChanges({
+    root,
+    worktreeRoot,
+    ledger,
+    batchTask,
+    snapshot,
+    immutableInputs: prepared.immutableInputs,
+    candidatePaths: files,
+    allowResult: true,
+  });
+  return { status: result.status, taskFile: batchTask.taskFile, resultFile: batchTask.resultFile, files, result };
+}
+
+async function reuseBatchWorkerReceipt(root, worktreeRoot, state, batch, batchTask, snapshot, prepared) {
+  const receipt = await readJsonOptional(root, batchTask.executionReceiptFile, "Serial batch Worker execution receipt");
+  if (!receipt) return null;
+  if (receipt.schemaVersion !== "1.0" || receipt.storyId !== state.storyId || receipt.runId !== state.runtime.runId
+      || receipt.taskId !== batchTask.taskId || receipt.dispatchId !== batchTask.dispatchId || receipt.phase !== batch.ledger.phase
+      || receipt.ownerAgent !== batchTask.ownerAgent || receipt.baseCommit !== batch.ledger.baseCommit
+      || receipt.outcome !== "ready-for-integration" || receipt.inheritedSnapshotSha256 !== batchTask.inheritedSnapshotSha256
+      || receipt.resultEvidenceFile !== batchTask.resultFile || !SHA256_PATTERN.test(receipt.resultSha256)
+      || !Array.isArray(receipt.files)) {
+    throw new Error("Existing serial batch Worker execution receipt does not match the claimed task.");
+  }
+  if (receipt.inputManifestSha256 !== await sha256File(root, prepared.manifestFile, "Batch Worker input manifest evidence")) {
+    throw new Error("Existing serial batch Worker execution receipt input manifest hash does not match.");
+  }
+  const seen = new Set();
+  const files = [];
+  for (const file of receipt.files) {
+    assertExactFields(file, ["path", "sha256", "bytes", "kind"], "Serial batch Worker execution receipt file");
+    const resolved = resolveInsideRoot(root, file.path, "Serial batch Worker execution receipt file");
+    if (seen.has(pathKey(resolved.relative)) || !SHA256_PATTERN.test(file.sha256)
+        || !Number.isInteger(file.bytes) || file.bytes < 0 || workerFileKind(batchTask, resolved.relative) !== file.kind) {
+      throw new Error("Existing serial batch Worker execution receipt contains an invalid file entry.");
+    }
+    assertRecoveredCandidatePath(batchTask, resolved.relative);
+    const current = await readInput(worktreeRoot, resolved.relative, "Existing serial batch Worker receipt file");
+    if (current.sha256 !== file.sha256 || current.bytes !== file.bytes) {
+      throw new Error(`Existing serial batch Worker receipt file hash does not match: ${resolved.relative}`);
+    }
+    seen.add(pathKey(resolved.relative));
+    files.push(resolved.relative);
+  }
+  const result = await readInput(worktreeRoot, batchTask.resultFile, "Existing serial batch Worker result");
+  if (result.sha256 !== receipt.resultSha256) throw new Error("Existing serial batch Worker result hash does not match the receipt.");
+  const collected = await readInput(root, batchTask.resultFile, "Collected serial batch Worker result");
+  if (collected.sha256 !== receipt.resultSha256) throw new Error("Collected serial batch Worker result hash does not match the receipt.");
+  const parsedResult = JSON.parse(result.content);
+  validateBatchWorkerResult(batch.ledger, batchTask, parsedResult);
+  if (parsedResult.status !== "completed") throw new Error("Existing serial batch Worker receipt requires a completed result.");
+  await validateBatchWorktreeChanges({
+    root,
+    worktreeRoot,
+    ledger: batch.ledger,
+    batchTask,
+    snapshot,
+    immutableInputs: prepared.immutableInputs,
+    candidatePaths: files,
+    allowResult: true,
+  });
+  return { receipt, resultFile: batchTask.resultFile, files };
+}
+
+async function collectBatchWorkerResult(root, worktreeRoot, state, batch, batchTask, snapshot, inspected, prepared, workerResult, options) {
+  const candidateKeys = new Set(workerResult.files.map(pathKey));
+  const missingOutput = batchTask.expectedOutputs.find((output) => !candidateKeys.has(pathKey(output)));
+  if (missingOutput) {
+    throw new Error(`Completed batch Worker result is missing an expected output file: ${missingOutput}`);
+  }
+  const files = [];
+  for (const relativeFile of workerResult.files) {
+    const source = await readInput(worktreeRoot, relativeFile, "Batch Worker collected file");
+    files.push({ path: relativeFile, sha256: source.sha256, bytes: source.bytes, kind: workerFileKind(batchTask, relativeFile) });
+  }
+  if (!files.some((file) => file.kind !== "phase-output")) {
+    throw new Error("Serial batch Worker requires at least one business candidate before integration.");
+  }
+  const result = await readInput(worktreeRoot, workerResult.resultFile, "Batch Worker result evidence");
+  for (const file of files.filter((item) => item.kind === "phase-output")) {
+    const source = await readInput(worktreeRoot, file.path, "Batch Worker phase output");
+    await writeAtomic(resolveInsideRoot(root, file.path, "Collected batch phase output").fullPath, source.buffer);
+  }
+  await writeAtomic(resolveInsideRoot(root, batchTask.resultFile, "Collected batch Worker result").fullPath, result.buffer);
+
+  const receipt = {
+    schemaVersion: "1.0",
+    storyId: state.storyId,
+    runId: state.runtime.runId,
+    taskId: batchTask.taskId,
+    dispatchId: batchTask.dispatchId,
+    phase: batch.ledger.phase,
+    ownerAgent: batchTask.ownerAgent,
+    baseCommit: batch.ledger.baseCommit,
+    headCommit: inspected.status.headCommit,
+    outcome: "ready-for-integration",
+    planSha256: await sha256File(root, batch.planFile, "Serial batch Worktree plan evidence"),
+    statusSha256: await sha256File(root, inspected.statusFile, "Serial batch Worktree status evidence"),
+    inputManifestSha256: await sha256File(root, prepared.manifestFile, "Batch Worker input manifest evidence"),
+    inheritedSnapshotSha256: batchTask.inheritedSnapshotSha256,
+    resultEvidenceFile: batchTask.resultFile,
+    resultSha256: result.sha256,
+    files,
+    completedAt: (options.now ?? (() => new Date().toISOString()))(),
+  };
+  await writeAtomicJson(resolveInsideRoot(root, batchTask.executionReceiptFile, "Serial batch Worker execution receipt").fullPath, receipt);
+  return {
+    outcome: receipt.outcome,
+    reused: false,
+    manifestFile: prepared.manifestFile,
+    receiptFile: batchTask.executionReceiptFile,
+    resultFile: batchTask.resultFile,
+    receipt,
+  };
+}
+
+async function collectBatchWorkerBlockedResult(root, worktreeRoot, batchTask, workerResult) {
+  const result = await readInput(worktreeRoot, workerResult.resultFile, "Blocked batch Worker result evidence");
+  await writeAtomic(resolveInsideRoot(root, batchTask.resultFile, "Collected blocked batch Worker result").fullPath, result.buffer);
+  return { resultFile: batchTask.resultFile, result };
+}
+
+async function recheckBatchWorkerReadiness(root, state, task, taskFile, current, prepared, snapshot, candidatePaths, options) {
+  const refreshed = await loadBatchWorkerContext(root, state, task, taskFile, options, true);
+  if (refreshed.batch.batchFile !== current.batch.batchFile
+      || refreshed.batchTask.taskId !== current.batchTask.taskId
+      || refreshed.batchTask.inheritedSnapshotSha256 !== current.batchTask.inheritedSnapshotSha256) {
+    throw new Error("Serial batch Worker context changed before readiness could be recorded.");
+  }
+  const worktreeRoot = resolveInsideRoot(root, refreshed.inspected.plan.worktreePath, "Batch Worktree path").fullPath;
+  await assertNoSymlink(root, worktreeRoot, "Batch Worktree path");
+  await validateBatchWorktreeChanges({
+    root,
+    worktreeRoot,
+    ledger: refreshed.batch.ledger,
+    batchTask: refreshed.batchTask,
+    snapshot,
+    immutableInputs: prepared.immutableInputs,
+    candidatePaths,
+    allowResult: true,
+  });
+  return refreshed;
+}
+
+async function recordCheckedBatchWorkerReady(root, state, task, taskFile, current, prepared, snapshot, candidatePaths, options) {
+  return recordBatchWorkerReady({
+    root,
+    stateFile: options.stateFile,
+    batchFile: current.batch.batchFile,
+    taskId: task.taskId,
+    executionReceiptFile: current.batchTask.executionReceiptFile,
+    now: options.now,
+    beforeReadyTransition: options.beforeReadyTransition,
+    verifyWorktreeReadiness: () => recheckBatchWorkerReadiness(
+      root,
+      state,
+      task,
+      taskFile,
+      current,
+      prepared,
+      snapshot,
+      candidatePaths,
+      options,
+    ),
+  });
+}
+
+async function runBatchWorktreeWorker(root, state, task, taskFile, options) {
+  const initial = await loadBatchWorkerContext(root, state, task, taskFile, options);
+  const lockPath = resolveInsideRoot(root, batchExecutionLockFile(initial.batchTask), "Batch Worker execution lock").fullPath;
+  await acquireExecutionLock(lockPath, options);
+  try {
+    const snapshotRecorded = await recordBatchInheritedSnapshot({
+      root,
+      stateFile: options.stateFile,
+      batchFile: initial.batch.batchFile,
+      taskId: task.taskId,
+      now: options.now,
+    });
+    const current = await loadBatchWorkerContext(root, state, task, taskFile, options);
+    const batchTask = current.batchTask;
+    if (batchTask.inheritedSnapshotSha256 !== snapshotRecorded.task.inheritedSnapshotSha256) {
+      throw new Error("Recorded inherited snapshot does not match the claimed serial batch task.");
+    }
+    const worktreeRoot = resolveInsideRoot(root, current.inspected.plan.worktreePath, "Batch Worktree path").fullPath;
+    await assertNoSymlink(root, worktreeRoot, "Batch Worktree path");
+    const snapshot = await readBatchSnapshot(root, batchTask);
+    let prepared = await reuseBatchWorkerInputs(
+      root,
+      worktreeRoot,
+      state,
+      current.batch.ledger,
+      batchTask,
+      snapshot.snapshot,
+      options,
+    );
+    const reusedPrepared = Boolean(prepared);
+    if (!prepared) {
+      await listWorktreeChanges(worktreeRoot);
+      const immutableInputs = await declaredBatchImmutableInputs(
+        root,
+        worktreeRoot,
+        state,
+        batchTask,
+        snapshot.snapshot,
+        options,
+      );
+      await validateBatchWorktreeChanges({
+        root,
+        worktreeRoot,
+        ledger: current.batch.ledger,
+        batchTask,
+        snapshot: snapshot.snapshot,
+        immutableInputs,
+        allowMissingImmutableInputs: true,
+      });
+      prepared = await prepareBatchWorkerInputs(root, worktreeRoot, state, current.batch.ledger, batchTask, snapshot.snapshot, options);
+      await validateBatchWorktreeChanges({
+        root,
+        worktreeRoot,
+        ledger: current.batch.ledger,
+        batchTask,
+        snapshot: snapshot.snapshot,
+        immutableInputs: prepared.immutableInputs,
+      });
+    }
+
+    const existingReceipt = await reuseBatchWorkerReceipt(
+      root,
+      worktreeRoot,
+      state,
+      current.batch,
+      batchTask,
+      snapshot.snapshot,
+      prepared,
+    );
+    if (existingReceipt) {
+      const ready = await recordCheckedBatchWorkerReady(
+        root,
+        state,
+        task,
+        taskFile,
+        current,
+        prepared,
+        snapshot.snapshot,
+        existingReceipt.files,
+        options,
+      );
+      return {
+        outcome: existingReceipt.receipt.outcome,
+        reused: true,
+        manifestFile: prepared.manifestFile,
+        receiptFile: batchTask.executionReceiptFile,
+        resultFile: existingReceipt.resultFile,
+        receipt: existingReceipt.receipt,
+        ledger: ready.ledger,
+        task: ready.task,
+      };
+    }
+    const recovered = await recoverBatchWorkerResult(
+      root,
+      worktreeRoot,
+      current.batch.ledger,
+      batchTask,
+      snapshot.snapshot,
+      prepared,
+    );
+    if (recovered) {
+      if (recovered.status !== "completed") {
+        const blocked = await collectBatchWorkerBlockedResult(root, worktreeRoot, batchTask, recovered);
+        const recorded = await recordBatchWorkerBlocked({
+          root,
+          stateFile: options.stateFile,
+          batchFile: current.batch.batchFile,
+          taskId: task.taskId,
+          resultFile: blocked.resultFile,
+          now: options.now,
+        });
+        return {
+          outcome: "blocked",
+          reused: recorded.reused,
+          resultFile: blocked.resultFile,
+          ledger: recorded.ledger,
+          task: recorded.task,
+        };
+      }
+      const collected = await collectBatchWorkerResult(
+        root,
+        worktreeRoot,
+        state,
+        current.batch,
+        batchTask,
+        snapshot.snapshot,
+        current.inspected,
+        prepared,
+        recovered,
+        options,
+      );
+      const ready = await recordCheckedBatchWorkerReady(
+        root,
+        state,
+        task,
+        taskFile,
+        current,
+        prepared,
+        snapshot.snapshot,
+        collected.receipt.files.map((file) => file.path),
+        options,
+      );
+      return { ...collected, ledger: ready.ledger, task: ready.task };
+    }
+    if (reusedPrepared) {
+      await validateBatchWorktreeChanges({
+        root,
+        worktreeRoot,
+        ledger: current.batch.ledger,
+        batchTask,
+        snapshot: snapshot.snapshot,
+        immutableInputs: prepared.immutableInputs,
+      });
+    }
+
+    const workerResult = await runWorkerTask({
+      root: worktreeRoot,
+      taskFile: batchTask.taskFile,
+      provider: options.provider,
+      timeoutMs: options.timeoutMs,
+      contextFiles: prepared.contextFiles,
+      predictedFiles: batchTask.predictedFiles,
+    });
+    await validateBatchWorktreeChanges({
+      root,
+      worktreeRoot,
+      ledger: current.batch.ledger,
+      batchTask,
+      snapshot: snapshot.snapshot,
+      immutableInputs: prepared.immutableInputs,
+      candidatePaths: workerResult.files,
+      allowResult: true,
+    });
+    if (workerResult.status !== "completed") {
+      const blocked = await collectBatchWorkerBlockedResult(root, worktreeRoot, batchTask, workerResult);
+      const recorded = await recordBatchWorkerBlocked({
+        root,
+        stateFile: options.stateFile,
+        batchFile: current.batch.batchFile,
+        taskId: task.taskId,
+        resultFile: blocked.resultFile,
+        now: options.now,
+      });
+      return {
+        outcome: "blocked",
+        reused: recorded.reused,
+        resultFile: blocked.resultFile,
+        ledger: recorded.ledger,
+        task: recorded.task,
+      };
+    }
+    if (options.afterWorker) await options.afterWorker();
+    const collected = await collectBatchWorkerResult(
+      root,
+      worktreeRoot,
+      state,
+      current.batch,
+      batchTask,
+      snapshot.snapshot,
+      current.inspected,
+      prepared,
+      workerResult,
+      options,
+    );
+    if (options.beforeRecordWorkerReady) await options.beforeRecordWorkerReady();
+    const ready = await recordCheckedBatchWorkerReady(
+      root,
+      state,
+      task,
+      taskFile,
+      current,
+      prepared,
+      snapshot.snapshot,
+      collected.receipt.files.map((file) => file.path),
+      options,
+    );
+    return { ...collected, ledger: ready.ledger, task: ready.task };
+  } finally {
+    await unlink(lockPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
+}
+
 export async function runWorktreeWorker(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   const state = await readJson(root, options.stateFile, "Harness state file");
   const task = await readJson(root, options.taskFile, "Worker task file");
   validateDispatchTaskStructure(task);
+  const taskFile = resolveInsideRoot(root, options.taskFile, "Worker task file").relative;
+  if (task.schemaVersion === "1.1") {
+    if (options.allowReadyTransitionLock !== undefined) {
+      throw new Error("allowReadyTransitionLock is reserved for internal readiness-transition checks.");
+    }
+    return runBatchWorktreeWorker(root, state, task, taskFile, options);
+  }
   if (state.runtime?.status !== "active") throw new Error("M5-B1 requires an active Harness state.");
   if (state.storyId !== task.storyId || state.runtime?.runId !== task.storyId || state.phase !== task.phase) {
     throw new Error("M3 task identity must match the active Story and phase.");
@@ -436,7 +1258,6 @@ export async function runWorktreeWorker(options = {}) {
   if (state.runtime?.revision !== task.preparedRevision) {
     throw new Error("M3 task prepared revision must match the active Harness revision.");
   }
-  const taskFile = resolveInsideRoot(root, options.taskFile, "Worker task file").relative;
   const checkpointFile = `${path.posix.dirname(taskFile)}/checkpoint.json`;
   const checkpoint = await readJson(root, checkpointFile, "M3 checkpoint");
   if (checkpoint.schemaVersion !== "1.0"

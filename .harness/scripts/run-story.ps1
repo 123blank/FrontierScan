@@ -1,11 +1,13 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("prepare", "status", "run-adapter", "apply")]
+  [ValidateSet("prepare", "status", "run-adapter", "apply", "prepare-batch", "finalize-batch")]
   [string]$Command,
 
   [string]$StateFile,
   [string]$Adapter,
   [string]$ResultFile,
+  [string]$TaskDagFile,
+  [string]$BatchFile,
   [string]$Root,
   [switch]$Json
 )
@@ -30,6 +32,12 @@ if (-not [string]::IsNullOrWhiteSpace($Adapter)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($ResultFile)) {
   $arguments += @("--result-file", $ResultFile)
+}
+if (-not [string]::IsNullOrWhiteSpace($TaskDagFile)) {
+  $arguments += @("--task-dag-file", $TaskDagFile)
+}
+if (-not [string]::IsNullOrWhiteSpace($BatchFile)) {
+  $arguments += @("--batch-file", $BatchFile)
 }
 if ($Json) {
   $arguments += "--json"

@@ -37,13 +37,22 @@ function predictedPath(value, label) {
   if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
     throw new Error(`${label} must be a repository-relative path.`);
   }
-  return { source: value, key: segments.join("/").toLowerCase() };
+  return { source: value, key: segments.join("/").toLowerCase(), subtree };
 }
 
 function pathsOverlap(left, right) {
   return left.key === right.key
     || left.key.startsWith(`${right.key}/`)
     || right.key.startsWith(`${left.key}/`);
+}
+
+export function matchesPredictedFile(predictedFile, candidateFile) {
+  const predicted = predictedPath(predictedFile, "Predicted file");
+  const candidate = predictedPath(candidateFile, "Candidate file");
+  if (candidate.subtree) throw new Error("Candidate file must be an exact path.");
+  return predicted.subtree
+    ? candidate.key.startsWith(`${predicted.key}/`)
+    : candidate.key === predicted.key;
 }
 
 export function validateTaskDag(dag) {
@@ -58,6 +67,7 @@ export function validateTaskDag(dag) {
   dag.risks.forEach((item, index) => assertString(item, `Task DAG risks[${index}] string`));
 
   const nodes = new Map();
+  const windowsTaskIds = new Map();
   const adjacency = new Map();
   const allowedTypes = new Set(["backend", "frontend", "database", "docs", "test", "integration", "unknown"]);
   const allowedStatuses = new Set(["pending", "running", "done", "blocked"]);
@@ -71,6 +81,11 @@ export function validateTaskDag(dag) {
     assertArray(node.acceptanceCriteria, "Task node acceptanceCriteria");
     node.acceptanceCriteria.forEach((item, index) => assertString(item, `Task '${node.taskId}' acceptanceCriteria[${index}]`));
     if (nodes.has(node.taskId)) throw new Error(`Duplicate taskId: ${node.taskId}`);
+    const taskIdKey = node.taskId.toLowerCase();
+    const equivalentTaskId = windowsTaskIds.get(taskIdKey);
+    if (equivalentTaskId) {
+      throw new Error(`Task DAG has a case-insensitive taskId collision: '${equivalentTaskId}' and '${node.taskId}'.`);
+    }
     if (!allowedTypes.has(node.type)) throw new Error(`Task node type has invalid value '${node.type}'.`);
     if (!allowedStatuses.has(node.status)) throw new Error(`Task node status has invalid value '${node.status}'.`);
     if (node.type === "backend" && node.ownerAgent === "frontend-developer") {
@@ -81,6 +96,7 @@ export function validateTaskDag(dag) {
     }
     node.predictedFiles.forEach((item, index) => predictedPath(item, `Task '${node.taskId}' predictedFiles[${index}]`));
     nodes.set(node.taskId, node);
+    windowsTaskIds.set(taskIdKey, node.taskId);
     adjacency.set(node.taskId, []);
   }
 

@@ -12,11 +12,11 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Output templates | `.harness/templates/*.md` | Done |
 | Task DAG example template | `.harness/templates/task-dag.example.json` | Done |
 | Report/output folders | `.harness/reports/`, `.harness/outputs/` | Done |
-| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker 回收、M5-B2 受控集成和 M5-C 生命周期回收 Runtime 已实现 V1 |
+| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收和 M5-B3-B 单 Worktree 串行批次 Runtime 已实现 |
 | Structure validation script | `.harness/scripts/validate-structure.ps1` | Done |
 | State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
 | State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
-| Story Dispatcher entry | `.harness/scripts/run-story.ps1` | M3 `prepare/status/run-adapter/apply` 文件式派发闭环已实现 V1 |
+| Story Dispatcher entry | `.harness/scripts/run-story.ps1` | M3 v1.0 单任务 `prepare/status/run-adapter/apply` 保持兼容；M5-B3-B 以 `prepare-batch/finalize-batch` 管理 v1.1 task-scoped dispatch，仍由既有 `apply` 唯一推进 phase |
 | Mock Worker runtime | `.harness/scripts/lib/worker-runtime.mjs` | M4-B 显式 context、角色权限、2/8 MiB 限额、30 秒超时、result-last 和重试恢复已实现 |
 | Worker policy registry | `.codex/agents/worker-policies.json` | 12 角色与 `agents.yaml` 名称、类别一一对应；无 shell、网络、状态、发布或 Git 能力 |
 | Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | 共享 Node 契约覆盖 UTF-8、唯一 wave、依赖顺序、路径冲突和 globalChanges 串行 |
@@ -28,13 +28,14 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Knowledge input scan script | `.harness/scripts/scan-knowledge-inputs.ps1` | Basic read-only source structure scan done |
 | Knowledge freshness script | `.harness/scripts/check-kb-freshness.ps1` | Backend/frontend/Common baseline, semantic, index, and content-fingerprint freshness check implemented |
 | Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | 旧版只读 DAG-to-worktree 计划保持兼容 |
-| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | M5-A `Plan/Status/Create` 与 M5-C `Retire`、SHA 绑定、事实对账、批准门禁、幂等和恢复已实现；Retire 只回收已完成 M5-B2 Worktree 并保留分支 |
-| Worktree Worker runtime | `.harness/scripts/lib/worktree-worker-runtime.mjs` | M5-B1 单任务执行、输入快照、Git 对账、分级回收、幂等和显式重试已实现；无 CLI |
-| Worktree integration runtime | `.harness/scripts/run-worktree-integration.ps1` + `lib/worktree-integration-runtime.mjs` | M5-B2 单任务 `Plan/Status/Apply`、内容寻址 bundle、批准门禁、result-last 和逐文件恢复已实现；不调用 M3 apply |
+| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | 单任务 `Plan/Status/Create/Retire` 与批次 `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 已实现；批次身份、分支、路径和基准仅由 ledger 派生，Create/Retire 仍受审批、事实对账、幂等和恢复保护 |
+| Serial batch runtime | `.harness/scripts/lib/batch-runtime.mjs` + `lib/batch-base-contract.mjs` | M5-B3-B ledger、任务顺序、锁、继承快照、逐任务回执和受验证的 `dev` 基准契约已实现；不执行 Git 或状态推进 |
+| Worktree Worker runtime | `.harness/scripts/lib/worktree-worker-runtime.mjs` | M5-B1 单任务路径保持兼容；M5-B3-B 仅在单个 batch Worktree 中逐项执行，验证前序集成快照、Git 对账、幂等和显式重试；无 CLI |
+| Worktree integration runtime | `.harness/scripts/run-worktree-integration.ps1` + `lib/worktree-integration-runtime.mjs` | M5-B2 单任务 `Plan/Status/Apply` 保持兼容；M5-B3-B 批次路径按 taskId 与前序回执验证候选，仍受内容寻址、批准门禁、result-last 和逐文件恢复保护，不调用 M3 apply |
 | Interface case derivation script | `.harness/scripts/derive-interface-cases.ps1` | Basic read-only acceptance-case draft done |
 | Build plan script | `.harness/scripts/plan-build.ps1` | Basic read-only build/publish plan done |
 | Delivery summary script | `.harness/scripts/summarize-delivery.ps1` | Basic read-only owned/unrelated change summary done |
-| Harness smoke flow script | `.harness/scripts/smoke-harness-flow.ps1` | 非破坏性 M2 初始化、M3 prepare/apply 和 M4-B mock Worker 临时闭环已实现；不是业务 E2E |
+| Harness smoke flow script | `.harness/scripts/smoke-harness-flow.ps1` | 非破坏性 M2 初始化、M3 prepare/apply、M4-B mock Worker 与 M5-B3-B public batch prepare/plan/status 协议临时闭环已实现；不是业务 E2E |
 | Agent registry | `.codex/agents/agents.yaml` | 12 角色已映射受约束 Mock Worker 策略；真实 Agent 执行仍延期 |
 | Project Skill area | `.codex/skills/` | Done |
 | MVP Skill placeholders | `.codex/skills/frontier-*` | Replaced by basic guidance |
@@ -72,19 +73,20 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M5-B2 Worktree integration plan/report | `docs/harness-m5b2-worktree-integration/` | 单 Worktree 业务候选的内容寻址计划、事实状态、批准集成和 M3 显式交接已实现 |
 | M5-C Worktree lifecycle plan/report | `docs/harness-m5c-worktree-lifecycle/` | 已完成 M5-B2 Worktree 的证据校验、双重确认、强制移除、回执和中断恢复已实现 |
 | M5-B3 multi-task protocol plan/report | `docs/harness-m5b3-multi-task-protocol/` | 已完成单 Worktree 串行多任务协议兼容性验证；Runtime 实现延期到 M5-B3-B |
+| M5-B3-B serial batch runtime plan/report | `docs/harness-m5b3-batch-runtime/` | 已完成单 Worktree 串行多任务 Runtime：v1.1 task-scoped dispatch、batch ledger、逐项 Worker/集成、由 `finalizationArtifacts` 固定的正式阶段工件证据链、一次 M3 apply 与 batch Retire 仅在临时 Git fixture 验证；收尾绑定以独占锁失败关闭并支持受控重试 |
 
 ## Deferred Functional Work
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
-- M5-B2 已实现单任务业务代码集成；多任务聚合、多 Worktree 波次和跨任务冲突停止继续延期。
-- 多任务/多 Worktree 回收、分支删除、`git worktree prune`、Fork-Join 和自动清理继续需要独立方案与明确批准。
+- M5-B3-B 仅实现单 Worktree、单 batch、严格串行的多任务闭环；同 wave 并行、多 Worktree 波次、跨 batch 冲突处理和 Fork-Join 继续延期。
+- 多 batch/多 Worktree 回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
 
 ## Safety Notes
 
 - Preserve unrelated working-tree files; do not delete or stage them as part of Harness work.
-- `run-worktree.ps1 Create` 只能在用户逐次批准并显式传入 `-ConfirmCreate` 后创建一个 Worktree；`Retire` 只能在已完成目标 Story、用户逐次批准并显式传入 `-ConfirmRetire` 后回收它。其他脚本不应隐式调用这些命令。
+- `run-worktree.ps1 Create/BatchCreate` 只能在用户逐次批准并显式传入 `-ConfirmCreate` 后创建一个 Worktree；`Retire/BatchRetire` 只能在已完成目标 Story、用户逐次批准并显式传入 `-ConfirmRetire` 后回收它。其他脚本不应隐式调用这些命令。
 - Publish, commit, push, deployment, and destructive git scripts are not implemented.
 
 ## Structure Validation
@@ -97,7 +99,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 25 directories, 159 required files, and 13 Skill files.
+Current verified structure: 27 directories, 177 required files, and 13 Skill files.
 
 ## Knowledge Query
 

@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree 创建、M5-B1 Worktree 内 Worker 分级回收和 M5-B2 单任务业务候选集成均已实现。真实 Agent、多任务/多 Worktree 波次、Fork-Join、合并/删除和 DevOps 闭环仍未实现。
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收与 M5-B3-B 单 Worktree 严格串行多任务批次运行时均已实现。真实 Agent、同 wave 并行、多 Worktree 波次、Fork-Join、分支删除和 DevOps 闭环仍未实现。
 
 ## Added Structure
 
@@ -293,9 +293,19 @@ M5-B3-A 已确认当前 M3 phase 级 dispatch 只能处理单 task：`task.json`
 
 后续 M5-B3-B 应先增加兼容的 task-scoped dispatch v1.1、batch-scoped Worktree plan 与独立 serial batch ledger：每项 task 有独立 dispatch、结果、checkpoint 和 M5-B1/B2 receipt；一次只执行一项；全部选中任务完成后才允许受控 phase 推进，M5-C 只在目标 Story 完成后回收 batch Worktree。该设计保留 M2/M3 的唯一状态权，不自动进入并行、多 Worktree 或 Fork-Join。
 
+## M5-B3-B 单 Worktree 串行多任务批次运行时
+
+M5-B3-B 将 M5-B3-A 的兼容性结论实现为受限运行时。v1.0 仍是单任务和非 `implementation` phase 的严格协议；只有 active Story 在 `implementation` phase 拥有至少两个 backend/frontend 任务时，`run-story.ps1 prepare-batch` 才会生成 v1.1 task-scoped dispatch、独立任务目录和 serial batch ledger。每项任务必须绑定相同的 `batchId`、`taskId`、`taskRoot` 和 prepared revision，不能复用 phase 级的 `task.json/result.json`。
+
+`batch-runtime.mjs` 不执行 Git，也不修改 M2/M3 状态；它只维护确定性任务顺序、batch 锁、继承快照和每项执行/集成回执。`batch-base-contract.mjs` 通过固定 Git argv 解析并校验 `dev` 的不可变基准。`worktree-runtime.mjs` 的 `batch-plan/status/create/retire` 从 ledger 派生唯一分支、路径和基准，拒绝外部任务、路径或基准注入；Create 与 Retire 仍分别要求真实用户批准和显式确认。
+
+共享 Worktree 中，每次只可 claim 一个下一任务。Worker 在任务开始前记录前序已集成候选的继承快照，候选路径必须匹配当前任务的 `predictedFiles`；M5-B2 批次集成以全部前序 integration receipt 与当前主树哈希为基线。任一 Provider 异常、非法输出、未解释的改动、哈希漂移或遗留锁都会失败关闭，不产生可推进后继的回执。
+
+只有全部任务已集成，`finalize-batch` 才生成唯一正式 phase result 和 batch receipt；它不推进状态。正式 implementation 的 `task.json`、`result.json` 和 `implementation-notes.md` 的路径与 SHA-256 由 `batch-finalization-contract.mjs` 固定到 receipt 的 `finalizationArtifacts`，ledger 再固定 receipt 哈希；M3 `apply` 与 `batch-retire` 均重新验证这条证据链。收尾使用 `batch-finalization.lock` 串行化 ledger finalization 与 checkpoint binding，并发调用失败关闭并可在首个调用完成后重试；receipt-to-ledger 和 ledger-to-checkpoint 两个中断窗口均可受限恢复。既有 M3 `apply` 是唯一 phase 推进入口，并由两任务真实 Git fixture 验证仅推进一次。目标 Story 到达 `done/completed` 后，`batch-retire` 才能验证全量批次证据并执行受审批的 `git worktree remove --force`；它保留分支，支持 Git 成功但回执未写入的受限恢复。
+
 ## 下一步实施
 
-M5-B3-A 完成后，M5-B3-B 必须先按上述协议制定独立实施计划，再开始任何 Runtime 修改。后续不得默认引入并行执行、分支删除、自动 `prune`、Fork-Join、真实模型、发布、部署或 Git 自动交付。
+M5-B3-B 已完成后，下一阶段只能在独立方案中评估同 wave 并行、多 Worktree、Fork-Join 或分支清理。不得把单 batch 的串行保证泛化为并行执行，也不得默认引入分支删除、自动 `prune`、真实模型、发布、部署或 Git 自动交付。
 
 ## Safety Boundaries
 

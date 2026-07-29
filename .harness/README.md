@@ -17,8 +17,15 @@ Directory layout:
     product-state.schema.json
     e2e-state.schema.json
     task-dag.schema.json
+    dispatch-task-v1.1.schema.json
+    dispatch-result-v1.1.schema.json
+    serial-batch-ledger.schema.json
     worktree-plan.schema.json
     worktree-status.schema.json
+    worktree-batch-plan.schema.json
+    worktree-batch-status.schema.json
+    worktree-batch-receipt.schema.json
+    worktree-batch-retirement-receipt.schema.json
     worktree-worker-input-manifest.schema.json
     worktree-worker-receipt.schema.json
     worktree-retirement-receipt.schema.json
@@ -77,6 +84,12 @@ Retire 保留任务分支，不执行 `prune`、合并或状态推进。
 `scripts/lib/worktree-worker-runtime.mjs` 是 M5-B1 内部编排接口，不提供 CLI。它只消费 M5-A 已创建的单 Worktree，
 在 Worktree 内运行测试注入的 M4-B Provider，并把结果分为 `ready-for-apply` 与 `ready-for-integration`；它不创建、
 合并或删除 Worktree，也不调用 M3 `apply`。
+
+M5-B3-B 在保持上述单任务入口兼容的前提下，为同一 Story 的 `implementation` phase 增加严格串行批次协议。多节点
+`backend`/`frontend` DAG 必须先通过 `run-story.ps1 -Command prepare-batch` 创建 task-scoped v1.1 dispatch 与
+serial batch ledger；随后仅使用 `run-worktree.ps1` 的 `BatchPlan/BatchStatus/BatchCreate/BatchRetire`。每项任务仍经
+M5-B1 Worker 和 M5-B2 集成独立验收，全部任务已集成后才可用 `finalize-batch` 生成 M3 可应用的 phase result，既有
+`apply` 仍是唯一状态推进入口。正式 implementation 工件通过 batch receipt 的 `finalizationArtifacts`、ledger receipt 哈希和 checkpoint binding 形成固定证据链；收尾 binding 使用独占锁，重叠调用失败关闭并可在首个完成后重试。批次不并行、不创建多个 Worktree，也不绕过用户对 Create、Apply 或 Retire 的逐次批准。
 
 `kb-query.ps1` is a read-only keyword search over `llm-knowledge/`. Treat empty results as missing
 knowledge and verify source files directly before implementation.
