@@ -12,7 +12,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Output templates | `.harness/templates/*.md` | Done |
 | Task DAG example template | `.harness/templates/task-dag.example.json` | Done |
 | Report/output folders | `.harness/reports/`, `.harness/outputs/` | Done |
-| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收和 M5-B3-B 单 Worktree 串行批次 Runtime 已实现 |
+| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 单 Worktree 串行批次和 M5-D-A 同 wave 只读规划 Runtime 已实现 |
 | Structure validation script | `.harness/scripts/validate-structure.ps1` | Done |
 | State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
 | State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
@@ -28,7 +28,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Knowledge input scan script | `.harness/scripts/scan-knowledge-inputs.ps1` | Basic read-only source structure scan done |
 | Knowledge freshness script | `.harness/scripts/check-kb-freshness.ps1` | Backend/frontend/Common baseline, semantic, index, and content-fingerprint freshness check implemented |
 | Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | 旧版只读 DAG-to-worktree 计划保持兼容 |
-| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | 单任务 `Plan/Status/Create/Retire` 与批次 `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 已实现；批次身份、分支、路径和基准仅由 ledger 派生，Create/Retire 仍受审批、事实对账、幂等和恢复保护 |
+| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | 单任务 `Plan/Status/Create/Retire`、批次 `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 与只读 `WavePlan/WaveStatus` 已实现；wave 仅规划和对账，批次身份、分支、路径和基准仅由 ledger 派生，Create/Retire 仍受审批、事实对账、幂等和恢复保护 |
 | Serial batch runtime | `.harness/scripts/lib/batch-runtime.mjs` + `lib/batch-base-contract.mjs` | M5-B3-B ledger、任务顺序、锁、继承快照、逐任务回执和受验证的 `dev` 基准契约已实现；不执行 Git 或状态推进 |
 | Worktree Worker runtime | `.harness/scripts/lib/worktree-worker-runtime.mjs` | M5-B1 单任务路径保持兼容；M5-B3-B 仅在单个 batch Worktree 中逐项执行，验证前序集成快照、Git 对账、幂等和显式重试；无 CLI |
 | Worktree integration runtime | `.harness/scripts/run-worktree-integration.ps1` + `lib/worktree-integration-runtime.mjs` | M5-B2 单任务 `Plan/Status/Apply` 保持兼容；M5-B3-B 批次路径按 taskId 与前序回执验证候选，仍受内容寻址、批准门禁、result-last 和逐文件恢复保护，不调用 M3 apply |
@@ -74,12 +74,13 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M5-C Worktree lifecycle plan/report | `docs/harness-m5c-worktree-lifecycle/` | 已完成 M5-B2 Worktree 的证据校验、双重确认、强制移除、回执和中断恢复已实现 |
 | M5-B3 multi-task protocol plan/report | `docs/harness-m5b3-multi-task-protocol/` | 已完成单 Worktree 串行多任务协议兼容性验证；Runtime 实现延期到 M5-B3-B |
 | M5-B3-B serial batch runtime plan/report | `docs/harness-m5b3-batch-runtime/` | 已完成单 Worktree 串行多任务 Runtime：v1.1 task-scoped dispatch、batch ledger、逐项 Worker/集成、由 `finalizationArtifacts` 固定的正式阶段工件证据链、一次 M3 apply 与 batch Retire 仅在临时 Git fixture 验证；收尾绑定以独占锁失败关闭并支持受控重试 |
+| M5-D-A multi-Worktree wave plan/report | `docs/harness-m5d-multi-worktree-wave/` | 已实现同 wave 多 Worktree 的确定性只读计划与 Git 事实状态；不提供创建、并行 Worker、合并或删除 |
 
 ## Deferred Functional Work
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
-- M5-B3-B 仅实现单 Worktree、单 batch、严格串行的多任务闭环；同 wave 并行、多 Worktree 波次、跨 batch 冲突处理和 Fork-Join 继续延期。
+- M5-D-A 只实现同 wave 多 Worktree 的 `WavePlan/WaveStatus`；审批门控创建、并行 Worker、跨 Worktree 结果汇总和 Fork-Join 继续延期。
 - 多 batch/多 Worktree 回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
 
@@ -99,7 +100,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 27 directories, 177 required files, and 13 Skill files.
+Current verified structure: 28 directories, 183 required files, and 13 Skill files.
 
 ## Knowledge Query
 

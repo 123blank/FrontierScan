@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-plan.schema.json",
+  "title": "FrontierScan Harness Worktree Wave Plan",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "runId",
+    "wave",
+    "taskDagFile",
+    "taskDagSha256",
+    "baseRef",
+    "baseCommit",
+    "tasks",
+    "plannedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "wave": { "type": "integer", "minimum": 1 },
+    "taskDagFile": { "type": "string", "minLength": 1 },
+    "taskDagSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "baseRef": { "type": "string", "minLength": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "tasks": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "title",
+          "type",
+          "ownerAgent",
+          "branch",
+          "worktreePath",
+          "predictedFiles"
+        ],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "enum": ["backend", "frontend"] },
+          "ownerAgent": { "type": "string" },
+          "branch": { "type": "string", "minLength": 1 },
+          "worktreePath": { "type": "string", "minLength": 1 },
+          "predictedFiles": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "plannedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

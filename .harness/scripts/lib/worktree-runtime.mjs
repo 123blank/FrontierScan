@@ -23,6 +23,20 @@ const BATCH_STATUS_FIELDS = [
   "schemaVersion", "storyId", "runId", "batchId", "batchPlanSha256", "taskDagSha256", "state",
   "branch", "worktreePath", "baseCommit", "headCommit", "observedAt", "details",
 ];
+const WAVE_PLAN_FIELDS = [
+  "schemaVersion", "storyId", "runId", "wave", "taskDagFile", "taskDagSha256",
+  "baseRef", "baseCommit", "tasks", "plannedAt",
+];
+const WAVE_PLAN_TASK_FIELDS = [
+  "taskId", "title", "type", "ownerAgent", "branch", "worktreePath", "predictedFiles",
+];
+const WAVE_STATUS_FIELDS = [
+  "schemaVersion", "storyId", "runId", "wave", "wavePlanSha256", "taskDagSha256",
+  "state", "baseRef", "baseCommit", "tasks", "observedAt", "details",
+];
+const WAVE_STATUS_TASK_FIELDS = [
+  "taskId", "state", "branch", "worktreePath", "headCommit", "details",
+];
 const RETIREMENT_RECEIPT_FIELDS = [
   "schemaVersion", "storyId", "runId", "taskId", "branch", "worktreePath", "baseCommit",
   "planSha256", "statusSha256", "executionReceiptSha256", "integrationPlanSha256",
@@ -173,6 +187,13 @@ function validateState(state) {
   if (state.runtime?.status !== "active") throw new Error("Worktree planning requires an active Story.");
 }
 
+function validateWaveState(state) {
+  validateState(state);
+  if (state.phase !== "implementation") {
+    throw new Error("Wave Worktree planning requires the implementation phase.");
+  }
+}
+
 function validateRetirementState(state) {
   if (!state || state.schemaVersion !== "1.0" || typeof state.storyId !== "string" || !state.storyId) {
     throw new Error("Harness state has an invalid identity.");
@@ -188,6 +209,12 @@ function slug(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "task";
 }
 
+function compareIdentifiers(left, right) {
+  const leftKey = left.toLowerCase();
+  const rightKey = right.toLowerCase();
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
 function outputPaths(root, state, taskId) {
   const directory = `.harness/runs/${state.runtime.runId}/worktrees/${taskId}`;
   return {
@@ -198,6 +225,17 @@ function outputPaths(root, state, taskId) {
     planPath: resolveInsideRoot(root, `${directory}/plan.json`, "Worktree plan file").fullPath,
     statusPath: resolveInsideRoot(root, `${directory}/status.json`, "Worktree status file").fullPath,
     lockPath: resolveInsideRoot(root, `${directory}/create.lock`, "Worktree lock file").fullPath,
+  };
+}
+
+function waveOutputPaths(root, state, wave) {
+  const directory = `.harness/runs/${state.runtime.runId}/waves/wave-${wave}`;
+  return {
+    directory,
+    planFile: `${directory}/plan.json`,
+    statusFile: `${directory}/status.json`,
+    planPath: resolveInsideRoot(root, `${directory}/plan.json`, "Wave Worktree plan file").fullPath,
+    statusPath: resolveInsideRoot(root, `${directory}/status.json`, "Wave Worktree status file").fullPath,
   };
 }
 
@@ -319,6 +357,88 @@ function validateBatchStatusStructure(status, plan, planSha256) {
     throw new Error("Serial batch Worktree status has an invalid structure.");
   }
   return status;
+}
+
+function validateWavePlanStructure(plan, state, wave) {
+  const fields = plan && typeof plan === "object" && !Array.isArray(plan) ? Object.keys(plan) : [];
+  if (!plan || fields.length !== WAVE_PLAN_FIELDS.length || WAVE_PLAN_FIELDS.some((field) => !Object.hasOwn(plan, field))
+      || plan.schemaVersion !== "1.0" || plan.storyId !== state.storyId || plan.runId !== state.runtime.runId
+      || plan.wave !== wave || !Number.isInteger(plan.wave) || plan.wave < 1
+      || typeof plan.taskDagFile !== "string" || !/^sha256:[a-f0-9]{64}$/.test(plan.taskDagSha256)
+      || typeof plan.baseRef !== "string" || !/^[a-f0-9]{40,64}$/.test(plan.baseCommit)
+      || typeof plan.plannedAt !== "string" || Number.isNaN(Date.parse(plan.plannedAt))
+      || !Array.isArray(plan.tasks) || plan.tasks.length < 2) {
+    throw new Error("Wave Worktree plan has an invalid structure.");
+  }
+  for (const task of plan.tasks) {
+    assertIdentifier(task?.taskId, "Task ID");
+    const taskFields = task && typeof task === "object" && !Array.isArray(task) ? Object.keys(task) : [];
+    if (!task || taskFields.length !== WAVE_PLAN_TASK_FIELDS.length
+        || WAVE_PLAN_TASK_FIELDS.some((field) => !Object.hasOwn(task, field))
+        || typeof task.taskId !== "string" || typeof task.title !== "string"
+        || !["backend", "frontend"].includes(task.type) || typeof task.ownerAgent !== "string"
+        || typeof task.branch !== "string" || typeof task.worktreePath !== "string"
+        || !Array.isArray(task.predictedFiles) || task.predictedFiles.some((item) => typeof item !== "string")) {
+      throw new Error("Wave Worktree plan task has an invalid structure.");
+    }
+  }
+  return plan;
+}
+
+function validateWaveStatusStructure(status, plan, planSha256) {
+  const fields = status && typeof status === "object" && !Array.isArray(status) ? Object.keys(status) : [];
+  if (!status || fields.length !== WAVE_STATUS_FIELDS.length || WAVE_STATUS_FIELDS.some((field) => !Object.hasOwn(status, field))
+      || status.schemaVersion !== "1.0" || status.storyId !== plan.storyId || status.runId !== plan.runId
+      || status.wave !== plan.wave || status.wavePlanSha256 !== planSha256
+      || status.taskDagSha256 !== plan.taskDagSha256 || !["absent", "partial", "ready"].includes(status.state)
+      || status.baseRef !== plan.baseRef || status.baseCommit !== plan.baseCommit
+      || !Array.isArray(status.tasks) || status.tasks.length !== plan.tasks.length
+      || typeof status.observedAt !== "string" || Number.isNaN(Date.parse(status.observedAt))
+      || !Array.isArray(status.details) || status.details.some((item) => typeof item !== "string")) {
+    throw new Error("Wave Worktree status has an invalid structure.");
+  }
+  for (const task of status.tasks) {
+    const taskFields = task && typeof task === "object" && !Array.isArray(task) ? Object.keys(task) : [];
+    if (!task || taskFields.length !== WAVE_STATUS_TASK_FIELDS.length
+        || WAVE_STATUS_TASK_FIELDS.some((field) => !Object.hasOwn(task, field))
+        || typeof task.taskId !== "string" || !["absent", "branch-only", "created"].includes(task.state)
+        || typeof task.branch !== "string" || typeof task.worktreePath !== "string"
+        || (task.headCommit !== null && typeof task.headCommit !== "string") || !Array.isArray(task.details)
+        || task.details.some((item) => typeof item !== "string")) {
+      throw new Error("Wave Worktree task status has an invalid structure.");
+    }
+  }
+  return status;
+}
+
+function comparableWavePlan(plan) {
+  return {
+    schemaVersion: plan.schemaVersion,
+    storyId: plan.storyId,
+    runId: plan.runId,
+    wave: plan.wave,
+    taskDagFile: plan.taskDagFile,
+    taskDagSha256: plan.taskDagSha256,
+    baseRef: plan.baseRef,
+    baseCommit: plan.baseCommit,
+    tasks: plan.tasks,
+  };
+}
+
+function comparableWaveStatus(status) {
+  return {
+    schemaVersion: status.schemaVersion,
+    storyId: status.storyId,
+    runId: status.runId,
+    wave: status.wave,
+    wavePlanSha256: status.wavePlanSha256,
+    taskDagSha256: status.taskDagSha256,
+    state: status.state,
+    baseRef: status.baseRef,
+    baseCommit: status.baseCommit,
+    tasks: status.tasks,
+    details: status.details,
+  };
 }
 
 function comparableBatchStatus(status) {
@@ -520,6 +640,141 @@ async function loadContext(root, options) {
   const outputs = outputPaths(root, state, options.taskId);
   await assertSafeTargetParents(root, outputs.planPath);
   return { state, stateFile: stateLocation.relative, ...outputs };
+}
+
+async function loadWaveContext(root, options) {
+  await assertRepositoryRoot(root, options);
+  const stateLocation = resolveInsideRoot(root, options.stateFile, "State file");
+  await assertSafeTargetParents(root, stateLocation.fullPath);
+  const state = await readJsonFile(stateLocation.fullPath, "State file");
+  validateWaveState(state);
+  if (!Number.isInteger(options.waveIndex) || options.waveIndex < 1) {
+    throw new Error("Wave index must be a positive integer.");
+  }
+  const outputs = waveOutputPaths(root, state, options.waveIndex);
+  await assertSafeTargetParents(root, outputs.planPath);
+  return { state, stateFile: stateLocation.relative, ...outputs };
+}
+
+async function validateStoredWavePlan(root, plan, state, wave, taskDagFile) {
+  validateWavePlanStructure(plan, state, wave);
+  const taskDagLocation = resolveInsideRoot(root, taskDagFile, "Task DAG file");
+  if (taskDagLocation.relative !== plan.taskDagFile) {
+    throw new Error("Wave Worktree plan is bound to a different Task DAG.");
+  }
+  await assertSafeTargetParents(root, taskDagLocation.fullPath);
+  if (await fileSha256(taskDagLocation.fullPath) !== plan.taskDagSha256) {
+    throw new Error("The bound Task DAG has changed since Wave Worktree planning.");
+  }
+  const loaded = await loadTaskDag(taskDagLocation.fullPath);
+  const taskIds = loaded.dag.waves[wave - 1];
+  if (loaded.dag.storyId !== state.storyId || !taskIds || taskIds.length !== plan.tasks.length) {
+    throw new Error("Wave Worktree plan no longer matches its bound Task DAG.");
+  }
+  const expectedTaskIds = [...taskIds].sort(compareIdentifiers);
+  const plannedTaskIds = plan.tasks.map((task) => task.taskId);
+  if (new Set(plannedTaskIds).size !== plannedTaskIds.length
+      || JSON.stringify(plannedTaskIds) !== JSON.stringify(expectedTaskIds)) {
+    throw new Error("Wave Worktree plan task set does not match its bound Task DAG.");
+  }
+  for (const plannedTask of plan.tasks) {
+    const task = loaded.nodes.get(plannedTask.taskId);
+    const expectedBranch = `harness/${state.storyId.toLowerCase()}/wave-${wave}-${task?.taskId.toLowerCase()}-${slug(task?.title ?? "")}`;
+    const expectedPath = `.harness/worktrees/${state.storyId}/wave-${wave}/${plannedTask.taskId}`;
+    if (!task || !taskIds.includes(task.taskId) || task.status !== "pending"
+        || task.title !== plannedTask.title || task.type !== plannedTask.type
+        || (task.ownerAgent ?? "") !== plannedTask.ownerAgent
+        || JSON.stringify(task.predictedFiles) !== JSON.stringify(plannedTask.predictedFiles)
+        || plannedTask.branch !== expectedBranch || plannedTask.worktreePath !== expectedPath) {
+      throw new Error("Wave Worktree plan no longer matches its bound Task DAG.");
+    }
+  }
+  return plan;
+}
+
+async function inspectWaveStatus(root, plan, planPath, statusPath, options) {
+  const currentBase = await tryGit(root, ["rev-parse", "--verify", "--end-of-options", `${plan.baseRef}^{commit}`], options);
+  if (!currentBase.ok || currentBase.stdout.trim() !== plan.baseCommit) {
+    throw new Error(`Planned base ref '${plan.baseRef}' has moved or is unavailable.`);
+  }
+  const listed = await executeGit(root, ["worktree", "list", "--porcelain"], options);
+  const worktrees = parseWorktreeList(String(listed.stdout ?? ""));
+  const waveRoot = pathKey(path.resolve(root, `.harness/worktrees/${plan.storyId}/wave-${plan.wave}`));
+  const plannedPaths = new Set(plan.tasks.map((task) => pathKey(path.resolve(root, task.worktreePath))));
+  const unplanned = worktrees.find((item) => {
+    const candidate = pathKey(item.worktree ?? "");
+    return candidate.startsWith(`${waveRoot}/`) && !plannedPaths.has(candidate);
+  });
+  if (unplanned) throw new Error("Wave contains an unplanned registered Worktree.");
+  const tasks = [];
+  for (const task of plan.tasks) {
+    const targetPath = resolveInsideRoot(root, task.worktreePath, "Wave Worktree path").fullPath;
+    await assertSafeTargetParents(root, targetPath);
+    const registered = worktrees.find((item) => pathKey(item.worktree ?? "") === pathKey(targetPath));
+    const branchRef = `refs/heads/${task.branch}`;
+    const branchWorktree = worktrees.find((item) => item.branch === branchRef);
+    const pathInfo = await lstat(targetPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+    const branch = await inspectGitRef(root, branchRef, options);
+    let state = "absent";
+    const details = [];
+    let headCommit = null;
+    if (registered) {
+      const issue = invalidRegisteredWorktreeDetail(registered, pathInfo, `Wave task '${task.taskId}' Worktree`);
+      if (issue) throw new Error(issue);
+      if (registered.branch !== branchRef || registered.HEAD !== plan.baseCommit
+          || !branch.exists || branch.commit !== plan.baseCommit) {
+        throw new Error(`Wave task '${task.taskId}' Worktree branch or HEAD does not match the plan.`);
+      }
+      state = "created";
+      headCommit = registered.HEAD;
+    } else if (pathInfo) {
+      throw new Error(`Wave task '${task.taskId}' Worktree path is occupied but not registered by Git.`);
+    } else if (branchWorktree) {
+      throw new Error(`Wave task '${task.taskId}' branch is mounted at another Worktree path.`);
+    } else if (branch.exists) {
+      if (branch.commit !== plan.baseCommit) {
+        throw new Error(`Wave task '${task.taskId}' branch does not point to the planned base commit.`);
+      }
+      state = "branch-only";
+      details.push("Target branch exists at the planned base commit and can be resumed.");
+    }
+    tasks.push({
+      taskId: task.taskId,
+      state,
+      branch: task.branch,
+      worktreePath: task.worktreePath,
+      headCommit,
+      details,
+    });
+  }
+  const state = tasks.every((task) => task.state === "created")
+    ? "ready"
+    : tasks.every((task) => task.state === "absent") ? "absent" : "partial";
+  const planSha256 = await fileSha256(planPath);
+  const status = {
+    schemaVersion: "1.0",
+    storyId: plan.storyId,
+    runId: plan.runId,
+    wave: plan.wave,
+    wavePlanSha256: planSha256,
+    taskDagSha256: plan.taskDagSha256,
+    state,
+    baseRef: plan.baseRef,
+    baseCommit: plan.baseCommit,
+    tasks,
+    observedAt: (options.now ?? (() => new Date().toISOString()))(),
+    details: [],
+  };
+  validateWaveStatusStructure(status, plan, planSha256);
+  const stored = await readJsonOptional(statusPath, "Wave Worktree status");
+  if (stored) {
+    validateWaveStatusStructure(stored, plan, planSha256);
+    if (JSON.stringify(comparableWaveStatus(stored)) === JSON.stringify(comparableWaveStatus(status))) {
+      return stored;
+    }
+  }
+  await writeAtomicJson(statusPath, status);
+  return status;
 }
 
 async function loadBatchContext(root, options) {
@@ -1448,6 +1703,76 @@ async function status(root, options) {
   return { command: "status", planFile: context.planFile, statusFile: context.statusFile, plan: worktreePlan, status: current };
 }
 
+async function wavePlan(root, options) {
+  const context = await loadWaveContext(root, options);
+  const taskDagLocation = resolveInsideRoot(root, options.taskDagFile, "Task DAG file");
+  await assertSafeTargetParents(root, taskDagLocation.fullPath);
+  const loaded = await loadTaskDag(taskDagLocation.fullPath);
+  if (loaded.dag.storyId !== context.state.storyId) throw new Error("Task DAG does not match the active Story.");
+  if (loaded.dag.globalChanges.length) throw new Error("Wave Worktree planning does not support globalChanges.");
+  const taskIds = loaded.dag.waves[options.waveIndex - 1];
+  if (!taskIds) throw new Error(`Task DAG does not contain wave ${options.waveIndex}.`);
+  if (taskIds.length < 2) throw new Error("Wave Worktree planning requires at least two tasks.");
+  const tasks = taskIds.map((taskId) => loaded.nodes.get(taskId));
+  if (tasks.some((task) => task.status !== "pending")) {
+    throw new Error("Wave Worktree planning requires every task to be pending.");
+  }
+  if (tasks.some((task) => !["backend", "frontend"].includes(task.type))) {
+    throw new Error("Wave Worktree planning only supports backend and frontend tasks.");
+  }
+  const baseRef = options.baseRef ?? "dev";
+  if (typeof baseRef !== "string" || !baseRef.trim()) throw new Error("Base ref must be a non-empty string.");
+  const base = await tryGit(root, ["rev-parse", "--verify", "--end-of-options", `${baseRef}^{commit}`], options);
+  if (!base.ok) throw new Error(`Cannot resolve base ref '${baseRef}'.`);
+  const orderedTasks = [...tasks].sort((left, right) => compareIdentifiers(left.taskId, right.taskId));
+  const expected = {
+    schemaVersion: "1.0",
+    storyId: context.state.storyId,
+    runId: context.state.runtime.runId,
+    wave: options.waveIndex,
+    taskDagFile: taskDagLocation.relative,
+    taskDagSha256: await fileSha256(taskDagLocation.fullPath),
+    baseRef,
+    baseCommit: base.stdout.trim(),
+    tasks: orderedTasks.map((task) => ({
+      taskId: task.taskId,
+      title: task.title,
+      type: task.type,
+      ownerAgent: task.ownerAgent ?? "",
+      branch: `harness/${context.state.storyId.toLowerCase()}/wave-${options.waveIndex}-${task.taskId.toLowerCase()}-${slug(task.title)}`,
+      worktreePath: `.harness/worktrees/${context.state.storyId}/wave-${options.waveIndex}/${task.taskId}`,
+      predictedFiles: [...task.predictedFiles],
+    })),
+  };
+  const existing = await readJsonOptional(context.planPath, "Wave Worktree plan");
+  if (existing) {
+    validateWavePlanStructure(existing, context.state, options.waveIndex);
+    if (JSON.stringify(comparableWavePlan(existing)) !== JSON.stringify(expected)) {
+      throw new Error("Existing Wave Worktree plan does not match the requested wave and base commit.");
+    }
+    const status = await inspectWaveStatus(root, existing, context.planPath, context.statusPath, options);
+    return { command: "wave-plan", reused: true, planFile: context.planFile, statusFile: context.statusFile, plan: existing, status };
+  }
+  const plan = { ...expected, plannedAt: (options.now ?? (() => new Date().toISOString()))() };
+  validateWavePlanStructure(plan, context.state, options.waveIndex);
+  await writeAtomicJson(context.planPath, plan);
+  const status = await inspectWaveStatus(root, plan, context.planPath, context.statusPath, options);
+  return { command: "wave-plan", reused: false, planFile: context.planFile, statusFile: context.statusFile, plan, status };
+}
+
+async function waveStatus(root, options) {
+  const context = await loadWaveContext(root, options);
+  const plan = await validateStoredWavePlan(
+    root,
+    await readJsonFile(context.planPath, "Wave Worktree plan"),
+    context.state,
+    options.waveIndex,
+    options.taskDagFile,
+  );
+  const current = await inspectWaveStatus(root, plan, context.planPath, context.statusPath, options);
+  return { command: "wave-status", planFile: context.planFile, statusFile: context.statusFile, plan, status: current };
+}
+
 async function create(root, options) {
   if (options.confirmCreate !== true) throw new Error("Worktree creation requires explicit approval and ConfirmCreate.");
   const context = await loadContext(root, options);
@@ -1599,6 +1924,8 @@ async function batchCreate(root, options) {
 
 export async function runWorktreeCommand(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
+  if (options.command === "wave-plan") return wavePlan(root, options);
+  if (options.command === "wave-status") return waveStatus(root, options);
   if (options.command === "plan") return plan(root, options);
   if (options.command === "status") return status(root, options);
   if (options.command === "create") return create(root, options);
@@ -1613,7 +1940,14 @@ export async function runWorktreeCommand(options = {}) {
 function parseCliArguments(argv) {
   const [command, ...tokens] = argv;
   const options = { command };
-  const keyMap = { "--root": "root", "--state-file": "stateFile", "--task-dag-file": "taskDagFile", "--task-id": "taskId", "--base-ref": "baseRef" };
+  const keyMap = {
+    "--root": "root",
+    "--state-file": "stateFile",
+    "--task-dag-file": "taskDagFile",
+    "--task-id": "taskId",
+    "--wave-index": "waveIndex",
+    "--base-ref": "baseRef",
+  };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (token === "--json") { options.json = true; continue; }
@@ -1623,6 +1957,7 @@ function parseCliArguments(argv) {
     if (!key || index + 1 >= tokens.length) throw new Error(`Unsupported or incomplete argument: ${token}`);
     options[key] = tokens[++index];
   }
+  if (options.waveIndex !== undefined) options.waveIndex = Number(options.waveIndex);
   return options;
 }
 
@@ -1631,7 +1966,8 @@ async function runCli() {
   try {
     options = parseCliArguments(process.argv.slice(2));
     const result = await runWorktreeCommand(options);
-    const scopeId = result.plan?.taskId ?? result.plan?.batchId ?? result.receipt?.taskId ?? result.receipt?.batchId;
+    const scopeId = result.plan?.taskId ?? result.plan?.batchId ?? result.plan?.wave
+      ?? result.receipt?.taskId ?? result.receipt?.batchId;
     console.log(options.json ? JSON.stringify(result) : `Worktree command '${result.command}' completed for ${scopeId}.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -42,6 +42,7 @@ Current limitations:
 - M5-B2 provides approval-gated `plan/status/apply` for one `ready-for-integration` result, using content-addressed bundles, base/candidate hash reconciliation, result-last writes, and per-file recovery. It does not call M3 `apply`, merge or remove Worktrees, execute Git writes, or support multiple tasks or Worktrees.
 - M5-C provides approval-gated `retire` for one completed M5-B2 Worktree. It revalidates M5-A/M5-B1/M5-B2 evidence, main-tree and Worktree Git facts, and lifecycle locks before `git worktree remove --force`; it preserves the task branch and does not advance M2/M3 state. Multi-Worktree retirement, branch deletion, `prune`, and cleanup remain deferred.
 - M5-B3-B 已实现同一 Story 的 `implementation` phase 单 Worktree 严格串行多任务批次：v1.1 task-scoped dispatch、serial batch ledger、继承快照、逐项 Worker/集成、批次收尾和 batch Retire 均受证据、哈希、锁与逐次审批约束。M3 `apply` 仍是唯一 phase 推进入口；同 wave 并行、多 Worktree、Fork-Join、分支清理、真实 Agent 和正式仓库 Worktree 操作仍未实现。
+- M5-D-A 已实现同一合法 wave 的多 Worktree 只读 `WavePlan/WaveStatus`：统一固定 `baseCommit`，确定性派生每任务分支/路径，并从 Git 事实聚合 `absent/partial/ready`。它不提供 Worktree 创建、并行 Worker、合并、回收或状态推进；真实双 Worktree 只在临时 fixture 中验证。
 
 Trust rule:
 

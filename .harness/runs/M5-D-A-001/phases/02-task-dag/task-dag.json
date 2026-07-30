@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-D-A-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "实现确定性 Wave 计划契约",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-runtime.test.mjs",
+        ".harness/schemas/worktree-wave-plan.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "合法同 wave 任务共享固定 base commit，并生成稳定顺序、分支和路径。",
+        "非法 phase、wave、任务类型、状态、全局变更和基准均失败关闭。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T2",
+      "title": "实现 Wave Git 事实状态与恢复",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-runtime.test.mjs",
+        ".harness/schemas/worktree-wave-status.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "任务状态正确识别 absent、branch-only 和 created。",
+        "聚合状态正确识别 absent、partial 和 ready，且不推进 Harness 状态。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T3",
+      "title": "拒绝漂移并接入 PowerShell",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/run-worktree.ps1",
+        ".harness/scripts/tests/worktree-wave-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "基准、DAG、计划、分支、路径、HEAD、符号链接和额外 Worktree 漂移均失败关闭。",
+        "WavePlan/WaveStatus PowerShell 入口可在临时双 Worktree fixture 运行。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T4",
+      "title": "完成回归审核与中文文档",
+      "type": "docs",
+      "status": "pending",
+      "predictedFiles": [
+        "docs/harness-m5d-multi-worktree-wave/**",
+        "docs/AI-handover.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        ".harness/README.md",
+        ".harness/scripts/README.md",
+        ".harness/structure-manifest.yaml",
+        "llm-knowledge/overview.md"
+      ],
+      "acceptanceCriteria": [
+        "专项与既有 Harness 回归、结构、Smoke、知识和 diff 门禁通过。",
+        "最终 Review 不存在影响稳定性、基本可用性或近期扩展的 BLOCKER/WARNING。"
+      ],
+      "ownerAgent": "code-reviewer"
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "Git 事实聚合必须绑定确定性 wave 计划。"
+    },
+    {
+      "from": "T2",
+      "to": "T3",
+      "reason": "漂移拒绝与入口验证建立在完整状态模型之上。"
+    },
+    {
+      "from": "T3",
+      "to": "T4",
+      "reason": "文档和审核必须基于新鲜专项与纵向验证证据。"
+    }
+  ],
+  "waves": [
+    ["T1"],
+    ["T2"],
+    ["T3"],
+    ["T4"]
+  ],
+  "globalChanges": [
+    "扩展现有 Worktree Runtime 的只读 wave 计划与状态能力。"
+  ],
+  "risks": [
+    "正式仓库不创建 Worktree，真实 Git 行为仅由临时 fixture 覆盖。",
+    "并行 Worker、创建、合并、删除和跨平台差异继续延期。"
+  ]
+}

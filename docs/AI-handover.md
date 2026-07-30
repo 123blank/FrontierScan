@@ -4,7 +4,7 @@
 >
 > 最后更新：2026-07-30
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 已完成至 M5-B3-B；同一 Story 的 `implementation` phase 可在单 Worktree 中按 v1.1 task-scoped dispatch 严格串行执行多个 backend/frontend 任务，并保留 M2/M3 唯一状态推进权。`M5-B3-B-001` 已完成最终测试、双重审核与 Git 交付，Harness 状态为 `done/completed`、revision `24`，业务修改提交为 `e3d77a4479916fb529f3561b1527941d00eeed7f`；截至 2026-07-30，本地 `dev` 与 `origin/dev` 一致。正式仓库 Worktree 操作、发布和部署未执行。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、同 wave 并行、多 Worktree、Fork-Join、分支清理、真实发布和 Git 自动交付仍未实现。
+> 当前重点：Harness 已实现至 M5-D-A 的同 wave 多 Worktree 只读规划与事实状态兼容层。M5-B3-B 仍提供单 Worktree 严格串行多任务闭环；M5-D-A 只新增 `WavePlan/WaveStatus`，可为同一合法 wave 固定统一基准、派生多个任务分支/路径，并从 Git 事实聚合 `absent/partial/ready`，不提供创建、并行 Worker、合并或删除。M2/M3 继续独占状态推进权。正式仓库 Worktree 操作、发布和部署未执行。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、同 wave 并行执行、WaveCreate、Fork-Join、分支清理、真实发布和 Git 自动交付仍未实现。
 
 ---
 
@@ -1664,3 +1664,18 @@ M4-B 受约束 Mock Worker 当前实现：
 - 临时 Git fixture 已跑通两任务的 prepare、batch Worktree、T1 集成、T2 Provider 异常后的同 dispatch 重试、收尾、一次 M3 apply、目标 Story 完成、batch Retire 中断恢复与 receipt 复用。正式 FrontierScan 仓库未创建或回收 Worktree，未修改 `backend/src/**`、`frontend/src/**`。`M5-B3-B-001` 已完成最终门禁和双重审核，状态为 `done/completed`、revision `24`；业务修改以提交 `e3d77a4479916fb529f3561b1527941d00eeed7f` 交付，截至 2026-07-30 本地 `dev` 与 `origin/dev` 一致。未执行发布或部署。
 
 后续只能在独立方案中评估同 wave 并行、多 Worktree 波次、Fork-Join、自动 merge、分支删除、`git worktree prune`、真实 Agent、发布、部署和 Git 自动交付；不得把当前单 batch 串行能力扩展为自动并行。
+
+### 16.23 2026-07-30 当前状态：M5-D-A 同 Wave 多 Worktree 只读兼容层
+
+权威设计、实施计划和报告位于 `docs/harness-m5d-multi-worktree-wave/`。
+
+- `run-worktree.ps1` 与 `worktree-runtime.mjs` 新增 `WavePlan/WaveStatus`，不创建第二套 Runtime。
+- 目标必须是 active Story 的 `implementation` phase、至少两个 pending 的 backend/frontend 任务、无 `globalChanges`，并先通过共享 DAG 的 wave、依赖和文件冲突校验。
+- `WavePlan` 将 `dev` 固化为统一 `baseCommit`，按大小写不敏感的 `taskId` 稳定排序，派生 `harness/<story>/wave-<wave>-<task>-<slug>` 分支和 `.harness/worktrees/<story>/wave-<wave>/<taskId>` 路径。
+- `WaveStatus` 只读取 Git 事实；任务级状态为 `absent/branch-only/created`，聚合状态为 `absent/partial/ready`。相同事实复用已有状态证据。
+- DAG、基准、计划任务集合、分支、路径、HEAD、junction、计划外 Worktree，以及计划分支被挂载在其他路径时均失败关闭。
+- 临时 Git fixture 真实创建两个 Worktree 验证 `partial -> ready`；正式 FrontierScan 仓库没有创建、合并、回收或修改 Worktree。
+- M5-D-A 不提供 `WaveCreate`，不启动并行 Worker，不生成合并结果，不删除分支或调用 M2/M3 状态命令。
+- `M5-D-A-001` 已完成实现、回归和 Review；用户已批准本地提交，本次批准不包含推送、PR、发布或部署。
+
+下一阶段如继续，应独立设计 M5-D-B 的审批门控 `WaveCreate` 和波次级锁/恢复；在获得方案与逐次批准前，不得启动并行 Worker、自动 merge/remove、Fork-Join、发布、部署或 Git 自动交付。

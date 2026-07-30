@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收与 M5-B3-B 单 Worktree 严格串行多任务批次运行时均已实现。真实 Agent、同 wave 并行、多 Worktree 波次、Fork-Join、分支删除和 DevOps 闭环仍未实现。
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 单 Worktree 严格串行多任务批次运行时，以及 M5-D-A 同 wave 多 Worktree 只读规划/状态兼容层均已实现。真实 Agent、同 wave 并行执行、WaveCreate、Fork-Join、分支删除和 DevOps 闭环仍未实现。
 
 ## Added Structure
 
@@ -305,9 +305,17 @@ M5-B3-B 将 M5-B3-A 的兼容性结论实现为受限运行时。v1.0 仍是单�
 
 `M5-B3-B-001` 已完成最终测试、双重审核和批准门控的 Git 交付，Harness 状态为 `done/completed`、revision `24`。业务修改提交为 `e3d77a4479916fb529f3561b1527941d00eeed7f`；截至 2026-07-30，本地 `dev` 与 `origin/dev` 一致。该交付未修改 `backend/src/**`、`frontend/src/**`，也未执行正式仓库 Worktree、发布或部署操作。
 
+## M5-D-A 同 Wave 多 Worktree 只读兼容层
+
+M5-D-A 继续复用 `worktree-runtime.mjs`，增加 `wave-plan/wave-status`，但不提供 `wave-create`。目标 wave 必须属于 active `implementation` Story，包含至少两个 pending backend/frontend 任务且没有 `globalChanges`；共享 `task-dag-contract.mjs` 继续是任务归属、依赖顺序和同 wave 文件冲突的唯一校验来源。
+
+计划把一个 `baseRef` 固定为统一 SHA，并按稳定任务顺序生成每项分支和 Worktree 路径。状态通过一次 `git worktree list --porcelain` 和逐分支 ref 探测识别 `absent/branch-only/created`，再聚合为 `absent/partial/ready`。计划任务集合、DAG 哈希、基准、分支、路径、HEAD、junction、计划外 Worktree 或分支被其他路径占用时均失败关闭；Runtime 不修复 Git 事实，也不改 M2/M3 状态。
+
+真实双 Worktree 只在临时 Git fixture 中挂载，用于验证 partial、ready 和恢复兼容性。正式 FrontierScan 仓库只允许生成计划和读取状态，不执行创建、Worker、合并、回收或分支操作。
+
 ## 下一步实施
 
-M5-B3-B 已完成后，下一阶段只能在独立方案中评估同 wave 并行、多 Worktree、Fork-Join 或分支清理。不得把单 batch 的串行保证泛化为并行执行，也不得默认引入分支删除、自动 `prune`、真实模型、发布、部署或 Git 自动交付。
+M5-D-A 完成后，如需继续，应独立设计审批门控的 `WaveCreate`、波次级锁和中断恢复。不得把“可规划且 ready”解释为已经获得并行执行授权，也不得默认引入自动 merge/remove、Fork-Join、分支删除、`prune`、真实模型、发布、部署或 Git 自动交付。
 
 ## Safety Boundaries
 
