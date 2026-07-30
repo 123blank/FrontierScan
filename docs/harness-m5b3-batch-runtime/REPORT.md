@@ -4,7 +4,7 @@
 >
 > 范围：Harness Runtime、Schema、测试、结构登记与中文文档；不修改业务源码。
 >
-> 交付状态：最终门禁和独立复审完成后，状态仅推进至 `git-delivery`；未执行 Git 交付、正式仓库 Worktree、发布或部署。
+> 交付状态：最终门禁和独立复审均已通过，`M5-B3-B-001` 已进入 `done/completed`、revision `24`；业务修改以提交 `e3d77a4479916fb529f3561b1527941d00eeed7f` 交付。截至 2026-07-30，本地 `dev` 与 `origin/dev` 一致；未执行正式仓库 Worktree、发布或部署。
 
 ## 需求覆盖
 
@@ -65,6 +65,14 @@ T8 规格复审先后发现公共 `prepare-batch` 入口绕过和 Smoke 未锁�
 - 规格复审未发现可复现的 `BLOCKER/WARNING`，确认 `batchRetire` 冻结并释放同一 `retirementLockPath`，且锁后证据重算、二次预检与回执恢复流程保持完整。
 - 质量复审未发现影响稳定性、可用性或近期扩展的 `BLOCKER/WARNING`，确认原子写入与锁初始化清理保持可重试语义，M2/M3 状态推进权限未扩大。
 - 审核期间发现的原子写临时文件、Worker 执行锁、通用回收锁和锁路径重载问题均已通过最小修复及针对性回归关闭。
+
+## Git 交付收尾（2026-07-30）
+
+- 用户批准本地提交后，任务归属修改以 `feat(harness): add serial multi-task batch runtime` 提交，完整 SHA 为 `e3d77a4479916fb529f3561b1527941d00eeed7f`。
+- Harness 状态已通过确定性运行时完成为 `done/completed`，最终 revision 为 `24`。
+- 截至 2026-07-30，本地 `dev` 与 `origin/dev` 无 ahead/behind 差异。
+- 已完成运行的 `.harness/runs/M5-B3-B-001/**` 证据保持不变；本次文档纠偏不修改状态机已绑定的证据文件。
+- 未执行正式 FrontierScan Worktree Create/Apply/Retire、发布或部署。
 
 ## 代码审核收尾修复（2026-07-29）
 

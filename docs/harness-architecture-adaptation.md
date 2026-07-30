@@ -303,6 +303,8 @@ M5-B3-B 将 M5-B3-A 的兼容性结论实现为受限运行时。v1.0 仍是单�
 
 只有全部任务已集成，`finalize-batch` 才生成唯一正式 phase result 和 batch receipt；它不推进状态。正式 implementation 的 `task.json`、`result.json` 和 `implementation-notes.md` 的路径与 SHA-256 由 `batch-finalization-contract.mjs` 固定到 receipt 的 `finalizationArtifacts`，ledger 再固定 receipt 哈希；M3 `apply` 与 `batch-retire` 均重新验证这条证据链。收尾使用 `batch-finalization.lock` 串行化 ledger finalization 与 checkpoint binding，并发调用失败关闭并可在首个调用完成后重试；receipt-to-ledger 和 ledger-to-checkpoint 两个中断窗口均可受限恢复。既有 M3 `apply` 是唯一 phase 推进入口，并由两任务真实 Git fixture 验证仅推进一次。目标 Story 到达 `done/completed` 后，`batch-retire` 才能验证全量批次证据并执行受审批的 `git worktree remove --force`；它保留分支，支持 Git 成功但回执未写入的受限恢复。
 
+`M5-B3-B-001` 已完成最终测试、双重审核和批准门控的 Git 交付，Harness 状态为 `done/completed`、revision `24`。业务修改提交为 `e3d77a4479916fb529f3561b1527941d00eeed7f`；截至 2026-07-30，本地 `dev` 与 `origin/dev` 一致。该交付未修改 `backend/src/**`、`frontend/src/**`，也未执行正式仓库 Worktree、发布或部署操作。
+
 ## 下一步实施
 
 M5-B3-B 已完成后，下一阶段只能在独立方案中评估同 wave 并行、多 Worktree、Fork-Join 或分支清理。不得把单 batch 的串行保证泛化为并行执行，也不得默认引入分支删除、自动 `prune`、真实模型、发布、部署或 Git 自动交付。

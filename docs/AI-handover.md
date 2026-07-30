@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-29
+> 最后更新：2026-07-30
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 已完成至 M5-B3-B；同一 Story 的 `implementation` phase 可在单 Worktree 中按 v1.1 task-scoped dispatch 严格串行执行多个 backend/frontend 任务，并保留 M2/M3 唯一状态推进权。`M5-B3-B-001` 当前等待最终质量门禁后进入 `git-delivery`，未执行 `git add`、`git commit`、`git push`、正式仓库 Worktree 操作、发布或部署。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、同 wave 并行、多 Worktree、Fork-Join、分支清理、真实发布和 Git 自动交付仍未实现。
+> 当前重点：Harness 已完成至 M5-B3-B；同一 Story 的 `implementation` phase 可在单 Worktree 中按 v1.1 task-scoped dispatch 严格串行执行多个 backend/frontend 任务，并保留 M2/M3 唯一状态推进权。`M5-B3-B-001` 已完成最终测试、双重审核与 Git 交付，Harness 状态为 `done/completed`、revision `24`，业务修改提交为 `e3d77a4479916fb529f3561b1527941d00eeed7f`；截至 2026-07-30，本地 `dev` 与 `origin/dev` 一致。正式仓库 Worktree 操作、发布和部署未执行。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、同 wave 并行、多 Worktree、Fork-Join、分支清理、真实发布和 Git 自动交付仍未实现。
 
 ---
 
@@ -1661,6 +1661,6 @@ M4-B 受约束 Mock Worker 当前实现：
 - `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 仅从 ledger 派生 Worktree 身份、分支、路径和基准，拒绝外部路径、任务和基准参数。正式 Create、Apply、Retire 继续分别要求真实用户逐次批准及 `-ConfirmCreate`、`-ConfirmApply`、`-ConfirmRetire`。
 - M5-B1 只允许当前任务写入其 `predictedFiles`，并验证前序集成候选的继承快照；M5-B2 按逐项 integration receipt 与当前主树哈希进行内容寻址集成。所有任务 `integrated` 前不能生成正式 phase result；`finalize-batch` 不推进状态，既有 M3 `apply` 是唯一推进入口且只推进一次。
 - 批次收尾把正式 implementation 的 `task.json`、`result.json` 和 `implementation-notes.md` 的路径与 SHA-256 固定进 `batch-receipt.json.finalizationArtifacts`，再由 ledger 固定 receipt 哈希；`apply` 与 `batch-retire` 均复核该可信链。`finalize-batch` 以 `batch-finalization.lock` 串行化 ledger 收尾和 checkpoint binding，并发调用明确拒绝、完成后允许显式重试。receipt 已写但 ledger 未落盘、以及 ledger 已完成但 binding 未落盘均已在临时 Git fixture 通过受控中断恢复验证。
-- 临时 Git fixture 已跑通两任务的 prepare、batch Worktree、T1 集成、T2 Provider 异常后的同 dispatch 重试、收尾、一次 M3 apply、目标 Story 完成、batch Retire 中断恢复与 receipt 复用。正式 FrontierScan 仓库未创建或回收 Worktree，未修改 `backend/src/**`、`frontend/src/**`，未进行 Git 交付、发布或部署。
+- 临时 Git fixture 已跑通两任务的 prepare、batch Worktree、T1 集成、T2 Provider 异常后的同 dispatch 重试、收尾、一次 M3 apply、目标 Story 完成、batch Retire 中断恢复与 receipt 复用。正式 FrontierScan 仓库未创建或回收 Worktree，未修改 `backend/src/**`、`frontend/src/**`。`M5-B3-B-001` 已完成最终门禁和双重审核，状态为 `done/completed`、revision `24`；业务修改以提交 `e3d77a4479916fb529f3561b1527941d00eeed7f` 交付，截至 2026-07-30 本地 `dev` 与 `origin/dev` 一致。未执行发布或部署。
 
 后续只能在独立方案中评估同 wave 并行、多 Worktree 波次、Fork-Join、自动 merge、分支删除、`git worktree prune`、真实 Agent、发布、部署和 Git 自动交付；不得把当前单 batch 串行能力扩展为自动并行。
