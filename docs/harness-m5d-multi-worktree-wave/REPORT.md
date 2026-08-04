@@ -4,7 +4,7 @@
 >
 > 范围：Harness Runtime、Schema、测试、结构登记与中文文档；不修改业务源码。
 >
-> 当前状态：`git-delivery`；用户已批准本地提交，本报告随本次提交交付，未批准推送。
+> 当前状态：`done/completed`、revision `20`；核心实现提交为 `b6b95d9`。2026-08-04 用户已批准文档收尾提交和 `dev` 推送，未批准 PR、发布或部署。
 
 ## 需求覆盖
 
@@ -66,6 +66,13 @@ Review 期间发现并修复以下问题：
 - `localeCompare` 的区域设置排序不满足跨环境确定性。
 
 每项均先新增可复现 RED，再以最小修复转 GREEN。最终 owned diff Review 未发现影响稳定性、基本可用性或近期扩展的未解决 `BLOCKER/WARNING`。
+
+## Git 交付收尾
+
+- 核心实现提交：`b6b95d9 feat(harness): add multi-worktree wave planning`。
+- Harness 最终状态：`done/completed`、revision `20`。
+- 2026-08-04 用户批准创建独立文档状态同步提交，并将本地 `dev` 推送到 `origin/dev`。
+- 本次交付不创建 PR，不执行发布、部署、分支删除或 Worktree 清理。
 
 ## 延期边界
 

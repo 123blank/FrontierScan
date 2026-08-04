@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-30
+> 最后更新：2026-08-04
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 已实现至 M5-D-A 的同 wave 多 Worktree 只读规划与事实状态兼容层。M5-B3-B 仍提供单 Worktree 严格串行多任务闭环；M5-D-A 只新增 `WavePlan/WaveStatus`，可为同一合法 wave 固定统一基准、派生多个任务分支/路径，并从 Git 事实聚合 `absent/partial/ready`，不提供创建、并行 Worker、合并或删除。M2/M3 继续独占状态推进权。正式仓库 Worktree 操作、发布和部署未执行。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、同 wave 并行执行、WaveCreate、Fork-Join、分支清理、真实发布和 Git 自动交付仍未实现。
+> 当前重点：Harness 已实现至 M5-D-A 的同 wave 多 Worktree 只读规划与事实状态兼容层。`M5-D-A-001` 已进入 `done/completed`、revision `20`，核心实现提交为 `b6b95d9`。M5-B3-B 仍提供单 Worktree 严格串行多任务闭环；M5-D-A 只新增 `WavePlan/WaveStatus`，可为同一合法 wave 固定统一基准、派生多个任务分支/路径，并从 Git 事实聚合 `absent/partial/ready`，不提供创建、并行 Worker、合并或删除。M2/M3 继续独占状态推进权。正式仓库 Worktree 操作、发布和部署未执行。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、同 wave 并行执行、WaveCreate、Fork-Join、分支清理、真实发布和 Git 自动交付仍未实现。
 
 ---
 
@@ -1676,6 +1676,7 @@ M4-B 受约束 Mock Worker 当前实现：
 - DAG、基准、计划任务集合、分支、路径、HEAD、junction、计划外 Worktree，以及计划分支被挂载在其他路径时均失败关闭。
 - 临时 Git fixture 真实创建两个 Worktree 验证 `partial -> ready`；正式 FrontierScan 仓库没有创建、合并、回收或修改 Worktree。
 - M5-D-A 不提供 `WaveCreate`，不启动并行 Worker，不生成合并结果，不删除分支或调用 M2/M3 状态命令。
-- `M5-D-A-001` 已完成实现、回归和 Review；用户已批准本地提交，本次批准不包含推送、PR、发布或部署。
+- `M5-D-A-001` 已完成实现、回归和 Review，Harness 状态为 `done/completed`、revision `20`；核心实现以提交 `b6b95d9` 交付。
+- 2026-08-04 用户已批准将文档收尾提交与 `b6b95d9` 一并推送至 `origin/dev`；未创建 PR，未执行发布或部署。
 
 下一阶段如继续，应独立设计 M5-D-B 的审批门控 `WaveCreate` 和波次级锁/恢复；在获得方案与逐次批准前，不得启动并行 Worker、自动 merge/remove、Fork-Join、发布、部署或 Git 自动交付。
