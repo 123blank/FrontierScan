@@ -333,10 +333,26 @@ M5-D-B 继续扩展同一 `worktree-runtime.mjs`，不创建第二套 Runtime。
 
 正式 FrontierScan 仓库没有执行 WaveCreate；真实多 Worktree、部分失败和受控中断仅在临时 Git fixture 中验证。
 
+## M5-D-C1 同 Wave 并行 Mock Worker
+
+M5-D-C1 在单个完整 implementation wave 上实现 execution-only 闭环。`prepare-wave` 获取统一 implementation owner，
+生成 v1.2 task/checkpoint 与 execution ledger；ordinary、serial batch 和 worktree wave 三种 owner 互斥，既有
+`prepare/prepare-batch/apply` 不能绕过 wave owner。
+
+每个任务使用不可变 attempt 目录、claim 和 task execute.lock。`execute-wave` 按稳定顺序 claim pending 任务，再通过
+`Promise.allSettled` 并行调用不同 Worktree 中的 Mock Worker。候选、attempt result、execution receipt、ledger 更新和
+锁释放前均验证当前 `attemptId/claimId/lockId`、锁哈希、dispatch、DAG、WavePlan 和 creation receipt。两个同进程 Worker
+只对短期 ledger mutation 做有界串行等待；外部 PID 或遗留锁继续失败关闭。
+
+部分失败不会覆盖成功 receipt，也不会写主工作树。blocked 任务只能通过独立 `ConfirmWaveTaskRetry` 和旧 failure 哈希创建
+新 attempt。`recover-attempt` 显式处理 claim-only、lock-before-running、完整 result/receipt、blocked 锁释放中断和
+孤儿 Worktree 候选；恢复不按时间或 PID 自动接管。
+
 ## 下一步实施
 
-后续如继续，应独立设计同 wave Worker 并行执行、结果汇总和跨 Worktree 集成。不得把“已批准创建”解释为 Worker、合并、
-回收或发布授权，也不得默认引入自动 merge/remove、Fork-Join、分支删除、`prune`、真实模型、发布、部署或 Git 自动交付。
+后续应以独立 Story 实现 M5-D-C2：冻结 integration manifest、主工作树串行受控集成、wave receipt、`finalize-wave`
+和最终 M3 `apply`。C1 不构成集成、回收、提交、推送、发布或部署授权，也不默认引入自动 merge/remove、Fork-Join、
+分支删除、`prune` 或真实模型。
 
 ## Safety Boundaries
 

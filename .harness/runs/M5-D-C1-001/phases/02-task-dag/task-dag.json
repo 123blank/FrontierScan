@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-D-C1-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "建立 implementation phase 统一所有权",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/implementation-owner-contract.mjs",
+        ".harness/scripts/lib/story-runtime.mjs",
+        ".harness/scripts/tests/story-runtime.test.mjs",
+        ".harness/schemas/implementation-owner.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "ordinary、serial-batch、worktree-wave 所有权互斥",
+        "prepare、prepare-batch、prepare-wave 和 apply 不能绕过当前 owner"
+      ]
+    },
+    {
+      "taskId": "T2",
+      "title": "增加 dispatch v1.2 与 prepare-wave",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/dispatch-contract.mjs",
+        ".harness/scripts/lib/story-runtime.mjs",
+        ".harness/scripts/run-story.ps1",
+        ".harness/scripts/tests/story-runtime.test.mjs",
+        ".harness/schemas/dispatch-task-v1.2.schema.json",
+        ".harness/schemas/dispatch-result-v1.2.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "prepare-wave 只接受覆盖全部 implementation 任务的唯一 wave",
+        "v1.2 身份和路径全部由 Runtime 派生"
+      ]
+    },
+    {
+      "taskId": "T3",
+      "title": "实现 Wave Execution Ledger 和确定性状态",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-wave-execution-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-execution-runtime.test.mjs",
+        ".harness/schemas/worktree-wave-execution-ledger.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "顶层状态由任务状态确定性派生",
+        "状态读取不持久化动态观察"
+      ]
+    },
+    {
+      "taskId": "T4",
+      "title": "实现不可变 attempt、claim、锁和恢复",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-wave-execution-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-execution-runtime.test.mjs",
+        ".harness/schemas/worktree-wave-attempt-claim.schema.json",
+        ".harness/schemas/worktree-wave-attempt-lock.schema.json",
+        ".harness/schemas/worktree-wave-attempt-failure.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "claiming 与 running 半完成状态可显式恢复",
+        "旧 attempt 不能写入或删除新锁",
+        "历史 attempt 不覆盖或删除"
+      ]
+    },
+    {
+      "taskId": "T5",
+      "title": "接入 v1.2 Worker guard 和并行执行",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worker-runtime.mjs",
+        ".harness/scripts/lib/worktree-worker-runtime.mjs",
+        ".harness/scripts/lib/worktree-wave-execution-runtime.mjs",
+        ".harness/scripts/tests/worker-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-wave-execution-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "测试 barrier 证明多个 Worker 真实并行",
+        "候选、result、receipt、ledger 和 release 前均执行 owner guard",
+        "部分失败保留成功回执且不写主工作树"
+      ]
+    },
+    {
+      "taskId": "T6",
+      "title": "完成 retry、recover、结构登记、文档和回归",
+      "type": "docs",
+      "status": "pending",
+      "ownerAgent": "task-planner",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-wave-execution-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-execution-runtime.test.mjs",
+        ".harness/structure-manifest.yaml",
+        ".harness/scripts/validate-structure.ps1",
+        ".harness/README.md",
+        ".harness/scripts/README.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        "docs/AI-handover.md",
+        "llm-knowledge/overview.md",
+        "docs/harness-m5d-wave-execution/REPORT-C1.md"
+      ],
+      "acceptanceCriteria": [
+        "retry-task 和 recover-attempt 绑定当前证据并失败关闭",
+        "C1 专项、直接回归、结构、Smoke 和知识门禁通过",
+        "最终 Review 无未解决 BLOCKER 或 WARNING"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "prepare-wave 必须建立在统一 phase owner 上"
+    },
+    {
+      "from": "T2",
+      "to": "T3",
+      "reason": "ledger 必须消费已验证的 v1.2 dispatch"
+    },
+    {
+      "from": "T3",
+      "to": "T4",
+      "reason": "attempt 状态必须写入确定性 ledger"
+    },
+    {
+      "from": "T4",
+      "to": "T5",
+      "reason": "Worker 并行写入必须先具备 attempt owner fencing"
+    },
+    {
+      "from": "T5",
+      "to": "T6",
+      "reason": "恢复、文档和回归必须基于最终执行行为"
+    }
+  ],
+  "waves": [
+    ["T1"],
+    ["T2"],
+    ["T3"],
+    ["T4"],
+    ["T5"],
+    ["T6"]
+  ],
+  "globalChanges": [],
+  "risks": [
+    "story-runtime owner 门禁会影响 v1.0/v1.1，必须保持 legacy fixture 兼容",
+    "Worker guard 插入所有 rename 点后必须验证旧路径无行为回归",
+    "普通 JSON 锁不是 OS 级租约，遗留恢复依赖真实人工确认"
+  ]
+}

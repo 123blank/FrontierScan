@@ -8,6 +8,13 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, test } from "node:test";
 import { claimBatchTask, prepareSerialBatch, recordBatchIntegration } from "../lib/batch-runtime.mjs";
+import {
+  claimWaveTask,
+  createWaveExecutionLedger,
+  inspectWaveExecution,
+  recoverAttempt,
+  runWaveExecutionCommand,
+} from "../lib/worktree-wave-execution-runtime.mjs";
 import { runWorktreeWorker } from "../lib/worktree-worker-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
 import { resolveBatchBase, runWorktreeCommand } from "../lib/worktree-runtime.mjs";
@@ -217,6 +224,176 @@ async function createBatchWorkerFixture(options = {}) {
     await runWorktreeCommand({ root, command: "batch-create", stateFile, confirmCreate: true });
   }
   return { root, storyId, runId, stateFile, taskDagFile, state, dag, prepared };
+}
+
+async function createWaveWorkerFixture({ claimTask = true } = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "frontierscan-m5dc1-worker-"));
+  temporaryRoots.push(root);
+  await git(root, "init", "-b", "dev");
+  await git(root, "config", "user.email", "m5dc1-worker@example.test");
+  await git(root, "config", "user.name", "M5-D-C1 Worker Test");
+  await copyFile(path.join(repositoryRoot, ".gitignore"), path.join(root, ".gitignore"));
+  await mkdir(path.join(root, ".codex/agents"), { recursive: true });
+  await copyFile(path.join(repositoryRoot, ".codex/agents/agents.yaml"), path.join(root, ".codex/agents/agents.yaml"));
+  await copyFile(path.join(repositoryRoot, ".codex/agents/worker-policies.json"), path.join(root, ".codex/agents/worker-policies.json"));
+  await writeFile(path.join(root, "seed.txt"), "seed\n", "utf8");
+
+  const storyId = "M5-D-C1-WORKTREE-WORKER";
+  const stateFile = ".harness/states/e2e-fixture.json";
+  const taskDagFile = `.harness/runs/${storyId}/phases/02-task-dag/task-dag.json`;
+  const state = {
+    schemaVersion: "1.0",
+    storyId,
+    phase: "implementation",
+    runtime: { runId: storyId, status: "active", revision: 7 },
+  };
+  const dag = {
+    schemaVersion: "1.0",
+    storyId,
+    nodes: [
+      {
+        taskId: "T1",
+        title: "Implement backend candidate",
+        type: "backend",
+        status: "pending",
+        ownerAgent: "backend-developer",
+        predictedFiles: ["backend/src/main/**"],
+        acceptanceCriteria: ["Backend candidate is ready."],
+      },
+      {
+        taskId: "T2",
+        title: "Implement frontend candidate",
+        type: "frontend",
+        status: "pending",
+        ownerAgent: "frontend-developer",
+        predictedFiles: ["frontend/src/**"],
+        acceptanceCriteria: ["Frontend candidate is ready."],
+      },
+    ],
+    edges: [],
+    waves: [["T1", "T2"]],
+    globalChanges: [],
+    risks: [],
+  };
+  for (const [relative, value] of [[stateFile, state], [taskDagFile, dag]]) {
+    await mkdir(path.join(root, path.dirname(relative)), { recursive: true });
+    await writeFile(path.join(root, relative), `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  }
+  await git(root, "add", "-f", ".gitignore", ".codex/agents", "seed.txt", stateFile, taskDagFile);
+  await git(root, "commit", "-m", "fixture");
+
+  const planned = await runWorktreeCommand({
+    root,
+    command: "wave-plan",
+    stateFile,
+    taskDagFile,
+    waveIndex: 1,
+  });
+  const created = await runWorktreeCommand({
+    root,
+    command: "wave-create",
+    stateFile,
+    taskDagFile,
+    waveIndex: 1,
+    expectedPlanSha256: planned.status.wavePlanSha256,
+    confirmWaveCreate: true,
+  });
+  const waveId = "wave-0123456789abcdef";
+  const preparedTasks = planned.plan.tasks.map((planTask, index) => {
+    const taskRoot = `.harness/runs/${storyId}/waves/${waveId}/tasks/${planTask.taskId}`;
+    const task = {
+      schemaVersion: "1.2",
+      dispatchId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      storyId,
+      runId: storyId,
+      phase: "implementation",
+      waveId,
+      waveIndex: 1,
+      taskId: planTask.taskId,
+      taskRoot,
+      ownerAgent: planTask.ownerAgent,
+      purpose: planTask.title,
+      preparedRevision: 7,
+      preparedAt: "2026-08-06T00:00:00.000Z",
+      expectedOutputs: [`${taskRoot}/task-report.md`],
+      allowedAdapters: [],
+      next: "unit-test",
+    };
+    return {
+      task,
+      taskFile: `${taskRoot}/task.json`,
+      checkpointFile: `${taskRoot}/checkpoint.json`,
+      checkpoint: {
+        schemaVersion: "1.2",
+        dispatchId: task.dispatchId,
+        storyId,
+        runId: storyId,
+        phase: task.phase,
+        waveId,
+        waveIndex: 1,
+        taskId: task.taskId,
+        taskRoot,
+        status: "prepared",
+        preparedAt: task.preparedAt,
+        updatedAt: task.preparedAt,
+      },
+    };
+  });
+  for (const item of preparedTasks) {
+    for (const [relative, value] of [[item.taskFile, item.task], [item.checkpointFile, item.checkpoint]]) {
+      await mkdir(path.join(root, path.dirname(relative)), { recursive: true });
+      await writeFile(path.join(root, relative), `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    }
+  }
+  const wave = {
+    waveIndex: 1,
+    taskDagFile,
+    taskDagSha256: sha256(await readFile(path.join(root, taskDagFile))),
+    planFile: planned.planFile,
+    planSha256: planned.status.wavePlanSha256,
+    creationReceiptFile: created.receiptFile,
+    creationReceiptSha256: sha256(await readFile(path.join(root, created.receiptFile))),
+    plan: planned.plan,
+  };
+  const ledger = await createWaveExecutionLedger({
+    root,
+    state,
+    wave,
+    waveId,
+    tasks: preparedTasks,
+    now: () => "2026-08-06T00:00:00.000Z",
+  });
+  const claimed = claimTask
+    ? await claimWaveTask({
+      root,
+      ledgerFile: ledger.ledgerFile,
+      taskId: "T1",
+      expectedWaveLedgerSha256: sha256(await readFile(path.join(root, ledger.ledgerFile))),
+      expectedCreationReceiptSha256: wave.creationReceiptSha256,
+      now: () => "2026-08-06T00:01:00.000Z",
+      randomUUID: (() => {
+        const values = [
+          "00000000-0000-4000-8000-000000000011",
+          "00000000-0000-4000-8000-000000000012",
+          "00000000-0000-4000-8000-000000000013",
+        ];
+        return () => values.shift();
+      })(),
+    })
+    : null;
+  return {
+    root,
+    stateFile,
+    taskDagFile,
+    state,
+    planned,
+    created,
+    wave,
+    ledger,
+    claimed,
+    task: preparedTasks[0].task,
+    taskFile: preparedTasks[0].taskFile,
+  };
 }
 
 function batchWorkerResponse(task, businessFile, content, capability = "backend-write") {
@@ -2009,6 +2186,627 @@ test("collects business writes as ready-for-integration without exposing an M3 r
   assert.notEqual(collected.resultFile, officialResult);
   assert.equal(collected.receipt.files.find((file) => file.path === businessFile).kind, "backend");
   assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), beforeState);
+});
+
+test("runs a claimed v1.2 Worker inside its wave Worktree and records attempt evidence", async () => {
+  const fixture = await createWaveWorkerFixture();
+  const businessFile = "backend/src/main/WaveCandidate.java";
+  const executionLockSha256 = sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile)));
+  const completed = await runWorktreeWorker({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    taskId: fixture.task.taskId,
+    taskFile: fixture.taskFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    attemptId: fixture.claimed.claim.attemptId,
+    claimId: fixture.claimed.claim.claimId,
+    lockId: fixture.claimed.claim.lockId,
+    expectedExecutionLockSha256: executionLockSha256,
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    provider: async ({ task }) => ({
+      files: [
+        { path: task.expectedOutputs[0], content: "# Wave task report\n", capability: "phase-output" },
+        { path: businessFile, content: "class WaveCandidate {}\n", capability: "backend-write" },
+      ],
+      result: {
+        schemaVersion: "1.2",
+        dispatchId: task.dispatchId,
+        storyId: task.storyId,
+        runId: task.runId,
+        phase: task.phase,
+        waveId: task.waveId,
+        waveIndex: task.waveIndex,
+        taskId: task.taskId,
+        taskRoot: task.taskRoot,
+        status: "completed",
+        summary: "Wave candidate is ready.",
+        outputs: task.expectedOutputs.map((output) => ({ path: output })),
+        records: [],
+      },
+    }),
+  });
+
+  assert.equal(completed.outcome, "ready-for-integration");
+  assert.equal(completed.receiptFile, fixture.claimed.paths.receiptFile);
+  assert.equal(completed.resultFile, fixture.claimed.paths.resultFile);
+  assert.equal(await readFile(path.join(fixture.root, completed.resultFile), "utf8")
+    .then((source) => JSON.parse(source).status), "completed");
+  await assert.rejects(readFile(path.join(fixture.root, businessFile)), /ENOENT/);
+  const worktreePath = fixture.planned.plan.tasks.find((task) => task.taskId === fixture.task.taskId).worktreePath;
+  assert.equal(await readFile(path.join(fixture.root, worktreePath, businessFile), "utf8"), "class WaveCandidate {}\n");
+  const inspected = await inspectWaveExecution({
+    root: fixture.root,
+    ledgerFile: fixture.ledger.ledgerFile,
+  });
+  assert.equal(inspected.ledger.tasks[0].status, "ready-for-integration");
+  assert.equal(inspected.ledger.status, "partial");
+  await assert.rejects(readFile(path.join(fixture.root, fixture.claimed.paths.lockFile)), /ENOENT/);
+});
+
+test("recover-attempt finalizes complete v1.2 result and receipt evidence without rerunning the Provider", async () => {
+  const fixture = await createWaveWorkerFixture();
+  let providerCalls = 0;
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: fixture.task.taskId,
+      taskFile: fixture.taskFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      attemptId: fixture.claimed.claim.attemptId,
+      claimId: fixture.claimed.claim.claimId,
+      lockId: fixture.claimed.claim.lockId,
+      expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+      expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+      beforeLedgerReadyWrite: () => { throw new Error("simulated ready-ledger interruption"); },
+      provider: async ({ task }) => {
+        providerCalls += 1;
+        return {
+          files: [
+            { path: task.expectedOutputs[0], content: "# Recoverable report\n", capability: "phase-output" },
+            { path: "backend/src/main/Recoverable.java", content: "class Recoverable {}\n", capability: "backend-write" },
+          ],
+          result: {
+            schemaVersion: "1.2",
+            dispatchId: task.dispatchId,
+            storyId: task.storyId,
+            runId: task.runId,
+            phase: task.phase,
+            waveId: task.waveId,
+            waveIndex: task.waveIndex,
+            taskId: task.taskId,
+            taskRoot: task.taskRoot,
+            status: "completed",
+            summary: "Recoverable candidate is ready.",
+            outputs: task.expectedOutputs.map((output) => ({ path: output })),
+            records: [],
+          },
+        };
+      },
+    }),
+    /simulated ready-ledger interruption/,
+  );
+  assert.equal(providerCalls, 1);
+  assert.equal((await inspectWaveExecution({
+    root: fixture.root,
+    ledgerFile: fixture.ledger.ledgerFile,
+  })).ledger.tasks[0].status, "running");
+
+  const recovered = await recoverAttempt({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    taskId: fixture.task.taskId,
+    expectedAttemptId: fixture.claimed.claim.attemptId,
+    expectedClaimSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.claimFile))),
+    expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    confirmAttemptRecovery: true,
+  });
+  assert.equal(recovered.task.status, "ready-for-integration");
+  assert.equal(recovered.receiptFile, fixture.claimed.paths.receiptFile);
+  assert.equal(providerCalls, 1);
+  await assert.rejects(readFile(path.join(fixture.root, fixture.claimed.paths.lockFile)), /ENOENT/);
+});
+
+test("recover-attempt releases a verified lock left after ledger readiness", async () => {
+  const fixture = await createWaveWorkerFixture();
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: fixture.task.taskId,
+      taskFile: fixture.taskFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      attemptId: fixture.claimed.claim.attemptId,
+      claimId: fixture.claimed.claim.claimId,
+      lockId: fixture.claimed.claim.lockId,
+      expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+      expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+      beforeExecutionLockRelease: () => {
+        throw new Error("simulated ready-lock release interruption");
+      },
+      provider: async ({ task }) => ({
+        files: [
+          { path: task.expectedOutputs[0], content: "# Ready report\n", capability: "phase-output" },
+          { path: "backend/src/main/Ready.java", content: "class Ready {}\n", capability: "backend-write" },
+        ],
+        result: {
+          schemaVersion: "1.2",
+          dispatchId: task.dispatchId,
+          storyId: task.storyId,
+          runId: task.runId,
+          phase: task.phase,
+          waveId: task.waveId,
+          waveIndex: task.waveIndex,
+          taskId: task.taskId,
+          taskRoot: task.taskRoot,
+          status: "completed",
+          summary: "Ready candidate is complete.",
+          outputs: task.expectedOutputs.map((output) => ({ path: output })),
+          records: [],
+        },
+      }),
+    }),
+    /simulated ready-lock release interruption/,
+  );
+  const interrupted = await inspectWaveExecution({
+    root: fixture.root,
+    ledgerFile: fixture.ledger.ledgerFile,
+  });
+  assert.equal(interrupted.ledger.tasks[0].status, "ready-for-integration");
+  assert.equal(interrupted.diagnostics[0].recoveryRequired, true);
+
+  const recovered = await recoverAttempt({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    taskId: fixture.task.taskId,
+    expectedAttemptId: fixture.claimed.claim.attemptId,
+    expectedClaimSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.claimFile))),
+    expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    confirmAttemptRecovery: true,
+  });
+  assert.equal(recovered.task.status, "ready-for-integration");
+  assert.equal(recovered.receiptFile, fixture.claimed.paths.receiptFile);
+  await assert.rejects(readFile(path.join(fixture.root, fixture.claimed.paths.lockFile)), /ENOENT/);
+});
+
+test("recover-attempt completes a blocked failure written before the ledger transition", async () => {
+  const fixture = await createWaveWorkerFixture();
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: fixture.task.taskId,
+      taskFile: fixture.taskFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      attemptId: fixture.claimed.claim.attemptId,
+      claimId: fixture.claimed.claim.claimId,
+      lockId: fixture.claimed.claim.lockId,
+      expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+      expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+      afterFailureWriteBeforeLedgerBlock: () => {
+        throw new Error("simulated failure-ledger interruption");
+      },
+      provider: async () => {
+        throw new Error("simulated Provider failure");
+      },
+    }),
+    /simulated failure-ledger interruption/,
+  );
+  assert.equal((await inspectWaveExecution({
+    root: fixture.root,
+    ledgerFile: fixture.ledger.ledgerFile,
+  })).ledger.tasks[0].status, "running");
+  const failureBefore = await readFile(path.join(fixture.root, fixture.claimed.paths.failureFile), "utf8");
+
+  const recovered = await recoverAttempt({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    taskId: fixture.task.taskId,
+    expectedAttemptId: fixture.claimed.claim.attemptId,
+    expectedClaimSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.claimFile))),
+    expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    confirmAttemptRecovery: true,
+  });
+  assert.equal(recovered.task.status, "blocked");
+  assert.equal(await readFile(path.join(fixture.root, fixture.claimed.paths.failureFile), "utf8"), failureBefore);
+  await assert.rejects(readFile(path.join(fixture.root, fixture.claimed.paths.lockFile)), /ENOENT/);
+});
+
+test("recover-attempt preserves a blocked v1.2 attempt and releases its verified stale lock", async () => {
+  const fixture = await createWaveWorkerFixture();
+  await assert.rejects(
+    runWorktreeWorker({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      taskId: fixture.task.taskId,
+      taskFile: fixture.taskFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      attemptId: fixture.claimed.claim.attemptId,
+      claimId: fixture.claimed.claim.claimId,
+      lockId: fixture.claimed.claim.lockId,
+      expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+      expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+      beforeExecutionLockRelease: () => { throw new Error("simulated blocked-lock release interruption"); },
+      provider: async ({ task }) => ({
+        files: [
+          { path: task.expectedOutputs[0], content: "# Blocked report\n", capability: "phase-output" },
+        ],
+        result: {
+          schemaVersion: "1.2",
+          dispatchId: task.dispatchId,
+          storyId: task.storyId,
+          runId: task.runId,
+          phase: task.phase,
+          waveId: task.waveId,
+          waveIndex: task.waveIndex,
+          taskId: task.taskId,
+          taskRoot: task.taskRoot,
+          status: "blocked",
+          summary: "The task needs an external decision.",
+          outputs: task.expectedOutputs.map((output) => ({ path: output })),
+          records: [],
+          blocker: {
+            reason: "Fixture blocker.",
+            owner: "user",
+            suggestedAction: "Resolve the fixture blocker and retry.",
+          },
+        },
+      }),
+    }),
+    /simulated blocked-lock release interruption/,
+  );
+  const interrupted = await inspectWaveExecution({
+    root: fixture.root,
+    ledgerFile: fixture.ledger.ledgerFile,
+  });
+  assert.equal(interrupted.ledger.tasks[0].status, "blocked");
+  const failureBefore = await readFile(path.join(fixture.root, fixture.claimed.paths.failureFile), "utf8");
+
+  const recovered = await recoverAttempt({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    taskId: fixture.task.taskId,
+    expectedAttemptId: fixture.claimed.claim.attemptId,
+    expectedClaimSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.claimFile))),
+    expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    confirmAttemptRecovery: true,
+  });
+  assert.equal(recovered.task.status, "blocked");
+  assert.equal(await readFile(path.join(fixture.root, fixture.claimed.paths.failureFile), "utf8"), failureBefore);
+  await assert.rejects(readFile(path.join(fixture.root, fixture.claimed.paths.lockFile)), /ENOENT/);
+});
+
+test("recover-attempt fails closed when a running v1.2 attempt leaves an orphan Worktree candidate", async () => {
+  const fixture = await createWaveWorkerFixture();
+  const worktreePath = fixture.planned.plan.tasks.find((task) => task.taskId === fixture.task.taskId).worktreePath;
+  const orphanFile = "backend/src/main/Orphan.java";
+  await mkdir(path.join(fixture.root, worktreePath, path.dirname(orphanFile)), { recursive: true });
+  await writeFile(path.join(fixture.root, worktreePath, orphanFile), "class Orphan {}\n", "utf8");
+
+  const recovered = await recoverAttempt({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    taskId: fixture.task.taskId,
+    expectedAttemptId: fixture.claimed.claim.attemptId,
+    expectedClaimSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.claimFile))),
+    expectedExecutionLockSha256: sha256(await readFile(path.join(fixture.root, fixture.claimed.paths.lockFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    confirmAttemptRecovery: true,
+  });
+  assert.equal(recovered.task.status, "blocked");
+  assert.match(recovered.failure.reason, /orphan|candidate|Worktree/i);
+  assert.equal(await readFile(path.join(fixture.root, worktreePath, orphanFile), "utf8"), "class Orphan {}\n");
+  await assert.rejects(readFile(path.join(fixture.root, fixture.claimed.paths.lockFile)), /ENOENT/);
+});
+
+test("a stale v1.2 Worker cannot write or release after its attempt lock is replaced", async () => {
+  const cases = [
+    { label: "candidate rename", commitKind: "candidate", expectedStatus: "running" },
+    { label: "result rename", commitKind: "result", expectedStatus: "running" },
+    { label: "execution receipt", hook: "beforeExecutionReceiptWrite", expectedStatus: "running" },
+    { label: "ledger readiness", hook: "beforeLedgerReadyWrite", expectedStatus: "running" },
+    { label: "execution lock release", hook: "beforeExecutionLockRelease", expectedStatus: "ready-for-integration" },
+  ];
+  for (const testCase of cases) {
+    const fixture = await createWaveWorkerFixture();
+    const lockPath = path.join(fixture.root, fixture.claimed.paths.lockFile);
+    const replacement = {
+      ...JSON.parse(await readFile(lockPath, "utf8")),
+      attemptId: "attempt-ffffffffffffffff",
+      claimId: "claim-ffffffffffffffff",
+      lockId: "lock-ffffffffffffffff",
+    };
+    const replacementSource = `${JSON.stringify(replacement, null, 2)}\n`;
+    let replaced = false;
+    const replaceOwner = async () => {
+      if (replaced) return;
+      replaced = true;
+      await writeFile(lockPath, replacementSource, "utf8");
+    };
+    const hooks = testCase.commitKind
+      ? {
+        beforeWaveCommit: async ({ kind }) => {
+          if (kind === testCase.commitKind) await replaceOwner();
+        },
+      }
+      : { [testCase.hook]: replaceOwner };
+
+    await assert.rejects(
+      runWorktreeWorker({
+        root: fixture.root,
+        stateFile: fixture.stateFile,
+        taskId: fixture.task.taskId,
+        taskFile: fixture.taskFile,
+        ledgerFile: fixture.ledger.ledgerFile,
+        attemptId: fixture.claimed.claim.attemptId,
+        claimId: fixture.claimed.claim.claimId,
+        lockId: fixture.claimed.claim.lockId,
+        expectedExecutionLockSha256: sha256(await readFile(lockPath)),
+        expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+        ...hooks,
+        provider: async ({ task }) => ({
+          files: [
+            { path: task.expectedOutputs[0], content: `# ${testCase.label}\n`, capability: "phase-output" },
+            { path: "backend/src/main/Fenced.java", content: "class Fenced {}\n", capability: "backend-write" },
+          ],
+          result: {
+            schemaVersion: "1.2",
+            dispatchId: task.dispatchId,
+            storyId: task.storyId,
+            runId: task.runId,
+            phase: task.phase,
+            waveId: task.waveId,
+            waveIndex: task.waveIndex,
+            taskId: task.taskId,
+            taskRoot: task.taskRoot,
+            status: "completed",
+            summary: `${testCase.label} fencing.`,
+            outputs: task.expectedOutputs.map((output) => ({ path: output })),
+            records: [],
+          },
+        }),
+      }),
+      /owner|lock|claim/i,
+      testCase.label,
+    );
+    assert.equal(replaced, true, testCase.label);
+    assert.equal(await readFile(lockPath, "utf8"), replacementSource, testCase.label);
+    assert.equal((await inspectWaveExecution({
+      root: fixture.root,
+      ledgerFile: fixture.ledger.ledgerFile,
+    })).ledger.tasks[0].status, testCase.expectedStatus, testCase.label);
+    await assert.rejects(
+      readFile(path.join(fixture.root, "backend/src/main/Fenced.java")),
+      /ENOENT/,
+      testCase.label,
+    );
+  }
+});
+
+test("execute-wave runs all claimed Workers concurrently and trusts settled disk evidence", async () => {
+  const fixture = await createWaveWorkerFixture({ claimTask: false });
+  const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+  const entered = new Set();
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  const uuidValues = [
+    "00000000-0000-4000-8000-000000000011",
+    "00000000-0000-4000-8000-000000000012",
+    "00000000-0000-4000-8000-000000000013",
+    "00000000-0000-4000-8000-000000000014",
+    "00000000-0000-4000-8000-000000000015",
+    "00000000-0000-4000-8000-000000000016",
+  ];
+  const execution = await runWaveExecutionCommand({
+    root: fixture.root,
+    command: "execute-wave",
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    confirmWaveExecute: true,
+    expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    randomUUID: () => uuidValues.shift(),
+    provider: async ({ task }) => {
+      entered.add(task.taskId);
+      if (entered.size === 2) release();
+      await barrier;
+      const isBackend = task.taskId === "T1";
+      return {
+        files: [
+          { path: task.expectedOutputs[0], content: `# ${task.taskId} report\n`, capability: "phase-output" },
+          {
+            path: isBackend ? "backend/src/main/T1.java" : "frontend/src/T2.ts",
+            content: isBackend ? "class T1 {}\n" : "export const t2 = true;\n",
+            capability: isBackend ? "backend-write" : "frontend-write",
+          },
+        ],
+        result: {
+          schemaVersion: "1.2",
+          dispatchId: task.dispatchId,
+          storyId: task.storyId,
+          runId: task.runId,
+          phase: task.phase,
+          waveId: task.waveId,
+          waveIndex: task.waveIndex,
+          taskId: task.taskId,
+          taskRoot: task.taskRoot,
+          status: "completed",
+          summary: `${task.taskId} is ready.`,
+          outputs: task.expectedOutputs.map((output) => ({ path: output })),
+          records: [],
+        },
+      };
+    },
+  });
+
+  assert.equal(entered.size, 2);
+  assert.deepEqual(execution.claimedTaskIds, ["T1", "T2"]);
+  assert.deepEqual(execution.settled.map((item) => item.status), ["fulfilled", "fulfilled"]);
+  const blockedFailures = [];
+  for (const ledgerTask of execution.ledger.tasks.filter((task) => task.status === "blocked")) {
+    const failureFile = `${fixture.task.taskRoot.replace(/T1$/, ledgerTask.taskId)}/attempts/${ledgerTask.currentAttemptId}/failure.json`;
+    blockedFailures.push(JSON.parse(await readFile(path.join(fixture.root, failureFile), "utf8")));
+  }
+  assert.equal(
+    execution.ledger.status,
+    "ready-for-integration",
+    JSON.stringify({
+      settled: execution.settled,
+      blockedFailures,
+      tasks: execution.ledger.tasks.map((task) => ({
+        taskId: task.taskId,
+        status: task.status,
+        currentAttemptId: task.currentAttemptId,
+      })),
+    }),
+  );
+  assert.deepEqual(
+    execution.ledger.tasks.map((task) => task.status),
+    ["ready-for-integration", "ready-for-integration"],
+  );
+  assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+  await assert.rejects(readFile(path.join(fixture.root, "backend/src/main/T1.java")), /ENOENT/);
+  await assert.rejects(readFile(path.join(fixture.root, "frontend/src/T2.ts")), /ENOENT/);
+});
+
+test("execute-wave preserves a successful receipt and leaves a failed task blocked without implicit retry", async () => {
+  const fixture = await createWaveWorkerFixture({ claimTask: false });
+  const uuidValues = [
+    "00000000-0000-4000-8000-000000000021",
+    "00000000-0000-4000-8000-000000000022",
+    "00000000-0000-4000-8000-000000000023",
+    "00000000-0000-4000-8000-000000000024",
+    "00000000-0000-4000-8000-000000000025",
+    "00000000-0000-4000-8000-000000000026",
+  ];
+  let providerCalls = 0;
+  const provider = async ({ task }) => {
+    providerCalls += 1;
+    if (task.taskId === "T2") throw new Error("simulated T2 failure");
+    return {
+      files: [
+        { path: task.expectedOutputs[0], content: "# T1 report\n", capability: "phase-output" },
+        { path: "backend/src/main/T1.java", content: "class T1 {}\n", capability: "backend-write" },
+      ],
+      result: {
+        schemaVersion: "1.2",
+        dispatchId: task.dispatchId,
+        storyId: task.storyId,
+        runId: task.runId,
+        phase: task.phase,
+        waveId: task.waveId,
+        waveIndex: task.waveIndex,
+        taskId: task.taskId,
+        taskRoot: task.taskRoot,
+        status: "completed",
+        summary: "T1 is ready.",
+        outputs: task.expectedOutputs.map((output) => ({ path: output })),
+        records: [],
+      },
+    };
+  };
+  const first = await runWaveExecutionCommand({
+    root: fixture.root,
+    command: "execute-wave",
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    confirmWaveExecute: true,
+    expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    randomUUID: () => uuidValues.shift(),
+    provider,
+  });
+
+  assert.equal(first.ledger.status, "partial");
+  assert.deepEqual(first.ledger.tasks.map((task) => task.status), ["ready-for-integration", "blocked"]);
+  assert.match(first.settled.find((item) => item.taskId === "T2").outcome, /blocked/);
+  const readyReceipt = first.ledger.tasks[0].executionReceiptFile;
+  const readyReceiptBefore = await readFile(path.join(fixture.root, readyReceipt), "utf8");
+
+  const repeated = await runWaveExecutionCommand({
+    root: fixture.root,
+    command: "execute-wave",
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    confirmWaveExecute: true,
+    expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    provider,
+  });
+  assert.deepEqual(repeated.claimedTaskIds, []);
+  assert.equal(providerCalls, 2);
+  assert.equal(await readFile(path.join(fixture.root, readyReceipt), "utf8"), readyReceiptBefore);
+  await assert.rejects(readFile(path.join(fixture.root, "backend/src/main/T1.java")), /ENOENT/);
+
+  const blockedTask = repeated.ledger.tasks.find((task) => task.taskId === "T2");
+  const previousAttemptId = blockedTask.currentAttemptId;
+  const previousFailureFile = `${fixture.task.taskRoot.replace(/T1$/, "T2")}/attempts/${previousAttemptId}/failure.json`;
+  const previousFailureSha256 = sha256(await readFile(path.join(fixture.root, previousFailureFile)));
+  const previousFailureBefore = await readFile(path.join(fixture.root, previousFailureFile), "utf8");
+  await assert.rejects(
+    runWaveExecutionCommand({
+      root: fixture.root,
+      command: "retry-task",
+      stateFile: fixture.stateFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      taskId: "T2",
+      expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+      expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+      expectedPreviousFailureSha256: previousFailureSha256,
+      provider,
+    }),
+    /ConfirmWaveTaskRetry/i,
+  );
+  const retryUuidValues = [
+    "10000000-0000-4000-8000-000000000031",
+    "20000000-0000-4000-8000-000000000032",
+    "30000000-0000-4000-8000-000000000033",
+  ];
+  const retried = await runWaveExecutionCommand({
+    root: fixture.root,
+    command: "retry-task",
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    taskId: "T2",
+    confirmWaveTaskRetry: true,
+    expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    expectedPreviousFailureSha256: previousFailureSha256,
+    randomUUID: () => retryUuidValues.shift(),
+    provider: async ({ task }) => ({
+      files: [
+        { path: task.expectedOutputs[0], content: "# T2 retry report\n", capability: "phase-output" },
+        { path: "frontend/src/T2.ts", content: "export const retried = true;\n", capability: "frontend-write" },
+      ],
+      result: {
+        schemaVersion: "1.2",
+        dispatchId: task.dispatchId,
+        storyId: task.storyId,
+        runId: task.runId,
+        phase: task.phase,
+        waveId: task.waveId,
+        waveIndex: task.waveIndex,
+        taskId: task.taskId,
+        taskRoot: task.taskRoot,
+        status: "completed",
+        summary: "T2 retry is ready.",
+        outputs: task.expectedOutputs.map((output) => ({ path: output })),
+        records: [],
+      },
+    }),
+  });
+  assert.equal(retried.ledger.status, "ready-for-integration");
+  assert.notEqual(retried.task.currentAttemptId, previousAttemptId);
+  assert.equal(await readFile(path.join(fixture.root, previousFailureFile), "utf8"), previousFailureBefore);
 });
 
 test("allows a declared Worker candidate to update an existing base context file", async () => {

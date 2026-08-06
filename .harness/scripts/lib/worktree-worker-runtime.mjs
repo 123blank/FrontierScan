@@ -13,6 +13,11 @@ import { validateDispatchResultStructure, validateDispatchTaskStructure } from "
 import { loadTaskDag, matchesPredictedFile } from "./task-dag-contract.mjs";
 import { loadWorkerPolicies, runWorkerTask } from "./worker-runtime.mjs";
 import { runWorktreeCommand } from "./worktree-runtime.mjs";
+import {
+  assertAttemptOwned,
+  recordWaveTaskBlocked,
+  recordWaveTaskReady,
+} from "./worktree-wave-execution-runtime.mjs";
 
 const execFileAsync = promisify(execFile);
 const FILE_LIMIT_BYTES = 2 * 1024 * 1024;
@@ -111,6 +116,26 @@ async function writeAtomic(filePath, content) {
 
 async function writeAtomicJson(filePath, value) {
   await writeAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function writeImmutable(root, relativeFile, content, label) {
+  const target = resolveInsideRoot(root, relativeFile, label);
+  await mkdir(path.dirname(target.fullPath), { recursive: true });
+  let handle;
+  try {
+    handle = await open(target.fullPath, "wx");
+    await handle.writeFile(content);
+    await handle.close();
+    return false;
+  } catch (error) {
+    await handle?.close().catch(() => {});
+    if (error?.code === "EEXIST") {
+      const existing = await readFile(target.fullPath);
+      if (Buffer.compare(existing, Buffer.from(content)) === 0) return true;
+    }
+    if (handle) await unlink(target.fullPath).catch(() => {});
+    throw error;
+  }
 }
 
 async function acquireExecutionLock(lockPath, options) {
@@ -370,7 +395,8 @@ async function recoverWorkerResult(root, worktreeRoot, inspected, state, task, o
 }
 
 async function reusePreparedInputs(root, worktreeRoot, inspected, state, task, options) {
-  const manifestFile = `.harness/runs/${state.runtime.runId}/worktrees/${options.taskId}/input-manifest.json`;
+  const manifestFile = options.inputManifestFile
+    ?? `.harness/runs/${state.runtime.runId}/worktrees/${options.taskId}/input-manifest.json`;
   const manifest = await readJsonOptional(root, manifestFile, "Worker input manifest");
   if (!manifest) return null;
   if (manifest.schemaVersion !== "1.0"
@@ -447,7 +473,7 @@ async function prepareInputs(root, worktreeRoot, inspected, state, task, options
   }));
 
   const evidenceDirectory = `.harness/runs/${state.runtime.runId}/worktrees/${options.taskId}`;
-  const manifestFile = `${evidenceDirectory}/input-manifest.json`;
+  const manifestFile = options.inputManifestFile ?? `${evidenceDirectory}/input-manifest.json`;
   const manifest = {
     schemaVersion: "1.0",
     storyId: state.storyId,
@@ -1239,12 +1265,316 @@ async function runBatchWorktreeWorker(root, state, task, taskFile, options) {
   }
 }
 
+function waveOwnerOptions(root, task, options) {
+  const lockFile = `${task.taskRoot}/execute.lock`;
+  if (typeof options.ledgerFile !== "string"
+      || typeof options.attemptId !== "string"
+      || typeof options.claimId !== "string"
+      || typeof options.lockId !== "string"
+      || typeof options.expectedExecutionLockSha256 !== "string"
+      || !SHA256_PATTERN.test(options.expectedExecutionLockSha256)
+      || typeof options.expectedCreationReceiptSha256 !== "string"
+      || !SHA256_PATTERN.test(options.expectedCreationReceiptSha256)) {
+    throw new Error("Wave Worker requires the current ledger, attempt owner, lock hash, and creation receipt hash.");
+  }
+  return {
+    root,
+    ledgerFile: options.ledgerFile,
+    taskId: task.taskId,
+    attemptId: options.attemptId,
+    claimId: options.claimId,
+    lockId: options.lockId,
+    lockFile,
+    expectedExecutionLockSha256: options.expectedExecutionLockSha256,
+    expectedCreationReceiptSha256: options.expectedCreationReceiptSha256,
+  };
+}
+
+async function loadWaveWorkerContext(root, state, task, taskFile, options) {
+  if (options.taskId !== task.taskId) throw new Error("Wave Worker taskId must match the dispatch identity.");
+  if (state.runtime?.status !== "active"
+      || state.storyId !== task.storyId
+      || state.runtime?.runId !== task.runId
+      || state.phase !== task.phase
+      || state.runtime?.revision !== task.preparedRevision) {
+    throw new Error("Wave Worker dispatch must match the active implementation Story revision.");
+  }
+  const ownerOptions = waveOwnerOptions(root, task, options);
+  const owner = await assertAttemptOwned(ownerOptions);
+  if (owner.task.taskFile !== taskFile || owner.task.dispatchId !== task.dispatchId) {
+    throw new Error("Wave Worker dispatch does not match the current ledger task.");
+  }
+  const checkpoint = await readJson(root, owner.task.checkpointFile, "Wave task checkpoint");
+  if (checkpoint.schemaVersion !== "1.2"
+      || checkpoint.dispatchId !== task.dispatchId
+      || checkpoint.storyId !== task.storyId
+      || checkpoint.runId !== task.runId
+      || checkpoint.phase !== task.phase
+      || checkpoint.waveId !== task.waveId
+      || checkpoint.waveIndex !== task.waveIndex
+      || checkpoint.taskId !== task.taskId
+      || checkpoint.taskRoot !== task.taskRoot
+      || checkpoint.status !== "prepared"
+      || checkpoint.preparedAt !== task.preparedAt) {
+    throw new Error("Wave task checkpoint does not match the current dispatch.");
+  }
+  const inspected = await runWorktreeCommand({
+    root,
+    command: "wave-status",
+    stateFile: options.stateFile,
+    taskDagFile: owner.ledger.taskDagFile,
+    waveIndex: owner.ledger.waveIndex,
+  });
+  if (inspected.planFile !== owner.ledger.wavePlanFile
+      || inspected.status.state !== "ready"
+      || inspected.status.wavePlanSha256 !== owner.ledger.wavePlanSha256
+      || inspected.plan.baseCommit !== owner.ledger.baseCommit) {
+    throw new Error("Wave Worker Worktree status does not match the execution ledger.");
+  }
+  const planTask = inspected.plan.tasks.find((item) => item.taskId === task.taskId);
+  const statusTask = inspected.status.tasks.find((item) => item.taskId === task.taskId);
+  if (!planTask
+      || !statusTask
+      || statusTask.state !== "created"
+      || statusTask.headCommit !== owner.ledger.baseCommit
+      || planTask.ownerAgent !== task.ownerAgent) {
+    throw new Error("Wave Worker task Worktree does not match the current dispatch.");
+  }
+  const creationReceipt = await readJson(root, owner.ledger.creationReceiptFile, "Wave creation receipt");
+  const receiptTask = creationReceipt.tasks?.find((item) => item.taskId === task.taskId);
+  if (creationReceipt.schemaVersion !== "1.0"
+      || creationReceipt.storyId !== task.storyId
+      || creationReceipt.runId !== task.runId
+      || creationReceipt.wave !== task.waveIndex
+      || creationReceipt.planSha256 !== owner.ledger.wavePlanSha256
+      || creationReceipt.taskDagSha256 !== owner.ledger.taskDagSha256
+      || creationReceipt.baseCommit !== owner.ledger.baseCommit
+      || receiptTask?.branch !== planTask.branch
+      || receiptTask?.worktreePath !== planTask.worktreePath
+      || receiptTask?.headCommit !== owner.ledger.baseCommit) {
+    throw new Error("Wave creation receipt does not match the current task Worktree.");
+  }
+  return {
+    owner,
+    ownerOptions,
+    checkpoint,
+    inspected,
+    planTask,
+    worktreeRoot: resolveInsideRoot(root, planTask.worktreePath, "Wave task Worktree path").fullPath,
+  };
+}
+
+async function executeWaveWorktreeWorker(root, state, task, taskFile, options, current) {
+  const guard = (allowedStatuses) => assertAttemptOwned({
+    ...current.ownerOptions,
+    allowedStatuses,
+  });
+  const inputOptions = {
+    ...options,
+    inputManifestFile: current.owner.paths.inputSnapshotFile,
+  };
+  const prepared = await reusePreparedInputs(
+    root,
+    current.worktreeRoot,
+    { plan: current.planTask },
+    state,
+    task,
+    inputOptions,
+  ) ?? await prepareInputs(
+    root,
+    current.worktreeRoot,
+    { plan: current.planTask },
+    state,
+    task,
+    inputOptions,
+  );
+  const workerResult = await runWorkerTask({
+    root: current.worktreeRoot,
+    taskFile,
+    provider: options.provider,
+    timeoutMs: options.timeoutMs,
+    contextFiles: prepared.contextFiles,
+    predictedFiles: current.planTask.predictedFiles,
+    resultFile: current.owner.paths.resultFile,
+    beforeCommit: async (entry) => {
+      if (options.beforeWaveCommit) await options.beforeWaveCommit(entry);
+      await guard(["running"]);
+    },
+    afterFilesWritten: options.afterFilesWritten,
+  });
+  await validateWorkerChanges(current.worktreeRoot, prepared, workerResult);
+  const head = await runGit(current.worktreeRoot, ["rev-parse", "HEAD"]);
+  if (String(head.stdout ?? "").trim() !== current.owner.ledger.baseCommit) {
+    throw new Error("Wave task Worktree HEAD changed during Worker execution.");
+  }
+  if (workerResult.status !== "completed") {
+    throw new Error(`Wave Worker returned '${workerResult.status}' and requires blocked-attempt handling.`);
+  }
+  if (options.afterWorker) await options.afterWorker();
+
+  const files = [];
+  for (const relative of workerResult.files) {
+    const loaded = await readInput(current.worktreeRoot, relative, "Wave Worker candidate");
+    files.push({
+      path: relative,
+      sha256: loaded.sha256,
+      bytes: loaded.bytes,
+      kind: workerFileKind(task, relative),
+    });
+  }
+  const result = await readInput(
+    current.worktreeRoot,
+    current.owner.paths.resultFile,
+    "Wave Worker result",
+  );
+  await guard(["running"]);
+  await writeImmutable(root, current.owner.paths.resultFile, result.buffer, "Wave attempt result");
+  const inputSnapshotSha256 = await sha256File(
+    root,
+    current.owner.paths.inputSnapshotFile,
+    "Wave task input snapshot",
+  );
+  const receipt = {
+    schemaVersion: "1.0",
+    storyId: task.storyId,
+    runId: task.runId,
+    phase: task.phase,
+    waveId: task.waveId,
+    waveIndex: task.waveIndex,
+    taskId: task.taskId,
+    dispatchId: task.dispatchId,
+    attemptId: options.attemptId,
+    claimId: options.claimId,
+    lockId: options.lockId,
+    baseCommit: current.owner.ledger.baseCommit,
+    worktreePath: current.planTask.worktreePath,
+    headCommit: current.owner.ledger.baseCommit,
+    inputSnapshotFile: current.owner.paths.inputSnapshotFile,
+    inputSnapshotSha256,
+    resultFile: current.owner.paths.resultFile,
+    resultSha256: result.sha256,
+    outcome: "ready-for-integration",
+    files,
+    completedAt: (options.now ?? (() => new Date().toISOString()))(),
+  };
+  if (options.beforeExecutionReceiptWrite) await options.beforeExecutionReceiptWrite();
+  await guard(["running"]);
+  await writeImmutable(
+    root,
+    current.owner.paths.receiptFile,
+    `${JSON.stringify(receipt, null, 2)}\n`,
+    "Wave task execution receipt",
+  );
+  const receiptSha256 = await sha256File(
+    root,
+    current.owner.paths.receiptFile,
+    "Wave task execution receipt",
+  );
+  if (options.beforeLedgerReadyWrite) await options.beforeLedgerReadyWrite();
+  const ready = await recordWaveTaskReady({
+    ...current.ownerOptions,
+    expectedExecutionReceiptSha256: receiptSha256,
+    now: options.now,
+  });
+  if (options.beforeExecutionLockRelease) await options.beforeExecutionLockRelease();
+  await guard(["ready-for-integration"]);
+  if (await sha256File(root, current.owner.paths.lockFile, "Wave task execution lock")
+      !== options.expectedExecutionLockSha256) {
+    throw new Error("Wave task execution lock changed before release.");
+  }
+  await unlink(resolveInsideRoot(root, current.owner.paths.lockFile, "Wave task execution lock").fullPath);
+  return {
+    outcome: "ready-for-integration",
+    reused: false,
+    inputSnapshotFile: current.owner.paths.inputSnapshotFile,
+    resultFile: current.owner.paths.resultFile,
+    receiptFile: current.owner.paths.receiptFile,
+    receipt,
+    ledger: ready.ledger,
+    task: ready.task,
+  };
+}
+
+async function blockWaveWorktreeWorker(root, task, options, current, error) {
+  for (const relativeFile of [current.owner.paths.resultFile, current.owner.paths.receiptFile]) {
+    const info = await lstat(resolveInsideRoot(root, relativeFile, "Wave attempt evidence").fullPath)
+      .catch((readError) => readError?.code === "ENOENT" ? null : Promise.reject(readError));
+    if (info) throw error;
+  }
+  try {
+    await assertAttemptOwned(current.ownerOptions);
+  } catch {
+    throw error;
+  }
+  const failure = {
+    schemaVersion: "1.0",
+    storyId: task.storyId,
+    runId: task.runId,
+    waveId: task.waveId,
+    taskId: task.taskId,
+    attemptId: options.attemptId,
+    claimId: options.claimId,
+    lockId: options.lockId,
+    status: "blocked",
+    reason: error instanceof Error ? error.message : String(error),
+    claimSha256: await sha256File(root, current.owner.paths.claimFile, "Wave attempt claim"),
+    executionLockSha256: options.expectedExecutionLockSha256,
+    recoveredAt: (options.now ?? (() => new Date().toISOString()))(),
+  };
+  if (options.beforeFailureWrite) await options.beforeFailureWrite();
+  await assertAttemptOwned(current.ownerOptions);
+  await writeImmutable(
+    root,
+    current.owner.paths.failureFile,
+    `${JSON.stringify(failure, null, 2)}\n`,
+    "Wave attempt failure",
+  );
+  if (options.afterFailureWriteBeforeLedgerBlock) {
+    await options.afterFailureWriteBeforeLedgerBlock();
+  }
+  const blocked = await recordWaveTaskBlocked({
+    ...current.ownerOptions,
+    expectedFailureSha256: await sha256File(root, current.owner.paths.failureFile, "Wave attempt failure"),
+    now: options.now,
+  });
+  if (options.beforeExecutionLockRelease) await options.beforeExecutionLockRelease();
+  await assertAttemptOwned({
+    ...current.ownerOptions,
+    allowedStatuses: ["blocked"],
+  });
+  if (await sha256File(root, current.owner.paths.lockFile, "Wave task execution lock")
+      !== options.expectedExecutionLockSha256) {
+    throw new Error("Wave task execution lock changed before blocked release.");
+  }
+  await unlink(resolveInsideRoot(root, current.owner.paths.lockFile, "Wave task execution lock").fullPath);
+  return {
+    outcome: "blocked",
+    reused: false,
+    failureFile: current.owner.paths.failureFile,
+    failure,
+    ledger: blocked.ledger,
+    task: blocked.task,
+  };
+}
+
+async function runWaveWorktreeWorker(root, state, task, taskFile, options) {
+  const current = await loadWaveWorkerContext(root, state, task, taskFile, options);
+  try {
+    return await executeWaveWorktreeWorker(root, state, task, taskFile, options, current);
+  } catch (error) {
+    return blockWaveWorktreeWorker(root, task, options, current, error);
+  }
+}
+
 export async function runWorktreeWorker(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   const state = await readJson(root, options.stateFile, "Harness state file");
   const task = await readJson(root, options.taskFile, "Worker task file");
   validateDispatchTaskStructure(task);
   const taskFile = resolveInsideRoot(root, options.taskFile, "Worker task file").relative;
+  if (task.schemaVersion === "1.2") {
+    return runWaveWorktreeWorker(root, state, task, taskFile, options);
+  }
   if (task.schemaVersion === "1.1") {
     if (options.allowReadyTransitionLock !== undefined) {
       throw new Error("allowReadyTransitionLock is reserved for internal readiness-transition checks.");

@@ -1698,3 +1698,19 @@ M4-B 受约束 Mock Worker 当前实现：
 - 正式 FrontierScan 仓库未创建、合并、回收或删除 Worktree；未执行 `git add/commit/push/PR`、发布或部署。
 
 下一阶段只能在独立方案与审批中评估同 wave Worker 并行、跨 Worktree 结果汇总/集成和生命周期回收。`WaveCreate` 批准不构成 Worker、merge/remove、Fork-Join、发布、部署或 Git 交付授权。
+
+### 16.25 2026-08-06 当前状态：M5-D-C1 同 Wave 并行 Mock Worker
+
+权威设计与实施计划位于 `docs/harness-m5d-wave-execution/`，活动 Story 为 `M5-D-C1-001`。
+
+- `story-runtime.mjs prepare-wave` 只接受覆盖全部 pending implementation 任务的唯一无依赖、无冲突 wave，并生成 v1.2 task/checkpoint、统一 implementation owner 和 execution ledger；ordinary、serial batch 与 worktree wave owner 互斥。
+- `worker-runtime.mjs` 支持 v1.2 attempt result 路径、`predictedFiles` 和 candidate/result rename 前 guard；v1.0/v1.1 行为保持兼容。
+- `worktree-wave-execution-runtime.mjs` 管理不可变 attempt、claim、execute.lock、短期 ledger mutation lock、`execute-wave`、`retry-task` 和 `recover-attempt`。
+- `execute-wave` 按稳定顺序 claim 所有 pending 任务，再通过 `Promise.allSettled` 并行调用独立 Worktree Worker；barrier 测试证明两个 Provider 同时进入。Promise 返回值不作为成功事实，最终状态只从 result、receipt、Git 与 ledger 重读。
+- 部分失败保留成功 execution receipt，失败任务稳定为 blocked；普通 execute 不自动重试 blocked，`retry-task` 必须重新批准并绑定旧 failure 哈希，生成新 attempt 且保留旧目录。
+- 恢复覆盖 claim-only、lock-before-running、完整 result/receipt、blocked 锁释放中断和孤儿 Worktree 候选。孤儿候选保留并失败关闭，不自动 reset 或删除。
+- candidate、result、receipt、ledger 和 lock release 五个写点均有 owner fencing；替换锁后旧 Worker 不能继续写入，也不能删除新锁。
+- 同进程并行 Worker 只对短期 ledger mutation lock 做最多 5 秒有界等待；不同 PID、损坏锁或超时仍失败关闭。
+- 正式 FrontierScan 仓库未执行 `WaveCreate`、Worker、Worktree 创建/回收、主树集成或 M3 apply，未修改 `backend/src/**`、`frontend/src/**`，未执行 `git add/commit/push/PR`、发布或部署。
+
+下一阶段为独立的 M5-D-C2：integration manifest freeze、主工作树串行受控集成、wave receipt、`finalize-wave` 和最终 M3 apply。不得把 C1 Worker 执行批准解释为集成、回收或 Git 交付批准。

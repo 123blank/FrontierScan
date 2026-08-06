@@ -1355,6 +1355,15 @@ export async function prepareSerialBatch(options = {}) {
     }
     await assertNoCompetingPhaseLedger(root, context);
     await assertNoOrdinaryImplementationArtifacts(root, context.state);
+    if (options.onContextPrepared) {
+      await options.onContextPrepared({
+        state: context.state,
+        stateFile: context.stateFile,
+        taskDagFile: context.taskDagFile,
+        taskDagSha256: context.taskDagSha256,
+        batchId: batchIdFor(context.state, context.taskDagSha256),
+      });
+    }
     await acquireLock(context.paths.lockPath, options);
     try {
     const existing = await readJsonOptional(context.paths.ledgerPath, "Serial batch ledger");

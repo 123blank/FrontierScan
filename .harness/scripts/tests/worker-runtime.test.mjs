@@ -91,6 +91,51 @@ function dispatchResultV11(task, overrides = {}) {
   };
 }
 
+function dispatchTaskV12(overrides = {}) {
+  const storyId = "M5-D-C1-WORKER";
+  const waveId = "wave-0123456789abcdef";
+  const taskId = "T1";
+  const taskRoot = `.harness/runs/${storyId}/waves/${waveId}/tasks/${taskId}`;
+  return {
+    schemaVersion: "1.2",
+    dispatchId: DISPATCH_ID,
+    storyId,
+    runId: storyId,
+    phase: "implementation",
+    waveId,
+    waveIndex: 1,
+    taskId,
+    taskRoot,
+    ownerAgent: "backend-developer",
+    purpose: "Implement the wave task.",
+    preparedRevision: 7,
+    preparedAt: FIXED_NOW,
+    expectedOutputs: [`${taskRoot}/task-report.md`],
+    allowedAdapters: [],
+    next: "unit-test",
+    ...overrides,
+  };
+}
+
+function dispatchResultV12(task, overrides = {}) {
+  return {
+    schemaVersion: "1.2",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    runId: task.runId,
+    phase: task.phase,
+    waveId: task.waveId,
+    waveIndex: task.waveIndex,
+    taskId: task.taskId,
+    taskRoot: task.taskRoot,
+    status: "completed",
+    summary: "Mock worker completed the wave task.",
+    outputs: task.expectedOutputs.map((output) => ({ path: output })),
+    records: [],
+    ...overrides,
+  };
+}
+
 const AGENTS = `schema_version: "1.0"
 agents:
   - name: requirement-analyst
@@ -727,6 +772,24 @@ async function createTaskScopedBackendWorkerFixture() {
   return { root, task, taskFile };
 }
 
+async function createWaveScopedBackendWorkerFixture() {
+  const backendAgents = AGENTS.replace("requirement-analyst", "backend-developer").replace("category: planning", "category: execution");
+  const backendPolicy = {
+    ...policies().roles[0],
+    name: "backend-developer",
+    category: "execution",
+    readPathPrefixes: [".harness/", "backend/"],
+    writePathPrefixes: [".harness/runs/", "backend/src/"],
+    capabilities: ["phase-output", "backend-write"],
+  };
+  const root = await createPolicyFixture(policies({ roles: [backendPolicy, policies().roles[1]] }), backendAgents);
+  const task = dispatchTaskV12();
+  const taskFile = `${task.taskRoot}/task.json`;
+  const resultFile = `${task.taskRoot}/attempts/attempt-0123456789abcdef/result.json`;
+  await write(root, taskFile, `${JSON.stringify(task, null, 2)}\n`);
+  return { root, task, taskFile, resultFile };
+}
+
 function taskScopedWorkerResponse(task, businessPath = "backend/src/main/TaskScopedWorker.java") {
   return {
     files: [
@@ -735,6 +798,36 @@ function taskScopedWorkerResponse(task, businessPath = "backend/src/main/TaskSco
     ],
     result: dispatchResultV11(task),
   };
+}
+
+async function testWaveScopedWorkerUsesAttemptResultAndGuardsEveryRename() {
+  const fixture = await createWaveScopedBackendWorkerFixture();
+  const guarded = [];
+  try {
+    const completed = await runWorkerTask({
+      root: fixture.root,
+      taskFile: fixture.taskFile,
+      resultFile: fixture.resultFile,
+      predictedFiles: ["backend/src/main/**"],
+      beforeCommit: async (entry) => guarded.push(entry),
+      provider: ({ task }) => ({
+        files: [
+          { path: task.expectedOutputs[0], content: "# Wave task\n", capability: "phase-output" },
+          { path: "backend/src/main/WaveTask.java", content: "class WaveTask {}\n", capability: "backend-write" },
+        ],
+        result: dispatchResultV12(task),
+      }),
+    });
+
+    assert.equal(completed.resultFile, fixture.resultFile);
+    assert.deepEqual(guarded.map((entry) => entry.kind), ["candidate", "candidate", "result"]);
+    assert.deepEqual(
+      guarded.map((entry) => entry.path),
+      [...completed.files].sort((left, right) => left.localeCompare(right)).concat(fixture.resultFile),
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
 }
 
 async function testTaskScopedWorkerWritesResultIntoItsTaskRootAndEnforcesTaskIdentity() {
@@ -1043,6 +1136,7 @@ await testWorkerRejectsInvalidTimeoutBeforeProvider();
 await testWorkerWritesValidatedFilesAndResultLast();
 await testWorkerRejectsInvalidCandidatesBeforeAnyWrite();
 await testWorkerRejectsCandidateTotalOverLimit();
+await testWaveScopedWorkerUsesAttemptResultAndGuardsEveryRename();
 await testTaskScopedWorkerWritesResultIntoItsTaskRootAndEnforcesTaskIdentity();
 await testTaskScopedWorkerRejectsBusinessCandidatesOutsidePredictedFilesBeforeWriting();
 await testWorkerRejectsResultSchemaVersionThatDoesNotMatchItsDispatch();

@@ -44,6 +44,27 @@ function assertTaskRoot(value, { storyId, phase, taskId }, label) {
   }
 }
 
+function assertWaveTaskRoot(value, { runId, waveId, taskId }, label) {
+  assertNonEmptyString(value, label);
+  if (value !== value.trim() || value.includes("\0") || value.includes("\\") || value.startsWith("/") || /^[A-Za-z]:/.test(value)) {
+    throw new Error(`${label} must be a repository-relative directory.`);
+  }
+  const parts = value.split("/");
+  if (parts.some((part) => !part || part === "." || part === "..")) {
+    throw new Error(`${label} must be a repository-relative directory.`);
+  }
+  if (parts.length !== 7
+      || parts[0] !== ".harness"
+      || parts[1] !== "runs"
+      || parts[2] !== runId
+      || parts[3] !== "waves"
+      || parts[4] !== waveId
+      || parts[5] !== "tasks"
+      || parts[6] !== taskId) {
+    throw new Error(`${label} must be the derived wave task directory.`);
+  }
+}
+
 function assertTaskScopedPath(value, taskRoot, label) {
   assertNonEmptyString(value, label);
   if (value !== value.trim() || value.includes("\0") || value.includes("\\") || !value.startsWith(`${taskRoot}/`)) {
@@ -71,6 +92,7 @@ export function isDispatchRecordStatusAllowed(type, status) {
 }
 
 export function validateDispatchTaskStructure(task) {
+  if (task?.schemaVersion === "1.2") return validateDispatchTaskV12(task);
   if (task?.schemaVersion === "1.1") return validateDispatchTaskV11(task);
   return validateDispatchTaskV10(task);
 }
@@ -129,7 +151,49 @@ function validateDispatchTaskV11(task) {
   return task;
 }
 
+function validateDispatchTaskV12(task) {
+  assertObject(task, "Dispatch task");
+  const fields = [
+    "schemaVersion", "dispatchId", "storyId", "runId", "phase",
+    "waveId", "waveIndex", "taskId", "taskRoot", "ownerAgent",
+    "purpose", "preparedRevision", "preparedAt",
+    "expectedOutputs", "allowedAdapters", "next",
+  ];
+  assertExactFields(task, fields, "Dispatch task");
+  for (const field of fields) {
+    if (!(field in task)) throw new Error(`Dispatch task requires '${field}'.`);
+  }
+  if (task.schemaVersion !== "1.2") throw new Error("Dispatch task schemaVersion must be '1.2'.");
+  if (!UUID_PATTERN.test(task.dispatchId)) throw new Error("Dispatch task dispatchId must be a UUID.");
+  if (!STORY_PATTERN.test(task.storyId) || task.runId !== task.storyId) {
+    throw new Error("Dispatch task Story and run identity are invalid.");
+  }
+  if (task.phase !== "implementation") throw new Error("Dispatch task phase must be 'implementation'.");
+  assertTaskScope(task.waveId, "Dispatch task waveId");
+  assertTaskScope(task.taskId, "Dispatch task taskId");
+  assertWaveTaskRoot(task.taskRoot, task, "Dispatch task taskRoot");
+  if (!Number.isInteger(task.waveIndex) || task.waveIndex < 1) {
+    throw new Error("Dispatch task waveIndex must be a positive integer.");
+  }
+  for (const field of ["ownerAgent", "purpose", "next"]) {
+    assertNonEmptyString(task[field], `Dispatch task ${field}`);
+  }
+  if (!Number.isInteger(task.preparedRevision) || task.preparedRevision < 1) {
+    throw new Error("Dispatch task preparedRevision must be a positive integer.");
+  }
+  if (typeof task.preparedAt !== "string" || !task.preparedAt.includes("T") || Number.isNaN(Date.parse(task.preparedAt))) {
+    throw new Error("Dispatch task preparedAt must be a date-time string.");
+  }
+  assertUniqueStrings(task.expectedOutputs, "Dispatch task expectedOutputs", { minItems: 1 });
+  task.expectedOutputs.forEach((output) => {
+    assertTaskScopedPath(output, task.taskRoot, "Dispatch task expected output");
+  });
+  assertUniqueStrings(task.allowedAdapters, "Dispatch task allowedAdapters");
+  return task;
+}
+
 export function validateDispatchResultStructure(result) {
+  if (result?.schemaVersion === "1.2") return validateDispatchResultV12(result);
   if (result?.schemaVersion === "1.1") return validateDispatchResultV11(result);
   return validateDispatchResultV10(result);
 }
@@ -254,6 +318,86 @@ function validateDispatchResultV11(result) {
     const blockerFields = ["reason", "owner", "suggestedAction"];
     assertExactFields(result.blocker, blockerFields, "Dispatch result blocker");
     for (const field of blockerFields) assertNonEmptyString(result.blocker[field], `Dispatch result blocker ${field}`);
+  }
+  return result;
+}
+
+function validateDispatchResultV12(result) {
+  assertObject(result, "Dispatch result");
+  const required = [
+    "schemaVersion", "dispatchId", "storyId", "runId", "phase",
+    "waveId", "waveIndex", "taskId", "taskRoot",
+    "status", "summary", "outputs", "records",
+  ];
+  assertExactFields(result, [...required, "blocker"], "Dispatch result");
+  for (const field of required) {
+    if (!(field in result)) throw new Error(`Dispatch result requires '${field}'.`);
+  }
+  if (result.schemaVersion !== "1.2") throw new Error("Dispatch result schemaVersion must be '1.2'.");
+  if (!UUID_PATTERN.test(result.dispatchId)) throw new Error("Dispatch result dispatchId must be a UUID.");
+  if (!STORY_PATTERN.test(result.storyId) || result.runId !== result.storyId) {
+    throw new Error("Dispatch result Story and run identity are invalid.");
+  }
+  if (result.phase !== "implementation") throw new Error("Dispatch result phase must be 'implementation'.");
+  assertTaskScope(result.waveId, "Dispatch result waveId");
+  assertTaskScope(result.taskId, "Dispatch result taskId");
+  assertWaveTaskRoot(result.taskRoot, result, "Dispatch result taskRoot");
+  if (!Number.isInteger(result.waveIndex) || result.waveIndex < 1) {
+    throw new Error("Dispatch result waveIndex must be a positive integer.");
+  }
+  if (!["completed", "failed", "blocked"].includes(result.status)) {
+    throw new Error("Dispatch result status is invalid.");
+  }
+  assertNonEmptyString(result.summary, "Dispatch result summary");
+
+  if (!Array.isArray(result.outputs)) throw new Error("Dispatch result outputs must be an array.");
+  const outputPaths = [];
+  for (const output of result.outputs) {
+    assertObject(output, "Dispatch result output");
+    assertExactFields(output, ["path"], "Dispatch result output");
+    assertNonEmptyString(output.path, "Dispatch result output path");
+    assertTaskScopedPath(output.path, result.taskRoot, "Dispatch result output");
+    outputPaths.push(output.path);
+  }
+  if (new Set(outputPaths).size !== outputPaths.length) {
+    throw new Error("Dispatch result output paths must be unique.");
+  }
+
+  if (!Array.isArray(result.records)) throw new Error("Dispatch result records must be an array.");
+  for (const record of result.records) {
+    assertObject(record, "Dispatch result record");
+    assertExactFields(record, ["type", "status", "path", "message", "actor"], "Dispatch result record");
+    for (const field of ["type", "status", "message"]) {
+      if (!(field in record)) throw new Error(`Dispatch result record requires '${field}'.`);
+    }
+    if (!["test", "review", "note"].includes(record.type)) {
+      throw new Error("Dispatch result record type is invalid.");
+    }
+    if (typeof record.status !== "string" || typeof record.message !== "string") {
+      throw new Error("Dispatch result record status and message must be strings.");
+    }
+    if (!isDispatchRecordStatusAllowed(record.type, record.status)) {
+      throw new Error(`Dispatch result record status '${record.status}' is invalid for type '${record.type}'.`);
+    }
+    if (record.path !== undefined && record.path !== null && typeof record.path !== "string") {
+      throw new Error("Dispatch result record path must be a string or null.");
+    }
+    if (record.path) assertTaskScopedPath(record.path, result.taskRoot, "Dispatch result record");
+    if (record.type === "test" && !record.path) {
+      throw new Error("Dispatch result test record requires an evidence path.");
+    }
+    if (record.actor !== undefined && typeof record.actor !== "string") {
+      throw new Error("Dispatch result record actor must be a string.");
+    }
+  }
+
+  if (result.blocker !== undefined) {
+    assertObject(result.blocker, "Dispatch result blocker");
+    const blockerFields = ["reason", "owner", "suggestedAction"];
+    assertExactFields(result.blocker, blockerFields, "Dispatch result blocker");
+    for (const field of blockerFields) {
+      assertNonEmptyString(result.blocker[field], `Dispatch result blocker ${field}`);
+    }
   }
   return result;
 }

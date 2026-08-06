@@ -148,20 +148,9 @@ function filesystemPathKey(relativePath) {
 }
 
 function phaseRootForTask(taskFile, task) {
-  if (task.schemaVersion === "1.1") {
+  if (task.schemaVersion === "1.1" || task.schemaVersion === "1.2") {
     const expectedTaskFile = `${task.taskRoot}/task.json`;
-    const taskSegments = task.taskRoot.split("/");
-    const [harnessDirectory, runsDirectory, runId, phasesDirectory, phaseDirectory, tasksDirectory, taskId] = taskSegments;
-    if (taskFile !== expectedTaskFile
-        || taskSegments.length !== 7
-        || harnessDirectory !== ".harness"
-        || runsDirectory !== "runs"
-        || !runId
-        || phasesDirectory !== "phases"
-        || !/^\d{2}-/.test(phaseDirectory)
-        || phaseDirectory.slice(3) !== task.phase
-        || tasksDirectory !== "tasks"
-        || taskId !== task.taskId) {
+    if (taskFile !== expectedTaskFile) {
       throw new Error("Worker task file path does not match its task-scoped dispatch identity.");
     }
     for (const output of task.expectedOutputs) {
@@ -186,6 +175,25 @@ function phaseRootForTask(taskFile, task) {
     }
   }
   return phaseRoot;
+}
+
+function resultFileForTask(task, phaseRoot, resultFile) {
+  if (task.schemaVersion !== "1.2") {
+    if (resultFile !== undefined) {
+      throw new Error("An explicit Worker resultFile is only supported for wave-scoped dispatch.");
+    }
+    return `${phaseRoot}/result.json`;
+  }
+  const relative = resolveRepositoryPath(".", resultFile, "Wave Worker result file").relative;
+  const parts = relative.slice(task.taskRoot.length + 1).split("/");
+  if (!relative.startsWith(`${task.taskRoot}/attempts/`)
+      || parts.length !== 3
+      || parts[0] !== "attempts"
+      || !parts[1]
+      || parts[2] !== "result.json") {
+    throw new Error("Wave Worker resultFile must be the current attempt result path.");
+  }
+  return relative;
 }
 
 async function assertWritableTarget(root, fullPath, label) {
@@ -232,7 +240,7 @@ function validateProviderResponse(response, task, policy, phaseRoot, predictedFi
       if (!task.expectedOutputs.includes(relative)) throw new Error(`Worker phase-output candidate is not expected: ${relative}`);
     } else if (!relative.startsWith(CAPABILITY_PREFIXES[candidate.capability])) {
       throw new Error(`Worker candidate path does not match capability '${candidate.capability}': ${relative}`);
-    } else if (task.schemaVersion === "1.1"
+    } else if ((task.schemaVersion === "1.1" || task.schemaVersion === "1.2")
         && !predictedFiles.some((predictedFile) => matchesPredictedFile(predictedFile, relative))) {
       throw new Error(`Worker candidate path is outside the task predicted files: ${relative}`);
     }
@@ -259,6 +267,14 @@ function validateProviderResponse(response, task, policy, phaseRoot, predictedFi
   if (task.schemaVersion === "1.1"
       && (result.batchId !== task.batchId || result.taskId !== task.taskId || result.taskRoot !== task.taskRoot)) {
     throw new Error("Worker result task-scoped identity does not match the current task.");
+  }
+  if (task.schemaVersion === "1.2"
+      && (result.runId !== task.runId
+        || result.waveId !== task.waveId
+        || result.waveIndex !== task.waveIndex
+        || result.taskId !== task.taskId
+        || result.taskRoot !== task.taskRoot)) {
+    throw new Error("Worker result wave-scoped identity does not match the current task.");
   }
   if (result.status === "blocked" && !result.blocker) throw new Error("Blocked worker result requires blocker details.");
   const outputPaths = result.outputs.map((output) => resolveRepositoryPath(".", output.path, "Worker result output").relative);
@@ -288,8 +304,15 @@ function validateProviderResponse(response, task, policy, phaseRoot, predictedFi
   return { files, result, resultContent, phaseRoot };
 }
 
-async function writeValidatedResponse(root, task, taskFile, validated, afterFilesWritten) {
-  const resultFile = `${validated.phaseRoot}/result.json`;
+async function writeValidatedResponse(
+  root,
+  task,
+  taskFile,
+  validated,
+  resultFile,
+  beforeCommit,
+  afterFilesWritten,
+) {
   const resultTarget = resolveRepositoryPath(root, resultFile, "Worker result file");
   const prepared = [];
   const candidates = [];
@@ -315,10 +338,12 @@ async function writeValidatedResponse(root, task, taskFile, validated, afterFile
     prepared.push(resultTemporary);
 
     for (const candidate of [...candidates].sort((left, right) => left.path.localeCompare(right.path))) {
+      if (beforeCommit) await beforeCommit({ kind: "candidate", path: candidate.path });
       await rename(candidate.temporary, candidate.target);
       prepared.splice(prepared.indexOf(candidate.temporary), 1);
     }
     if (afterFilesWritten) await afterFilesWritten();
+    if (beforeCommit) await beforeCommit({ kind: "result", path: resultFile });
     await rename(resultTemporary, resultTarget.fullPath);
     prepared.splice(prepared.indexOf(resultTemporary), 1);
     return {
@@ -392,6 +417,8 @@ export async function runWorkerTask({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   contextFiles = [],
   predictedFiles,
+  resultFile,
+  beforeCommit,
   afterFilesWritten,
 } = {}) {
   if (typeof provider !== "function") throw new Error("Worker provider must be a function.");
@@ -411,10 +438,12 @@ export async function runWorkerTask({
   }
   validateDispatchTaskStructure(task);
   const phaseRoot = phaseRootForTask(taskSource.relative, task);
-  if (task.schemaVersion === "1.1" && (!Array.isArray(predictedFiles) || !predictedFiles.length)) {
+  if ((task.schemaVersion === "1.1" || task.schemaVersion === "1.2")
+      && (!Array.isArray(predictedFiles) || !predictedFiles.length)) {
     throw new Error("Task-scoped Worker execution requires non-empty predictedFiles.");
   }
-  const resultPath = resolveRepositoryPath(root, `${phaseRoot}/result.json`, "Worker result file").fullPath;
+  const effectiveResultFile = resultFileForTask(task, phaseRoot, resultFile);
+  const resultPath = resolveRepositoryPath(root, effectiveResultFile, "Worker result file").fullPath;
   const existingResult = await lstat(resultPath).catch((error) => {
     if (error?.code === "ENOENT") return null;
     throw error;
@@ -463,5 +492,13 @@ export async function runWorkerTask({
     clearTimeout(timer);
   }
   const validated = validateProviderResponse(response, task, policy, phaseRoot, predictedFiles ?? []);
-  return writeValidatedResponse(root, task, taskSource.relative, validated, afterFilesWritten);
+  return writeValidatedResponse(
+    root,
+    task,
+    taskSource.relative,
+    validated,
+    effectiveResultFile,
+    beforeCommit,
+    afterFilesWritten,
+  );
 }

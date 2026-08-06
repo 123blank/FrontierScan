@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("prepare", "status", "run-adapter", "apply", "prepare-batch", "finalize-batch")]
+  [ValidateSet("prepare", "status", "run-adapter", "apply", "prepare-batch", "finalize-batch", "prepare-wave")]
   [string]$Command,
 
   [string]$StateFile,
@@ -8,6 +8,7 @@ param(
   [string]$ResultFile,
   [string]$TaskDagFile,
   [string]$BatchFile,
+  [int]$WaveIndex = 0,
   [string]$Root,
   [switch]$Json
 )
@@ -16,6 +17,19 @@ $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($Root)) {
   $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+}
+
+if ($Command -eq "prepare-wave") {
+  if ([string]::IsNullOrWhiteSpace($TaskDagFile) -or $WaveIndex -lt 1) {
+    throw "prepare-wave requires TaskDagFile and a positive WaveIndex."
+  }
+  if (-not [string]::IsNullOrWhiteSpace($Adapter) -or
+      -not [string]::IsNullOrWhiteSpace($ResultFile) -or
+      -not [string]::IsNullOrWhiteSpace($BatchFile)) {
+    throw "prepare-wave does not accept Adapter, ResultFile, or BatchFile."
+  }
+} elseif ($WaveIndex -ne 0) {
+  throw "WaveIndex is only supported by prepare-wave."
 }
 
 $nodeScript = Join-Path $PSScriptRoot "lib\story-runtime.mjs"
@@ -38,6 +52,9 @@ if (-not [string]::IsNullOrWhiteSpace($TaskDagFile)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($BatchFile)) {
   $arguments += @("--batch-file", $BatchFile)
+}
+if ($WaveIndex -gt 0) {
+  $arguments += @("--wave-index", [string]$WaveIndex)
 }
 if ($Json) {
   $arguments += "--json"

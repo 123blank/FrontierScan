@@ -44,6 +44,7 @@ Current limitations:
 - M5-B3-B 已实现同一 Story 的 `implementation` phase 单 Worktree 严格串行多任务批次：v1.1 task-scoped dispatch、serial batch ledger、继承快照、逐项 Worker/集成、批次收尾和 batch Retire 均受证据、哈希、锁与逐次审批约束。M3 `apply` 仍是唯一 phase 推进入口；同 wave 并行、多 Worktree、Fork-Join、分支清理、真实 Agent 和正式仓库 Worktree 操作仍未实现。
 - M5-D-A 已实现同一合法 wave 的多 Worktree 只读 `WavePlan/WaveStatus`：统一固定 `baseCommit`，确定性派生每任务分支/路径，并从 Git 事实聚合 `absent/partial/ready`。它不提供 Worktree 创建、并行 Worker、合并、回收或状态推进；真实双 Worktree 只在临时 fixture 中验证。
 - M5-D-B 在同一 Runtime 中增加审批门控 `WaveCreate`：每个明确 wave 的批准绑定当前 `plan.json` SHA-256；同一 run/Story 的所有 wave 共享创建/恢复锁，恢复在替换前重验完整锁集合、替换后匹配本次生成的随机 `lockId`，所有 Git、状态、回执和释放动作前重新执行计划与 owner fencing。恢复异常保留锁，部分失败保留已创建 Worktree并只补齐缺失项；动态锁事实只出现在 `WaveStatus` 命令结果顶层。首次 WavePlan 后，复用 WavePlan/WaveStatus 不再持久化动态观察，稳定状态只由持锁 WaveCreate 更新；完整 Git 事实为 `ready` 后才写绑定计划、DAG、稳定状态和任务 HEAD 的完成回执。正式仓库未执行 WaveCreate；并行 Worker、跨 Worktree 集成、合并、回收、Fork-Join 和状态推进仍未实现。
+- M5-D-C1 已实现单个完整 implementation wave 的 execution-only 闭环：`prepare-wave` 生成 v1.2 dispatch、checkpoint、统一 implementation owner 和 execution ledger；每任务使用不可变 attempt、claim 与 execute.lock；`execute-wave` 通过 `Promise.allSettled` 在独立临时 Worktree 中并行运行 Mock Worker。成功、blocked、partial、独立批准 retry，以及 claim/lock 半完成、完整 result/receipt、blocked 锁释放和孤儿候选恢复均由磁盘哈希、Git 事实和 owner fencing 决定。正式仓库未执行 Worker 或 Worktree 写操作；integration manifest、主树集成、finalize-wave、M3 apply、回收、真实 Agent 和 Git 自动交付仍未实现。
 
 Trust rule:
 

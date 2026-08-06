@@ -14,6 +14,11 @@ import {
   validateBatchFinalizationBinding,
   validateBatchReceiptFinalizationArtifacts,
 } from "./batch-finalization-contract.mjs";
+import {
+  acquireImplementationOwner,
+  assertImplementationModeAvailable,
+  assertImplementationOwner,
+} from "./implementation-owner-contract.mjs";
 import { readWorkflowDefinition, runStateCommand } from "./state-runtime.mjs";
 
 const PHASE_ADAPTERS = {
@@ -483,6 +488,419 @@ function phaseDirectory(state, phase) {
   return `.harness/runs/${state.runtime.runId}/phases/${String(phase.order).padStart(2, "0")}-${phase.id}`;
 }
 
+function implementationTaskDagFile(state) {
+  return `.harness/runs/${state.runtime.runId}/phases/02-task-dag/task-dag.json`;
+}
+
+function compareIdentifiers(left, right) {
+  const leftKey = left.toLowerCase();
+  const rightKey = right.toLowerCase();
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+function normalizePredictedPath(value) {
+  if (typeof value !== "string" || !value.trim() || value.includes("\\") || path.isAbsolute(value)) {
+    throw new Error("Wave task predictedFiles must contain repository-relative paths.");
+  }
+  const normalized = value.replace(/\/\*\*$/, "").replace(/\/+$/, "");
+  const parts = normalized.split("/");
+  if (!normalized || parts.some((part) => !part || part === "." || part === "..")) {
+    throw new Error("Wave task predictedFiles must contain repository-relative paths.");
+  }
+  return normalized.toLowerCase();
+}
+
+function assertWavePredictedFilesDoNotConflict(tasks) {
+  const paths = [];
+  for (const task of tasks) {
+    if (!Array.isArray(task.predictedFiles) || !task.predictedFiles.length) {
+      throw new Error(`Wave task '${task.taskId}' must declare predictedFiles.`);
+    }
+    for (const value of task.predictedFiles) {
+      const normalized = normalizePredictedPath(value);
+      const conflict = paths.find((item) => (
+        item.path === normalized
+        || item.path.startsWith(`${normalized}/`)
+        || normalized.startsWith(`${item.path}/`)
+      ));
+      if (conflict) {
+        throw new Error(
+          `Wave task predictedFiles conflict between '${conflict.taskId}' and '${task.taskId}'.`,
+        );
+      }
+      paths.push({ taskId: task.taskId, path: normalized });
+    }
+  }
+}
+
+function validateCompleteWaveDag(dag, state, waveIndex) {
+  if (!dag || typeof dag !== "object" || Array.isArray(dag)
+      || dag.schemaVersion !== "1.0"
+      || dag.storyId !== state.storyId
+      || !Array.isArray(dag.nodes) || dag.nodes.length < 2
+      || !Array.isArray(dag.edges) || dag.edges.length
+      || !Array.isArray(dag.waves) || dag.waves.length !== 1
+      || waveIndex !== 1
+      || !Array.isArray(dag.globalChanges) || dag.globalChanges.length) {
+    throw new Error(
+      "Wave preparation requires one complete dependency-free wave with no globalChanges.",
+    );
+  }
+  const ids = dag.nodes.map((task) => task?.taskId);
+  if (ids.some((taskId) => typeof taskId !== "string" || !taskId)
+      || new Set(ids).size !== ids.length
+      || dag.waves[0].length !== ids.length
+      || new Set(dag.waves[0]).size !== ids.length
+      || ids.some((taskId) => !dag.waves[0].includes(taskId))) {
+    throw new Error("Wave preparation requires its only wave to cover every implementation task.");
+  }
+  for (const task of dag.nodes) {
+    if (task.status !== "pending"
+        || !["backend", "frontend"].includes(task.type)
+        || typeof task.title !== "string" || !task.title
+        || typeof task.ownerAgent !== "string" || !task.ownerAgent) {
+      throw new Error("Wave preparation only supports pending backend/frontend implementation tasks.");
+    }
+  }
+  assertWavePredictedFilesDoNotConflict(dag.nodes);
+  return [...dag.nodes].sort((left, right) => compareIdentifiers(left.taskId, right.taskId));
+}
+
+function assertExactFields(value, fields, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || Object.keys(value).length !== fields.length
+      || fields.some((field) => !Object.hasOwn(value, field))) {
+    throw new Error(`${label} has an invalid structure.`);
+  }
+}
+
+async function executeStoryGit(root, args, options) {
+  if (options.executeGit) return options.executeGit(args);
+  return new Promise((resolve, reject) => {
+    execFile("git", args, { cwd: root, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) reject(new Error(String(stderr || error.message)));
+      else resolve({ stdout, stderr });
+    });
+  });
+}
+
+async function assertMainRepositoryReadyForWave(root, located, taskDagFile, options) {
+  const excluded = [
+    `:(top,literal,exclude)${located.stateFile}`,
+    `:(top,literal,exclude)${taskDagFile}`,
+    `:(top,glob,exclude).harness/runs/${located.state.runtime.runId}/**`,
+    `:(top,glob,exclude).harness/worktrees/${located.state.storyId}/**`,
+  ];
+  const result = await executeStoryGit(
+    root,
+    ["status", "--porcelain=v1", "--untracked-files=all", "--", ".", ...excluded],
+    options,
+  );
+  if (String(result.stdout ?? "").trim()) {
+    throw new Error("The main repository contains unapproved changes before wave preparation.");
+  }
+}
+
+async function loadApprovedCompleteWave(root, context, options) {
+  if (!Number.isInteger(options.waveIndex) || options.waveIndex < 1) {
+    throw new Error("Wave preparation requires a positive waveIndex.");
+  }
+  const taskDagFile = resolveInsideRoot(root, options.taskDagFile, "Task DAG file").relative;
+  if (taskDagFile !== implementationTaskDagFile(context.located.state)) {
+    throw new Error("Wave preparation requires the active run Task DAG.");
+  }
+  const dagPath = resolveInsideRoot(root, taskDagFile, "Task DAG file").fullPath;
+  const dag = await readJsonOptional(dagPath, "Task DAG file");
+  const tasks = validateCompleteWaveDag(dag, context.located.state, options.waveIndex);
+  const { runWorktreeCommand } = await import("./worktree-runtime.mjs");
+  const inspected = await runWorktreeCommand({
+    root,
+    command: "wave-status",
+    stateFile: context.located.stateFile,
+    taskDagFile,
+    waveIndex: options.waveIndex,
+    executeGit: options.executeGit,
+    now: options.now,
+  });
+  if (inspected.status.state !== "ready"
+      || inspected.status.tasks.some((task) => (
+        task.state !== "created" || task.headCommit !== inspected.plan.baseCommit
+      ))
+      || inspected.locks.create || inspected.locks.recovery) {
+    throw new Error("Wave preparation requires every Worktree to be created at the common base with no active create lock.");
+  }
+  if (inspected.plan.tasks.length !== tasks.length) {
+    throw new Error("Wave Worktree plan does not cover every implementation task.");
+  }
+  for (let index = 0; index < tasks.length; index += 1) {
+    const task = tasks[index];
+    const planned = inspected.plan.tasks[index];
+    if (planned.taskId !== task.taskId
+        || planned.title !== task.title
+        || planned.type !== task.type
+        || planned.ownerAgent !== task.ownerAgent
+        || JSON.stringify(planned.predictedFiles) !== JSON.stringify(task.predictedFiles)) {
+      throw new Error("Wave Worktree plan drifted from the active Task DAG.");
+    }
+  }
+
+  const planSha256 = await fileSha256(
+    resolveInsideRoot(root, inspected.planFile, "Wave Worktree plan").fullPath,
+    "Wave Worktree plan",
+  );
+  const statusSha256 = await fileSha256(
+    resolveInsideRoot(root, inspected.statusFile, "Wave Worktree status").fullPath,
+    "Wave Worktree status",
+  );
+  const storedStatus = await readJsonOptional(
+    resolveInsideRoot(root, inspected.statusFile, "Wave Worktree status").fullPath,
+    "Wave Worktree status",
+  );
+  assertExactFields(storedStatus, [
+    "schemaVersion", "storyId", "runId", "wave", "wavePlanSha256", "taskDagSha256",
+    "state", "baseRef", "baseCommit", "tasks", "observedAt", "details",
+  ], "Stored Wave Worktree status");
+  if (storedStatus.schemaVersion !== "1.0"
+      || storedStatus.storyId !== context.located.state.storyId
+      || storedStatus.runId !== context.located.state.runtime.runId
+      || storedStatus.wave !== options.waveIndex
+      || storedStatus.wavePlanSha256 !== planSha256
+      || storedStatus.taskDagSha256 !== inspected.plan.taskDagSha256
+      || storedStatus.state !== "ready"
+      || storedStatus.baseRef !== inspected.plan.baseRef
+      || storedStatus.baseCommit !== inspected.plan.baseCommit
+      || !Array.isArray(storedStatus.tasks)
+      || storedStatus.tasks.length !== inspected.plan.tasks.length) {
+    throw new Error("Stored Wave Worktree status must be ready and match the current plan.");
+  }
+  for (let index = 0; index < storedStatus.tasks.length; index += 1) {
+    const item = storedStatus.tasks[index];
+    const planned = inspected.plan.tasks[index];
+    const current = inspected.status.tasks[index];
+    assertExactFields(
+      item,
+      ["taskId", "state", "branch", "worktreePath", "headCommit", "details"],
+      "Stored Wave Worktree status task",
+    );
+    if (item.taskId !== planned.taskId
+        || item.state !== "created"
+        || item.branch !== planned.branch
+        || item.worktreePath !== planned.worktreePath
+        || item.headCommit !== inspected.plan.baseCommit
+        || JSON.stringify(item) !== JSON.stringify(current)) {
+      throw new Error("Stored Wave Worktree status task drifted from current Git facts.");
+    }
+  }
+  const taskDagSha256 = await fileSha256(dagPath, "Task DAG file");
+  const receiptFile = `${path.posix.dirname(inspected.planFile)}/creation-receipt.json`;
+  const receiptPath = resolveInsideRoot(root, receiptFile, "Wave Worktree creation receipt").fullPath;
+  const receipt = await readJsonOptional(receiptPath, "Wave Worktree creation receipt");
+  assertExactFields(receipt, [
+    "schemaVersion", "storyId", "runId", "wave", "planSha256", "taskDagSha256",
+    "statusSha256", "baseCommit", "tasks", "lockRecovered", "completedAt",
+  ], "Wave Worktree creation receipt");
+  if (receipt.schemaVersion !== "1.0"
+      || receipt.storyId !== context.located.state.storyId
+      || receipt.runId !== context.located.state.runtime.runId
+      || receipt.wave !== options.waveIndex
+      || receipt.planSha256 !== planSha256
+      || receipt.taskDagSha256 !== taskDagSha256
+      || receipt.statusSha256 !== statusSha256
+      || receipt.baseCommit !== inspected.plan.baseCommit
+      || !Array.isArray(receipt.tasks)
+      || receipt.tasks.length !== inspected.plan.tasks.length) {
+    throw new Error("Wave Worktree creation receipt drifted from the current plan, status, or Task DAG.");
+  }
+  for (let index = 0; index < receipt.tasks.length; index += 1) {
+    const item = receipt.tasks[index];
+    const planned = inspected.plan.tasks[index];
+    const status = storedStatus.tasks[index];
+    assertExactFields(item, ["taskId", "branch", "worktreePath", "headCommit"], "Wave Worktree receipt task");
+    if (item.taskId !== planned.taskId
+        || item.branch !== planned.branch
+        || item.worktreePath !== planned.worktreePath
+        || item.headCommit !== status.headCommit) {
+      throw new Error("Wave Worktree creation receipt task drifted from current Git facts.");
+    }
+  }
+  await assertMainRepositoryReadyForWave(root, context.located, taskDagFile, options);
+  return {
+    waveIndex: options.waveIndex,
+    taskDagFile,
+    taskDagSha256,
+    planFile: inspected.planFile,
+    planSha256,
+    statusFile: inspected.statusFile,
+    statusSha256,
+    creationReceiptFile: receiptFile,
+    creationReceiptSha256: await fileSha256(receiptPath, "Wave Worktree creation receipt"),
+    plan: inspected.plan,
+    status: inspected.status,
+    tasks,
+  };
+}
+
+function deriveWaveId({ runId, revision, waveIndex, taskDagSha256, planSha256 }) {
+  const identity = JSON.stringify([runId, revision, waveIndex, taskDagSha256, planSha256]);
+  return `wave-${createHash("sha256").update(identity).digest("hex").slice(0, 16)}`;
+}
+
+function waveTaskRoot(state, waveId, taskId) {
+  return `.harness/runs/${state.runtime.runId}/waves/${waveId}/tasks/${taskId}`;
+}
+
+function waveCheckpointFor(task) {
+  return {
+    schemaVersion: "1.2",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    runId: task.runId,
+    phase: task.phase,
+    waveId: task.waveId,
+    waveIndex: task.waveIndex,
+    taskId: task.taskId,
+    taskRoot: task.taskRoot,
+    status: "prepared",
+    preparedAt: task.preparedAt,
+    updatedAt: task.preparedAt,
+  };
+}
+
+async function writeWaveDispatch({ root, state, phase, wave, waveId, dagTask, options, timestamp }) {
+  const taskRoot = waveTaskRoot(state, waveId, dagTask.taskId);
+  const taskFile = `${taskRoot}/task.json`;
+  const checkpointFile = `${taskRoot}/checkpoint.json`;
+  const taskPath = resolveInsideRoot(root, taskFile, "Wave dispatch task").fullPath;
+  const checkpointPath = resolveInsideRoot(root, checkpointFile, "Wave dispatch checkpoint").fullPath;
+  const existing = await readJsonOptional(taskPath, "Wave dispatch task");
+  const task = existing ?? {
+    schemaVersion: "1.2",
+    dispatchId: (options.randomUUID ?? createRandomUUID)(),
+    storyId: state.storyId,
+    runId: state.runtime.runId,
+    phase: "implementation",
+    waveId,
+    waveIndex: wave.waveIndex,
+    taskId: dagTask.taskId,
+    taskRoot,
+    ownerAgent: dagTask.ownerAgent,
+    purpose: dagTask.title,
+    preparedRevision: state.runtime.revision,
+    preparedAt: timestamp,
+    expectedOutputs: [`${taskRoot}/report.md`],
+    allowedAdapters: [],
+    next: phase.next[0],
+  };
+  validateDispatchTaskStructure(task);
+  if (existing) {
+    const expected = {
+      ...existing,
+      storyId: state.storyId,
+      runId: state.runtime.runId,
+      phase: "implementation",
+      waveId,
+      waveIndex: wave.waveIndex,
+      taskId: dagTask.taskId,
+      taskRoot,
+      ownerAgent: dagTask.ownerAgent,
+      purpose: dagTask.title,
+      preparedRevision: state.runtime.revision,
+      expectedOutputs: [`${taskRoot}/report.md`],
+      allowedAdapters: [],
+      next: phase.next[0],
+    };
+    if (JSON.stringify(existing) !== JSON.stringify(expected)) {
+      throw new Error(`Existing wave dispatch drifted for task '${dagTask.taskId}'.`);
+    }
+  } else {
+    await writeAtomicJson(taskPath, task);
+  }
+  const checkpoint = waveCheckpointFor(task);
+  const currentCheckpoint = await readJsonOptional(checkpointPath, "Wave dispatch checkpoint");
+  if (currentCheckpoint) {
+    if (JSON.stringify(currentCheckpoint) !== JSON.stringify(checkpoint)) {
+      throw new Error(`Existing wave checkpoint drifted for task '${dagTask.taskId}'.`);
+    }
+  } else {
+    await writeAtomicJson(checkpointPath, checkpoint);
+  }
+  return {
+    reused: Boolean(existing && currentCheckpoint),
+    taskFile,
+    checkpointFile,
+    task,
+    checkpoint,
+  };
+}
+
+async function prepareWave(root, options) {
+  for (const field of ["waveId", "dispatchId", "taskRoot"]) {
+    if (options[field] !== undefined) {
+      throw new Error(`Wave preparation does not accept caller-provided ${field}.`);
+    }
+  }
+  const context = await currentContext(root, options.stateFile);
+  if (context.located.state.runtime.status !== "active" || context.phase?.id !== "implementation") {
+    throw new Error("Wave preparation requires an active implementation phase.");
+  }
+  if (context.phase.next.length !== 1) {
+    throw new Error("Implementation phase must define exactly one next phase.");
+  }
+  await assertImplementationModeAvailable({
+    root,
+    state: context.located.state,
+    requestedMode: "worktree-wave",
+  });
+  const wave = await loadApprovedCompleteWave(root, context, options);
+  const waveId = deriveWaveId({
+    runId: context.located.state.runtime.runId,
+    revision: context.located.state.runtime.revision,
+    waveIndex: wave.waveIndex,
+    taskDagSha256: wave.taskDagSha256,
+    planSha256: wave.planSha256,
+  });
+  const timestamp = (options.now ?? (() => new Date().toISOString()))();
+  await acquireImplementationOwner({
+    root,
+    state: context.located.state,
+    mode: "worktree-wave",
+    ownerId: waveId,
+    taskDagFile: wave.taskDagFile,
+    now: () => timestamp,
+  });
+  const tasks = [];
+  for (const dagTask of wave.tasks) {
+    tasks.push(await writeWaveDispatch({
+      root,
+      state: context.located.state,
+      phase: context.phase,
+      wave,
+      waveId,
+      dagTask,
+      options,
+      timestamp,
+    }));
+  }
+  const { createWaveExecutionLedger } = await import("./worktree-wave-execution-runtime.mjs");
+  const execution = await createWaveExecutionLedger({
+    root,
+    state: context.located.state,
+    wave,
+    waveId,
+    tasks,
+    now: () => timestamp,
+  });
+  return {
+    command: "prepare-wave",
+    reused: execution.reused && tasks.every((item) => item.reused),
+    waveId,
+    ...wave,
+    tasks,
+    ledgerFile: execution.ledgerFile,
+    ledger: execution.ledger,
+  };
+}
+
 function phaseOutputs(root, phase, expectedPhaseRoot) {
   return phase.required_outputs.map((output) => {
     const resolved = resolveInsideRoot(root, output, "Required output");
@@ -564,6 +982,13 @@ async function prepareFromContext(root, options, verifiedBatch, context, prepara
   }
   if (!phase) throw new Error(`Workflow does not define current phase '${located.state.phase}'.`);
   if (phase.next.length !== 1) throw new Error(`Workflow phase '${phase.id}' must define exactly one next phase.`);
+  if (phase.id === "implementation") {
+    await assertImplementationModeAvailable({
+      root,
+      state: located.state,
+      requestedMode: verifiedBatch ? "serial-batch" : "ordinary",
+    });
+  }
   await assertBatchDoesNotBlockPrepare(root, located, phase, verifiedBatch, preparationLockHeld, allowReadyBatchStaging);
 
   const phaseRoot = phaseDirectory(located.state, phase);
@@ -575,9 +1000,33 @@ async function prepareFromContext(root, options, verifiedBatch, context, prepara
   const checkpointPath = resolveInsideRoot(root, checkpointFile, "Checkpoint file").fullPath;
   const existing = await readJsonOptional(taskPath, "Task file");
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
+  const task = existing ?? {
+    schemaVersion: "1.0",
+    dispatchId: (options.randomUUID ?? createRandomUUID)(),
+    storyId: located.state.storyId,
+    phase: phase.id,
+    ownerAgent: phase.owner_agent,
+    purpose: phase.purpose,
+    preparedRevision: located.state.runtime.revision,
+    preparedAt: timestamp,
+    expectedOutputs,
+    allowedAdapters: PHASE_ADAPTERS[phase.id] ?? [],
+    next: phase.next[0],
+  };
+
+  if (existing) validateTask(root, existing, located.state, phase, phaseRoot);
+  if (phase.id === "implementation") {
+    await acquireImplementationOwner({
+      root,
+      state: located.state,
+      mode: verifiedBatch ? "serial-batch" : "ordinary",
+      ownerId: verifiedBatch?.ledger?.batchId ?? task.dispatchId,
+      taskDagFile: implementationTaskDagFile(located.state),
+      now: () => timestamp,
+    });
+  }
 
   if (existing) {
-    validateTask(root, existing, located.state, phase, phaseRoot);
     let checkpoint = await readJsonOptional(checkpointPath, "Checkpoint file");
     if (!checkpoint) {
       checkpoint = {
@@ -595,19 +1044,6 @@ async function prepareFromContext(root, options, verifiedBatch, context, prepara
     return { command: "prepare", reused: true, taskFile, resultFile, checkpointFile, task: existing, checkpoint };
   }
 
-  const task = {
-    schemaVersion: "1.0",
-    dispatchId: (options.randomUUID ?? createRandomUUID)(),
-    storyId: located.state.storyId,
-    phase: phase.id,
-    ownerAgent: phase.owner_agent,
-    purpose: phase.purpose,
-    preparedRevision: located.state.runtime.revision,
-    preparedAt: timestamp,
-    expectedOutputs,
-    allowedAdapters: PHASE_ADAPTERS[phase.id] ?? [],
-    next: phase.next[0],
-  };
   const checkpoint = {
     schemaVersion: "1.0",
     dispatchId: task.dispatchId,
@@ -641,6 +1077,11 @@ async function prepareBatch(root, options) {
   if (located.state.runtime.status !== "active" || phase?.id !== "implementation") {
     throw new Error("Batch preparation requires an active implementation phase.");
   }
+  await assertImplementationModeAvailable({
+    root,
+    state: located.state,
+    requestedMode: "serial-batch",
+  });
   const { resolveBatchBase } = await import("./worktree-runtime.mjs");
   const { prepareSerialBatch } = await import("./batch-runtime.mjs");
   const prepared = await prepareSerialBatch({
@@ -651,6 +1092,14 @@ async function prepareBatch(root, options) {
       root,
       baseRef: "dev",
       executeGit: options.executeGit,
+    }),
+    onContextPrepared: ({ state, taskDagFile, batchId }) => acquireImplementationOwner({
+      root,
+      state,
+      mode: "serial-batch",
+      ownerId: batchId,
+      taskDagFile,
+      now: options.now,
     }),
     now: options.now,
     randomUUID: options.randomUUID,
@@ -1135,6 +1584,21 @@ async function reconcileAdvancedResult(root, located, workflow, options) {
   validateTask(root, task, previousState, previousPhase, phaseRoot);
   validateCheckpoint(checkpoint, task);
   await validateResult(root, result, task, previousState, phaseRoot);
+  if (previousPhase.id === "implementation") {
+    await assertImplementationOwner({
+      root,
+      state: {
+        ...located.state,
+        phase: previousPhase.id,
+        runtime: {
+          ...located.state.runtime,
+          revision: task.preparedRevision,
+        },
+      },
+      expectedMode: checkpoint.batchFinalization ? "serial-batch" : "ordinary",
+      expectedOwnerId: checkpoint.batchFinalization?.batchId ?? task.dispatchId,
+    });
+  }
   await assertBatchFinalizationBeforeRecovery(root, located, previousPhase, task, checkpoint);
   if (result.status !== "completed") return null;
 
@@ -1173,6 +1637,20 @@ async function applyResult(root, options) {
   validateTask(root, task, located.state, phase, phaseRoot);
   validateCheckpoint(checkpoint, task);
   await validateResult(root, result, task, located.state, phaseRoot);
+  if (phase.id === "implementation") {
+    await assertImplementationOwner({
+      root,
+      state: {
+        ...located.state,
+        runtime: {
+          ...located.state.runtime,
+          revision: task.preparedRevision,
+        },
+      },
+      expectedMode: checkpoint.batchFinalization ? "serial-batch" : "ordinary",
+      expectedOwnerId: checkpoint.batchFinalization?.batchId ?? task.dispatchId,
+    });
+  }
   await assertBatchFinalizationBeforeApply(root, located, phase, task, checkpoint);
 
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
@@ -1226,6 +1704,7 @@ export async function runStoryCommand(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   if (options.command === "prepare") return prepare(root, options);
   if (options.command === "prepare-batch") return prepareBatch(root, options);
+  if (options.command === "prepare-wave") return prepareWave(root, options);
   if (options.command === "finalize-batch") return finalizeBatch(root, options);
   if (options.command === "run-adapter") return runAdapter(root, options);
   if (options.command === "apply") return applyResult(root, options);
@@ -1246,6 +1725,7 @@ function parseCliArguments(argv) {
     "--result-file": "resultFile",
     "--task-dag-file": "taskDagFile",
     "--batch-file": "batchFile",
+    "--wave-index": "waveIndex",
   };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
@@ -1255,7 +1735,7 @@ function parseCliArguments(argv) {
     }
     const key = keyMap[token];
     if (!key || index + 1 >= tokens.length) throw new Error(`Unsupported or incomplete argument: ${token}`);
-    options[key] = tokens[index + 1];
+    options[key] = key === "waveIndex" ? Number(tokens[index + 1]) : tokens[index + 1];
     index += 1;
   }
   return options;

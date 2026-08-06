@@ -19,6 +19,9 @@ Directory layout:
     task-dag.schema.json
     dispatch-task-v1.1.schema.json
     dispatch-result-v1.1.schema.json
+    dispatch-task-v1.2.schema.json
+    dispatch-result-v1.2.schema.json
+    implementation-owner.schema.json
     serial-batch-ledger.schema.json
     worktree-plan.schema.json
     worktree-status.schema.json
@@ -29,6 +32,10 @@ Directory layout:
     worktree-worker-input-manifest.schema.json
     worktree-worker-receipt.schema.json
     worktree-retirement-receipt.schema.json
+    worktree-wave-execution-ledger.schema.json
+    worktree-wave-attempt-claim.schema.json
+    worktree-wave-attempt-lock.schema.json
+    worktree-wave-attempt-failure.schema.json
   states/
     product-state.template.json
     e2e-state.template.json
@@ -108,6 +115,14 @@ Worktree 或计划外挂载都会在继续写入前失败关闭。创建按计�
 `creation-receipt.json`。动态锁快照只出现在命令结果顶层 `locks`，不写入稳定 `status.json`。该入口不启动 Worker，
 复用 `WavePlan` 和普通 `WaveStatus` 也只返回动态 Git 事实，不改写稳定状态；后续状态持久化只由持锁 `WaveCreate` 执行。
 该入口不合并、回收或删除 Worktree/分支，也不修改 M2/M3 状态；正式仓库执行仍需要针对具体计划的独立批准。
+
+M5-D-C1 在 WaveCreate 完成证据之上增加单个完整 implementation wave 的并行 Mock Worker 执行闭环。`prepare-wave`
+生成 v1.2 task/checkpoint 和统一 `implementation-owner.json`；`worktree-wave-execution-runtime.mjs` 管理
+execution ledger、不可变 attempt、claim、execute.lock、`execute-wave`、`retry-task` 和 `recover-attempt`。
+Worker 在独立临时 Worktree 中并行运行，候选、result、execution receipt、ledger ready/blocked 与锁释放前均重新验证
+当前 attempt owner。部分失败保留成功 receipt，blocked 任务只能经独立批准创建新 attempt；完整 result/receipt、
+blocked 释放中断、claim/lock 半完成和孤儿候选均按磁盘事实显式恢复。该能力不写主工作树业务文件，不生成正式 phase
+result，不调用 M3 `apply`，也不实现 integration manifest、跨 Worktree 集成、回收、提交或推送。
 
 `kb-query.ps1` is a read-only keyword search over `llm-knowledge/`. Treat empty results as missing
 knowledge and verify source files directly before implementation.

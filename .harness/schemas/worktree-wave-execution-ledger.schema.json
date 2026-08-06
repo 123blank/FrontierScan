@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-execution-ledger.schema.json",
+  "title": "FrontierScan Harness Wave Execution Ledger",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "runId",
+    "phase",
+    "preparedRevision",
+    "waveId",
+    "waveIndex",
+    "taskDagFile",
+    "taskDagSha256",
+    "wavePlanFile",
+    "wavePlanSha256",
+    "creationReceiptFile",
+    "creationReceiptSha256",
+    "baseCommit",
+    "status",
+    "tasks",
+    "integrationManifestFile",
+    "integrationManifestSha256",
+    "waveReceiptFile",
+    "waveReceiptSha256",
+    "preparedAt",
+    "finalizedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "phase": { "const": "implementation" },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "waveId": { "type": "string", "pattern": "^wave-[a-f0-9]{16}$" },
+    "waveIndex": { "type": "integer", "minimum": 1 },
+    "taskDagFile": { "type": "string", "minLength": 1 },
+    "taskDagSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "wavePlanFile": { "type": "string", "minLength": 1 },
+    "wavePlanSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "creationReceiptFile": { "type": "string", "minLength": 1 },
+    "creationReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "status": {
+      "type": "string",
+      "enum": [
+        "prepared",
+        "executing",
+        "partial",
+        "ready-for-integration",
+        "partial-integration",
+        "integrated"
+      ]
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "dispatchId",
+          "taskFile",
+          "taskSha256",
+          "checkpointFile",
+          "checkpointSha256",
+          "status",
+          "currentAttemptId",
+          "executionReceiptFile",
+          "executionReceiptSha256",
+          "integrationReceiptFile",
+          "integrationReceiptSha256",
+          "startedAt",
+          "workerReadyAt",
+          "integratedAt"
+        ],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "dispatchId": { "type": "string", "format": "uuid" },
+          "taskFile": { "type": "string", "minLength": 1 },
+          "taskSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "checkpointFile": { "type": "string", "minLength": 1 },
+          "checkpointSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "claiming",
+              "running",
+              "blocked",
+              "ready-for-integration",
+              "integrated"
+            ]
+          },
+          "currentAttemptId": { "type": ["string", "null"] },
+          "executionReceiptFile": { "type": ["string", "null"] },
+          "executionReceiptSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+          "integrationReceiptFile": { "type": ["string", "null"] },
+          "integrationReceiptSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+          "startedAt": { "type": ["string", "null"] },
+          "workerReadyAt": { "type": ["string", "null"] },
+          "integratedAt": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "integrationManifestFile": { "type": ["string", "null"] },
+    "integrationManifestSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+    "waveReceiptFile": { "type": ["string", "null"] },
+    "waveReceiptSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+    "preparedAt": { "type": "string", "format": "date-time" },
+    "finalizedAt": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

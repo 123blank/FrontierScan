@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/implementation-owner.schema.json",
+  "title": "FrontierScan Harness Implementation Owner",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "runId",
+    "phase",
+    "mode",
+    "ownerId",
+    "preparedRevision",
+    "taskDagFile",
+    "taskDagSha256",
+    "acquiredAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "phase": { "const": "implementation" },
+    "mode": {
+      "type": "string",
+      "enum": ["ordinary", "serial-batch", "worktree-wave"]
+    },
+    "ownerId": { "type": "string", "minLength": 1 },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "taskDagFile": { "type": "string", "minLength": 1 },
+    "taskDagSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "acquiredAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

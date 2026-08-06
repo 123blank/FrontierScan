@@ -13,6 +13,7 @@ const STATE_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta
 const STORY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "story-runtime.mjs");
 const DISPATCH_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "dispatch-contract.mjs");
 const BATCH_FINALIZATION_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "batch-finalization-contract.mjs");
+const IMPLEMENTATION_OWNER_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "implementation-owner-contract.mjs");
 const VALIDATE_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "validate-state.ps1");
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -1414,6 +1415,7 @@ quality_gates: []
       [STORY_RUNTIME_MODULE, ".harness/scripts/lib/story-runtime.mjs"],
       [DISPATCH_CONTRACT_MODULE, ".harness/scripts/lib/dispatch-contract.mjs"],
       [BATCH_FINALIZATION_CONTRACT_MODULE, ".harness/scripts/lib/batch-finalization-contract.mjs"],
+      [IMPLEMENTATION_OWNER_CONTRACT_MODULE, ".harness/scripts/lib/implementation-owner-contract.mjs"],
     ]) {
       await write(root, target, await readFile(source, "utf8"));
     }

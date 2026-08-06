@@ -12,11 +12,11 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Output templates | `.harness/templates/*.md` | Done |
 | Task DAG example template | `.harness/templates/task-dag.example.json` | Done |
 | Report/output folders | `.harness/reports/`, `.harness/outputs/` | Done |
-| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 单 Worktree 串行批次、M5-D-A wave 规划和 M5-D-B 审批创建 Runtime 已实现 |
+| Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 串行批次、M5-D-A/B wave 规划创建和 M5-D-C1 并行执行 Runtime 已实现 |
 | Structure validation script | `.harness/scripts/validate-structure.ps1` | Done |
 | State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
 | State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
-| Story Dispatcher entry | `.harness/scripts/run-story.ps1` | M3 v1.0 单任务 `prepare/status/run-adapter/apply` 保持兼容；M5-B3-B 以 `prepare-batch/finalize-batch` 管理 v1.1 task-scoped dispatch，仍由既有 `apply` 唯一推进 phase |
+| Story Dispatcher entry | `.harness/scripts/run-story.ps1` | v1.0 单任务与 v1.1 serial batch 保持兼容；M5-D-C1 `prepare-wave` 生成 v1.2 wave-scoped dispatch、implementation owner 和 execution ledger，C1 不生成正式 phase result |
 | Mock Worker runtime | `.harness/scripts/lib/worker-runtime.mjs` | M4-B 显式 context、角色权限、2/8 MiB 限额、30 秒超时、result-last 和重试恢复已实现 |
 | Worker policy registry | `.codex/agents/worker-policies.json` | 12 角色与 `agents.yaml` 名称、类别一一对应；无 shell、网络、状态、发布或 Git 能力 |
 | Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | 共享 Node 契约覆盖 UTF-8、唯一 wave、依赖顺序、路径冲突和 globalChanges 串行 |
@@ -30,7 +30,8 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | 旧版只读 DAG-to-worktree 计划保持兼容 |
 | Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | 单任务 `Plan/Status/Create/Retire`、批次 `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 与波次 `WavePlan/WaveStatus/WaveCreate` 已实现；WaveCreate 绑定计划哈希、波次锁、`lockId` fencing、部分恢复和完成回执，仍不执行 Worker、合并或回收 |
 | Serial batch runtime | `.harness/scripts/lib/batch-runtime.mjs` + `lib/batch-base-contract.mjs` | M5-B3-B ledger、任务顺序、锁、继承快照、逐任务回执和受验证的 `dev` 基准契约已实现；不执行 Git 或状态推进 |
-| Worktree Worker runtime | `.harness/scripts/lib/worktree-worker-runtime.mjs` | M5-B1 单任务路径保持兼容；M5-B3-B 仅在单个 batch Worktree 中逐项执行，验证前序集成快照、Git 对账、幂等和显式重试；无 CLI |
+| Worktree Worker runtime | `.harness/scripts/lib/worktree-worker-runtime.mjs` | v1.0/v1.1 路径保持兼容；v1.2 在每任务独立 Worktree 中运行当前 attempt，收集不可变 result/receipt，并在五类副作用前执行 owner fencing；无 CLI |
+| Wave execution runtime | `.harness/scripts/lib/worktree-wave-execution-runtime.mjs` | M5-D-C1 execution ledger、claim/lock、并行 `execute-wave`、partial、`retry-task`、完整/blocked/孤儿 `recover-attempt` 已实现；不写主工作树 |
 | Worktree integration runtime | `.harness/scripts/run-worktree-integration.ps1` + `lib/worktree-integration-runtime.mjs` | M5-B2 单任务 `Plan/Status/Apply` 保持兼容；M5-B3-B 批次路径按 taskId 与前序回执验证候选，仍受内容寻址、批准门禁、result-last 和逐文件恢复保护，不调用 M3 apply |
 | Interface case derivation script | `.harness/scripts/derive-interface-cases.ps1` | Basic read-only acceptance-case draft done |
 | Build plan script | `.harness/scripts/plan-build.ps1` | Basic read-only build/publish plan done |
@@ -76,12 +77,13 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M5-B3-B serial batch runtime plan/report | `docs/harness-m5b3-batch-runtime/` | 已完成单 Worktree 串行多任务 Runtime：v1.1 task-scoped dispatch、batch ledger、逐项 Worker/集成、由 `finalizationArtifacts` 固定的正式阶段工件证据链、一次 M3 apply 与 batch Retire 仅在临时 Git fixture 验证；收尾绑定以独占锁失败关闭并支持受控重试 |
 | M5-D-A multi-Worktree wave plan/report | `docs/harness-m5d-multi-worktree-wave/` | 已实现同 wave 多 Worktree 的确定性只读计划与 Git 事实状态；不提供创建、并行 Worker、合并或删除 |
 | M5-D-B wave create plan/report | `docs/harness-m5d-wave-create/` | 已实现计划哈希审批门控、多 Worktree 顺序创建、波次锁恢复、`lockId` fencing、部分失败恢复和完成回执；正式仓库未执行创建 |
+| M5-D-C1 wave execution design/plan/report | `docs/harness-m5d-wave-execution/` | 已实现单个完整 implementation wave 的 v1.2 dispatch、统一 owner、不可变 attempt、并行 Mock Worker、partial/retry/recover；C2 集成与 finalize 延期 |
 
 ## Deferred Functional Work
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
-- M5-D-B 已实现审批门控创建；同 wave Worker 并行、跨 Worktree 结果汇总/集成和 Fork-Join 继续延期。
+- M5-D-C1 已实现同 wave Mock Worker 并行执行与 attempt 收敛；跨 Worktree 主树集成、manifest freeze、finalize-wave 和 Fork-Join 继续延期。
 - 多 batch/多 Worktree 回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
 
@@ -101,7 +103,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 29 directories, 188 required files, and 13 Skill files.
+Current verified structure: 30 directories, 201 required files, and 13 Skill files.
 
 ## Knowledge Query
 

@@ -12,8 +12,13 @@ import {
   recordBatchIntegration,
   recordBatchWorkerReady,
 } from "../lib/batch-runtime.mjs";
+import {
+  validateDispatchResultStructure,
+  validateDispatchTaskStructure,
+} from "../lib/dispatch-contract.mjs";
 import { runStateCommand } from "../lib/state-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
+import { runWorktreeCommand } from "../lib/worktree-runtime.mjs";
 
 const FIXED_NOW = "2026-07-16T00:00:00.000Z";
 const FIXED_DISPATCH_ID = "00000000-0000-4000-8000-000000000001";
@@ -224,6 +229,438 @@ quality_gates: []
     stateFile: `.harness/states/e2e-${fixture.storyId}.json`,
     taskDagFile,
   };
+}
+
+async function createWavePrepareFixture(storyId = "M3-WAVE-PREPARE", { createWorktrees = true } = {}) {
+  const fixture = await createBatchPrepareFixture(storyId);
+  const dag = await readJson(fixture.root, fixture.taskDagFile);
+  dag.edges = [];
+  dag.waves = [["T1", "T2"]];
+  await write(fixture.root, fixture.taskDagFile, `${JSON.stringify(dag, null, 2)}\n`);
+  await git(fixture.root, "add", ".");
+  await git(fixture.root, "commit", "-m", "wave fixture");
+  const planned = await runWorktreeCommand({
+    root: fixture.root,
+    command: "wave-plan",
+    stateFile: fixture.stateFile,
+    taskDagFile: fixture.taskDagFile,
+    waveIndex: 1,
+    now: () => FIXED_NOW,
+  });
+  if (!createWorktrees) return { ...fixture, planned, created: null };
+  const created = await runWorktreeCommand({
+    root: fixture.root,
+    command: "wave-create",
+    stateFile: fixture.stateFile,
+    taskDagFile: fixture.taskDagFile,
+    waveIndex: 1,
+    expectedPlanSha256: planned.status.wavePlanSha256,
+    confirmWaveCreate: true,
+    now: () => FIXED_NOW,
+  });
+  assert.equal(created.status.state, "ready");
+  return { ...fixture, planned, created };
+}
+
+function waveTaskFixture(overrides = {}) {
+  const taskRoot = ".harness/runs/M5-D-C1-FIXTURE/waves/wave-0123456789abcdef/tasks/T1";
+  return {
+    schemaVersion: "1.2",
+    dispatchId: FIXED_DISPATCH_ID,
+    storyId: "M5-D-C1-FIXTURE",
+    runId: "M5-D-C1-FIXTURE",
+    phase: "implementation",
+    waveId: "wave-0123456789abcdef",
+    waveIndex: 1,
+    taskId: "T1",
+    taskRoot,
+    ownerAgent: "backend-developer",
+    purpose: "Implement backend candidate",
+    preparedRevision: 7,
+    preparedAt: FIXED_NOW,
+    expectedOutputs: [`${taskRoot}/report.md`],
+    allowedAdapters: [],
+    next: "unit-test",
+    ...overrides,
+  };
+}
+
+async function testDispatchV12RequiresRuntimeDerivedWaveIdentity() {
+  const task = waveTaskFixture();
+  assert.doesNotThrow(() => validateDispatchTaskStructure(task));
+
+  for (const field of ["runId", "waveId", "waveIndex", "taskId", "taskRoot"]) {
+    const invalid = structuredClone(task);
+    delete invalid[field];
+    assert.throws(() => validateDispatchTaskStructure(invalid), new RegExp(field, "i"));
+  }
+  assert.throws(
+    () => validateDispatchTaskStructure({ ...task, batchId: "batch-forbidden" }),
+    /unsupported field|batchId/i,
+  );
+}
+
+async function testDispatchResultV12RequiresWaveScopedEvidence() {
+  const task = waveTaskFixture();
+  const result = {
+    schemaVersion: "1.2",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    runId: task.runId,
+    phase: task.phase,
+    waveId: task.waveId,
+    waveIndex: task.waveIndex,
+    taskId: task.taskId,
+    taskRoot: task.taskRoot,
+    status: "completed",
+    summary: "Candidate is ready.",
+    outputs: [{ path: `${task.taskRoot}/report.md` }],
+    records: [{
+      type: "note",
+      status: "recorded",
+      path: `${task.taskRoot}/evidence/note.json`,
+      message: "Wave task completed.",
+    }],
+  };
+  assert.doesNotThrow(() => validateDispatchResultStructure(result));
+  assert.throws(
+    () => validateDispatchResultStructure({ ...result, batchId: "batch-forbidden" }),
+    /unsupported field|batchId/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({
+      ...result,
+      outputs: [{ path: ".harness/runs/M5-D-C1-FIXTURE/outside.md" }],
+    }),
+    /taskRoot/i,
+  );
+}
+
+async function testPrepareWaveCreatesRuntimeDerivedDispatchesWithoutAdvancingState() {
+  const fixture = await createWavePrepareFixture();
+  try {
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    let dispatchSequence = 1;
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-wave",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+      waveIndex: 1,
+      randomUUID: () => `00000000-0000-4000-8000-${String(dispatchSequence++).padStart(12, "0")}`,
+    }));
+
+    assert.equal(prepared.command, "prepare-wave");
+    assert.match(prepared.waveId, /^wave-[a-f0-9]{16}$/);
+    assert.deepEqual(prepared.tasks.map((item) => item.task.taskId), ["T1", "T2"]);
+    assert.equal(prepared.ledger.status, "prepared");
+    assert.deepEqual(prepared.ledger.tasks.map((item) => item.status), ["pending", "pending"]);
+    assert.equal((await readJson(fixture.root, prepared.ledgerFile)).waveId, prepared.waveId);
+    for (const item of prepared.tasks) {
+      assert.equal(item.task.schemaVersion, "1.2");
+      validateDispatchTaskStructure(item.task);
+      assert.equal((await readJson(fixture.root, item.taskFile)).dispatchId, item.task.dispatchId);
+      assert.equal((await readJson(fixture.root, item.checkpointFile)).status, "prepared");
+    }
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    const phaseRoot = `.harness/runs/${fixture.storyId}/phases/03-implementation`;
+    for (const name of ["task.json", "result.json", "checkpoint.json"]) {
+      await assert.rejects(access(path.join(fixture.root, phaseRoot, name)), (error) => error?.code === "ENOENT");
+    }
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testPrepareWaveRejectsCoordinatedStoredStatusAndReceiptDrift() {
+  const fixture = await createWavePrepareFixture("M3-WAVE-STATUS-DRIFT");
+  try {
+    const storedStatus = await readJson(fixture.root, fixture.planned.statusFile);
+    storedStatus.state = "partial";
+    storedStatus.tasks[0].state = "absent";
+    storedStatus.tasks[0].headCommit = null;
+    await write(fixture.root, fixture.planned.statusFile, `${JSON.stringify(storedStatus, null, 2)}\n`);
+    const receiptFile = `${path.posix.dirname(fixture.planned.planFile)}/creation-receipt.json`;
+    const receipt = await readJson(fixture.root, receiptFile);
+    receipt.statusSha256 = await batchFileSha256(fixture.root, fixture.planned.statusFile);
+    await write(fixture.root, receiptFile, `${JSON.stringify(receipt, null, 2)}\n`);
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "prepare-wave",
+        stateFile: fixture.stateFile,
+        taskDagFile: fixture.taskDagFile,
+        waveIndex: 1,
+      })),
+      /stored.*status|creation receipt|ready/i,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testPrepareWaveRejectsUnsupportedScopeAndCallerIdentity() {
+  const multiWave = await createBatchPrepareFixture("M3-WAVE-MULTIPLE");
+  try {
+    await assert.rejects(
+      runStoryCommand(storyOptions(multiWave.root, {
+        command: "prepare-wave",
+        stateFile: multiWave.stateFile,
+        taskDagFile: multiWave.taskDagFile,
+        waveIndex: 1,
+      })),
+      /one complete|only wave|dependency-free/i,
+    );
+  } finally {
+    await rm(multiWave.root, { recursive: true, force: true });
+  }
+
+  const conflicting = await createBatchPrepareFixture("M3-WAVE-CONFLICT");
+  try {
+    const dag = await readJson(conflicting.root, conflicting.taskDagFile);
+    dag.edges = [];
+    dag.waves = [["T1", "T2"]];
+    dag.nodes[0].predictedFiles = ["backend/src/Feature"];
+    dag.nodes[1].predictedFiles = ["BACKEND/src/feature/Child.java"];
+    await write(conflicting.root, conflicting.taskDagFile, `${JSON.stringify(dag, null, 2)}\n`);
+    await assert.rejects(
+      runStoryCommand(storyOptions(conflicting.root, {
+        command: "prepare-wave",
+        stateFile: conflicting.stateFile,
+        taskDagFile: conflicting.taskDagFile,
+        waveIndex: 1,
+      })),
+      /predictedFiles conflict/i,
+    );
+  } finally {
+    await rm(conflicting.root, { recursive: true, force: true });
+  }
+
+  const uncreated = await createWavePrepareFixture(
+    "M3-WAVE-NOT-CREATED",
+    { createWorktrees: false },
+  );
+  try {
+    await assert.rejects(
+      runStoryCommand(storyOptions(uncreated.root, {
+        command: "prepare-wave",
+        stateFile: uncreated.stateFile,
+        taskDagFile: uncreated.taskDagFile,
+        waveIndex: 1,
+      })),
+      /Worktree.*created|common base|ready/i,
+    );
+  } finally {
+    await rm(uncreated.root, { recursive: true, force: true });
+  }
+
+  const owned = await createWavePrepareFixture("M3-WAVE-OWNER-CONFLICT");
+  try {
+    await runStoryCommand(storyOptions(owned.root, {
+      command: "prepare",
+      stateFile: owned.stateFile,
+    }));
+    await assert.rejects(
+      runStoryCommand(storyOptions(owned.root, {
+        command: "prepare-wave",
+        stateFile: owned.stateFile,
+        taskDagFile: owned.taskDagFile,
+        waveIndex: 1,
+      })),
+      /ordinary.*implementation phase|implementation owner/i,
+    );
+    await assert.rejects(
+      runStoryCommand(storyOptions(owned.root, {
+        command: "prepare-wave",
+        stateFile: owned.stateFile,
+        taskDagFile: owned.taskDagFile,
+        waveIndex: 1,
+        waveId: "wave-injected",
+      })),
+      /caller-provided waveId/i,
+    );
+  } finally {
+    await rm(owned.root, { recursive: true, force: true });
+  }
+}
+
+async function testImplementationOwnerPreventsPreparationModeOverlap() {
+  const fixture = await createBatchPrepareFixture("M3-IMPLEMENTATION-OWNER");
+  try {
+    const state = await readJson(fixture.root, fixture.stateFile);
+    const ownerFile = `.harness/runs/${fixture.storyId}/phases/03-implementation/implementation-owner.json`;
+    await write(fixture.root, ownerFile, `${JSON.stringify({
+      schemaVersion: "1.0",
+      storyId: fixture.storyId,
+      runId: state.runtime.runId,
+      phase: "implementation",
+      mode: "worktree-wave",
+      ownerId: "wave-0123456789abcdef",
+      preparedRevision: state.runtime.revision,
+      taskDagFile: fixture.taskDagFile,
+      taskDagSha256: await batchFileSha256(fixture.root, fixture.taskDagFile),
+      acquiredAt: FIXED_NOW,
+    }, null, 2)}\n`);
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "prepare",
+        stateFile: fixture.stateFile,
+      })),
+      /implementation owner|worktree-wave/i,
+    );
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "prepare-batch",
+        stateFile: fixture.stateFile,
+        taskDagFile: fixture.taskDagFile,
+      })),
+      /implementation owner|worktree-wave/i,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testOrdinaryPrepareAcquiresImplementationOwner() {
+  const fixture = await createBatchPrepareFixture("M3-ORDINARY-OWNER");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare",
+      stateFile: fixture.stateFile,
+    }));
+    const state = await readJson(fixture.root, fixture.stateFile);
+    const ownerFile = `.harness/runs/${fixture.storyId}/phases/03-implementation/implementation-owner.json`;
+    assert.deepEqual(await readJson(fixture.root, ownerFile), {
+      schemaVersion: "1.0",
+      storyId: fixture.storyId,
+      runId: state.runtime.runId,
+      phase: "implementation",
+      mode: "ordinary",
+      ownerId: prepared.task.dispatchId,
+      preparedRevision: state.runtime.revision,
+      taskDagFile: fixture.taskDagFile,
+      taskDagSha256: await batchFileSha256(fixture.root, fixture.taskDagFile),
+      acquiredAt: FIXED_NOW,
+    });
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testOrdinaryApplyRejectsImplementationOwnerIdentityDrift() {
+  const fixture = await createBatchPrepareFixture("M3-ORDINARY-OWNER-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare",
+      stateFile: fixture.stateFile,
+    }));
+    await write(fixture.root, prepared.task.expectedOutputs[0], "# Ordinary implementation\n");
+    await writePreparedResult(fixture.root, prepared, dispatchResult(prepared.task));
+    const ownerFile = `.harness/runs/${fixture.storyId}/phases/03-implementation/implementation-owner.json`;
+    const owner = await readJson(fixture.root, ownerFile);
+    owner.ownerId = "00000000-0000-4000-8000-000000000099";
+    await write(fixture.root, ownerFile, `${JSON.stringify(owner, null, 2)}\n`);
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    const checkpointBefore = await readFile(path.join(fixture.root, prepared.checkpointFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "apply",
+        stateFile: fixture.stateFile,
+      })),
+      /implementation owner|owner.*identity/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+    assert.equal(await readFile(path.join(fixture.root, prepared.checkpointFile), "utf8"), checkpointBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testImplementationOwnerRejectsTaskDagPathDriftWithMatchingContent() {
+  const fixture = await createBatchPrepareFixture("M3-OWNER-DAG-PATH-DRIFT");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare",
+      stateFile: fixture.stateFile,
+    }));
+    await write(fixture.root, prepared.task.expectedOutputs[0], "# Ordinary implementation\n");
+    await writePreparedResult(fixture.root, prepared, dispatchResult(prepared.task));
+    const copiedTaskDagFile = `.harness/runs/${fixture.storyId}/phases/02-task-dag/copied-task-dag.json`;
+    await write(
+      fixture.root,
+      copiedTaskDagFile,
+      await readFile(path.join(fixture.root, fixture.taskDagFile), "utf8"),
+    );
+    const ownerFile = `.harness/runs/${fixture.storyId}/phases/03-implementation/implementation-owner.json`;
+    const owner = await readJson(fixture.root, ownerFile);
+    owner.taskDagFile = copiedTaskDagFile;
+    await write(fixture.root, ownerFile, `${JSON.stringify(owner, null, 2)}\n`);
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "apply",
+        stateFile: fixture.stateFile,
+      })),
+      /implementation owner|task dag.*path|identity/i,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testBatchPrepareAcquiresImplementationOwner() {
+  const fixture = await createBatchPrepareFixture("M3-BATCH-OWNER");
+  try {
+    const prepared = await runStoryCommand(storyOptions(fixture.root, {
+      command: "prepare-batch",
+      stateFile: fixture.stateFile,
+      taskDagFile: fixture.taskDagFile,
+    }));
+    const state = await readJson(fixture.root, fixture.stateFile);
+    const ownerFile = `.harness/runs/${fixture.storyId}/phases/03-implementation/implementation-owner.json`;
+    assert.deepEqual(await readJson(fixture.root, ownerFile), {
+      schemaVersion: "1.0",
+      storyId: fixture.storyId,
+      runId: state.runtime.runId,
+      phase: "implementation",
+      mode: "serial-batch",
+      ownerId: prepared.ledger.batchId,
+      preparedRevision: state.runtime.revision,
+      taskDagFile: fixture.taskDagFile,
+      taskDagSha256: await batchFileSha256(fixture.root, fixture.taskDagFile),
+      acquiredAt: FIXED_NOW,
+    });
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testLegacyWaveLedgerPreventsOrdinaryOwnerInference() {
+  const fixture = await createBatchPrepareFixture("M3-LEGACY-WAVE-OWNER");
+  try {
+    await write(
+      fixture.root,
+      `.harness/runs/${fixture.storyId}/waves/wave-1/execution-ledger.json`,
+      "{}\n",
+    );
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "prepare",
+        stateFile: fixture.stateFile,
+      })),
+      /worktree-wave|wave.*owner/i,
+    );
+    await assert.rejects(
+      access(path.join(
+        fixture.root,
+        `.harness/runs/${fixture.storyId}/phases/03-implementation/implementation-owner.json`,
+      )),
+      (error) => error?.code === "ENOENT",
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
 }
 
 async function testPrepareBatchCreatesTaskScopedDispatchesWithoutPhaseRootArtifacts() {
@@ -463,6 +900,10 @@ async function testOrdinaryApplyCannotBypassAnUnfinalizedBatch() {
     const ordinary = await runStoryCommand(storyOptions(fixture.root, { command: "prepare", stateFile: fixture.stateFile }));
     await rm(path.join(fixture.root, ordinary.taskFile));
     await rm(path.join(fixture.root, ordinary.checkpointFile));
+    await rm(path.join(
+      fixture.root,
+      `.harness/runs/${fixture.storyId}/phases/03-implementation/implementation-owner.json`,
+    ));
     await runStoryCommand(storyOptions(fixture.root, {
       command: "prepare-batch",
       stateFile: fixture.stateFile,
@@ -2333,6 +2774,17 @@ async function testM3RuntimeIsRegisteredInHarnessContracts() {
   assert.match(structureValidator, /\.harness\/schemas\/dispatch-result\.schema\.json/);
 }
 
+await testDispatchV12RequiresRuntimeDerivedWaveIdentity();
+await testDispatchResultV12RequiresWaveScopedEvidence();
+await testPrepareWaveCreatesRuntimeDerivedDispatchesWithoutAdvancingState();
+await testPrepareWaveRejectsCoordinatedStoredStatusAndReceiptDrift();
+await testPrepareWaveRejectsUnsupportedScopeAndCallerIdentity();
+await testImplementationOwnerPreventsPreparationModeOverlap();
+await testOrdinaryPrepareAcquiresImplementationOwner();
+await testOrdinaryApplyRejectsImplementationOwnerIdentityDrift();
+await testImplementationOwnerRejectsTaskDagPathDriftWithMatchingContent();
+await testBatchPrepareAcquiresImplementationOwner();
+await testLegacyWaveLedgerPreventsOrdinaryOwnerInference();
 await testPrepareBatchCreatesTaskScopedDispatchesWithoutPhaseRootArtifacts();
 await testBatchPreparationOwnsImplementationBeforeResolvingBase();
 await testBatchCliArgumentsAndPowerShellEntryPointAreRegistered();
