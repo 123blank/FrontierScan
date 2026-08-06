@@ -37,6 +37,18 @@ const WAVE_STATUS_FIELDS = [
 const WAVE_STATUS_TASK_FIELDS = [
   "taskId", "state", "branch", "worktreePath", "headCommit", "details",
 ];
+const WAVE_LOCK_FIELDS = [
+  "schemaVersion", "lockId", "mode", "storyId", "runId", "wave",
+  "planSha256", "pid", "createdAt",
+];
+const WAVE_LOCK_SNAPSHOT_FIELDS = ["file", "sha256", ...WAVE_LOCK_FIELDS];
+const WAVE_CREATION_RECEIPT_FIELDS = [
+  "schemaVersion", "storyId", "runId", "wave", "planSha256", "taskDagSha256",
+  "statusSha256", "baseCommit", "tasks", "lockRecovered", "completedAt",
+];
+const WAVE_CREATION_RECEIPT_TASK_FIELDS = [
+  "taskId", "branch", "worktreePath", "headCommit",
+];
 const RETIREMENT_RECEIPT_FIELDS = [
   "schemaVersion", "storyId", "runId", "taskId", "branch", "worktreePath", "baseCommit",
   "planSha256", "statusSha256", "executionReceiptSha256", "integrationPlanSha256",
@@ -230,12 +242,19 @@ function outputPaths(root, state, taskId) {
 
 function waveOutputPaths(root, state, wave) {
   const directory = `.harness/runs/${state.runtime.runId}/waves/wave-${wave}`;
+  const lockDirectory = `.harness/runs/${state.runtime.runId}/waves`;
   return {
     directory,
     planFile: `${directory}/plan.json`,
     statusFile: `${directory}/status.json`,
+    createLockFile: `${lockDirectory}/create.lock`,
+    recoveryLockFile: `${lockDirectory}/create-recovery.lock`,
+    receiptFile: `${directory}/creation-receipt.json`,
     planPath: resolveInsideRoot(root, `${directory}/plan.json`, "Wave Worktree plan file").fullPath,
     statusPath: resolveInsideRoot(root, `${directory}/status.json`, "Wave Worktree status file").fullPath,
+    createLockPath: resolveInsideRoot(root, `${lockDirectory}/create.lock`, "Wave Worktree create lock").fullPath,
+    recoveryLockPath: resolveInsideRoot(root, `${lockDirectory}/create-recovery.lock`, "Wave Worktree recovery lock").fullPath,
+    receiptPath: resolveInsideRoot(root, `${directory}/creation-receipt.json`, "Wave Worktree creation receipt").fullPath,
   };
 }
 
@@ -409,6 +428,63 @@ function validateWaveStatusStructure(status, plan, planSha256) {
     }
   }
   return status;
+}
+
+function validateWaveLockSnapshot(snapshot, expectedMode, plan, planSha256) {
+  if (snapshot === null) return null;
+  const fields = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
+    ? Object.keys(snapshot)
+    : [];
+  if (!snapshot || fields.length !== WAVE_LOCK_SNAPSHOT_FIELDS.length
+      || WAVE_LOCK_SNAPSHOT_FIELDS.some((field) => !Object.hasOwn(snapshot, field))
+      || typeof snapshot.file !== "string" || !snapshot.file
+      || !/^sha256:[a-f0-9]{64}$/.test(snapshot.sha256)
+      || snapshot.schemaVersion !== "1.0"
+      || typeof snapshot.lockId !== "string"
+      || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(snapshot.lockId)
+      || snapshot.mode !== expectedMode
+      || snapshot.storyId !== plan.storyId || snapshot.runId !== plan.runId
+      || snapshot.wave !== plan.wave || snapshot.planSha256 !== planSha256
+      || !Number.isInteger(snapshot.pid) || snapshot.pid < 1
+      || typeof snapshot.createdAt !== "string" || Number.isNaN(Date.parse(snapshot.createdAt))) {
+    throw new Error(`Wave Worktree ${expectedMode} lock has an invalid structure.`);
+  }
+  return snapshot;
+}
+
+function validateWaveCreationReceipt(receipt, plan, planSha256, status, statusSha256) {
+  const fields = receipt && typeof receipt === "object" && !Array.isArray(receipt)
+    ? Object.keys(receipt)
+    : [];
+  if (!receipt || fields.length !== WAVE_CREATION_RECEIPT_FIELDS.length
+      || WAVE_CREATION_RECEIPT_FIELDS.some((field) => !Object.hasOwn(receipt, field))
+      || receipt.schemaVersion !== "1.0"
+      || receipt.storyId !== plan.storyId || receipt.runId !== plan.runId
+      || receipt.wave !== plan.wave || receipt.planSha256 !== planSha256
+      || receipt.taskDagSha256 !== plan.taskDagSha256
+      || receipt.statusSha256 !== statusSha256 || receipt.baseCommit !== plan.baseCommit
+      || typeof receipt.lockRecovered !== "boolean"
+      || typeof receipt.completedAt !== "string" || Number.isNaN(Date.parse(receipt.completedAt))
+      || !Array.isArray(receipt.tasks) || receipt.tasks.length !== plan.tasks.length) {
+    throw new Error("Wave Worktree creation receipt has an invalid structure.");
+  }
+  for (let index = 0; index < receipt.tasks.length; index += 1) {
+    const task = receipt.tasks[index];
+    const planned = plan.tasks[index];
+    const observed = status.tasks[index];
+    const taskFields = task && typeof task === "object" && !Array.isArray(task)
+      ? Object.keys(task)
+      : [];
+    if (!task || taskFields.length !== WAVE_CREATION_RECEIPT_TASK_FIELDS.length
+        || WAVE_CREATION_RECEIPT_TASK_FIELDS.some((field) => !Object.hasOwn(task, field))
+        || task.taskId !== planned.taskId || task.branch !== planned.branch
+        || task.worktreePath !== planned.worktreePath
+        || observed.state !== "created" || task.headCommit !== observed.headCommit
+        || task.headCommit !== plan.baseCommit) {
+      throw new Error("Wave Worktree creation receipt task has an invalid structure.");
+    }
+  }
+  return receipt;
 }
 
 function comparableWavePlan(plan) {
@@ -653,6 +729,10 @@ async function loadWaveContext(root, options) {
   }
   const outputs = waveOutputPaths(root, state, options.waveIndex);
   await assertSafeTargetParents(root, outputs.planPath);
+  await assertSafeTargetParents(root, outputs.statusPath);
+  await assertSafeTargetParents(root, outputs.createLockPath);
+  await assertSafeTargetParents(root, outputs.recoveryLockPath);
+  await assertSafeTargetParents(root, outputs.receiptPath);
   return { state, stateFile: stateLocation.relative, ...outputs };
 }
 
@@ -692,7 +772,296 @@ async function validateStoredWavePlan(root, plan, state, wave, taskDagFile) {
   return plan;
 }
 
-async function inspectWaveStatus(root, plan, planPath, statusPath, options) {
+async function inspectWaveLock(root, lockFile, expectedMode, plan, planSha256) {
+  const location = resolveInsideRoot(root, lockFile, `Wave Worktree ${expectedMode} lock`);
+  await assertSafeTargetParents(root, location.fullPath);
+  const lock = await readJsonOptional(location.fullPath, `Wave Worktree ${expectedMode} lock`);
+  if (!lock) return null;
+  const fields = Object.keys(lock);
+  if (fields.length !== WAVE_LOCK_FIELDS.length
+      || WAVE_LOCK_FIELDS.some((field) => !Object.hasOwn(lock, field))) {
+    throw new Error(`Wave Worktree ${expectedMode} lock has an invalid structure.`);
+  }
+  const snapshot = {
+    file: location.relative,
+    sha256: await fileSha256(location.fullPath),
+    ...lock,
+  };
+  return validateWaveLockSnapshot(snapshot, expectedMode, plan, planSha256);
+}
+
+async function inspectWaveLocks(root, context, plan, planSha256) {
+  return {
+    create: await inspectWaveLock(root, context.createLockFile, "create", plan, planSha256),
+    recovery: await inspectWaveLock(root, context.recoveryLockFile, "recovery", plan, planSha256),
+  };
+}
+
+function assertWaveCreateInputs(options) {
+  if (options.confirmWaveCreate !== true) {
+    throw new Error("Wave Worktree creation requires explicit approval and ConfirmWaveCreate.");
+  }
+  if (typeof options.expectedPlanSha256 !== "string"
+      || !/^sha256:[a-f0-9]{64}$/.test(options.expectedPlanSha256)) {
+    throw new Error("Wave Worktree creation requires ExpectedPlanSha256.");
+  }
+  for (const field of ["taskId", "baseRef", "branch", "worktreePath"]) {
+    if (options[field] !== undefined && options[field] !== null) {
+      throw new Error(`Wave Worktree creation derives identity, branch, path, and base from the approved plan; ${field} is not accepted.`);
+    }
+  }
+  for (const field of ["expectedCreateLockSha256", "expectedRecoveryLockSha256"]) {
+    const value = options[field];
+    if (value !== undefined && value !== null && !/^sha256:[a-f0-9]{64}$/.test(value)) {
+      throw new Error(`${field} must be a SHA-256 value.`);
+    }
+  }
+  if (options.confirmWaveLockRecovery !== true
+      && (options.expectedCreateLockSha256 || options.expectedRecoveryLockSha256)) {
+    throw new Error("Wave lock hash inputs require ConfirmWaveLockRecovery.");
+  }
+}
+
+async function loadApprovedWavePlan(root, context, options) {
+  const plan = await validateStoredWavePlan(
+    root,
+    await readJsonFile(context.planPath, "Wave Worktree plan"),
+    context.state,
+    options.waveIndex,
+    options.taskDagFile,
+  );
+  const planSha256 = await fileSha256(context.planPath);
+  if (planSha256 !== options.expectedPlanSha256) {
+    throw new Error("Wave Worktree approved plan hash does not match ExpectedPlanSha256.");
+  }
+  return { plan, planSha256 };
+}
+
+async function writeExclusiveJson(filePath, value, existsMessage) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  let handle;
+  try {
+    handle = await open(filePath, "wx");
+  } catch (error) {
+    if (error?.code === "EEXIST") throw new Error(existsMessage);
+    throw error;
+  }
+  try {
+    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await handle.close();
+  } catch (error) {
+    await handle.close().catch(() => {});
+    await unlink(filePath).catch(() => {});
+    throw error;
+  }
+}
+
+async function acquireWaveCreateLock(root, context, plan, planSha256, options) {
+  const recovery = await inspectWaveLock(root, context.recoveryLockFile, "recovery", plan, planSha256);
+  if (recovery) throw new Error("Wave Worktree recovery lock already exists; inspect it before retrying.");
+  const lock = {
+    schemaVersion: "1.0",
+    lockId: randomUUID(),
+    mode: "create",
+    storyId: plan.storyId,
+    runId: plan.runId,
+    wave: plan.wave,
+    planSha256,
+    pid: process.pid,
+    createdAt: (options.now ?? (() => new Date().toISOString()))(),
+  };
+  await writeExclusiveJson(
+    context.createLockPath,
+    lock,
+    "Wave Worktree create lock already exists; inspect it before retrying.",
+  );
+  const owner = await inspectWaveLock(root, context.createLockFile, "create", plan, planSha256);
+  if (options.afterWaveCreateLockAcquired) await options.afterWaveCreateLockAcquired();
+  const racedRecovery = await inspectWaveLock(root, context.recoveryLockFile, "recovery", plan, planSha256);
+  if (racedRecovery) {
+    throw new Error("Wave Worktree recovery started while create ownership was being acquired.");
+  }
+  return owner;
+}
+
+async function assertWaveLockOwned(root, context, plan, owner) {
+  const lockFile = owner.mode === "recovery" ? context.recoveryLockFile : context.createLockFile;
+  const current = await inspectWaveLock(root, lockFile, owner.mode, plan, owner.planSha256);
+  if (!current || current.lockId !== owner.lockId || current.sha256 !== owner.sha256) {
+    throw new Error(`Wave Worktree ${owner.mode} lock ownership has changed.`);
+  }
+  if (owner.mode === "create") {
+    const recovery = await inspectWaveLock(root, context.recoveryLockFile, "recovery", plan, owner.planSha256);
+    if (recovery) throw new Error("Wave Worktree create ownership was fenced by a recovery lock.");
+  }
+  return current;
+}
+
+async function assertWaveMutationAuthorized(root, context, owner, options) {
+  const approved = await loadApprovedWavePlan(root, context, options);
+  await assertWaveLockOwned(root, context, approved.plan, owner);
+  return approved;
+}
+
+function assertExpectedWaveLock(snapshot, expectedSha256, label) {
+  if (snapshot && !expectedSha256) throw new Error(`${label} requires its expected lock hash.`);
+  if (!snapshot && expectedSha256) throw new Error(`${label} does not exist but an expected lock hash was provided.`);
+  if (snapshot && snapshot.sha256 !== expectedSha256) throw new Error(`${label} hash does not match the approved lock hash.`);
+}
+
+async function acquireWaveRecoveryLock(root, context, plan, planSha256, options) {
+  const createLock = await inspectWaveLock(root, context.createLockFile, "create", plan, planSha256);
+  const recoveryLock = await inspectWaveLock(root, context.recoveryLockFile, "recovery", plan, planSha256);
+  if (!createLock && !recoveryLock) {
+    throw new Error("Wave lock recovery requires an existing create or recovery lock.");
+  }
+  assertExpectedWaveLock(createLock, options.expectedCreateLockSha256, "ExpectedCreateLockSha256");
+  assertExpectedWaveLock(recoveryLock, options.expectedRecoveryLockSha256, "ExpectedRecoveryLockSha256");
+  const lock = {
+    schemaVersion: "1.0",
+    lockId: randomUUID(),
+    mode: "recovery",
+    storyId: plan.storyId,
+    runId: plan.runId,
+    wave: plan.wave,
+    planSha256,
+    pid: process.pid,
+    createdAt: (options.now ?? (() => new Date().toISOString()))(),
+  };
+  if (options.beforeWaveRecoveryLockWrite) await options.beforeWaveRecoveryLockWrite();
+  const preWriteCreateLock = await inspectWaveLock(
+    root,
+    context.createLockFile,
+    "create",
+    plan,
+    planSha256,
+  );
+  const preWriteRecoveryLock = await inspectWaveLock(
+    root,
+    context.recoveryLockFile,
+    "recovery",
+    plan,
+    planSha256,
+  );
+  assertExpectedWaveLock(preWriteCreateLock, options.expectedCreateLockSha256, "ExpectedCreateLockSha256");
+  assertExpectedWaveLock(preWriteRecoveryLock, options.expectedRecoveryLockSha256, "ExpectedRecoveryLockSha256");
+  await writeAtomicJson(context.recoveryLockPath, lock);
+  if (options.afterWaveRecoveryLockWrite) await options.afterWaveRecoveryLockWrite();
+  const owner = await inspectWaveLock(root, context.recoveryLockFile, "recovery", plan, planSha256);
+  if (!owner || owner.lockId !== lock.lockId) {
+    throw new Error("Wave Worktree recovery lock ownership has changed during acquisition.");
+  }
+  if (options.afterWaveRecoveryLockAcquired) await options.afterWaveRecoveryLockAcquired();
+  const currentCreateLock = await inspectWaveLock(root, context.createLockFile, "create", plan, planSha256);
+  assertExpectedWaveLock(currentCreateLock, options.expectedCreateLockSha256, "ExpectedCreateLockSha256");
+  return {
+    ...owner,
+    expectedCreateLockSha256: options.expectedCreateLockSha256 ?? null,
+  };
+}
+
+async function releaseWaveLockOwned(root, context, plan, owner, options) {
+  if (options.beforeWaveLockRelease) await options.beforeWaveLockRelease(owner.mode);
+  if (owner.mode === "create") {
+    const recovery = await inspectWaveLock(root, context.recoveryLockFile, "recovery", plan, owner.planSha256);
+    if (recovery) return false;
+    await assertWaveLockOwned(root, context, plan, owner);
+    await unlink(context.createLockPath);
+    return true;
+  }
+  await assertWaveLockOwned(root, context, plan, owner);
+  const createLock = await inspectWaveLock(root, context.createLockFile, "create", plan, owner.planSha256);
+  assertExpectedWaveLock(createLock, owner.expectedCreateLockSha256, "ExpectedCreateLockSha256");
+  if (createLock) await unlink(context.createLockPath);
+  await assertWaveLockOwned(root, context, plan, owner);
+  await unlink(context.recoveryLockPath);
+  return true;
+}
+
+async function assertWaveStoryAllowlist(root, plan, options) {
+  const listed = await executeGit(root, ["worktree", "list", "--porcelain"], options);
+  const worktrees = parseWorktreeList(String(listed.stdout ?? ""));
+  const storyRoot = pathKey(path.resolve(root, `.harness/worktrees/${plan.storyId}`));
+  const allowedPaths = new Set(plan.tasks.map((task) => pathKey(path.resolve(root, task.worktreePath))));
+  const unplanned = worktrees.find((item) => {
+    const candidate = pathKey(item.worktree ?? "");
+    return candidate.startsWith(`${storyRoot}/`) && !allowedPaths.has(candidate);
+  });
+  if (unplanned) throw new Error("Wave Worktree allowlist rejects an unplanned Worktree for the current Story.");
+}
+
+async function createWaveTask(root, plan, taskStatus, options, beforeWrite) {
+  const task = plan.tasks.find((item) => item.taskId === taskStatus.taskId);
+  if (!task) throw new Error(`Wave Worktree plan is missing task '${taskStatus.taskId}'.`);
+  const targetPath = resolveInsideRoot(root, task.worktreePath, "Wave Worktree path").fullPath;
+  await assertSafeTargetParents(root, targetPath);
+  const branch = await inspectGitRef(root, `refs/heads/${task.branch}`, options);
+  if (branch.exists && branch.commit !== plan.baseCommit) {
+    throw new Error(`Wave task '${task.taskId}' branch does not point to the planned base commit.`);
+  }
+  const args = branch.exists
+    ? ["worktree", "add", targetPath, task.branch]
+    : ["worktree", "add", "-b", task.branch, targetPath, plan.baseCommit];
+  if (options.beforeWaveGitWrite) await options.beforeWaveGitWrite(task.taskId);
+  if (beforeWrite) await beforeWrite();
+  try {
+    await executeGit(root, args, options);
+  } catch (error) {
+    const diagnostic = String(error?.stderr ?? error?.message ?? "unknown Git error").trim();
+    throw new Error(`git worktree add failed for wave task '${task.taskId}': ${diagnostic}`);
+  }
+}
+
+async function ensureWaveCreationReceipt(root, context, plan, planSha256, status, owner, options) {
+  if (status.state !== "ready" || status.tasks.some((task) => task.state !== "created")) {
+    throw new Error("Wave Worktree creation receipt requires a ready status.");
+  }
+  await assertWaveLockOwned(root, context, plan, owner);
+  if (await fileSha256(context.planPath) !== options.expectedPlanSha256) {
+    throw new Error("Wave Worktree approved plan hash changed before receipt creation.");
+  }
+  const statusSha256 = await fileSha256(context.statusPath);
+  const existing = await readJsonOptional(context.receiptPath, "Wave Worktree creation receipt");
+  if (existing) {
+    return {
+      reused: true,
+      receipt: validateWaveCreationReceipt(existing, plan, planSha256, status, statusSha256),
+    };
+  }
+  const receipt = {
+    schemaVersion: "1.0",
+    storyId: plan.storyId,
+    runId: plan.runId,
+    wave: plan.wave,
+    planSha256,
+    taskDagSha256: plan.taskDagSha256,
+    statusSha256,
+    baseCommit: plan.baseCommit,
+    tasks: status.tasks.map((task) => ({
+      taskId: task.taskId,
+      branch: task.branch,
+      worktreePath: task.worktreePath,
+      headCommit: task.headCommit,
+    })),
+    lockRecovered: owner.mode === "recovery",
+    completedAt: (options.now ?? (() => new Date().toISOString()))(),
+  };
+  validateWaveCreationReceipt(receipt, plan, planSha256, status, statusSha256);
+  if (options.beforeWaveReceiptWrite) await options.beforeWaveReceiptWrite(receipt);
+  await assertWaveLockOwned(root, context, plan, owner);
+  if (await fileSha256(context.planPath) !== options.expectedPlanSha256) {
+    throw new Error("Wave Worktree approved plan hash changed before receipt write.");
+  }
+  await writeAtomicJson(context.receiptPath, receipt);
+  await assertWaveLockOwned(root, context, plan, owner);
+  const stored = await readJsonFile(context.receiptPath, "Wave Worktree creation receipt");
+  return {
+    reused: false,
+    receipt: validateWaveCreationReceipt(stored, plan, planSha256, status, statusSha256),
+  };
+}
+
+async function inspectWaveStatus(root, plan, planPath, statusPath, options, beforeWrite, persist = true) {
   const currentBase = await tryGit(root, ["rev-parse", "--verify", "--end-of-options", `${plan.baseRef}^{commit}`], options);
   if (!currentBase.ok || currentBase.stdout.trim() !== plan.baseCommit) {
     throw new Error(`Planned base ref '${plan.baseRef}' has moved or is unavailable.`);
@@ -773,6 +1142,9 @@ async function inspectWaveStatus(root, plan, planPath, statusPath, options) {
       return stored;
     }
   }
+  if (options.beforeWaveStatusWrite) await options.beforeWaveStatusWrite(status);
+  if (!persist) return status;
+  if (beforeWrite) await beforeWrite();
   await writeAtomicJson(statusPath, status);
   return status;
 }
@@ -1750,7 +2122,15 @@ async function wavePlan(root, options) {
     if (JSON.stringify(comparableWavePlan(existing)) !== JSON.stringify(expected)) {
       throw new Error("Existing Wave Worktree plan does not match the requested wave and base commit.");
     }
-    const status = await inspectWaveStatus(root, existing, context.planPath, context.statusPath, options);
+    const status = await inspectWaveStatus(
+      root,
+      existing,
+      context.planPath,
+      context.statusPath,
+      options,
+      undefined,
+      false,
+    );
     return { command: "wave-plan", reused: true, planFile: context.planFile, statusFile: context.statusFile, plan: existing, status };
   }
   const plan = { ...expected, plannedAt: (options.now ?? (() => new Date().toISOString()))() };
@@ -1769,8 +2149,96 @@ async function waveStatus(root, options) {
     options.waveIndex,
     options.taskDagFile,
   );
-  const current = await inspectWaveStatus(root, plan, context.planPath, context.statusPath, options);
-  return { command: "wave-status", planFile: context.planFile, statusFile: context.statusFile, plan, status: current };
+  const planSha256 = await fileSha256(context.planPath);
+  const current = await inspectWaveStatus(
+    root,
+    plan,
+    context.planPath,
+    context.statusPath,
+    options,
+    undefined,
+    false,
+  );
+  const locks = await inspectWaveLocks(root, context, plan, planSha256);
+  return {
+    command: "wave-status",
+    planFile: context.planFile,
+    statusFile: context.statusFile,
+    plan,
+    status: current,
+    locks,
+  };
+}
+
+async function waveCreate(root, options) {
+  assertWaveCreateInputs(options);
+  const context = await loadWaveContext(root, options);
+  const initial = await loadApprovedWavePlan(root, context, options);
+  const owner = options.confirmWaveLockRecovery === true
+    ? await acquireWaveRecoveryLock(root, context, initial.plan, initial.planSha256, options)
+    : await acquireWaveCreateLock(root, context, initial.plan, initial.planSha256, options);
+  let result;
+  let completed = false;
+  try {
+    const approved = await loadApprovedWavePlan(root, context, options);
+    await assertWaveLockOwned(root, context, approved.plan, owner);
+    await assertMainRepositoryClean(root, context, approved.plan, options);
+    await assertWaveStoryAllowlist(root, approved.plan, options);
+    const authorizeMutation = () => assertWaveMutationAuthorized(root, context, owner, options);
+    let current = await inspectWaveStatus(
+      root,
+      approved.plan,
+      context.planPath,
+      context.statusPath,
+      options,
+      authorizeMutation,
+    );
+    for (const taskStatus of current.tasks) {
+      if (taskStatus.state === "created") continue;
+      if (options.beforeWaveTaskCreate) await options.beforeWaveTaskCreate(taskStatus.taskId);
+      const reloaded = await loadApprovedWavePlan(root, context, options);
+      await assertWaveLockOwned(root, context, reloaded.plan, owner);
+      await createWaveTask(root, reloaded.plan, taskStatus, options, authorizeMutation);
+      if (options.afterWaveTaskCreate) await options.afterWaveTaskCreate(taskStatus.taskId);
+      await loadApprovedWavePlan(root, context, options);
+      await assertWaveLockOwned(root, context, reloaded.plan, owner);
+      current = await inspectWaveStatus(
+        root,
+        reloaded.plan,
+        context.planPath,
+        context.statusPath,
+        options,
+        authorizeMutation,
+      );
+    }
+    if (current.state !== "ready") throw new Error("Wave Worktree creation did not converge to ready.");
+    const receiptResult = await ensureWaveCreationReceipt(
+      root,
+      context,
+      approved.plan,
+      approved.planSha256,
+      current,
+      owner,
+      options,
+    );
+    result = {
+      command: "wave-create",
+      reused: receiptResult.reused,
+      planFile: context.planFile,
+      statusFile: context.statusFile,
+      receiptFile: context.receiptFile,
+      plan: approved.plan,
+      status: current,
+      receipt: receiptResult.receipt,
+    };
+    completed = true;
+  } finally {
+    if (owner.mode === "create" || completed) {
+      await releaseWaveLockOwned(root, context, initial.plan, owner, options);
+    }
+  }
+  const refreshed = await waveStatus(root, options);
+  return { ...result, status: refreshed.status, locks: refreshed.locks };
 }
 
 async function create(root, options) {
@@ -1926,6 +2394,7 @@ export async function runWorktreeCommand(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   if (options.command === "wave-plan") return wavePlan(root, options);
   if (options.command === "wave-status") return waveStatus(root, options);
+  if (options.command === "wave-create") return waveCreate(root, options);
   if (options.command === "plan") return plan(root, options);
   if (options.command === "status") return status(root, options);
   if (options.command === "create") return create(root, options);
@@ -1947,12 +2416,20 @@ function parseCliArguments(argv) {
     "--task-id": "taskId",
     "--wave-index": "waveIndex",
     "--base-ref": "baseRef",
+    "--expected-plan-sha256": "expectedPlanSha256",
+    "--expected-create-lock-sha256": "expectedCreateLockSha256",
+    "--expected-recovery-lock-sha256": "expectedRecoveryLockSha256",
   };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (token === "--json") { options.json = true; continue; }
     if (token === "--confirm-create") { options.confirmCreate = true; continue; }
     if (token === "--confirm-retire") { options.confirmRetire = true; continue; }
+    if (token === "--confirm-wave-create") { options.confirmWaveCreate = true; continue; }
+    if (token === "--confirm-wave-lock-recovery") {
+      options.confirmWaveLockRecovery = true;
+      continue;
+    }
     const key = keyMap[token];
     if (!key || index + 1 >= tokens.length) throw new Error(`Unsupported or incomplete argument: ${token}`);
     options[key] = tokens[++index];

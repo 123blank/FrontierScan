@@ -29,6 +29,7 @@ required_directories:
   - docs/harness-m5b3-multi-task-protocol
   - docs/harness-m5b3-batch-runtime
   - docs/harness-m5d-multi-worktree-wave
+  - docs/harness-m5d-wave-create
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -55,6 +56,8 @@ required_files:
   - .harness/schemas/worktree-batch-retirement-receipt.schema.json
   - .harness/schemas/worktree-wave-plan.schema.json
   - .harness/schemas/worktree-wave-status.schema.json
+  - .harness/schemas/worktree-wave-lock.schema.json
+  - .harness/schemas/worktree-wave-creation-receipt.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
   - .harness/workflows/e2e-development.yaml
@@ -213,6 +216,9 @@ required_files:
   - docs/harness-m5d-multi-worktree-wave/DESIGN.md
   - docs/harness-m5d-multi-worktree-wave/PLAN.md
   - docs/harness-m5d-multi-worktree-wave/REPORT.md
+  - docs/harness-m5d-wave-create/DESIGN.md
+  - docs/harness-m5d-wave-create/PLAN.md
+  - docs/harness-m5d-wave-create/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -220,6 +226,6 @@ status_notes:
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
   state_runtime: implemented-v1
-  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.1-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-planning-v1
+  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.1-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-create-v1
   deterministic_scripts: mixed-read-only-helpers-state-story-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
   business_code_changes: none-required-for-m0-m5b3b

@@ -4,7 +4,7 @@
 >
 > 最后更新：2026-08-04
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 已实现至 M5-D-A 的同 wave 多 Worktree 只读规划与事实状态兼容层。`M5-D-A-001` 已进入 `done/completed`、revision `20`，核心实现提交为 `b6b95d9`。M5-B3-B 仍提供单 Worktree 严格串行多任务闭环；M5-D-A 只新增 `WavePlan/WaveStatus`，可为同一合法 wave 固定统一基准、派生多个任务分支/路径，并从 Git 事实聚合 `absent/partial/ready`，不提供创建、并行 Worker、合并或删除。M2/M3 继续独占状态推进权。正式仓库 Worktree 操作、发布和部署未执行。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准；真实 Agent、同 wave 并行执行、WaveCreate、Fork-Join、分支清理、真实发布和 Git 自动交付仍未实现。
+> 当前重点：Harness 正在完成 M5-D-B 审批门控 `WaveCreate`。M5-D-A 的 `WavePlan/WaveStatus` 继续负责固定统一基准、派生同 wave 多任务分支/路径和读取 Git 事实；M5-D-B 在同一 Runtime 中增加计划哈希审批、波次锁、`lockId` fencing、部分失败恢复和完成回执。创建只在临时 Git fixture 中验证，正式仓库没有执行 `WaveCreate`。M2/M3 继续独占状态推进权；并行 Worker、跨 Worktree 汇总/合并、Fork-Join、分支清理、真实 Agent、发布和 Git 自动交付仍未实现。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准。
 
 ---
 
@@ -1679,4 +1679,22 @@ M4-B 受约束 Mock Worker 当前实现：
 - `M5-D-A-001` 已完成实现、回归和 Review，Harness 状态为 `done/completed`、revision `20`；核心实现以提交 `b6b95d9` 交付。
 - 2026-08-04 用户已批准将文档收尾提交与 `b6b95d9` 一并推送至 `origin/dev`；未创建 PR，未执行发布或部署。
 
-下一阶段如继续，应独立设计 M5-D-B 的审批门控 `WaveCreate` 和波次级锁/恢复；在获得方案与逐次批准前，不得启动并行 Worker、自动 merge/remove、Fork-Join、发布、部署或 Git 自动交付。
+该阶段提出的 M5-D-B 设计工作已在下节实施；M5-D-A 本身仍保持只读规划和状态能力，不应被解释为创建授权。
+
+### 16.24 2026-08-04 当前状态：M5-D-B 审批门控 WaveCreate
+
+权威设计、实施计划和报告位于 `docs/harness-m5d-wave-create/`，活动 Story 为 `M5-D-B-001`。
+
+- `run-worktree.ps1` 与 `worktree-runtime.mjs` 新增 `WaveCreate/wave-create`，继续复用 M5-D-A 的 WavePlan、WaveStatus、固定 Git argv、路径校验和原子 JSON。
+- 每次创建只处理一个明确 wave，必须传入 `ConfirmWaveCreate` 和当前 `plan.json` 的 `ExpectedPlanSha256`；Runtime 在所有关键副作用前重新验证计划，计划漂移会使批准立即失效。
+- 同一 run/Story 的所有 wave 共享带随机 `lockId` 的 `waves/create.lock`，不同 wave 在首个 Git 写入前即互斥。遗留锁不按时间或 PID 自动失效；恢复必须确认旧进程停止，并绑定 `WaveStatus` 顶层 `locks` 中全部现存锁 SHA-256。
+- 恢复期间共享 `waves/create-recovery.lock` 是活动所有权，旧 `create.lock` 保留为接管证据。恢复替换后必须匹配本次生成的 `lockId`；旧创建所有者观察到恢复锁后不能继续 Git、写状态/回执或删除锁，恢复异常保留两把锁。
+- 创建按计划稳定顺序处理 `branch-only/absent` 项；部分失败保留已创建 Worktree，重试只补齐缺失项。Git 成功但状态写入中断、以及 ready 后回执写入中断均可从当前事实受控恢复。
+- 动态锁快照不写入稳定 `status.json`。只有完整 Git 事实为 `ready` 时才写 `creation-receipt.json`，并绑定计划、DAG、稳定状态哈希、基准和每个任务 HEAD。
+- 首次 WavePlan 初始化状态后，复用 WavePlan 和普通 WaveStatus 只返回动态 Git 事实；稳定状态只由持锁 WaveCreate 更新，陈旧查询不能覆盖完成回执绑定状态。
+- 同一 Story 其他 wave、计划外 Worktree、异地挂载、主工作树不干净以及计划/DAG/基准/路径/HEAD 漂移均失败关闭。
+- 独立 Review 发现并修复了恢复异常误清锁、并发恢复采用他人 owner、不同 wave 独立锁，以及 Git/状态实际写入点 fencing 不足；新增真实临时 Git 用例覆盖这些竞态。
+- 第二轮复审又补出恢复写前锁集合变化和陈旧 WaveStatus 覆盖回执状态，两项均新增 RED 并修复。
+- 正式 FrontierScan 仓库未创建、合并、回收或删除 Worktree；未执行 `git add/commit/push/PR`、发布或部署。
+
+下一阶段只能在独立方案与审批中评估同 wave Worker 并行、跨 Worktree 结果汇总/集成和生命周期回收。`WaveCreate` 批准不构成 Worker、merge/remove、Fork-Join、发布、部署或 Git 交付授权。

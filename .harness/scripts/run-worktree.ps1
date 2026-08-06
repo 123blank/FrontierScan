@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("Plan", "Status", "Create", "Retire", "BatchPlan", "BatchStatus", "BatchCreate", "BatchRetire", "WavePlan", "WaveStatus")]
+  [ValidateSet("Plan", "Status", "Create", "Retire", "BatchPlan", "BatchStatus", "BatchCreate", "BatchRetire", "WavePlan", "WaveStatus", "WaveCreate")]
   [string]$Command,
 
   [Parameter(Mandatory = $true)]
@@ -12,9 +12,14 @@ param(
 
   [int]$WaveIndex,
   [string]$BaseRef,
+  [string]$ExpectedPlanSha256,
+  [string]$ExpectedCreateLockSha256,
+  [string]$ExpectedRecoveryLockSha256,
   [string]$Root,
   [switch]$ConfirmCreate,
   [switch]$ConfirmRetire,
+  [switch]$ConfirmWaveCreate,
+  [switch]$ConfirmWaveLockRecovery,
   [switch]$Json
 )
 
@@ -25,7 +30,8 @@ if ([string]::IsNullOrWhiteSpace($Root)) {
 
 $runtime = Join-Path $PSScriptRoot "lib\worktree-runtime.mjs"
 $isBatchCommand = $Command -in @("BatchPlan", "BatchStatus", "BatchCreate", "BatchRetire")
-$isWaveCommand = $Command -in @("WavePlan", "WaveStatus")
+$isWaveCommand = $Command -in @("WavePlan", "WaveStatus", "WaveCreate")
+$isWaveCreate = $Command -eq "WaveCreate"
 $runtimeCommand = switch ($Command) {
   "BatchPlan" { "batch-plan" }
   "BatchStatus" { "batch-status" }
@@ -33,6 +39,7 @@ $runtimeCommand = switch ($Command) {
   "BatchRetire" { "batch-retire" }
   "WavePlan" { "wave-plan" }
   "WaveStatus" { "wave-status" }
+  "WaveCreate" { "wave-create" }
   default { $Command.ToLowerInvariant() }
 }
 $arguments = @($runtime, $runtimeCommand, "--root", $Root, "--state-file", $StateFile)
@@ -52,8 +59,42 @@ if ($isBatchCommand) {
   if (-not $PSBoundParameters.ContainsKey("WaveIndex") -or $WaveIndex -lt 1) {
     throw "-WaveIndex must be a positive 1-based index for $Command."
   }
-  $effectiveBaseRef = if ([string]::IsNullOrWhiteSpace($BaseRef)) { "dev" } else { $BaseRef }
-  $arguments += @("--task-dag-file", $TaskDagFile, "--wave-index", [string]$WaveIndex, "--base-ref", $effectiveBaseRef)
+  $arguments += @("--task-dag-file", $TaskDagFile, "--wave-index", [string]$WaveIndex)
+  if ($isWaveCreate) {
+    if ($PSBoundParameters.ContainsKey("BaseRef")) {
+      throw "WaveCreate derives its base from the approved plan; -BaseRef is not accepted."
+    }
+    if ([string]::IsNullOrWhiteSpace($ExpectedPlanSha256)) {
+      throw "-ExpectedPlanSha256 is required for WaveCreate."
+    }
+    if (-not $ConfirmWaveCreate) {
+      throw "-ConfirmWaveCreate is required for WaveCreate."
+    }
+    $arguments += @("--expected-plan-sha256", $ExpectedPlanSha256, "--confirm-wave-create")
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedCreateLockSha256)) {
+      $arguments += @("--expected-create-lock-sha256", $ExpectedCreateLockSha256)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRecoveryLockSha256)) {
+      $arguments += @("--expected-recovery-lock-sha256", $ExpectedRecoveryLockSha256)
+    }
+    if ($ConfirmWaveLockRecovery) {
+      $arguments += "--confirm-wave-lock-recovery"
+    }
+  } else {
+    foreach ($parameterName in @(
+      "ExpectedPlanSha256",
+      "ExpectedCreateLockSha256",
+      "ExpectedRecoveryLockSha256",
+      "ConfirmWaveCreate",
+      "ConfirmWaveLockRecovery"
+    )) {
+      if ($PSBoundParameters.ContainsKey($parameterName)) {
+        throw "$Command does not accept -$parameterName."
+      }
+    }
+    $effectiveBaseRef = if ([string]::IsNullOrWhiteSpace($BaseRef)) { "dev" } else { $BaseRef }
+    $arguments += @("--base-ref", $effectiveBaseRef)
+  }
 } else {
   if ([string]::IsNullOrWhiteSpace($TaskId)) {
     throw "-TaskId is required for $Command."

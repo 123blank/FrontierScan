@@ -91,11 +91,23 @@ serial batch ledger；随后仅使用 `run-worktree.ps1` 的 `BatchPlan/BatchSta
 M5-B1 Worker 和 M5-B2 集成独立验收，全部任务已集成后才可用 `finalize-batch` 生成 M3 可应用的 phase result，既有
 `apply` 仍是唯一状态推进入口。正式 implementation 工件通过 batch receipt 的 `finalizationArtifacts`、ledger receipt 哈希和 checkpoint binding 形成固定证据链；收尾 binding 使用独占锁，重叠调用失败关闭并可在首个完成后重试。批次不并行、不创建多个 Worktree，也不绕过用户对 Create、Apply 或 Retire 的逐次批准。
 
-M5-D-A 在同一 Runtime 中增加只读 `WavePlan/WaveStatus`。它只接受 active Story 的 `implementation` phase 中至少两个
+M5-D-A 在同一 Runtime 中增加 `WavePlan/WaveStatus`。它只接受 active Story 的 `implementation` phase 中至少两个
 pending 的 backend/frontend 任务，复用共享 Task DAG 冲突校验，把 `dev` 固化为同一 `baseCommit`，并为每项任务派生
 稳定分支和 `.harness/worktrees/<story>/wave-<n>/<taskId>` 路径。状态仅从 Git 事实聚合为 `absent/partial/ready`，
 任务级状态为 `absent/branch-only/created`；DAG、基准、分支、路径、HEAD、junction 或计划外 Worktree 漂移均失败关闭。
-该入口不提供 `WaveCreate`，不启动 Worker，不合并或删除 Worktree，也不修改 M2/M3 状态。
+
+M5-D-B 在上述只读计划之上增加审批门控的 `WaveCreate`。每次调用只处理一个明确 wave，必须同时提供
+`-ConfirmWaveCreate` 与计划文件的 `-ExpectedPlanSha256`；计划漂移、主工作树不干净、同 Story 其他 wave 已有
+Worktree 或计划外挂载都会在继续写入前失败关闭。创建按计划稳定顺序处理 `branch-only/absent` 项，部分失败保留已创建项，
+重试只补齐缺失项。
+
+同一 run/Story 的所有 wave 共享带随机 `lockId` 的 `waves/create.lock`；遗留锁恢复必须由用户确认旧进程已停止，并绑定
+`WaveStatus` 返回的全部现存锁 SHA-256。恢复期间共享 `waves/create-recovery.lock` 是活动所有权，旧创建所有者一旦
+观察到恢复锁便失去 Git、状态、回执和删锁资格。恢复异常保留两把锁，只有完成回执成功后才清理。
+只有当前 Git 事实完整收敛为 `ready` 时才写入绑定计划、DAG、稳定状态哈希和任务 HEAD 的
+`creation-receipt.json`。动态锁快照只出现在命令结果顶层 `locks`，不写入稳定 `status.json`。该入口不启动 Worker，
+复用 `WavePlan` 和普通 `WaveStatus` 也只返回动态 Git 事实，不改写稳定状态；后续状态持久化只由持锁 `WaveCreate` 执行。
+该入口不合并、回收或删除 Worktree/分支，也不修改 M2/M3 状态；正式仓库执行仍需要针对具体计划的独立批准。
 
 `kb-query.ps1` is a read-only keyword search over `llm-knowledge/`. Treat empty results as missing
 knowledge and verify source files directly before implementation.

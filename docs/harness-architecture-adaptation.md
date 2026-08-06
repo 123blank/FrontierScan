@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 单 Worktree 严格串行多任务批次运行时，以及 M5-D-A 同 wave 多 Worktree 只读规划/状态兼容层均已实现。真实 Agent、同 wave 并行执行、WaveCreate、Fork-Join、分支删除和 DevOps 闭环仍未实现。
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 单 Worktree 严格串行多任务批次运行时、M5-D-A 同 wave 多 Worktree 只读规划/状态兼容层，以及 M5-D-B 审批门控 WaveCreate、波次锁和中断恢复均已实现。真实 Agent、同 wave Worker 并行执行、跨 Worktree 汇总/合并、Fork-Join、分支删除和 DevOps 闭环仍未实现。
 
 ## Added Structure
 
@@ -313,9 +313,30 @@ M5-D-A 继续复用 `worktree-runtime.mjs`，增加 `wave-plan/wave-status`，�
 
 真实双 Worktree 只在临时 Git fixture 中挂载，用于验证 partial、ready 和恢复兼容性。正式 FrontierScan 仓库只允许生成计划和读取状态，不执行创建、Worker、合并、回收或分支操作。
 
+## M5-D-B 审批门控 WaveCreate
+
+M5-D-B 继续扩展同一 `worktree-runtime.mjs`，不创建第二套 Runtime。`wave-create` 只消费已经落盘的 WavePlan，
+调用方必须明确确认创建并提供计划文件当前 SHA-256；Runtime 在取锁前、取锁后、每次 Git 写入前、状态写入前和回执写入前
+重新读取计划，任何漂移都会使本次批准失效。
+
+普通创建通过同一 run/Story 的共享 `waves/create.lock` 获得波次所有权，因此不同 wave 在任何 Worktree 出现前也不能同时
+进入创建临界区。锁包含随机 `lockId`，所有 Git、状态、回执和释放动作前都重新验证身份、
+内容哈希和恢复锁不存在。遗留锁不按时间或 PID 自动失效；恢复必须确认旧进程均已停止，并绑定 `WaveStatus` 返回的全部现存
+锁哈希。恢复以共享 `waves/create-recovery.lock` 为活动所有权，保留旧 `create.lock` 作为接管证据；替换恢复锁后必须
+验证磁盘 `lockId` 等于本次生成值。旧所有者一旦看到恢复锁就失去继续副作用和删除锁的资格，恢复异常保留两把锁。
+
+创建状态继续以 Git 事实为权威。`created` 项只复核，`branch-only/absent` 项按计划稳定顺序补齐；中途失败不回滚已创建项，
+后续重试只处理缺失项。动态锁事实只在命令结果顶层返回，稳定 `status.json` 不包含锁，因此完成回执可以绑定不随锁生命周期
+变化的 `statusSha256`。首次 WavePlan 初始化状态后，复用 WavePlan 和普通 WaveStatus 只返回动态事实，不持久化；后续稳定
+状态只由持锁 WaveCreate 更新，避免陈旧查询覆盖回执绑定状态。只有全部任务当前均为 `ready` 时才写
+`creation-receipt.json`，其中固定计划、DAG、状态和每项 HEAD。
+
+正式 FrontierScan 仓库没有执行 WaveCreate；真实多 Worktree、部分失败和受控中断仅在临时 Git fixture 中验证。
+
 ## 下一步实施
 
-M5-D-A 完成后，如需继续，应独立设计审批门控的 `WaveCreate`、波次级锁和中断恢复。不得把“可规划且 ready”解释为已经获得并行执行授权，也不得默认引入自动 merge/remove、Fork-Join、分支删除、`prune`、真实模型、发布、部署或 Git 自动交付。
+后续如继续，应独立设计同 wave Worker 并行执行、结果汇总和跨 Worktree 集成。不得把“已批准创建”解释为 Worker、合并、
+回收或发布授权，也不得默认引入自动 merge/remove、Fork-Join、分支删除、`prune`、真实模型、发布、部署或 Git 自动交付。
 
 ## Safety Boundaries
 
