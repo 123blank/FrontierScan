@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-manifest-preparation-lock.schema.json",
+  "title": "FrontierScan Harness Wave Manifest Preparation Lock",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "lockId",
+    "freezeId",
+    "storyId",
+    "runId",
+    "waveId",
+    "ledgerSha256",
+    "creationReceiptSha256",
+    "pid",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "lockId": { "type": "string", "minLength": 1 },
+    "freezeId": { "type": "string", "minLength": 1 },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "waveId": { "type": "string", "pattern": "^wave-[a-f0-9]{16}$" },
+    "ledgerSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "creationReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "pid": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

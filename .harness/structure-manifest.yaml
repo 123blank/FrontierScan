@@ -66,6 +66,12 @@ required_files:
   - .harness/schemas/worktree-wave-attempt-claim.schema.json
   - .harness/schemas/worktree-wave-attempt-lock.schema.json
   - .harness/schemas/worktree-wave-attempt-failure.schema.json
+  - .harness/schemas/worktree-wave-manifest-preparation-lock.schema.json
+  - .harness/schemas/worktree-wave-integration-manifest.schema.json
+  - .harness/schemas/worktree-wave-integration-lock.schema.json
+  - .harness/schemas/worktree-wave-integration-recovery-lock.schema.json
+  - .harness/schemas/worktree-wave-integration-receipt.schema.json
+  - .harness/schemas/worktree-wave-receipt.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
   - .harness/workflows/e2e-development.yaml
@@ -233,6 +239,8 @@ required_files:
   - docs/harness-m5d-wave-execution/DESIGN.md
   - docs/harness-m5d-wave-execution/PLAN-C1.md
   - docs/harness-m5d-wave-execution/REPORT-C1.md
+  - docs/harness-m5d-wave-execution/PLAN-C2.md
+  - docs/harness-m5d-wave-execution/REPORT-C2.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows

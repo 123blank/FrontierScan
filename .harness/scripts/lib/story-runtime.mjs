@@ -18,6 +18,7 @@ import {
   acquireImplementationOwner,
   assertImplementationModeAvailable,
   assertImplementationOwner,
+  inspectImplementationOwner,
 } from "./implementation-owner-contract.mjs";
 import { readWorkflowDefinition, runStateCommand } from "./state-runtime.mjs";
 
@@ -26,6 +27,58 @@ const PHASE_ADAPTERS = {
   "build-publish": ["harness-structure", "backend-package", "frontend-build", "no-build-required"],
 };
 const ADAPTER_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+const WAVE_FINALIZATION_FIELDS = [
+  "schemaVersion",
+  "storyId",
+  "runId",
+  "stateFile",
+  "phase",
+  "preparedRevision",
+  "waveId",
+  "waveLedgerFile",
+  "waveLedgerSha256",
+  "waveReceiptFile",
+  "waveReceiptSha256",
+  "integrationManifestFile",
+  "integrationManifestSha256",
+  "taskFile",
+  "taskSha256",
+  "resultFile",
+  "resultSha256",
+  "notesFile",
+  "notesSha256",
+  "finalizedAt",
+];
+const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+
+function validateWaveFinalizationBinding(binding) {
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)
+      || Object.keys(binding).length !== WAVE_FINALIZATION_FIELDS.length
+      || WAVE_FINALIZATION_FIELDS.some((field) => !Object.hasOwn(binding, field))
+      || binding.schemaVersion !== "1.0"
+      || binding.phase !== "implementation"
+      || !Number.isInteger(binding.preparedRevision) || binding.preparedRevision < 1
+      || typeof binding.finalizedAt !== "string" || Number.isNaN(Date.parse(binding.finalizedAt))) {
+    throw new Error("Wave finalization binding has an invalid structure.");
+  }
+  for (const field of [
+    "storyId", "runId", "stateFile", "waveId", "waveLedgerFile", "waveReceiptFile",
+    "integrationManifestFile", "taskFile", "resultFile", "notesFile",
+  ]) {
+    if (typeof binding[field] !== "string" || !binding[field]) {
+      throw new Error(`Wave finalization binding ${field} must be a non-empty string.`);
+    }
+  }
+  for (const field of [
+    "waveLedgerSha256", "waveReceiptSha256", "integrationManifestSha256",
+    "taskSha256", "resultSha256", "notesSha256",
+  ]) {
+    if (!SHA256_PATTERN.test(binding[field])) {
+      throw new Error(`Wave finalization binding ${field} must be a SHA-256 hash.`);
+    }
+  }
+  return binding;
+}
 
 function platformCommand(command, args, cwd) {
   if (process.platform === "win32") {
@@ -464,6 +517,119 @@ async function assertBatchFinalizationBeforeRecovery(root, located, previousPhas
   if (BATCH_FINALIZATION_FIELDS.some((field) => binding[field] !== expected[field])) {
     throw new Error("Finalized serial batch no longer matches the checkpoint binding before recovery.");
   }
+}
+
+async function assertWaveFinalizationEvidence(root, located, phase, task, checkpoint) {
+  if (phase.id !== "implementation" || !checkpoint.waveFinalization) return;
+  const binding = validateWaveFinalizationBinding(checkpoint.waveFinalization);
+  if (binding.storyId !== located.state.storyId
+      || binding.runId !== located.state.runtime.runId
+      || binding.stateFile !== located.stateFile
+      || binding.phase !== phase.id
+      || binding.preparedRevision !== task.preparedRevision
+      || located.state.runtime.revision < task.preparedRevision) {
+    throw new Error("Checkpoint Wave binding does not match the implementation phase.");
+  }
+  if (located.state.runtime.revision > task.preparedRevision
+      && !new Set(["result-received", "failed", "completed"]).has(checkpoint.status)) {
+    throw new Error("Checkpoint Wave binding does not match the recovered implementation phase.");
+  }
+  const { validateWaveExecutionLedger } = await import("./worktree-wave-execution-runtime.mjs");
+  const ledgerPath = resolveInsideRoot(root, binding.waveLedgerFile, "Wave execution ledger").fullPath;
+  const ledger = validateWaveExecutionLedger(await readJsonOptional(ledgerPath, "Wave execution ledger"));
+  if (!ledger
+      || ledger.status !== "finalized"
+      || ledger.storyId !== binding.storyId
+      || ledger.runId !== binding.runId
+      || ledger.waveId !== binding.waveId
+      || ledger.preparedRevision !== binding.preparedRevision
+      || ledger.waveReceiptFile !== binding.waveReceiptFile
+      || ledger.waveReceiptSha256 !== binding.waveReceiptSha256
+      || ledger.integrationManifestFile !== binding.integrationManifestFile
+      || ledger.integrationManifestSha256 !== binding.integrationManifestSha256
+      || await fileSha256(ledgerPath, "Wave execution ledger") !== binding.waveLedgerSha256) {
+    throw new Error("Finalized Wave ledger no longer matches the checkpoint binding.");
+  }
+  const receiptPath = resolveInsideRoot(root, binding.waveReceiptFile, "Wave receipt").fullPath;
+  const receipt = await readJsonOptional(receiptPath, "Wave receipt");
+  if (!receipt
+      || await fileSha256(receiptPath, "Wave receipt") !== binding.waveReceiptSha256
+      || receipt.storyId !== binding.storyId
+      || receipt.runId !== binding.runId
+      || receipt.phase !== binding.phase
+      || receipt.waveId !== binding.waveId
+      || receipt.preparedRevision !== binding.preparedRevision
+      || receipt.integrationManifestFile !== binding.integrationManifestFile
+      || receipt.integrationManifestSha256 !== binding.integrationManifestSha256
+      || !Array.isArray(receipt.tasks)
+      || receipt.tasks.length !== ledger.tasks.length
+      || receipt.phaseArtifacts?.taskFile !== binding.taskFile
+      || receipt.phaseArtifacts?.taskSha256 !== binding.taskSha256
+      || receipt.phaseArtifacts?.resultFile !== binding.resultFile
+      || receipt.phaseArtifacts?.resultSha256 !== binding.resultSha256
+      || receipt.phaseArtifacts?.notesFile !== binding.notesFile
+      || receipt.phaseArtifacts?.notesSha256 !== binding.notesSha256
+      || receipt.completedAt !== binding.finalizedAt) {
+    throw new Error("Finalized Wave receipt no longer matches the checkpoint binding.");
+  }
+  for (let index = 0; index < ledger.tasks.length; index += 1) {
+    const ledgerTask = ledger.tasks[index];
+    const receiptTask = receipt.tasks[index];
+    if (receiptTask?.taskId !== ledgerTask.taskId
+        || receiptTask.dispatchId !== ledgerTask.dispatchId
+        || receiptTask.executionReceiptFile !== ledgerTask.executionReceiptFile
+        || receiptTask.executionReceiptSha256 !== ledgerTask.executionReceiptSha256
+        || receiptTask.integrationReceiptFile !== ledgerTask.integrationReceiptFile
+        || receiptTask.integrationReceiptSha256 !== ledgerTask.integrationReceiptSha256
+        || await fileSha256(
+          resolveInsideRoot(root, ledgerTask.executionReceiptFile, "Wave execution receipt").fullPath,
+          "Wave execution receipt",
+        ) !== ledgerTask.executionReceiptSha256
+        || await fileSha256(
+          resolveInsideRoot(root, ledgerTask.integrationReceiptFile, "Wave integration receipt").fullPath,
+          "Wave integration receipt",
+        ) !== ledgerTask.integrationReceiptSha256
+        || await fileSha256(
+          resolveInsideRoot(root, receiptTask.resultFile, "Wave task result").fullPath,
+          "Wave task result",
+        ) !== receiptTask.resultSha256) {
+      throw new Error(`Finalized Wave task evidence changed: ${ledgerTask.taskId}`);
+    }
+  }
+  for (const [fileField, hashField, label] of [
+    ["taskFile", "taskSha256", "Finalized implementation task"],
+    ["resultFile", "resultSha256", "Finalized implementation result"],
+    ["notesFile", "notesSha256", "Finalized implementation notes"],
+    ["integrationManifestFile", "integrationManifestSha256", "Wave integration manifest"],
+  ]) {
+    if (await fileSha256(
+      resolveInsideRoot(root, binding[fileField], label).fullPath,
+      label,
+    ) !== binding[hashField]) {
+      throw new Error(`${label} changed after Wave finalization.`);
+    }
+  }
+}
+
+async function assertWaveFinalizationBeforeApply(root, located, phase, task, checkpoint) {
+  if (phase.id !== "implementation") return;
+  const owner = await inspectImplementationOwner({
+    root,
+    state: {
+      ...located.state,
+      runtime: { ...located.state.runtime, revision: task.preparedRevision },
+    },
+  });
+  if (!checkpoint.waveFinalization) {
+    if (owner?.owner.mode === "worktree-wave") {
+      throw new Error("A worktree Wave must be finalized before apply can advance implementation.");
+    }
+    return;
+  }
+  if (checkpoint.waveFinalization.preparedRevision !== task.preparedRevision) {
+    throw new Error("Checkpoint Wave binding does not match the finalized Wave.");
+  }
+  await assertWaveFinalizationEvidence(root, located, phase, task, checkpoint);
 }
 
 function executeAdapter(specification) {
@@ -947,6 +1113,12 @@ function validateCheckpoint(checkpoint, task) {
   if (Object.hasOwn(checkpoint, "batchFinalization")) {
     validateBatchFinalizationBinding(checkpoint.batchFinalization);
   }
+  if (Object.hasOwn(checkpoint, "waveFinalization")) {
+    validateWaveFinalizationBinding(checkpoint.waveFinalization);
+  }
+  if (checkpoint.batchFinalization && checkpoint.waveFinalization) {
+    throw new Error("A dispatch checkpoint cannot bind both batch and Wave finalization.");
+  }
 }
 
 async function currentContext(root, stateFile) {
@@ -1313,6 +1485,339 @@ async function finalizeBatch(root, options) {
   });
 }
 
+function waveFinalizationDispatchId(ledger) {
+  const hex = createHash("sha256")
+    .update(`${ledger.storyId}\0${ledger.waveId}\0${ledger.integrationManifestSha256}`)
+    .digest("hex")
+    .slice(0, 32)
+    .split("");
+  hex[12] = "4";
+  hex[16] = "8";
+  const value = hex.join("");
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
+async function collectWaveFinalizationArtifacts(root, ledger, manifest) {
+  const records = [];
+  const recordKeys = new Set();
+  const reports = [];
+  for (const ledgerTask of ledger.tasks) {
+    const manifestTask = manifest.tasks.find((item) => item.taskId === ledgerTask.taskId);
+    if (!manifestTask
+        || await fileSha256(
+          resolveInsideRoot(root, manifestTask.resultFile, "Wave task result").fullPath,
+          "Wave task result",
+        ) !== manifestTask.resultSha256
+        || await fileSha256(
+          resolveInsideRoot(root, ledgerTask.executionReceiptFile, "Wave execution receipt").fullPath,
+          "Wave execution receipt",
+        ) !== ledgerTask.executionReceiptSha256
+        || await fileSha256(
+          resolveInsideRoot(root, ledgerTask.integrationReceiptFile, "Wave integration receipt").fullPath,
+          "Wave integration receipt",
+        ) !== ledgerTask.integrationReceiptSha256) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' finalization evidence changed.`);
+    }
+    const result = await readJsonOptional(
+      resolveInsideRoot(root, manifestTask.resultFile, "Wave task result").fullPath,
+      "Wave task result",
+    );
+    validateDispatchResultStructure(result);
+    if (result.schemaVersion !== "1.2"
+        || result.status !== "completed"
+        || result.storyId !== ledger.storyId
+        || result.runId !== ledger.runId
+        || result.phase !== ledger.phase
+        || result.waveId !== ledger.waveId
+        || result.waveIndex !== ledger.waveIndex
+        || result.taskId !== ledgerTask.taskId
+        || result.dispatchId !== ledgerTask.dispatchId) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' result does not match the finalized ledger.`);
+    }
+    for (const record of result.records) {
+      if (record.path) {
+        throw new Error("Wave task records with an evidence path cannot be materialized into the phase result.");
+      }
+      const key = batchRecordKey(record);
+      if (recordKeys.has(key)) continue;
+      recordKeys.add(key);
+      records.push({ ...record });
+    }
+    const reportCandidates = manifest.candidateFiles.filter((candidate) => (
+      candidate.taskId === ledgerTask.taskId && candidate.type === "phase-output"
+    ));
+    if (reportCandidates.length !== 1) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' must contain exactly one integrated task report.`);
+    }
+    const reportCandidate = reportCandidates[0];
+    const reportPath = resolveInsideRoot(root, reportCandidate.path, "Wave task report").fullPath;
+    const reportBytes = await readRegularFile(reportPath, "Wave task report");
+    if (sha256Buffer(reportBytes) !== reportCandidate.sha256
+        || reportBytes.byteLength !== reportCandidate.bytes) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' report changed after integration.`);
+    }
+    const dispatch = validateDispatchTaskStructure(await readJsonOptional(
+      resolveInsideRoot(root, ledgerTask.taskFile, "Wave dispatch task").fullPath,
+      "Wave dispatch task",
+    ));
+    reports.push({
+      taskId: ledgerTask.taskId,
+      title: dispatch.purpose,
+      report: reportBytes.toString("utf8"),
+    });
+  }
+  return { records, reports };
+}
+
+function implementationNotesForWave(ledger, manifest, reports) {
+  const lines = [
+    "# 实施 Wave 汇总",
+    "",
+    `- Wave：${ledger.waveId}`,
+    `- 基准提交：${ledger.baseCommit}`,
+    `- Integration Manifest：${ledger.integrationManifestFile}`,
+    `- Execution Ledger：${`.harness/runs/${ledger.runId}/waves/${ledger.waveId}/execution-ledger.json`}`,
+    "",
+  ];
+  for (const report of reports) {
+    lines.push(`## ${report.taskId} ${report.title}`, "", report.report.trimEnd(), "");
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+async function ensureExactJson(filePath, value, label) {
+  const existing = await readJsonOptional(filePath, label);
+  if (existing) {
+    if (JSON.stringify(existing) !== JSON.stringify(value)) {
+      throw new Error(`Existing ${label} does not match the finalized Wave.`);
+    }
+    return;
+  }
+  await writeAtomicJson(filePath, value);
+}
+
+async function ensureExactText(filePath, value, label) {
+  const info = await lstat(filePath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (info) {
+    if (!info.isFile() || info.isSymbolicLink() || await readFile(filePath, "utf8") !== value) {
+      throw new Error(`Existing ${label} does not match the finalized Wave.`);
+    }
+    return;
+  }
+  await writeAtomicText(filePath, value);
+}
+
+async function materializeWaveFinalizationPhaseArtifacts(root, options, context, ledger, manifest, artifacts) {
+  const { located, phase } = context;
+  const phaseRoot = phaseDirectory(located.state, phase);
+  const expectedOutputs = phaseOutputs(root, phase, phaseRoot);
+  const taskFile = `${phaseRoot}/task.json`;
+  const resultFile = `${phaseRoot}/result.json`;
+  const checkpointFile = `${phaseRoot}/checkpoint.json`;
+  const notesFile = `${phaseRoot}/implementation-notes.md`;
+  const task = {
+    schemaVersion: "1.0",
+    dispatchId: waveFinalizationDispatchId(ledger),
+    storyId: ledger.storyId,
+    phase: ledger.phase,
+    ownerAgent: phase.owner_agent,
+    purpose: phase.purpose,
+    preparedRevision: ledger.preparedRevision,
+    preparedAt: ledger.preparedAt,
+    expectedOutputs,
+    allowedAdapters: PHASE_ADAPTERS[phase.id] ?? [],
+    next: phase.next[0],
+  };
+  validateTask(root, task, located.state, phase, phaseRoot);
+  const checkpoint = {
+    schemaVersion: "1.0",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    phase: task.phase,
+    status: "prepared",
+    preparedAt: task.preparedAt,
+    updatedAt: task.preparedAt,
+  };
+  const notes = implementationNotesForWave(ledger, manifest, artifacts.reports);
+  const result = {
+    schemaVersion: "1.0",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    phase: task.phase,
+    status: "completed",
+    summary: `Worktree Wave '${ledger.waveId}' completed ${ledger.tasks.length} task(s).`,
+    outputs: [{ path: notesFile }],
+    records: artifacts.records,
+  };
+  validateDispatchResultStructure(result);
+  await ensureExactJson(resolveInsideRoot(root, taskFile, "Finalized implementation task").fullPath, task, "implementation task");
+  const checkpointPath = resolveInsideRoot(root, checkpointFile, "Finalized implementation checkpoint").fullPath;
+  const existingCheckpoint = await readJsonOptional(checkpointPath, "Finalized implementation checkpoint");
+  if (existingCheckpoint) {
+    validateCheckpoint(existingCheckpoint, task);
+    if (existingCheckpoint.waveFinalization === undefined
+        && JSON.stringify(existingCheckpoint) !== JSON.stringify(checkpoint)) {
+      throw new Error("Existing implementation checkpoint does not match the finalized Wave.");
+    }
+  } else {
+    await writeAtomicJson(checkpointPath, checkpoint);
+  }
+  await ensureExactText(
+    resolveInsideRoot(root, notesFile, "Finalized implementation notes").fullPath,
+    notes,
+    "implementation notes",
+  );
+  await ensureExactJson(
+    resolveInsideRoot(root, resultFile, "Finalized implementation result").fullPath,
+    result,
+    "implementation result",
+  );
+  return {
+    task,
+    taskFile,
+    resultFile,
+    checkpointFile,
+    notesFile,
+    taskSha256: await fileSha256(
+      resolveInsideRoot(root, taskFile, "Finalized implementation task").fullPath,
+      "Finalized implementation task",
+    ),
+    resultSha256: await fileSha256(
+      resolveInsideRoot(root, resultFile, "Finalized implementation result").fullPath,
+      "Finalized implementation result",
+    ),
+    notesSha256: await fileSha256(
+      resolveInsideRoot(root, notesFile, "Finalized implementation notes").fullPath,
+      "Finalized implementation notes",
+    ),
+  };
+}
+
+async function finalizeWave(root, options) {
+  const context = await currentContext(root, options.stateFile);
+  const { located, phase } = context;
+  if (located.state.runtime.status !== "active" || phase?.id !== "implementation") {
+    throw new Error("Wave finalization requires an active implementation phase.");
+  }
+  if (typeof options.taskDagFile !== "string" || !options.taskDagFile
+      || !Number.isInteger(options.waveIndex) || options.waveIndex < 1) {
+    throw new Error("Wave finalization requires TaskDagFile and a positive WaveIndex.");
+  }
+  const owner = await inspectImplementationOwner({ root, state: located.state });
+  if (!owner || owner.owner.mode !== "worktree-wave") {
+    throw new Error("Wave finalization requires the current worktree-wave implementation owner.");
+  }
+  const taskDagFile = resolveInsideRoot(root, options.taskDagFile, "Wave Task DAG").relative;
+  if (owner.owner.taskDagFile !== taskDagFile) {
+    throw new Error("Wave finalization Task DAG does not match the implementation owner.");
+  }
+  const ledgerFile = `.harness/runs/${located.state.runtime.runId}/waves/${owner.owner.ownerId}/execution-ledger.json`;
+  const phaseRoot = phaseDirectory(located.state, phase);
+  const existingTask = await readJsonOptional(
+    resolveInsideRoot(root, `${phaseRoot}/task.json`, "Finalized implementation task").fullPath,
+    "Finalized implementation task",
+  );
+  const existingCheckpoint = await readJsonOptional(
+    resolveInsideRoot(root, `${phaseRoot}/checkpoint.json`, "Finalized implementation checkpoint").fullPath,
+    "Finalized implementation checkpoint",
+  );
+  if (existingTask && existingCheckpoint?.waveFinalization) {
+    validateTask(root, existingTask, located.state, phase, phaseRoot);
+    validateCheckpoint(existingCheckpoint, existingTask);
+    await assertWaveFinalizationEvidence(root, located, phase, existingTask, existingCheckpoint);
+    return {
+      command: "finalize-wave",
+      status: "ready-for-apply",
+      stateFile: located.stateFile,
+      ledgerFile,
+      receiptFile: existingCheckpoint.waveFinalization.waveReceiptFile,
+      taskFile: existingCheckpoint.waveFinalization.taskFile,
+      resultFile: existingCheckpoint.waveFinalization.resultFile,
+      checkpointFile: `${phaseRoot}/checkpoint.json`,
+      notesFile: existingCheckpoint.waveFinalization.notesFile,
+      task: existingTask,
+    };
+  }
+  if (!SHA256_PATTERN.test(options.expectedIntegrationManifestSha256 ?? "")
+      || !SHA256_PATTERN.test(options.expectedIntegrationLockSha256 ?? "")) {
+    throw new Error("Wave finalization requires expected manifest and integration lock hashes.");
+  }
+  const { validateWaveExecutionLedger, finalizeWaveExecution } = await import(
+    "./worktree-wave-execution-runtime.mjs"
+  );
+  const ledger = validateWaveExecutionLedger(await readJsonOptional(
+    resolveInsideRoot(root, ledgerFile, "Wave execution ledger").fullPath,
+    "Wave execution ledger",
+  ));
+  if (!ledger
+      || !["integrated", "finalized"].includes(ledger.status)
+      || ledger.waveIndex !== options.waveIndex
+      || ledger.taskDagFile !== taskDagFile
+      || ledger.integrationManifestSha256 !== options.expectedIntegrationManifestSha256) {
+    throw new Error("Wave execution ledger is not ready for finalization.");
+  }
+  const manifest = await readJsonOptional(
+    resolveInsideRoot(root, ledger.integrationManifestFile, "Wave integration manifest").fullPath,
+    "Wave integration manifest",
+  );
+  const artifacts = await collectWaveFinalizationArtifacts(root, ledger, manifest);
+  const materialized = await materializeWaveFinalizationPhaseArtifacts(
+    root,
+    options,
+    context,
+    ledger,
+    manifest,
+    artifacts,
+  );
+  const finalized = await finalizeWaveExecution({
+    root,
+    stateFile: located.stateFile,
+    ledgerFile,
+    expectedIntegrationManifestSha256: options.expectedIntegrationManifestSha256,
+    expectedIntegrationLockSha256: options.expectedIntegrationLockSha256,
+    phaseArtifacts: {
+      taskFile: materialized.taskFile,
+      taskSha256: materialized.taskSha256,
+      resultFile: materialized.resultFile,
+      resultSha256: materialized.resultSha256,
+      notesFile: materialized.notesFile,
+      notesSha256: materialized.notesSha256,
+    },
+    now: options.now,
+    bindCheckpoint: async (binding) => {
+      validateWaveFinalizationBinding(binding);
+      const checkpointPath = resolveInsideRoot(
+        root,
+        materialized.checkpointFile,
+        "Finalized implementation checkpoint",
+      ).fullPath;
+      const checkpoint = await readJsonOptional(checkpointPath, "Finalized implementation checkpoint");
+      validateCheckpoint(checkpoint, materialized.task);
+      if (checkpoint.waveFinalization
+          && WAVE_FINALIZATION_FIELDS.some((field) => checkpoint.waveFinalization[field] !== binding[field])) {
+        throw new Error("Existing checkpoint Wave binding does not match the finalized Wave.");
+      }
+      if (!checkpoint.waveFinalization) {
+        checkpoint.waveFinalization = binding;
+        checkpoint.updatedAt = binding.finalizedAt;
+        await writeAtomicJson(checkpointPath, checkpoint);
+      }
+    },
+  });
+  return {
+    command: "finalize-wave",
+    status: "ready-for-apply",
+    stateFile: located.stateFile,
+    ledgerFile,
+    receiptFile: finalized.receiptFile,
+    taskFile: materialized.taskFile,
+    resultFile: materialized.resultFile,
+    checkpointFile: materialized.checkpointFile,
+    notesFile: materialized.notesFile,
+    task: materialized.task,
+  };
+}
+
 async function runAdapter(root, options) {
   const { located, phase } = await currentContext(root, options.stateFile);
   if (located.state.runtime.status !== "active" || !phase) {
@@ -1578,13 +2083,20 @@ async function reconcileAdvancedResult(root, located, workflow, options) {
   );
   const checkpointPath = resolveInsideRoot(root, `${phaseRoot}/checkpoint.json`, "Previous checkpoint file").fullPath;
   const checkpoint = await readJsonOptional(checkpointPath, "Previous checkpoint file");
-  if (!task || !result || !checkpoint || checkpoint.status !== "result-received") return null;
+  const completedWave = checkpoint?.status === "completed" && checkpoint.waveFinalization;
+  if (!task || !result || !checkpoint
+      || (checkpoint.status !== "result-received" && !completedWave)) return null;
 
   const previousState = { ...located.state, phase: previousPhase.id };
   validateTask(root, task, previousState, previousPhase, phaseRoot);
   validateCheckpoint(checkpoint, task);
   await validateResult(root, result, task, previousState, phaseRoot);
   if (previousPhase.id === "implementation") {
+    const expectedMode = checkpoint.waveFinalization
+      ? "worktree-wave"
+      : checkpoint.batchFinalization
+        ? "serial-batch"
+        : "ordinary";
     await assertImplementationOwner({
       root,
       state: {
@@ -1595,12 +2107,18 @@ async function reconcileAdvancedResult(root, located, workflow, options) {
           revision: task.preparedRevision,
         },
       },
-      expectedMode: checkpoint.batchFinalization ? "serial-batch" : "ordinary",
-      expectedOwnerId: checkpoint.batchFinalization?.batchId ?? task.dispatchId,
+      expectedMode,
+      expectedOwnerId: checkpoint.waveFinalization?.waveId
+        ?? checkpoint.batchFinalization?.batchId
+        ?? task.dispatchId,
     });
   }
+  await assertWaveFinalizationEvidence(root, located, previousPhase, task, checkpoint);
   await assertBatchFinalizationBeforeRecovery(root, located, previousPhase, task, checkpoint);
   if (result.status !== "completed") return null;
+  if (completedWave) {
+    return { command: "apply", status: "already-applied", stateFile: located.stateFile, state: located.state };
+  }
 
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
   checkpoint.status = "completed";
@@ -1638,6 +2156,11 @@ async function applyResult(root, options) {
   validateCheckpoint(checkpoint, task);
   await validateResult(root, result, task, located.state, phaseRoot);
   if (phase.id === "implementation") {
+    const expectedMode = checkpoint.waveFinalization
+      ? "worktree-wave"
+      : checkpoint.batchFinalization
+        ? "serial-batch"
+        : "ordinary";
     await assertImplementationOwner({
       root,
       state: {
@@ -1647,10 +2170,13 @@ async function applyResult(root, options) {
           revision: task.preparedRevision,
         },
       },
-      expectedMode: checkpoint.batchFinalization ? "serial-batch" : "ordinary",
-      expectedOwnerId: checkpoint.batchFinalization?.batchId ?? task.dispatchId,
+      expectedMode,
+      expectedOwnerId: checkpoint.waveFinalization?.waveId
+        ?? checkpoint.batchFinalization?.batchId
+        ?? task.dispatchId,
     });
   }
+  await assertWaveFinalizationBeforeApply(root, located, phase, task, checkpoint);
   await assertBatchFinalizationBeforeApply(root, located, phase, task, checkpoint);
 
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
@@ -1706,6 +2232,7 @@ export async function runStoryCommand(options = {}) {
   if (options.command === "prepare-batch") return prepareBatch(root, options);
   if (options.command === "prepare-wave") return prepareWave(root, options);
   if (options.command === "finalize-batch") return finalizeBatch(root, options);
+  if (options.command === "finalize-wave") return finalizeWave(root, options);
   if (options.command === "run-adapter") return runAdapter(root, options);
   if (options.command === "apply") return applyResult(root, options);
   if (options.command === "status") {
@@ -1726,6 +2253,8 @@ function parseCliArguments(argv) {
     "--task-dag-file": "taskDagFile",
     "--batch-file": "batchFile",
     "--wave-index": "waveIndex",
+    "--expected-integration-manifest-sha256": "expectedIntegrationManifestSha256",
+    "--expected-integration-lock-sha256": "expectedIntegrationLockSha256",
   };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];

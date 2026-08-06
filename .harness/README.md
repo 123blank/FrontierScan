@@ -124,5 +124,9 @@ Worker 在独立临时 Worktree 中并行运行，候选、result、execution re
 blocked 释放中断、claim/lock 半完成和孤儿候选均按磁盘事实显式恢复。该能力不写主工作树业务文件，不生成正式 phase
 result，不调用 M3 `apply`，也不实现 integration manifest、跨 Worktree 集成、回收、提交或推送。
 
+M5-D-C2 在 C1 ready 证据之上增加 integration manifest 原子冻结、wave 级 integration/recovery owner、按稳定任务
+顺序写入主工作树、partial integration 前缀恢复、`finalize-wave`、wave receipt 与 M3 `apply` 单次推进。所有真实
+Git/Worktree 写入仍只在临时 fixture 中验证；不实现自动冲突解决、主树回滚、Worktree 回收、提交、推送或发布。
+
 `kb-query.ps1` is a read-only keyword search over `llm-knowledge/`. Treat empty results as missing
 knowledge and verify source files directly before implementation.

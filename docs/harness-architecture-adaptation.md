@@ -361,3 +361,9 @@ M5-D-C1 在单个完整 implementation wave 上实现 execution-only 闭环。`p
 - Do not commit, push, or publish without explicit user confirmation.
 - Do not overwrite unrelated dirty files.
 - Keep B2B admin UI changes aligned with project UI guidelines.
+## M5-D-C2 Wave 集成与阶段收尾
+
+M5-D-C2 在全部任务 `ready-for-integration` 后原子冻结 integration manifest，并关闭 C1 的 attempt 变更入口。
+主工作树只允许按 WavePlan 稳定任务顺序形成“已集成前缀 + 当前任务”差异；中断保留前缀，由显式 recovery owner
+继续剩余任务。全部任务集成后，`finalize-wave` 生成正式 phase 产物、wave receipt、finalized ledger 与
+`checkpoint.waveFinalization`，随后仍由 M3 `apply` 唯一推进 phase。

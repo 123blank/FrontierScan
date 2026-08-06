@@ -49,8 +49,12 @@
         "executing",
         "partial",
         "ready-for-integration",
+        "freezing",
+        "integration-frozen",
+        "integrating",
         "partial-integration",
-        "integrated"
+        "integrated",
+        "finalized"
       ]
     },
     "tasks": {

@@ -945,7 +945,20 @@ async function acquireWaveRecoveryLock(root, context, plan, planSha256, options)
   );
   assertExpectedWaveLock(preWriteCreateLock, options.expectedCreateLockSha256, "ExpectedCreateLockSha256");
   assertExpectedWaveLock(preWriteRecoveryLock, options.expectedRecoveryLockSha256, "ExpectedRecoveryLockSha256");
-  await writeAtomicJson(context.recoveryLockPath, lock);
+  try {
+    await writeAtomicJson(context.recoveryLockPath, lock);
+  } catch (error) {
+    if (error?.code !== "EPERM" && error?.code !== "EACCES") throw error;
+    const currentOwner = await inspectWaveLock(
+      root,
+      context.recoveryLockFile,
+      "recovery",
+      plan,
+      planSha256,
+    ).catch(() => null);
+    if (!currentOwner || currentOwner.lockId === lock.lockId) throw error;
+    throw new Error("Wave Worktree recovery lock ownership has changed during acquisition.");
+  }
   if (options.afterWaveRecoveryLockWrite) await options.afterWaveRecoveryLockWrite();
   const owner = await inspectWaveLock(root, context.recoveryLockFile, "recovery", plan, planSha256);
   if (!owner || owner.lockId !== lock.lockId) {

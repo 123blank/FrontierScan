@@ -21,6 +21,18 @@ const TASK_STATUSES = new Set([
   "ready-for-integration",
   "integrated",
 ]);
+const WAVE_STATUSES = new Set([
+  "prepared",
+  "executing",
+  "partial",
+  "ready-for-integration",
+  "freezing",
+  "integration-frozen",
+  "integrating",
+  "partial-integration",
+  "integrated",
+  "finalized",
+]);
 const LEDGER_FIELDS = [
   "schemaVersion",
   "storyId",
@@ -61,6 +73,124 @@ const TASK_FIELDS = [
   "startedAt",
   "workerReadyAt",
   "integratedAt",
+];
+const PREPARATION_LOCK_FIELDS = [
+  "schemaVersion",
+  "lockId",
+  "freezeId",
+  "storyId",
+  "runId",
+  "waveId",
+  "ledgerSha256",
+  "creationReceiptSha256",
+  "pid",
+  "createdAt",
+];
+const INTEGRATION_MANIFEST_FIELDS = [
+  "schemaVersion",
+  "freezeId",
+  "storyId",
+  "runId",
+  "phase",
+  "waveId",
+  "waveIndex",
+  "preparedRevision",
+  "taskDagFile",
+  "taskDagSha256",
+  "wavePlanFile",
+  "wavePlanSha256",
+  "creationReceiptFile",
+  "creationReceiptSha256",
+  "baseCommit",
+  "mainHeadCommit",
+  "businessStatusSnapshot",
+  "tasks",
+  "candidateFiles",
+  "createdAt",
+];
+const MANIFEST_TASK_FIELDS = [
+  "taskId",
+  "dispatchId",
+  "taskFile",
+  "taskSha256",
+  "checkpointFile",
+  "checkpointSha256",
+  "attemptId",
+  "resultFile",
+  "resultSha256",
+  "executionReceiptFile",
+  "executionReceiptSha256",
+  "worktreePath",
+  "headCommit",
+  "predictedFiles",
+];
+const MANIFEST_CANDIDATE_FIELDS = [
+  "taskId",
+  "path",
+  "type",
+  "sha256",
+  "bytes",
+];
+const INTEGRATION_LOCK_FIELDS = [
+  "schemaVersion",
+  "lockId",
+  "freezeId",
+  "manifestSha256",
+  "storyId",
+  "runId",
+  "waveId",
+  "pid",
+  "createdAt",
+];
+const INTEGRATION_RECOVERY_LOCK_FIELDS = [
+  ...INTEGRATION_LOCK_FIELDS,
+  "integrationLockSha256",
+];
+const INTEGRATION_RECEIPT_FIELDS = [
+  "schemaVersion",
+  "storyId",
+  "runId",
+  "phase",
+  "waveId",
+  "waveIndex",
+  "taskId",
+  "dispatchId",
+  "manifestSha256",
+  "baseCommit",
+  "appliedFiles",
+  "completedAt",
+];
+const WAVE_RECEIPT_FIELDS = [
+  "schemaVersion",
+  "storyId",
+  "runId",
+  "phase",
+  "waveId",
+  "waveIndex",
+  "preparedRevision",
+  "integrationManifestFile",
+  "integrationManifestSha256",
+  "tasks",
+  "phaseArtifacts",
+  "completedAt",
+];
+const WAVE_RECEIPT_TASK_FIELDS = [
+  "taskId",
+  "dispatchId",
+  "resultFile",
+  "resultSha256",
+  "executionReceiptFile",
+  "executionReceiptSha256",
+  "integrationReceiptFile",
+  "integrationReceiptSha256",
+];
+const WAVE_PHASE_ARTIFACT_FIELDS = [
+  "taskFile",
+  "taskSha256",
+  "resultFile",
+  "resultSha256",
+  "notesFile",
+  "notesSha256",
 ];
 
 function normalizePath(filePath) {
@@ -128,6 +258,18 @@ async function writeAtomicJson(filePath, value) {
   }
 }
 
+async function writeAtomicBuffer(filePath, value) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const temporary = `${filePath}.tmp-${process.pid}-${createRandomUUID()}`;
+  try {
+    await writeFile(temporary, value);
+    await rename(temporary, filePath);
+  } catch (error) {
+    await unlink(temporary).catch(() => {});
+    throw error;
+  }
+}
+
 async function writeExclusiveJson(root, relativeFile, value, label) {
   const location = resolveInsideRoot(root, relativeFile, label);
   await mkdir(path.dirname(location.fullPath), { recursive: true });
@@ -165,8 +307,1313 @@ function attemptPaths(ledger, taskId, attemptId) {
   };
 }
 
+function integrationPaths(ledger) {
+  const root = `.harness/runs/${ledger.runId}/waves/${ledger.waveId}`;
+  return {
+    manifestFile: `${root}/integration-manifest.json`,
+    preparationLockFile: `${root}/manifest-preparation.lock`,
+    integrationLockFile: `${root}/integration.lock`,
+    integrationRecoveryLockFile: `${root}/integration-recovery.lock`,
+    waveReceiptFile: `${root}/wave-receipt.json`,
+  };
+}
+
 function token(prefix, randomUUID) {
   return `${prefix}-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+}
+
+function pathKey(filePath) {
+  return process.platform === "win32" ? filePath.toLowerCase() : filePath;
+}
+
+async function gitOutput(root, args) {
+  const result = await execFileAsync("git", args, {
+    cwd: root,
+    windowsHide: true,
+    shell: false,
+    timeout: 30_000,
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  return String(result.stdout ?? "");
+}
+
+async function optionalFileSnapshot(root, relativeFile, label) {
+  const location = resolveInsideRoot(root, relativeFile, label);
+  const info = await lstat(location.fullPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (!info) return { path: location.relative, exists: false, sha256: null, bytes: null };
+  if (!info.isFile() || info.isSymbolicLink()) throw new Error(`${label} must be a regular file.`);
+  return {
+    path: location.relative,
+    exists: true,
+    sha256: await fileSha256(root, location.relative, label),
+    bytes: info.size,
+  };
+}
+
+function assertUniqueCandidatePaths(candidates) {
+  const keys = new Map();
+  for (const candidate of candidates) {
+    const key = pathKey(candidate.path);
+    if (keys.has(key)) {
+      throw new Error(`Wave integration candidates contain a duplicate path: ${candidate.path}`);
+    }
+    for (const [existing, existingPath] of keys) {
+      if (key.startsWith(`${existing}/`) || existing.startsWith(`${key}/`)) {
+        throw new Error(
+          `Wave integration candidates contain a parent/child path conflict: ${existingPath} and ${candidate.path}`,
+        );
+      }
+    }
+    keys.set(key, candidate.path);
+  }
+}
+
+function validatePreparationLock(lock, ledger) {
+  assertExactFields(lock, PREPARATION_LOCK_FIELDS, "Wave manifest preparation lock");
+  if (lock.schemaVersion !== "1.0"
+      || typeof lock.lockId !== "string" || !lock.lockId
+      || typeof lock.freezeId !== "string" || !lock.freezeId
+      || lock.storyId !== ledger.storyId
+      || lock.runId !== ledger.runId
+      || lock.waveId !== ledger.waveId
+      || !SHA256_PATTERN.test(lock.ledgerSha256)
+      || lock.creationReceiptSha256 !== ledger.creationReceiptSha256
+      || !Number.isInteger(lock.pid)
+      || typeof lock.createdAt !== "string" || Number.isNaN(Date.parse(lock.createdAt))) {
+    throw new Error("Wave manifest preparation lock does not match the current ledger.");
+  }
+  return lock;
+}
+
+async function assertPreparationOwner(root, ledger, lock, expectedLockSha256) {
+  const paths = integrationPaths(ledger);
+  const currentSha256 = await fileSha256(
+    root,
+    paths.preparationLockFile,
+    "Wave manifest preparation lock",
+  );
+  if (expectedLockSha256 && currentSha256 !== expectedLockSha256) {
+    throw new Error("Wave manifest preparation lock hash changed.");
+  }
+  const current = validatePreparationLock(
+    await readJsonFile(
+      resolveInsideRoot(root, paths.preparationLockFile, "Wave manifest preparation lock").fullPath,
+      "Wave manifest preparation lock",
+    ),
+    ledger,
+  );
+  if (current.lockId !== lock.lockId || current.freezeId !== lock.freezeId) {
+    throw new Error("Wave manifest preparation owner changed.");
+  }
+  return { lock: current, lockSha256: currentSha256, paths };
+}
+
+function validateIntegrationManifest(manifest, ledger) {
+  assertExactFields(manifest, INTEGRATION_MANIFEST_FIELDS, "Wave integration manifest");
+  if (manifest.schemaVersion !== "1.0"
+      || typeof manifest.freezeId !== "string" || !manifest.freezeId
+      || manifest.storyId !== ledger.storyId
+      || manifest.runId !== ledger.runId
+      || manifest.phase !== ledger.phase
+      || manifest.waveId !== ledger.waveId
+      || manifest.waveIndex !== ledger.waveIndex
+      || manifest.preparedRevision !== ledger.preparedRevision
+      || manifest.taskDagFile !== ledger.taskDagFile
+      || manifest.taskDagSha256 !== ledger.taskDagSha256
+      || manifest.wavePlanFile !== ledger.wavePlanFile
+      || manifest.wavePlanSha256 !== ledger.wavePlanSha256
+      || manifest.creationReceiptFile !== ledger.creationReceiptFile
+      || manifest.creationReceiptSha256 !== ledger.creationReceiptSha256
+      || manifest.baseCommit !== ledger.baseCommit
+      || typeof manifest.mainHeadCommit !== "string" || !/^[a-f0-9]{40,64}$/.test(manifest.mainHeadCommit)
+      || typeof manifest.createdAt !== "string" || Number.isNaN(Date.parse(manifest.createdAt))
+      || !manifest.businessStatusSnapshot || typeof manifest.businessStatusSnapshot !== "object"
+      || Array.isArray(manifest.businessStatusSnapshot)
+      || !Array.isArray(manifest.tasks) || manifest.tasks.length !== ledger.tasks.length
+      || !Array.isArray(manifest.candidateFiles) || !manifest.candidateFiles.length) {
+    throw new Error("Wave integration manifest identity is invalid.");
+  }
+  for (let index = 0; index < manifest.tasks.length; index += 1) {
+    const task = manifest.tasks[index];
+    const ledgerTask = ledger.tasks[index];
+    assertExactFields(task, MANIFEST_TASK_FIELDS, "Wave integration manifest task");
+    if (task.taskId !== ledgerTask.taskId
+        || task.dispatchId !== ledgerTask.dispatchId
+        || task.taskFile !== ledgerTask.taskFile
+        || task.taskSha256 !== ledgerTask.taskSha256
+        || task.checkpointFile !== ledgerTask.checkpointFile
+        || task.checkpointSha256 !== ledgerTask.checkpointSha256
+        || task.attemptId !== ledgerTask.currentAttemptId
+        || task.executionReceiptFile !== ledgerTask.executionReceiptFile
+        || task.executionReceiptSha256 !== ledgerTask.executionReceiptSha256
+        || typeof task.resultFile !== "string" || !task.resultFile
+        || !SHA256_PATTERN.test(task.resultSha256)
+        || typeof task.worktreePath !== "string" || !task.worktreePath
+        || task.headCommit !== ledger.baseCommit
+        || !Array.isArray(task.predictedFiles)
+        || task.predictedFiles.some((item) => typeof item !== "string" || !item)) {
+      throw new Error("Wave integration manifest task does not match the current ledger.");
+    }
+  }
+  for (const candidate of manifest.candidateFiles) {
+    assertExactFields(candidate, MANIFEST_CANDIDATE_FIELDS, "Wave integration manifest candidate");
+    if (!manifest.tasks.some((task) => task.taskId === candidate.taskId)
+        || typeof candidate.path !== "string" || !candidate.path
+        || !["backend", "frontend", "phase-output"].includes(candidate.type)
+        || !SHA256_PATTERN.test(candidate.sha256)
+        || !Number.isInteger(candidate.bytes) || candidate.bytes < 0) {
+      throw new Error("Wave integration manifest candidate is invalid.");
+    }
+  }
+  assertUniqueCandidatePaths(manifest.candidateFiles);
+  return manifest;
+}
+
+async function assertFreezeStateAndOwner(root, options, ledger) {
+  if (typeof options.stateFile !== "string" || !options.stateFile) {
+    throw new Error("Wave integration freeze requires stateFile.");
+  }
+  const state = await readJsonFile(
+    resolveInsideRoot(root, options.stateFile, "Harness state file").fullPath,
+    "Harness state file",
+  );
+  if (state.storyId !== ledger.storyId
+      || state.runtime?.runId !== ledger.runId
+      || state.runtime?.status !== "active"
+      || state.runtime?.revision !== ledger.preparedRevision
+      || state.phase !== ledger.phase) {
+    throw new Error("Wave integration freeze requires the active prepared implementation state.");
+  }
+  const { assertImplementationOwner } = await import("./implementation-owner-contract.mjs");
+  await assertImplementationOwner({
+    root,
+    state,
+    expectedMode: "worktree-wave",
+    expectedOwnerId: ledger.waveId,
+  });
+  return state;
+}
+
+async function buildIntegrationManifest(root, options, ledger, lock) {
+  if (!ledger.tasks.every((task) => task.status === "ready-for-integration")) {
+    throw new Error("Wave integration manifest requires every task to be ready-for-integration.");
+  }
+  await assertFreezeStateAndOwner(root, options, ledger);
+  if (await fileSha256(root, ledger.taskDagFile, "Wave Task DAG") !== ledger.taskDagSha256
+      || await fileSha256(root, ledger.wavePlanFile, "Wave Worktree plan") !== ledger.wavePlanSha256
+      || await fileSha256(root, ledger.creationReceiptFile, "Wave creation receipt")
+        !== ledger.creationReceiptSha256) {
+    throw new Error("Wave planning evidence changed before integration freeze.");
+  }
+  const { runWorktreeCommand } = await import("./worktree-runtime.mjs");
+  const inspected = await runWorktreeCommand({
+    root,
+    command: "wave-status",
+    stateFile: options.stateFile,
+    taskDagFile: ledger.taskDagFile,
+    waveIndex: ledger.waveIndex,
+  });
+  if (inspected.planFile !== ledger.wavePlanFile
+      || inspected.status.state !== "ready"
+      || inspected.status.wavePlanSha256 !== ledger.wavePlanSha256
+      || inspected.plan.baseCommit !== ledger.baseCommit) {
+    throw new Error("Wave Worktree facts changed before integration freeze.");
+  }
+  const mainHeadCommit = (await gitOutput(root, ["rev-parse", "HEAD"])).trim();
+  if (mainHeadCommit !== ledger.baseCommit) {
+    throw new Error("Main repository HEAD changed before integration freeze.");
+  }
+  const businessChanges = (await gitOutput(root, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+    "--",
+    "backend/src",
+    "frontend/src",
+  ])).split("\0").filter(Boolean);
+  if (businessChanges.length) {
+    throw new Error("Main repository contains a business change before integration freeze.");
+  }
+
+  const manifestTasks = [];
+  const candidateFiles = [];
+  for (let index = 0; index < ledger.tasks.length; index += 1) {
+    const task = ledger.tasks[index];
+    const planTask = inspected.plan.tasks[index];
+    const statusTask = inspected.status.tasks[index];
+    if (!planTask
+        || !statusTask
+        || planTask.taskId !== task.taskId
+        || statusTask.taskId !== task.taskId
+        || statusTask.state !== "created"
+        || statusTask.headCommit !== ledger.baseCommit) {
+      throw new Error(`Wave Worktree facts changed for task '${task.taskId}'.`);
+    }
+    const paths = attemptPaths(ledger, task.taskId, task.currentAttemptId);
+    const lockInfo = await lstat(
+      resolveInsideRoot(root, paths.lockFile, "Wave task execution lock").fullPath,
+    ).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+    if (lockInfo) throw new Error(`Wave task '${task.taskId}' still has an execution lock.`);
+    if (await fileSha256(root, task.executionReceiptFile, "Wave task execution receipt")
+        !== task.executionReceiptSha256) {
+      throw new Error(`Wave task '${task.taskId}' execution receipt changed.`);
+    }
+    const claim = validateClaim(
+      await readJsonFile(
+        resolveInsideRoot(root, paths.claimFile, "Wave attempt claim").fullPath,
+        "Wave attempt claim",
+      ),
+      ledger,
+      task,
+      paths,
+    );
+    const receipt = await validateRecoveredReadyEvidence(
+      root,
+      options,
+      ledger,
+      task,
+      {
+        attemptId: claim.attemptId,
+        claimId: claim.claimId,
+        lockId: claim.lockId,
+      },
+      paths,
+    );
+    const resultSha256 = await fileSha256(root, paths.resultFile, "Wave task result");
+    const dispatchTask = validateDispatchTaskStructure(await readJsonFile(
+      resolveInsideRoot(root, task.taskFile, "Wave dispatch task").fullPath,
+      "Wave dispatch task",
+    ));
+    manifestTasks.push({
+      taskId: task.taskId,
+      dispatchId: task.dispatchId,
+      taskFile: task.taskFile,
+      taskSha256: task.taskSha256,
+      checkpointFile: task.checkpointFile,
+      checkpointSha256: task.checkpointSha256,
+      attemptId: task.currentAttemptId,
+      resultFile: paths.resultFile,
+      resultSha256,
+      executionReceiptFile: task.executionReceiptFile,
+      executionReceiptSha256: task.executionReceiptSha256,
+      worktreePath: planTask.worktreePath,
+      headCommit: receipt.headCommit,
+      predictedFiles: [...planTask.predictedFiles],
+    });
+    const sortedFiles = [...receipt.files].sort((left, right) => {
+      const priority = (file) => file.kind === "phase-output" ? 1 : 0;
+      return priority(left) - priority(right) || left.path.localeCompare(right.path);
+    });
+    for (const file of sortedFiles) {
+      if (file.kind === "phase-output") {
+        if (!dispatchTask.expectedOutputs.includes(file.path)) {
+          throw new Error(`Wave task '${task.taskId}' contains an unexpected phase output.`);
+        }
+      } else if (!planTask.predictedFiles.some((predicted) => matchesPredictedFile(predicted, file.path))) {
+        throw new Error(`Wave task '${task.taskId}' contains a candidate outside predicted files.`);
+      }
+      candidateFiles.push({
+        taskId: task.taskId,
+        path: file.path,
+        type: file.kind,
+        sha256: file.sha256,
+        bytes: file.bytes,
+      });
+    }
+  }
+  assertUniqueCandidatePaths(candidateFiles);
+  const phaseRoot = `.harness/runs/${ledger.runId}/phases/03-implementation`;
+  const phaseArtifacts = await Promise.all([
+    `${phaseRoot}/task.json`,
+    `${phaseRoot}/result.json`,
+    `${phaseRoot}/checkpoint.json`,
+    `${phaseRoot}/implementation-notes.md`,
+  ].map((file) => optionalFileSnapshot(root, file, "Formal implementation artifact")));
+  const manifest = {
+    schemaVersion: "1.0",
+    freezeId: lock.freezeId,
+    storyId: ledger.storyId,
+    runId: ledger.runId,
+    phase: ledger.phase,
+    waveId: ledger.waveId,
+    waveIndex: ledger.waveIndex,
+    preparedRevision: ledger.preparedRevision,
+    taskDagFile: ledger.taskDagFile,
+    taskDagSha256: ledger.taskDagSha256,
+    wavePlanFile: ledger.wavePlanFile,
+    wavePlanSha256: ledger.wavePlanSha256,
+    creationReceiptFile: ledger.creationReceiptFile,
+    creationReceiptSha256: ledger.creationReceiptSha256,
+    baseCommit: ledger.baseCommit,
+    mainHeadCommit,
+    businessStatusSnapshot: {
+      businessChanges: [],
+      phaseArtifacts,
+    },
+    tasks: manifestTasks,
+    candidateFiles,
+    createdAt: lock.createdAt,
+  };
+  return validateIntegrationManifest(manifest, ledger);
+}
+
+async function bindFrozenManifest(root, options, ledger, lock, manifest) {
+  const owner = await assertPreparationOwner(root, ledger, lock);
+  const paths = owner.paths;
+  await writeExclusiveJson(root, paths.manifestFile, manifest, "Wave integration manifest");
+  if (options.afterManifestWriteBeforeLedgerBinding) {
+    await options.afterManifestWriteBeforeLedgerBinding({
+      lock,
+      manifest,
+      manifestFile: paths.manifestFile,
+      preparationLockFile: paths.preparationLockFile,
+    });
+  }
+  const manifestSha256 = await fileSha256(root, paths.manifestFile, "Wave integration manifest");
+  const currentLedgerSha256 = await fileSha256(root, options.ledgerFile, "Wave execution ledger");
+  const frozen = await mutateLedger({
+    root,
+    ledgerFile: options.ledgerFile,
+    now: options.now,
+    expectedSha256: currentLedgerSha256,
+    mutate: async (current) => {
+      await assertPreparationOwner(root, current, lock, owner.lockSha256);
+      if (current.integrationManifestFile !== paths.manifestFile) {
+        throw new Error("Wave integration manifest path changed before binding.");
+      }
+      if (current.integrationManifestSha256 !== null
+          && current.integrationManifestSha256 !== manifestSha256) {
+        throw new Error("Wave integration manifest hash changed before binding.");
+      }
+      current.integrationManifestSha256 = manifestSha256;
+    },
+  });
+  await assertPreparationOwner(root, frozen, lock, owner.lockSha256);
+  await unlink(resolveInsideRoot(
+    root,
+    paths.preparationLockFile,
+    "Wave manifest preparation lock",
+  ).fullPath);
+  return {
+    command: "freeze-integration",
+    reused: false,
+    ledgerFile: options.ledgerFile,
+    ledger: frozen,
+    manifestFile: paths.manifestFile,
+    manifest,
+    preparationLockFile: paths.preparationLockFile,
+  };
+}
+
+export async function freezeWaveIntegration(options = {}) {
+  const root = path.resolve(options.root ?? process.cwd());
+  const now = options.now ?? (() => new Date().toISOString());
+  const randomUUID = options.randomUUID ?? createRandomUUID;
+  if (!SHA256_PATTERN.test(options.expectedWaveLedgerSha256 ?? "")
+      || !SHA256_PATTERN.test(options.expectedCreationReceiptSha256 ?? "")) {
+    throw new Error("Wave integration freeze requires expected ledger and creation receipt hashes.");
+  }
+  if (await fileSha256(root, options.ledgerFile, "Wave execution ledger")
+      !== options.expectedWaveLedgerSha256) {
+    throw new Error("Wave execution ledger hash changed before integration freeze.");
+  }
+  const initial = validateWaveExecutionLedger(await readJsonFile(
+    resolveInsideRoot(root, options.ledgerFile, "Wave execution ledger").fullPath,
+    "Wave execution ledger",
+  ));
+  if (initial.status !== "ready-for-integration"
+      || initial.creationReceiptSha256 !== options.expectedCreationReceiptSha256
+      || await fileSha256(root, initial.creationReceiptFile, "Wave creation receipt")
+        !== options.expectedCreationReceiptSha256) {
+    throw new Error("Wave must be ready-for-integration with current creation evidence before freeze.");
+  }
+  await assertFreezeStateAndOwner(root, options, initial);
+  const paths = integrationPaths(initial);
+  const lock = {
+    schemaVersion: "1.0",
+    lockId: token("lock", randomUUID),
+    freezeId: token("freeze", randomUUID),
+    storyId: initial.storyId,
+    runId: initial.runId,
+    waveId: initial.waveId,
+    ledgerSha256: options.expectedWaveLedgerSha256,
+    creationReceiptSha256: initial.creationReceiptSha256,
+    pid: process.pid,
+    createdAt: now(),
+  };
+  validatePreparationLock(lock, initial);
+  const freezing = await mutateLedger({
+    root,
+    ledgerFile: options.ledgerFile,
+    now,
+    expectedSha256: options.expectedWaveLedgerSha256,
+    mutate: async (ledger) => {
+      if (ledger.status !== "ready-for-integration"
+          || ledger.integrationManifestFile !== null
+          || ledger.integrationManifestSha256 !== null) {
+        throw new Error("Wave integration manifest preparation has already started.");
+      }
+      ledger.integrationManifestFile = paths.manifestFile;
+      await writeExclusiveJson(
+        root,
+        paths.preparationLockFile,
+        lock,
+        "Wave manifest preparation lock",
+      );
+      if (options.afterPreparationLockWriteBeforeLedgerCommit) {
+        await options.afterPreparationLockWriteBeforeLedgerCommit({ lock, ...paths });
+      }
+    },
+  });
+  const manifest = await buildIntegrationManifest(root, options, freezing, lock);
+  return bindFrozenManifest(root, options, freezing, lock, manifest);
+}
+
+export async function recoverWaveFreeze(options = {}) {
+  const root = path.resolve(options.root ?? process.cwd());
+  if (options.confirmManifestFreezeRecovery !== true) {
+    throw new Error("Manifest freeze recovery requires ConfirmManifestFreezeRecovery.");
+  }
+  if (!SHA256_PATTERN.test(options.expectedPreparationLockSha256 ?? "")
+      || !SHA256_PATTERN.test(options.expectedWaveLedgerSha256 ?? "")
+      || !SHA256_PATTERN.test(options.expectedCreationReceiptSha256 ?? "")) {
+    throw new Error("Manifest freeze recovery requires expected lock, ledger, and creation receipt hashes.");
+  }
+  if (await fileSha256(root, options.ledgerFile, "Wave execution ledger")
+      !== options.expectedWaveLedgerSha256) {
+    throw new Error("Wave execution ledger hash changed before manifest freeze recovery.");
+  }
+  let ledger = validateWaveExecutionLedger(await readJsonFile(
+    resolveInsideRoot(root, options.ledgerFile, "Wave execution ledger").fullPath,
+    "Wave execution ledger",
+  ));
+  if (ledger.creationReceiptSha256 !== options.expectedCreationReceiptSha256) {
+    throw new Error("Wave creation receipt hash changed before manifest freeze recovery.");
+  }
+  await assertFreezeStateAndOwner(root, options, ledger);
+  const paths = integrationPaths(ledger);
+  const lock = validatePreparationLock(
+    await readJsonFile(
+      resolveInsideRoot(root, paths.preparationLockFile, "Wave manifest preparation lock").fullPath,
+      "Wave manifest preparation lock",
+    ),
+    ledger,
+  );
+  if (lock.freezeId !== options.freezeId
+      || await fileSha256(root, paths.preparationLockFile, "Wave manifest preparation lock")
+        !== options.expectedPreparationLockSha256) {
+    throw new Error("Wave manifest preparation lock changed before recovery.");
+  }
+  if (ledger.integrationManifestFile === null) {
+    if (ledger.status !== "ready-for-integration") {
+      throw new Error("Wave manifest freeze recovery found an incompatible ledger state.");
+    }
+    ledger = await mutateLedger({
+      root,
+      ledgerFile: options.ledgerFile,
+      now: options.now,
+      expectedSha256: options.expectedWaveLedgerSha256,
+      mutate: async (current) => {
+        await assertPreparationOwner(root, current, lock, options.expectedPreparationLockSha256);
+        current.integrationManifestFile = paths.manifestFile;
+      },
+    });
+  } else if (ledger.integrationManifestFile !== paths.manifestFile
+      || !["freezing", "integration-frozen"].includes(ledger.status)) {
+    throw new Error("Wave manifest freeze recovery found incompatible manifest evidence.");
+  }
+  const manifest = await buildIntegrationManifest(root, options, ledger, lock);
+  const existingInfo = await lstat(
+    resolveInsideRoot(root, paths.manifestFile, "Wave integration manifest").fullPath,
+  ).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (existingInfo) {
+    const existing = validateIntegrationManifest(await readJsonFile(
+      resolveInsideRoot(root, paths.manifestFile, "Wave integration manifest").fullPath,
+      "Wave integration manifest",
+    ), ledger);
+    if (JSON.stringify(existing) !== JSON.stringify(manifest)) {
+      throw new Error("Existing Wave integration manifest drifted during recovery.");
+    }
+  }
+  if (ledger.integrationManifestSha256 !== null) {
+    if (await fileSha256(root, paths.manifestFile, "Wave integration manifest")
+        !== ledger.integrationManifestSha256) {
+      throw new Error("Frozen Wave integration manifest changed before recovery.");
+    }
+    await assertPreparationOwner(root, ledger, lock, options.expectedPreparationLockSha256);
+    await unlink(resolveInsideRoot(
+      root,
+      paths.preparationLockFile,
+      "Wave manifest preparation lock",
+    ).fullPath);
+    return {
+      command: "recover-freeze",
+      reused: true,
+      ledgerFile: options.ledgerFile,
+      ledger,
+      manifestFile: paths.manifestFile,
+      manifest,
+      preparationLockFile: paths.preparationLockFile,
+    };
+  }
+  const recovered = await bindFrozenManifest(root, options, ledger, lock, manifest);
+  return { ...recovered, command: "recover-freeze" };
+}
+
+function validateIntegrationLock(lock, ledger, manifest) {
+  assertExactFields(lock, INTEGRATION_LOCK_FIELDS, "Wave integration lock");
+  if (lock.schemaVersion !== "1.0"
+      || typeof lock.lockId !== "string" || !lock.lockId
+      || lock.freezeId !== manifest.freezeId
+      || lock.manifestSha256 !== ledger.integrationManifestSha256
+      || lock.storyId !== ledger.storyId
+      || lock.runId !== ledger.runId
+      || lock.waveId !== ledger.waveId
+      || !Number.isInteger(lock.pid)
+      || typeof lock.createdAt !== "string" || Number.isNaN(Date.parse(lock.createdAt))) {
+    throw new Error("Wave integration lock does not match the frozen manifest.");
+  }
+  return lock;
+}
+
+function validateIntegrationRecoveryLock(lock, ledger, manifest, integrationLockSha256) {
+  assertExactFields(lock, INTEGRATION_RECOVERY_LOCK_FIELDS, "Wave integration recovery lock");
+  validateIntegrationLock(
+    Object.fromEntries(INTEGRATION_LOCK_FIELDS.map((field) => [field, lock[field]])),
+    ledger,
+    manifest,
+  );
+  if (lock.integrationLockSha256 !== integrationLockSha256) {
+    throw new Error("Wave integration recovery lock does not bind the current integration lock.");
+  }
+  return lock;
+}
+
+async function loadFrozenIntegrationContext(root, options) {
+  if (!SHA256_PATTERN.test(options.expectedIntegrationManifestSha256 ?? "")) {
+    throw new Error("Wave integration requires ExpectedIntegrationManifestSha256.");
+  }
+  const ledger = validateWaveExecutionLedger(await readJsonFile(
+    resolveInsideRoot(root, options.ledgerFile, "Wave execution ledger").fullPath,
+    "Wave execution ledger",
+  ));
+  if (!["integration-frozen", "integrating", "partial-integration", "integrated", "finalized"].includes(ledger.status)
+      || ledger.integrationManifestFile === null
+      || ledger.integrationManifestSha256 !== options.expectedIntegrationManifestSha256
+      || await fileSha256(root, ledger.integrationManifestFile, "Wave integration manifest")
+        !== options.expectedIntegrationManifestSha256) {
+    throw new Error("Wave integration requires a current frozen integration manifest.");
+  }
+  await assertFreezeStateAndOwner(root, options, ledger);
+  const manifest = validateIntegrationManifest(await readJsonFile(
+    resolveInsideRoot(root, ledger.integrationManifestFile, "Wave integration manifest").fullPath,
+    "Wave integration manifest",
+  ), ledger);
+  return { ledger, manifest, paths: integrationPaths(ledger) };
+}
+
+async function acquireWaveIntegrationOwner(root, options, context) {
+  const { ledger, manifest, paths } = context;
+  const lock = {
+    schemaVersion: "1.0",
+    lockId: token("lock", options.randomUUID ?? createRandomUUID),
+    freezeId: manifest.freezeId,
+    manifestSha256: ledger.integrationManifestSha256,
+    storyId: ledger.storyId,
+    runId: ledger.runId,
+    waveId: ledger.waveId,
+    pid: process.pid,
+    createdAt: (options.now ?? (() => new Date().toISOString()))(),
+  };
+  validateIntegrationLock(lock, ledger, manifest);
+  await writeExclusiveJson(root, paths.integrationLockFile, lock, "Wave integration lock");
+  const integrationLockSha256 = await fileSha256(
+    root,
+    paths.integrationLockFile,
+    "Wave integration lock",
+  );
+  return {
+    mode: "integration",
+    lock,
+    integrationLockSha256,
+    recoveryLock: null,
+    recoveryLockSha256: null,
+    paths,
+  };
+}
+
+async function acquireWaveIntegrationRecoveryOwner(root, options, context) {
+  const { ledger, manifest, paths } = context;
+  if (!SHA256_PATTERN.test(options.expectedIntegrationLockSha256 ?? "")) {
+    throw new Error("Wave integration recovery requires ExpectedIntegrationLockSha256.");
+  }
+  const integrationLockSha256 = await fileSha256(
+    root,
+    paths.integrationLockFile,
+    "Wave integration lock",
+  );
+  if (integrationLockSha256 !== options.expectedIntegrationLockSha256) {
+    throw new Error("Wave integration lock changed before recovery.");
+  }
+  const integrationLock = validateIntegrationLock(await readJsonFile(
+    resolveInsideRoot(root, paths.integrationLockFile, "Wave integration lock").fullPath,
+    "Wave integration lock",
+  ), ledger, manifest);
+  const existingInfo = await lstat(
+    resolveInsideRoot(root, paths.integrationRecoveryLockFile, "Wave integration recovery lock").fullPath,
+  ).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  let recoveryLock;
+  let recoveryLockSha256;
+  if (existingInfo) {
+    if (!SHA256_PATTERN.test(options.expectedIntegrationRecoveryLockSha256 ?? "")) {
+      throw new Error("Existing Wave integration recovery lock requires its expected SHA-256.");
+    }
+    recoveryLockSha256 = await fileSha256(
+      root,
+      paths.integrationRecoveryLockFile,
+      "Wave integration recovery lock",
+    );
+    if (recoveryLockSha256 !== options.expectedIntegrationRecoveryLockSha256) {
+      throw new Error("Wave integration recovery lock changed.");
+    }
+    recoveryLock = validateIntegrationRecoveryLock(await readJsonFile(
+      resolveInsideRoot(root, paths.integrationRecoveryLockFile, "Wave integration recovery lock").fullPath,
+      "Wave integration recovery lock",
+    ), ledger, manifest, integrationLockSha256);
+  } else {
+    recoveryLock = {
+      schemaVersion: "1.0",
+      lockId: token("lock", options.randomUUID ?? createRandomUUID),
+      freezeId: manifest.freezeId,
+      manifestSha256: ledger.integrationManifestSha256,
+      storyId: ledger.storyId,
+      runId: ledger.runId,
+      waveId: ledger.waveId,
+      pid: process.pid,
+      createdAt: (options.now ?? (() => new Date().toISOString()))(),
+      integrationLockSha256,
+    };
+    validateIntegrationRecoveryLock(recoveryLock, ledger, manifest, integrationLockSha256);
+    await writeExclusiveJson(
+      root,
+      paths.integrationRecoveryLockFile,
+      recoveryLock,
+      "Wave integration recovery lock",
+    );
+    recoveryLockSha256 = await fileSha256(
+      root,
+      paths.integrationRecoveryLockFile,
+      "Wave integration recovery lock",
+    );
+  }
+  if (await fileSha256(root, paths.integrationLockFile, "Wave integration lock")
+      !== integrationLockSha256) {
+    throw new Error("Wave integration lock changed while recovery ownership was acquired.");
+  }
+  return {
+    mode: "recovery",
+    lock: integrationLock,
+    integrationLockSha256,
+    recoveryLock,
+    recoveryLockSha256,
+    paths,
+  };
+}
+
+async function assertWaveIntegrationOwner(root, options, owner, ledger, manifest) {
+  if (await fileSha256(root, ledger.integrationManifestFile, "Wave integration manifest")
+      !== ledger.integrationManifestSha256
+      || ledger.integrationManifestSha256 !== owner.lock.manifestSha256) {
+    throw new Error("Wave integration manifest changed while integration was active.");
+  }
+  const integrationLockSha256 = await fileSha256(
+    root,
+    owner.paths.integrationLockFile,
+    "Wave integration lock",
+  );
+  if (integrationLockSha256 !== owner.integrationLockSha256) {
+    throw new Error("Wave integration owner lock changed.");
+  }
+  const integrationLock = validateIntegrationLock(await readJsonFile(
+    resolveInsideRoot(root, owner.paths.integrationLockFile, "Wave integration lock").fullPath,
+    "Wave integration lock",
+  ), ledger, manifest);
+  if (integrationLock.lockId !== owner.lock.lockId) {
+    throw new Error("Wave integration owner changed.");
+  }
+  const recoveryInfo = await lstat(
+    resolveInsideRoot(root, owner.paths.integrationRecoveryLockFile, "Wave integration recovery lock").fullPath,
+  ).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (owner.mode === "integration") {
+    if (recoveryInfo) throw new Error("Wave integration owner was fenced by a recovery owner.");
+    return;
+  }
+  if (!recoveryInfo
+      || await fileSha256(root, owner.paths.integrationRecoveryLockFile, "Wave integration recovery lock")
+        !== owner.recoveryLockSha256) {
+    throw new Error("Wave integration recovery owner changed.");
+  }
+  const recoveryLock = validateIntegrationRecoveryLock(await readJsonFile(
+    resolveInsideRoot(root, owner.paths.integrationRecoveryLockFile, "Wave integration recovery lock").fullPath,
+    "Wave integration recovery lock",
+  ), ledger, manifest, integrationLockSha256);
+  if (recoveryLock.lockId !== owner.recoveryLock.lockId) {
+    throw new Error("Wave integration recovery owner changed.");
+  }
+}
+
+async function assertNoSymlinkTarget(root, fullPath, label) {
+  const parts = path.relative(root, fullPath).split(path.sep).filter(Boolean);
+  let current = root;
+  for (const part of parts) {
+    current = path.join(current, part);
+    const info = await lstat(current).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+    if (!info) break;
+    if (info.isSymbolicLink()) throw new Error(`${label} must not traverse a symbolic link.`);
+  }
+}
+
+async function currentFileEvidence(root, relativeFile, label) {
+  const location = resolveInsideRoot(root, relativeFile, label);
+  await assertNoSymlinkTarget(root, location.fullPath, label);
+  const info = await lstat(location.fullPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (!info) return { exists: false, sha256: null, bytes: null, location };
+  if (!info.isFile() || info.isSymbolicLink()) throw new Error(`${label} must be a regular file.`);
+  return {
+    exists: true,
+    sha256: await fileSha256(root, location.relative, label),
+    bytes: info.size,
+    location,
+  };
+}
+
+async function gitObjectBuffer(root, commit, relativeFile) {
+  try {
+    const result = await execFileAsync("git", ["show", `${commit}:${relativeFile}`], {
+      cwd: root,
+      windowsHide: true,
+      shell: false,
+      timeout: 30_000,
+      maxBuffer: 4 * 1024 * 1024,
+      encoding: "buffer",
+    });
+    return Buffer.from(result.stdout ?? []);
+  } catch (error) {
+    if (error?.code === 128) return null;
+    throw new Error(`Cannot inspect base content for ${relativeFile}.`);
+  }
+}
+
+function integrationReceiptFileFor(ledger, taskId) {
+  return `.harness/runs/${ledger.runId}/waves/${ledger.waveId}/tasks/${taskId}/integration-receipt.json`;
+}
+
+function taskManifestCandidates(manifest, taskId) {
+  return manifest.candidateFiles.filter((candidate) => candidate.taskId === taskId);
+}
+
+function validateIntegrationReceipt(receipt, ledger, manifest, task, candidates) {
+  assertExactFields(receipt, INTEGRATION_RECEIPT_FIELDS, "Wave integration receipt");
+  if (receipt.schemaVersion !== "1.0"
+      || receipt.storyId !== ledger.storyId
+      || receipt.runId !== ledger.runId
+      || receipt.phase !== ledger.phase
+      || receipt.waveId !== ledger.waveId
+      || receipt.waveIndex !== ledger.waveIndex
+      || receipt.taskId !== task.taskId
+      || receipt.dispatchId !== task.dispatchId
+      || receipt.manifestSha256 !== ledger.integrationManifestSha256
+      || receipt.baseCommit !== ledger.baseCommit
+      || !Array.isArray(receipt.appliedFiles)
+      || receipt.appliedFiles.length !== candidates.length
+      || typeof receipt.completedAt !== "string" || Number.isNaN(Date.parse(receipt.completedAt))) {
+    throw new Error("Wave integration receipt identity is invalid.");
+  }
+  for (let index = 0; index < candidates.length; index += 1) {
+    if (JSON.stringify(receipt.appliedFiles[index]) !== JSON.stringify(candidates[index])) {
+      throw new Error("Wave integration receipt files do not match the frozen manifest.");
+    }
+  }
+  return receipt;
+}
+
+async function assertFormalArtifactsUnchanged(root, manifest) {
+  for (const expected of manifest.businessStatusSnapshot.phaseArtifacts) {
+    const actual = await currentFileEvidence(root, expected.path, "Formal implementation artifact");
+    if (actual.exists !== expected.exists
+        || actual.sha256 !== expected.sha256
+        || actual.bytes !== expected.bytes) {
+      throw new Error(`Formal implementation artifact changed before Wave finalization: ${expected.path}`);
+    }
+  }
+}
+
+async function assertMainIntegrationState(root, ledger, manifest, currentTaskId, allowFormalArtifacts = false) {
+  if ((await gitOutput(root, ["rev-parse", "HEAD"])).trim() !== manifest.mainHeadCommit) {
+    throw new Error("Main repository HEAD changed during Wave integration.");
+  }
+  if (!allowFormalArtifacts) await assertFormalArtifactsUnchanged(root, manifest);
+  const integratedIds = new Set(
+    ledger.tasks.filter((task) => task.status === "integrated").map((task) => task.taskId),
+  );
+  const allowedBusinessChanges = new Set();
+  for (const candidate of manifest.candidateFiles) {
+    const current = await currentFileEvidence(root, candidate.path, "Wave integration target");
+    const isIntegrated = integratedIds.has(candidate.taskId);
+    const isCurrent = candidate.taskId === currentTaskId;
+    const matchesCandidate = current.exists
+      && current.sha256 === candidate.sha256
+      && current.bytes === candidate.bytes;
+    if (isIntegrated) {
+      if (!matchesCandidate) {
+        throw new Error(`Integrated Wave prefix candidate changed: ${candidate.path}`);
+      }
+      if (candidate.type !== "phase-output") allowedBusinessChanges.add(pathKey(candidate.path));
+      continue;
+    }
+    if (isCurrent && matchesCandidate) {
+      if (candidate.type !== "phase-output") allowedBusinessChanges.add(pathKey(candidate.path));
+      continue;
+    }
+    if (candidate.type === "phase-output") {
+      if (current.exists) throw new Error(`Future Wave phase candidate appeared early: ${candidate.path}`);
+      continue;
+    }
+    const base = await gitObjectBuffer(root, ledger.baseCommit, candidate.path);
+    if (base === null) {
+      if (current.exists) throw new Error(`Future Wave business candidate appeared early: ${candidate.path}`);
+    } else if (!current.exists
+        || current.sha256 !== `sha256:${createHash("sha256").update(base).digest("hex")}`
+        || current.bytes !== base.byteLength) {
+      throw new Error(`Wave business target changed outside the integrated prefix: ${candidate.path}`);
+    }
+  }
+  const changes = (await gitOutput(root, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+    "--",
+    "backend/src",
+    "frontend/src",
+  ])).split("\0").filter(Boolean);
+  for (const record of changes) {
+    const status = record.slice(0, 2);
+    const relative = normalizePath(record.slice(3));
+    if (!relative || status.includes("R") || status.includes("C") || status.includes("D")) {
+      throw new Error("Wave integration does not support renamed, copied, or deleted business files.");
+    }
+    if (!allowedBusinessChanges.has(pathKey(relative))) {
+      throw new Error(`Main repository contains an unexplained business change: ${relative}`);
+    }
+  }
+}
+
+async function readTaskCandidateBuffers(root, manifest, taskId) {
+  const task = manifest.tasks.find((item) => item.taskId === taskId);
+  const candidates = taskManifestCandidates(manifest, taskId);
+  const loaded = [];
+  for (const candidate of candidates) {
+    const source = resolveInsideRoot(
+      root,
+      `${task.worktreePath}/${candidate.path}`,
+      "Wave Worktree integration candidate",
+    );
+    await assertNoSymlinkTarget(root, source.fullPath, "Wave Worktree integration candidate");
+    const info = await lstat(source.fullPath);
+    if (!info.isFile() || info.isSymbolicLink()) {
+      throw new Error(`Wave Worktree candidate must be a regular file: ${candidate.path}`);
+    }
+    const buffer = await readFile(source.fullPath);
+    if (buffer.byteLength !== candidate.bytes
+        || `sha256:${createHash("sha256").update(buffer).digest("hex")}` !== candidate.sha256) {
+      throw new Error(`Wave Worktree candidate changed after manifest freeze: ${candidate.path}`);
+    }
+    loaded.push({ candidate, buffer });
+  }
+  return loaded;
+}
+
+async function integrateWaveTask(root, options, owner, context, task) {
+  const { ledger, manifest } = context;
+  const candidates = taskManifestCandidates(manifest, task.taskId);
+  const receiptFile = integrationReceiptFileFor(ledger, task.taskId);
+  if (task.status === "integrated") {
+    if (task.integrationReceiptFile !== receiptFile
+        || await fileSha256(root, receiptFile, "Wave integration receipt")
+          !== task.integrationReceiptSha256) {
+      throw new Error(`Integrated Wave task receipt changed: ${task.taskId}`);
+    }
+    validateIntegrationReceipt(await readJsonFile(
+      resolveInsideRoot(root, receiptFile, "Wave integration receipt").fullPath,
+      "Wave integration receipt",
+    ), ledger, manifest, task, candidates);
+    return { reused: true, receiptFile };
+  }
+  if (task.status !== "ready-for-integration") {
+    throw new Error(`Wave task '${task.taskId}' is not ready for integration.`);
+  }
+  await assertWaveIntegrationOwner(root, options, owner, ledger, manifest);
+  await assertMainIntegrationState(root, ledger, manifest, task.taskId);
+  const loaded = await readTaskCandidateBuffers(root, manifest, task.taskId);
+  for (const { candidate, buffer } of loaded) {
+    await assertWaveIntegrationOwner(root, options, owner, ledger, manifest);
+    const target = resolveInsideRoot(root, candidate.path, "Wave integration target");
+    await assertNoSymlinkTarget(root, target.fullPath, "Wave integration target");
+    const current = await currentFileEvidence(root, candidate.path, "Wave integration target");
+    if (current.sha256 === candidate.sha256 && current.bytes === candidate.bytes) continue;
+    await writeAtomicBuffer(target.fullPath, buffer);
+  }
+  await assertWaveIntegrationOwner(root, options, owner, ledger, manifest);
+  await assertMainIntegrationState(root, ledger, manifest, task.taskId);
+  if (options.afterTaskCandidatesWriteBeforeReceipt) {
+    await options.afterTaskCandidatesWriteBeforeReceipt({
+      taskId: task.taskId,
+      integrationLockFile: owner.paths.integrationLockFile,
+      integrationRecoveryLockFile: owner.paths.integrationRecoveryLockFile,
+      receiptFile,
+    });
+  }
+  const receipt = {
+    schemaVersion: "1.0",
+    storyId: ledger.storyId,
+    runId: ledger.runId,
+    phase: ledger.phase,
+    waveId: ledger.waveId,
+    waveIndex: ledger.waveIndex,
+    taskId: task.taskId,
+    dispatchId: task.dispatchId,
+    manifestSha256: ledger.integrationManifestSha256,
+    baseCommit: ledger.baseCommit,
+    appliedFiles: candidates.map((candidate) => ({ ...candidate })),
+    completedAt: owner.lock.createdAt,
+  };
+  validateIntegrationReceipt(receipt, ledger, manifest, task, candidates);
+  await writeExclusiveJson(root, receiptFile, receipt, "Wave integration receipt");
+  const receiptSha256 = await fileSha256(root, receiptFile, "Wave integration receipt");
+  if (options.afterTaskIntegrationReceiptBeforeLedger) {
+    await options.afterTaskIntegrationReceiptBeforeLedger({ taskId: task.taskId, receiptFile, receipt });
+  }
+  const currentLedgerSha256 = await fileSha256(root, options.ledgerFile, "Wave execution ledger");
+  const updated = await mutateLedger({
+    root,
+    ledgerFile: options.ledgerFile,
+    now: options.now,
+    expectedSha256: currentLedgerSha256,
+    mutate: async (currentLedger) => {
+      await assertWaveIntegrationOwner(root, options, owner, currentLedger, manifest);
+      const currentTask = currentLedger.tasks.find((item) => item.taskId === task.taskId);
+      if (!currentTask || currentTask.status !== "ready-for-integration") {
+        throw new Error(`Wave task '${task.taskId}' changed before integration receipt binding.`);
+      }
+      currentTask.status = "integrated";
+      currentTask.integrationReceiptFile = receiptFile;
+      currentTask.integrationReceiptSha256 = receiptSha256;
+      currentTask.integratedAt = receipt.completedAt;
+      currentLedger.status = "partial-integration";
+    },
+  });
+  return { reused: false, receiptFile, receipt, ledger: updated };
+}
+
+async function runOwnedWaveIntegration(root, options, owner) {
+  const integratedTaskIds = [];
+  try {
+    let context = await loadFrozenIntegrationContext(root, options);
+    await assertWaveIntegrationOwner(root, options, owner, context.ledger, context.manifest);
+    if (context.ledger.status !== "integrated") {
+      const currentSha256 = await fileSha256(root, options.ledgerFile, "Wave execution ledger");
+      await mutateLedger({
+        root,
+        ledgerFile: options.ledgerFile,
+        now: options.now,
+        expectedSha256: currentSha256,
+        mutate: async (ledger) => {
+          await assertWaveIntegrationOwner(root, options, owner, ledger, context.manifest);
+          ledger.status = "integrating";
+        },
+      });
+    }
+    for (const manifestTask of context.manifest.tasks) {
+      context = await loadFrozenIntegrationContext(root, options);
+      const task = context.ledger.tasks.find((item) => item.taskId === manifestTask.taskId);
+      const result = await integrateWaveTask(root, options, owner, context, task);
+      if (!result.reused) integratedTaskIds.push(task.taskId);
+    }
+    context = await loadFrozenIntegrationContext(root, options);
+    await assertWaveIntegrationOwner(root, options, owner, context.ledger, context.manifest);
+    if (context.ledger.status !== "integrated") {
+      throw new Error("Wave integration did not converge to integrated.");
+    }
+    await assertMainIntegrationState(root, context.ledger, context.manifest, null);
+    return {
+      command: owner.mode === "recovery" ? "recover-integration" : "integrate-wave",
+      ledgerFile: options.ledgerFile,
+      ledger: context.ledger,
+      integratedTaskIds,
+      integrationLockFile: owner.paths.integrationLockFile,
+      integrationLockSha256: owner.integrationLockSha256,
+      integrationRecoveryLockFile: owner.paths.integrationRecoveryLockFile,
+      integrationRecoveryLockSha256: owner.recoveryLockSha256,
+    };
+  } catch (error) {
+    try {
+      const context = await loadFrozenIntegrationContext(root, options);
+      await assertWaveIntegrationOwner(root, options, owner, context.ledger, context.manifest);
+      if (context.ledger.status !== "integrated") {
+        await mutateLedger({
+          root,
+          ledgerFile: options.ledgerFile,
+          now: options.now,
+          expectedSha256: await fileSha256(root, options.ledgerFile, "Wave execution ledger"),
+          mutate: async (ledger) => {
+            await assertWaveIntegrationOwner(root, options, owner, ledger, context.manifest);
+            ledger.status = "partial-integration";
+          },
+        });
+      }
+    } catch {
+      // Preserve the original integration failure and all owner evidence.
+    }
+    throw error;
+  }
+}
+
+export async function integrateWave(options = {}) {
+  const root = path.resolve(options.root ?? process.cwd());
+  if (options.confirmWaveIntegrate !== true) {
+    throw new Error("Wave integration requires ConfirmWaveIntegrate.");
+  }
+  const context = await loadFrozenIntegrationContext(root, options);
+  if (context.ledger.status !== "integration-frozen") {
+    throw new Error("Normal Wave integration requires an integration-frozen ledger.");
+  }
+  const owner = await acquireWaveIntegrationOwner(root, options, context);
+  return runOwnedWaveIntegration(root, options, owner);
+}
+
+export async function recoverWaveIntegration(options = {}) {
+  const root = path.resolve(options.root ?? process.cwd());
+  if (options.confirmWaveIntegrationRecovery !== true) {
+    throw new Error("Wave integration recovery requires ConfirmWaveIntegrationRecovery.");
+  }
+  const context = await loadFrozenIntegrationContext(root, options);
+  if (!["integrating", "partial-integration", "integrated"].includes(context.ledger.status)) {
+    throw new Error("Wave integration recovery requires an interrupted or integrated ledger.");
+  }
+  const owner = await acquireWaveIntegrationRecoveryOwner(root, options, context);
+  return runOwnedWaveIntegration(root, options, owner);
+}
+
+function validateWaveReceipt(receipt, ledger, phaseArtifacts) {
+  assertExactFields(receipt, WAVE_RECEIPT_FIELDS, "Wave receipt");
+  if (receipt.schemaVersion !== "1.0"
+      || receipt.storyId !== ledger.storyId
+      || receipt.runId !== ledger.runId
+      || receipt.phase !== ledger.phase
+      || receipt.waveId !== ledger.waveId
+      || receipt.waveIndex !== ledger.waveIndex
+      || receipt.preparedRevision !== ledger.preparedRevision
+      || receipt.integrationManifestFile !== ledger.integrationManifestFile
+      || receipt.integrationManifestSha256 !== ledger.integrationManifestSha256
+      || !Array.isArray(receipt.tasks) || receipt.tasks.length !== ledger.tasks.length
+      || typeof receipt.completedAt !== "string" || Number.isNaN(Date.parse(receipt.completedAt))) {
+    throw new Error("Wave receipt identity is invalid.");
+  }
+  assertExactFields(receipt.phaseArtifacts, WAVE_PHASE_ARTIFACT_FIELDS, "Wave receipt phase artifacts");
+  if (WAVE_PHASE_ARTIFACT_FIELDS.some((field) => receipt.phaseArtifacts[field] !== phaseArtifacts[field])) {
+    throw new Error("Wave receipt phase artifacts do not match the finalized implementation artifacts.");
+  }
+  for (let index = 0; index < receipt.tasks.length; index += 1) {
+    const item = receipt.tasks[index];
+    const task = ledger.tasks[index];
+    assertExactFields(item, WAVE_RECEIPT_TASK_FIELDS, "Wave receipt task");
+    const manifestTask = item.taskId === task.taskId;
+    if (!manifestTask
+        || item.dispatchId !== task.dispatchId
+        || item.executionReceiptFile !== task.executionReceiptFile
+        || item.executionReceiptSha256 !== task.executionReceiptSha256
+        || item.integrationReceiptFile !== task.integrationReceiptFile
+        || item.integrationReceiptSha256 !== task.integrationReceiptSha256
+        || typeof item.resultFile !== "string" || !item.resultFile
+        || !SHA256_PATTERN.test(item.resultSha256)) {
+      throw new Error("Wave receipt task does not match the finalized ledger.");
+    }
+  }
+  return receipt;
+}
+
+async function loadExistingIntegrationOwner(root, options, context) {
+  const { ledger, manifest, paths } = context;
+  if (!SHA256_PATTERN.test(options.expectedIntegrationLockSha256 ?? "")) {
+    throw new Error("Wave finalization requires ExpectedIntegrationLockSha256.");
+  }
+  const integrationLockSha256 = await fileSha256(
+    root,
+    paths.integrationLockFile,
+    "Wave integration lock",
+  );
+  if (integrationLockSha256 !== options.expectedIntegrationLockSha256) {
+    throw new Error("Wave integration lock changed before finalization.");
+  }
+  const lock = validateIntegrationLock(await readJsonFile(
+    resolveInsideRoot(root, paths.integrationLockFile, "Wave integration lock").fullPath,
+    "Wave integration lock",
+  ), ledger, manifest);
+  const recoveryInfo = await lstat(
+    resolveInsideRoot(root, paths.integrationRecoveryLockFile, "Wave integration recovery lock").fullPath,
+  ).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (!recoveryInfo) {
+    return {
+      mode: "integration",
+      lock,
+      integrationLockSha256,
+      recoveryLock: null,
+      recoveryLockSha256: null,
+      paths,
+    };
+  }
+  const recoveryLockSha256 = await fileSha256(
+    root,
+    paths.integrationRecoveryLockFile,
+    "Wave integration recovery lock",
+  );
+  const recoveryLock = validateIntegrationRecoveryLock(await readJsonFile(
+    resolveInsideRoot(root, paths.integrationRecoveryLockFile, "Wave integration recovery lock").fullPath,
+    "Wave integration recovery lock",
+  ), ledger, manifest, integrationLockSha256);
+  return {
+    mode: "recovery",
+    lock,
+    integrationLockSha256,
+    recoveryLock,
+    recoveryLockSha256,
+    paths,
+  };
+}
+
+export async function finalizeWaveExecution(options = {}) {
+  const root = path.resolve(options.root ?? process.cwd());
+  if (!options.phaseArtifacts || typeof options.phaseArtifacts !== "object") {
+    throw new Error("Wave finalization requires formal phase artifact bindings.");
+  }
+  const context = await loadFrozenIntegrationContext(root, options);
+  if (!["integrated", "finalized"].includes(context.ledger.status)) {
+    throw new Error("Wave finalization requires every task to be integrated.");
+  }
+  const owner = await loadExistingIntegrationOwner(root, options, context);
+  await assertWaveIntegrationOwner(root, options, owner, context.ledger, context.manifest);
+  await assertMainIntegrationState(root, context.ledger, context.manifest, null, true);
+  const receiptFile = context.paths.waveReceiptFile;
+  const completedAt = context.ledger.finalizedAt
+    ?? (options.now ?? (() => new Date().toISOString()))();
+  const receipt = {
+    schemaVersion: "1.0",
+    storyId: context.ledger.storyId,
+    runId: context.ledger.runId,
+    phase: context.ledger.phase,
+    waveId: context.ledger.waveId,
+    waveIndex: context.ledger.waveIndex,
+    preparedRevision: context.ledger.preparedRevision,
+    integrationManifestFile: context.ledger.integrationManifestFile,
+    integrationManifestSha256: context.ledger.integrationManifestSha256,
+    tasks: context.ledger.tasks.map((task) => {
+      const manifestTask = context.manifest.tasks.find((item) => item.taskId === task.taskId);
+      return {
+        taskId: task.taskId,
+        dispatchId: task.dispatchId,
+        resultFile: manifestTask.resultFile,
+        resultSha256: manifestTask.resultSha256,
+        executionReceiptFile: task.executionReceiptFile,
+        executionReceiptSha256: task.executionReceiptSha256,
+        integrationReceiptFile: task.integrationReceiptFile,
+        integrationReceiptSha256: task.integrationReceiptSha256,
+      };
+    }),
+    phaseArtifacts: { ...options.phaseArtifacts },
+    completedAt,
+  };
+  validateWaveReceipt(receipt, context.ledger, options.phaseArtifacts);
+  await writeExclusiveJson(root, receiptFile, receipt, "Wave receipt");
+  const receiptSha256 = await fileSha256(root, receiptFile, "Wave receipt");
+  let finalized = context.ledger;
+  if (context.ledger.status === "integrated") {
+    finalized = await mutateLedger({
+      root,
+      ledgerFile: options.ledgerFile,
+      now: options.now,
+      expectedSha256: await fileSha256(root, options.ledgerFile, "Wave execution ledger"),
+      mutate: async (ledger) => {
+        await assertWaveIntegrationOwner(root, options, owner, ledger, context.manifest);
+        ledger.waveReceiptFile = receiptFile;
+        ledger.waveReceiptSha256 = receiptSha256;
+        ledger.finalizedAt = completedAt;
+      },
+    });
+  } else if (context.ledger.waveReceiptFile !== receiptFile
+      || context.ledger.waveReceiptSha256 !== receiptSha256
+      || context.ledger.finalizedAt !== completedAt) {
+    throw new Error("Finalized Wave ledger does not match its receipt.");
+  }
+  const binding = {
+    schemaVersion: "1.0",
+    storyId: finalized.storyId,
+    runId: finalized.runId,
+    stateFile: options.stateFile,
+    phase: finalized.phase,
+    preparedRevision: finalized.preparedRevision,
+    waveId: finalized.waveId,
+    waveLedgerFile: options.ledgerFile,
+    waveLedgerSha256: await fileSha256(root, options.ledgerFile, "Wave execution ledger"),
+    waveReceiptFile: receiptFile,
+    waveReceiptSha256: receiptSha256,
+    integrationManifestFile: finalized.integrationManifestFile,
+    integrationManifestSha256: finalized.integrationManifestSha256,
+    taskFile: options.phaseArtifacts.taskFile,
+    taskSha256: options.phaseArtifacts.taskSha256,
+    resultFile: options.phaseArtifacts.resultFile,
+    resultSha256: options.phaseArtifacts.resultSha256,
+    notesFile: options.phaseArtifacts.notesFile,
+    notesSha256: options.phaseArtifacts.notesSha256,
+    finalizedAt: completedAt,
+  };
+  if (typeof options.bindCheckpoint !== "function") {
+    throw new Error("Wave finalization requires a checkpoint binding callback.");
+  }
+  await options.bindCheckpoint(binding);
+  const verified = await loadFrozenIntegrationContext(root, options);
+  await assertWaveIntegrationOwner(root, options, owner, verified.ledger, verified.manifest);
+  if (owner.recoveryLock) {
+    await unlink(resolveInsideRoot(
+      root,
+      owner.paths.integrationRecoveryLockFile,
+      "Wave integration recovery lock",
+    ).fullPath);
+    if (options.afterIntegrationRecoveryLockReleaseBeforeIntegrationLockRelease) {
+      await options.afterIntegrationRecoveryLockReleaseBeforeIntegrationLockRelease();
+    }
+  }
+  await assertWaveIntegrationOwner(
+    root,
+    options,
+    { ...owner, mode: "integration", recoveryLock: null, recoveryLockSha256: null },
+    verified.ledger,
+    verified.manifest,
+  );
+  await unlink(resolveInsideRoot(
+    root,
+    owner.paths.integrationLockFile,
+    "Wave integration lock",
+  ).fullPath);
+  return {
+    command: "finalize-wave",
+    ledgerFile: options.ledgerFile,
+    ledger: verified.ledger,
+    receiptFile,
+    receipt,
+    binding,
+  };
 }
 
 async function acquireMutationLock(root, ledgerFile, now, afterOpenBeforeWrite) {
@@ -226,7 +1673,7 @@ async function mutateLedger({
     const ledgerPath = resolveInsideRoot(root, ledgerFile, "Wave execution ledger").fullPath;
     const ledger = validateWaveExecutionLedger(await readJsonFile(ledgerPath, "Wave execution ledger"));
     await mutate(ledger);
-    ledger.status = deriveWaveExecutionStatus(ledger.tasks.map((task) => task.status));
+    ledger.status = deriveWaveExecutionStatus(ledger.tasks.map((task) => task.status), ledger);
     validateWaveExecutionLedger(ledger);
     await writeAtomicJson(ledgerPath, ledger);
     return ledger;
@@ -287,9 +1734,57 @@ function validateExecutionLock(lock, claim) {
   return lock;
 }
 
-export function deriveWaveExecutionStatus(statuses) {
+export function deriveWaveExecutionStatus(statuses, evidence) {
   if (!Array.isArray(statuses) || !statuses.length || statuses.some((status) => !TASK_STATUSES.has(status))) {
     throw new Error("Wave task statuses are invalid.");
+  }
+  if (evidence !== undefined) {
+    const manifestFile = evidence.integrationManifestFile ?? null;
+    const manifestSha256 = evidence.integrationManifestSha256 ?? null;
+    const waveReceiptFile = evidence.waveReceiptFile ?? null;
+    const waveReceiptSha256 = evidence.waveReceiptSha256 ?? null;
+    const finalizedAt = evidence.finalizedAt ?? null;
+    const hasManifestFile = typeof manifestFile === "string" && Boolean(manifestFile);
+    const hasManifestSha256 = typeof manifestSha256 === "string" && SHA256_PATTERN.test(manifestSha256);
+    const hasWaveReceiptFile = typeof waveReceiptFile === "string" && Boolean(waveReceiptFile);
+    const hasWaveReceiptSha256 = typeof waveReceiptSha256 === "string" && SHA256_PATTERN.test(waveReceiptSha256);
+    const hasFinalizedAt = typeof finalizedAt === "string" && !Number.isNaN(Date.parse(finalizedAt));
+    if ((manifestFile !== null && !hasManifestFile)
+        || (manifestSha256 !== null && !hasManifestSha256)
+        || hasManifestSha256 && !hasManifestFile) {
+      throw new Error("Wave integration manifest evidence is invalid.");
+    }
+    const finalizationParts = [hasWaveReceiptFile, hasWaveReceiptSha256, hasFinalizedAt];
+    if (finalizationParts.some(Boolean) && !finalizationParts.every(Boolean)) {
+      throw new Error("Finalized Wave receipt evidence must be fully bound.");
+    }
+    if (finalizationParts.every(Boolean)) {
+      if (!hasManifestSha256 || !statuses.every((status) => status === "integrated")) {
+        throw new Error("A finalized Wave requires a frozen manifest and integrated tasks.");
+      }
+      return "finalized";
+    }
+    if (hasManifestFile && !hasManifestSha256) {
+      if (!statuses.every((status) => status === "ready-for-integration")) {
+        throw new Error("A freezing Wave requires all tasks to remain ready for integration.");
+      }
+      return "freezing";
+    }
+    if (hasManifestSha256) {
+      if (statuses.every((status) => status === "integrated")) return "integrated";
+      if (statuses.every((status) => status === "ready-for-integration")) {
+        if (evidence.status === "partial-integration") return "partial-integration";
+        return evidence.status === "integrating" ? "integrating" : "integration-frozen";
+      }
+      if (statuses.every((status) => status === "integrated" || status === "ready-for-integration")
+          && statuses.some((status) => status === "integrated")) {
+        return evidence.status === "integrating" ? "integrating" : "partial-integration";
+      }
+      throw new Error("A frozen Wave manifest is incompatible with the current task states.");
+    }
+    if (statuses.some((status) => status === "integrated")) {
+      throw new Error("Integrated Wave tasks require a frozen integration manifest.");
+    }
   }
   if (statuses.every((status) => status === "pending")) return "prepared";
   if (statuses.some((status) => status === "claiming" || status === "running")) return "executing";
@@ -367,6 +1862,7 @@ export function validateWaveExecutionLedger(ledger) {
       || typeof ledger.wavePlanFile !== "string" || !SHA256_PATTERN.test(ledger.wavePlanSha256)
       || typeof ledger.creationReceiptFile !== "string" || !SHA256_PATTERN.test(ledger.creationReceiptSha256)
       || typeof ledger.baseCommit !== "string" || !/^[a-f0-9]{40,64}$/.test(ledger.baseCommit)
+      || !WAVE_STATUSES.has(ledger.status)
       || !Array.isArray(ledger.tasks) || ledger.tasks.length < 2
       || typeof ledger.preparedAt !== "string" || Number.isNaN(Date.parse(ledger.preparedAt))) {
     throw new Error("Wave execution ledger identity is invalid.");
@@ -387,7 +1883,7 @@ export function validateWaveExecutionLedger(ledger) {
     taskIds.add(task.taskId);
     dispatchIds.add(task.dispatchId);
   }
-  const derived = deriveWaveExecutionStatus(ledger.tasks.map((task) => task.status));
+  const derived = deriveWaveExecutionStatus(ledger.tasks.map((task) => task.status), ledger);
   if (ledger.status !== derived) {
     throw new Error("Wave execution ledger top-level status does not match its derived task status.");
   }
@@ -1288,6 +2784,10 @@ export async function runWaveExecutionCommand(options = {}) {
   if (options.command === "execute-wave") return executeWave(options);
   if (options.command === "retry-task") return retryWaveTask(options);
   if (options.command === "recover-attempt") return recoverAttempt(options);
+  if (options.command === "freeze-integration") return freezeWaveIntegration(options);
+  if (options.command === "recover-freeze") return recoverWaveFreeze(options);
+  if (options.command === "integrate-wave") return integrateWave(options);
+  if (options.command === "recover-integration") return recoverWaveIntegration(options);
   throw new Error(`Unsupported Wave execution command: ${options.command ?? "(missing)"}`);
 }
 

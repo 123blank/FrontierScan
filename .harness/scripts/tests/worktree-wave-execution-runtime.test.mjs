@@ -136,6 +136,79 @@ test("derives wave status from task states", () => {
   );
 });
 
+test("derives C2 freeze, integration, and finalization states from bound evidence", () => {
+  const ready = ["ready-for-integration", "ready-for-integration"];
+  const integrated = ["integrated", "integrated"];
+  const manifestFile = ".harness/runs/M5-D-C2-FIXTURE/waves/wave-1/integration-manifest.json";
+  const waveReceiptFile = ".harness/runs/M5-D-C2-FIXTURE/waves/wave-1/wave-receipt.json";
+
+  assert.equal(deriveWaveExecutionStatus(ready, {
+    status: "freezing",
+    integrationManifestFile: manifestFile,
+    integrationManifestSha256: null,
+    waveReceiptFile: null,
+    waveReceiptSha256: null,
+    finalizedAt: null,
+  }), "freezing");
+  assert.equal(deriveWaveExecutionStatus(ready, {
+    status: "integration-frozen",
+    integrationManifestFile: manifestFile,
+    integrationManifestSha256: SHA,
+    waveReceiptFile: null,
+    waveReceiptSha256: null,
+    finalizedAt: null,
+  }), "integration-frozen");
+  assert.equal(deriveWaveExecutionStatus(ready, {
+    status: "integrating",
+    integrationManifestFile: manifestFile,
+    integrationManifestSha256: SHA,
+    waveReceiptFile: null,
+    waveReceiptSha256: null,
+    finalizedAt: null,
+  }), "integrating");
+  assert.equal(deriveWaveExecutionStatus(["integrated", "ready-for-integration"], {
+    status: "partial-integration",
+    integrationManifestFile: manifestFile,
+    integrationManifestSha256: SHA,
+    waveReceiptFile: null,
+    waveReceiptSha256: null,
+    finalizedAt: null,
+  }), "partial-integration");
+  assert.equal(deriveWaveExecutionStatus(integrated, {
+    status: "integrated",
+    integrationManifestFile: manifestFile,
+    integrationManifestSha256: SHA,
+    waveReceiptFile: null,
+    waveReceiptSha256: null,
+    finalizedAt: null,
+  }), "integrated");
+  assert.equal(deriveWaveExecutionStatus(integrated, {
+    status: "finalized",
+    integrationManifestFile: manifestFile,
+    integrationManifestSha256: SHA,
+    waveReceiptFile,
+    waveReceiptSha256: SHA,
+    finalizedAt: FIXED_NOW,
+  }), "finalized");
+
+  assert.equal(deriveWaveExecutionStatus(ready, {
+    status: "freezing",
+    integrationManifestFile: manifestFile,
+    integrationManifestSha256: SHA,
+    waveReceiptFile: null,
+    waveReceiptSha256: null,
+    finalizedAt: null,
+  }), "integration-frozen");
+  assert.throws(() => deriveWaveExecutionStatus(integrated, {
+    status: "finalized",
+    integrationManifestFile: manifestFile,
+    integrationManifestSha256: SHA,
+    waveReceiptFile,
+    waveReceiptSha256: null,
+    finalizedAt: FIXED_NOW,
+  }), /receipt|finalized/i);
+});
+
 test("rejects task evidence that contradicts task or top-level status", async () => {
   const fixture = await createPreparedFixture();
   try {
@@ -167,6 +240,31 @@ test("rejects task evidence that contradicts task or top-level status", async ()
     const wrongTopLevel = structuredClone(ledger);
     wrongTopLevel.status = "partial";
     assert.throws(() => validateWaveExecutionLedger(wrongTopLevel), /derived|top-level|status/i);
+
+    const halfBoundManifest = structuredClone(ledger);
+    halfBoundManifest.status = "freezing";
+    halfBoundManifest.integrationManifestFile = null;
+    halfBoundManifest.integrationManifestSha256 = SHA;
+    assert.throws(() => validateWaveExecutionLedger(halfBoundManifest), /manifest/i);
+
+    const finalizedWithoutReceipt = structuredClone(ledger);
+    finalizedWithoutReceipt.tasks = finalizedWithoutReceipt.tasks.map((task) => ({
+      ...task,
+      status: "integrated",
+      currentAttemptId: "attempt-0123456789abcdef",
+      executionReceiptFile: "execution-receipt.json",
+      executionReceiptSha256: SHA,
+      integrationReceiptFile: "integration-receipt.json",
+      integrationReceiptSha256: SHA,
+      startedAt: FIXED_NOW,
+      workerReadyAt: FIXED_NOW,
+      integratedAt: FIXED_NOW,
+    }));
+    finalizedWithoutReceipt.status = "finalized";
+    finalizedWithoutReceipt.integrationManifestFile = "integration-manifest.json";
+    finalizedWithoutReceipt.integrationManifestSha256 = SHA;
+    finalizedWithoutReceipt.finalizedAt = FIXED_NOW;
+    assert.throws(() => validateWaveExecutionLedger(finalizedWithoutReceipt), /receipt|finalized/i);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }

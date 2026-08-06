@@ -1714,3 +1714,9 @@ M4-B 受约束 Mock Worker 当前实现：
 - 正式 FrontierScan 仓库未执行 `WaveCreate`、Worker、Worktree 创建/回收、主树集成或 M3 apply，未修改 `backend/src/**`、`frontend/src/**`，未执行 `git add/commit/push/PR`、发布或部署。
 
 下一阶段为独立的 M5-D-C2：integration manifest freeze、主工作树串行受控集成、wave receipt、`finalize-wave` 和最终 M3 apply。不得把 C1 Worker 执行批准解释为集成、回收或 Git 交付批准。
+### 16.26 2026-08-06 当前状态：M5-D-C2 Wave 集成与阶段收尾
+
+M5-D-C2 已实现 integration manifest 原子冻结、`recover-freeze`、wave 级 integration/recovery owner、稳定任务顺序
+主树集成、partial 前缀恢复、wave receipt、`finalize-wave` 与 M3 `apply` 单次推进。所有真实 Git/Worktree
+变更只在临时 fixture 中验证；正式仓库未执行 Worker 或候选集成。Worktree/分支回收、真实 Agent、自动提交、
+推送、PR、发布和部署仍不在范围内。

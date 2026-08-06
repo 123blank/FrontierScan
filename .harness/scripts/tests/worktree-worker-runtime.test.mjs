@@ -11,10 +11,16 @@ import { claimBatchTask, prepareSerialBatch, recordBatchIntegration } from "../l
 import {
   claimWaveTask,
   createWaveExecutionLedger,
+  finalizeWaveExecution,
+  freezeWaveIntegration,
   inspectWaveExecution,
+  integrateWave,
   recoverAttempt,
+  recoverWaveIntegration,
+  recoverWaveFreeze,
   runWaveExecutionCommand,
 } from "../lib/worktree-wave-execution-runtime.mjs";
+import { acquireImplementationOwner } from "../lib/implementation-owner-contract.mjs";
 import { runWorktreeWorker } from "../lib/worktree-worker-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
 import { resolveBatchBase, runWorktreeCommand } from "../lib/worktree-runtime.mjs";
@@ -355,6 +361,14 @@ async function createWaveWorkerFixture({ claimTask = true } = {}) {
     creationReceiptSha256: sha256(await readFile(path.join(root, created.receiptFile))),
     plan: planned.plan,
   };
+  await acquireImplementationOwner({
+    root,
+    state,
+    mode: "worktree-wave",
+    ownerId: waveId,
+    taskDagFile,
+    now: () => "2026-08-06T00:00:00.000Z",
+  });
   const ledger = await createWaveExecutionLedger({
     root,
     state,
@@ -2676,6 +2690,500 @@ test("execute-wave runs all claimed Workers concurrently and trusts settled disk
   assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
   await assert.rejects(readFile(path.join(fixture.root, "backend/src/main/T1.java")), /ENOENT/);
   await assert.rejects(readFile(path.join(fixture.root, "frontend/src/T2.ts")), /ENOENT/);
+});
+
+async function createReadyWaveIntegrationFixture() {
+  const fixture = await createWaveWorkerFixture({ claimTask: false });
+  const uuidValues = [
+    "00000000-0000-4000-8000-000000000041",
+    "00000000-0000-4000-8000-000000000042",
+    "00000000-0000-4000-8000-000000000043",
+    "00000000-0000-4000-8000-000000000044",
+    "00000000-0000-4000-8000-000000000045",
+    "00000000-0000-4000-8000-000000000046",
+  ];
+  const executed = await runWaveExecutionCommand({
+    root: fixture.root,
+    command: "execute-wave",
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    confirmWaveExecute: true,
+    expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    randomUUID: () => uuidValues.shift(),
+    provider: async ({ task }) => {
+      const isBackend = task.taskId === "T1";
+      return {
+        files: [
+          { path: task.expectedOutputs[0], content: `# ${task.taskId} report\n`, capability: "phase-output" },
+          {
+            path: isBackend ? "backend/src/main/T1.java" : "frontend/src/T2.ts",
+            content: isBackend ? "class T1 {}\n" : "export const t2 = true;\n",
+            capability: isBackend ? "backend-write" : "frontend-write",
+          },
+        ],
+        result: {
+          schemaVersion: "1.2",
+          dispatchId: task.dispatchId,
+          storyId: task.storyId,
+          runId: task.runId,
+          phase: task.phase,
+          waveId: task.waveId,
+          waveIndex: task.waveIndex,
+          taskId: task.taskId,
+          taskRoot: task.taskRoot,
+          status: "completed",
+          summary: `${task.taskId} is ready for integration.`,
+          outputs: task.expectedOutputs.map((output) => ({ path: output })),
+          records: [],
+        },
+      };
+    },
+  });
+  assert.equal(executed.ledger.status, "ready-for-integration");
+  return { ...fixture, executed };
+}
+
+test("freeze-integration requires a fully ready wave", async () => {
+  const fixture = await createWaveWorkerFixture({ claimTask: false });
+  await assert.rejects(
+    freezeWaveIntegration({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+      expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    }),
+    /ready-for-integration|ready/i,
+  );
+});
+
+test("freeze-integration writes one deterministic manifest without touching main business files", async () => {
+  const fixture = await createReadyWaveIntegrationFixture();
+  const frozen = await freezeWaveIntegration({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    now: () => "2026-08-06T00:10:00.000Z",
+    randomUUID: (() => {
+      const values = [
+        "00000000-0000-4000-8000-000000000051",
+        "00000000-0000-4000-8000-000000000052",
+      ];
+      return () => values.shift();
+    })(),
+  });
+
+  assert.equal(frozen.ledger.status, "integration-frozen");
+  assert.equal(frozen.manifest.storyId, fixture.state.storyId);
+  assert.deepEqual(frozen.manifest.tasks.map((task) => task.taskId), ["T1", "T2"]);
+  assert.deepEqual(
+    frozen.manifest.candidateFiles.map((file) => [file.taskId, file.path]),
+    [
+      ["T1", "backend/src/main/T1.java"],
+      ["T1", `.harness/runs/${fixture.state.storyId}/waves/wave-0123456789abcdef/tasks/T1/task-report.md`],
+      ["T2", "frontend/src/T2.ts"],
+      ["T2", `.harness/runs/${fixture.state.storyId}/waves/wave-0123456789abcdef/tasks/T2/task-report.md`],
+    ],
+  );
+  assert.equal(
+    sha256(await readFile(path.join(fixture.root, frozen.manifestFile))),
+    frozen.ledger.integrationManifestSha256,
+  );
+  await assert.rejects(readFile(path.join(fixture.root, frozen.preparationLockFile)), /ENOENT/);
+  await assert.rejects(readFile(path.join(fixture.root, "backend/src/main/T1.java")), /ENOENT/);
+  await assert.rejects(readFile(path.join(fixture.root, "frontend/src/T2.ts")), /ENOENT/);
+});
+
+test("recover-freeze binds an already written manifest and releases only the expected owner lock", async () => {
+  const fixture = await createReadyWaveIntegrationFixture();
+  let interrupted;
+  await assert.rejects(
+    freezeWaveIntegration({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+      expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+      now: () => "2026-08-06T00:11:00.000Z",
+      randomUUID: (() => {
+        const values = [
+          "00000000-0000-4000-8000-000000000061",
+          "00000000-0000-4000-8000-000000000062",
+        ];
+        return () => values.shift();
+      })(),
+      afterManifestWriteBeforeLedgerBinding: (value) => {
+        interrupted = value;
+        throw new Error("simulated manifest binding interruption");
+      },
+    }),
+    /manifest binding interruption/i,
+  );
+  const lockSource = await readFile(path.join(fixture.root, interrupted.preparationLockFile));
+  const manifestBefore = await readFile(path.join(fixture.root, interrupted.manifestFile));
+  const recovered = await recoverWaveFreeze({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    freezeId: interrupted.lock.freezeId,
+    confirmManifestFreezeRecovery: true,
+    expectedPreparationLockSha256: sha256(lockSource),
+    expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+  });
+
+  assert.equal(recovered.ledger.status, "integration-frozen");
+  assert.equal(await readFile(path.join(fixture.root, recovered.manifestFile), "utf8"), manifestBefore.toString("utf8"));
+  await assert.rejects(readFile(path.join(fixture.root, recovered.preparationLockFile)), /ENOENT/);
+});
+
+async function createFrozenWaveIntegrationFixture() {
+  const fixture = await createReadyWaveIntegrationFixture();
+  const frozen = await freezeWaveIntegration({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
+    now: () => "2026-08-06T00:12:00.000Z",
+    randomUUID: (() => {
+      const values = [
+        "00000000-0000-4000-8000-000000000071",
+        "00000000-0000-4000-8000-000000000072",
+      ];
+      return () => values.shift();
+    })(),
+  });
+  return { ...fixture, frozen };
+}
+
+test("integrate-wave applies manifest candidates in stable task order and retains its owner lock", async () => {
+  const fixture = await createFrozenWaveIntegrationFixture();
+  const integrated = await integrateWave({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    confirmWaveIntegrate: true,
+    expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+    now: () => "2026-08-06T00:13:00.000Z",
+    randomUUID: () => "00000000-0000-4000-8000-000000000081",
+  });
+
+  assert.equal(integrated.ledger.status, "integrated");
+  assert.deepEqual(integrated.ledger.tasks.map((task) => task.status), ["integrated", "integrated"]);
+  assert.equal(await readFile(path.join(fixture.root, "backend/src/main/T1.java"), "utf8"), "class T1 {}\n");
+  assert.equal(await readFile(path.join(fixture.root, "frontend/src/T2.ts"), "utf8"), "export const t2 = true;\n");
+  assert.match(await readFile(path.join(fixture.root, integrated.integrationLockFile), "utf8"), /integration-manifest|manifestSha256|lockId/i);
+  assert.deepEqual(integrated.integratedTaskIds, ["T1", "T2"]);
+});
+
+test("recover-integration preserves the integrated prefix and completes only the remaining task", async () => {
+  const fixture = await createFrozenWaveIntegrationFixture();
+  let interrupted;
+  await assert.rejects(
+    integrateWave({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      confirmWaveIntegrate: true,
+      expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+      now: () => "2026-08-06T00:14:00.000Z",
+      randomUUID: () => "00000000-0000-4000-8000-000000000091",
+      afterTaskCandidatesWriteBeforeReceipt: (value) => {
+        if (value.taskId === "T2") {
+          interrupted = value;
+          throw new Error("simulated T2 integration interruption");
+        }
+      },
+    }),
+    /T2 integration interruption/i,
+  );
+  const ledgerAfterFailure = JSON.parse(
+    await readFile(path.join(fixture.root, fixture.ledger.ledgerFile), "utf8"),
+  );
+  assert.equal(ledgerAfterFailure.status, "partial-integration");
+  assert.deepEqual(ledgerAfterFailure.tasks.map((task) => task.status), ["integrated", "ready-for-integration"]);
+  const prefixBefore = await readFile(path.join(fixture.root, "backend/src/main/T1.java"), "utf8");
+  const integrationLockSource = await readFile(path.join(fixture.root, interrupted.integrationLockFile));
+
+  const recovered = await recoverWaveIntegration({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    confirmWaveIntegrationRecovery: true,
+    expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+    expectedIntegrationLockSha256: sha256(integrationLockSource),
+    now: () => "2026-08-06T00:15:00.000Z",
+    randomUUID: () => "00000000-0000-4000-8000-000000000092",
+  });
+
+  assert.equal(recovered.ledger.status, "integrated");
+  assert.deepEqual(recovered.integratedTaskIds, ["T2"]);
+  assert.equal(await readFile(path.join(fixture.root, "backend/src/main/T1.java"), "utf8"), prefixBefore);
+  assert.equal(await readFile(path.join(fixture.root, "frontend/src/T2.ts"), "utf8"), "export const t2 = true;\n");
+  assert.match(await readFile(path.join(fixture.root, recovered.integrationRecoveryLockFile), "utf8"), /lockId/i);
+});
+
+test("recover-integration refuses to continue after the integrated prefix drifts", async () => {
+  const fixture = await createFrozenWaveIntegrationFixture();
+  let interrupted;
+  await assert.rejects(
+    integrateWave({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      confirmWaveIntegrate: true,
+      expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+      now: () => "2026-08-06T00:16:00.000Z",
+      randomUUID: () => "00000000-0000-4000-8000-000000000101",
+      afterTaskCandidatesWriteBeforeReceipt: (value) => {
+        if (value.taskId === "T2") {
+          interrupted = value;
+          throw new Error("simulated prefix drift window");
+        }
+      },
+    }),
+    /prefix drift window/i,
+  );
+  await writeFile(path.join(fixture.root, "backend/src/main/T1.java"), "class T1 { void drifted() {} }\n", "utf8");
+  const integrationLockSource = await readFile(path.join(fixture.root, interrupted.integrationLockFile));
+
+  await assert.rejects(
+    recoverWaveIntegration({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      confirmWaveIntegrationRecovery: true,
+      expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+      expectedIntegrationLockSha256: sha256(integrationLockSource),
+      now: () => "2026-08-06T00:17:00.000Z",
+      randomUUID: () => "00000000-0000-4000-8000-000000000102",
+    }),
+    /prefix|business.*change|candidate.*changed/i,
+  );
+  assert.equal(
+    JSON.parse(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile), "utf8")).status,
+    "partial-integration",
+  );
+});
+
+test("Wave finalization never deletes a replacement integration lock after recovery lock release", async () => {
+  const fixture = await createFrozenWaveIntegrationFixture();
+  let interrupted;
+  await assert.rejects(
+    integrateWave({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      confirmWaveIntegrate: true,
+      expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+      now: () => "2026-08-06T00:17:30.000Z",
+      randomUUID: () => "00000000-0000-4000-8000-000000000103",
+      afterTaskCandidatesWriteBeforeReceipt: (value) => {
+        if (value.taskId === "T2") {
+          interrupted = value;
+          throw new Error("simulated recovery-owned finalization");
+        }
+      },
+    }),
+    /recovery-owned finalization/i,
+  );
+  const recovered = await recoverWaveIntegration({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    confirmWaveIntegrationRecovery: true,
+    expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+    expectedIntegrationLockSha256: sha256(
+      await readFile(path.join(fixture.root, interrupted.integrationLockFile)),
+    ),
+    now: () => "2026-08-06T00:17:31.000Z",
+    randomUUID: () => "00000000-0000-4000-8000-000000000104",
+  });
+  const phaseRoot = `.harness/runs/${fixture.state.storyId}/phases/03-implementation`;
+  const phaseArtifacts = {
+    taskFile: `${phaseRoot}/task.json`,
+    resultFile: `${phaseRoot}/result.json`,
+    notesFile: `${phaseRoot}/implementation-notes.md`,
+  };
+  for (const file of Object.values(phaseArtifacts)) {
+    await mkdir(path.join(fixture.root, path.dirname(file)), { recursive: true });
+    await writeFile(path.join(fixture.root, file), `${file}\n`, "utf8");
+  }
+  const boundArtifacts = {
+    ...phaseArtifacts,
+    taskSha256: sha256(await readFile(path.join(fixture.root, phaseArtifacts.taskFile))),
+    resultSha256: sha256(await readFile(path.join(fixture.root, phaseArtifacts.resultFile))),
+    notesSha256: sha256(await readFile(path.join(fixture.root, phaseArtifacts.notesFile))),
+  };
+  const replacement = `${JSON.stringify({
+    schemaVersion: "1.0",
+    lockId: "lock-replacement0000",
+    freezeId: fixture.frozen.manifest.freezeId,
+    manifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+    storyId: fixture.state.storyId,
+    runId: fixture.state.storyId,
+    waveId: fixture.frozen.ledger.waveId,
+    pid: process.pid,
+    createdAt: "2026-08-06T00:17:32.000Z",
+  }, null, 2)}\n`;
+
+  await assert.rejects(
+    finalizeWaveExecution({
+      root: fixture.root,
+      stateFile: fixture.stateFile,
+      ledgerFile: fixture.ledger.ledgerFile,
+      expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+      expectedIntegrationLockSha256: recovered.integrationLockSha256,
+      phaseArtifacts: boundArtifacts,
+      now: () => "2026-08-06T00:17:33.000Z",
+      bindCheckpoint: async () => {},
+      afterIntegrationRecoveryLockReleaseBeforeIntegrationLockRelease: async () => {
+        await writeFile(path.join(fixture.root, recovered.integrationLockFile), replacement, "utf8");
+      },
+    }),
+    /owner|lock.*changed/i,
+  );
+  assert.equal(await readFile(path.join(fixture.root, recovered.integrationLockFile), "utf8"), replacement);
+});
+
+async function createFinalizableWaveFixture() {
+  const fixture = await createFrozenWaveIntegrationFixture();
+  const integrated = await integrateWave({
+    root: fixture.root,
+    stateFile: fixture.stateFile,
+    ledgerFile: fixture.ledger.ledgerFile,
+    confirmWaveIntegrate: true,
+    expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+    now: () => "2026-08-06T00:18:00.000Z",
+    randomUUID: () => "00000000-0000-4000-8000-000000000111",
+  });
+  await mkdir(path.join(fixture.root, ".harness/workflows"), { recursive: true });
+  await copyFile(
+    path.join(repositoryRoot, ".harness/workflows/e2e-development.yaml"),
+    path.join(fixture.root, ".harness/workflows/e2e-development.yaml"),
+  );
+  const state = {
+    schemaVersion: "1.0",
+    storyId: fixture.state.storyId,
+    phase: "implementation",
+    runtime: {
+      runId: fixture.state.storyId,
+      workflow: ".harness/workflows/e2e-development.yaml",
+      status: "active",
+      revision: 7,
+      previousPhase: "task-dag",
+      blocked: null,
+      records: [],
+      createdAt: "2026-08-06T00:00:00.000Z",
+      updatedAt: "2026-08-06T00:00:00.000Z",
+    },
+    requirement: { summary: "Wave finalization fixture", openQuestions: [], acceptanceCriteria: [] },
+    knowledge: { loadedFiles: [], staleFiles: [], missingAreas: [] },
+    tasks: [],
+    dag: { nodes: [], edges: [], waves: [] },
+    worktrees: [],
+    tests: { commands: [], results: [] },
+    review: { findings: [], status: "pending" },
+    verification: { cases: [], results: [] },
+    delivery: { ownedFiles: [], commit: null, pr: null },
+    logs: [],
+  };
+  await writeFile(path.join(fixture.root, fixture.stateFile), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  return { ...fixture, state, integrated };
+}
+
+async function finalizeWaveFixture(fixture) {
+  return runStoryCommand({
+    root: fixture.root,
+    command: "finalize-wave",
+    stateFile: fixture.stateFile,
+    taskDagFile: fixture.taskDagFile,
+    waveIndex: 1,
+    expectedIntegrationManifestSha256: fixture.frozen.ledger.integrationManifestSha256,
+    expectedIntegrationLockSha256: fixture.integrated.integrationLockSha256,
+    now: () => "2026-08-06T00:19:00.000Z",
+  });
+}
+
+test("finalize-wave binds formal phase artifacts and M3 apply advances exactly once", async () => {
+  const fixture = await createFinalizableWaveFixture();
+  const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+  const finalized = await finalizeWaveFixture(fixture);
+  const checkpoint = JSON.parse(await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8"));
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile), "utf8"));
+
+  assert.equal(finalized.status, "ready-for-apply");
+  assert.equal(ledger.status, "finalized");
+  assert.equal(checkpoint.waveFinalization.waveId, fixture.frozen.ledger.waveId);
+  assert.equal(checkpoint.waveFinalization.waveLedgerSha256, sha256(
+    await readFile(path.join(fixture.root, fixture.ledger.ledgerFile)),
+  ));
+  assert.match(await readFile(path.join(fixture.root, finalized.notesFile), "utf8"), /T1[\s\S]*T2/);
+  assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
+  await assert.rejects(readFile(path.join(fixture.root, fixture.integrated.integrationLockFile)), /ENOENT/);
+
+  const repeatedFinalize = await finalizeWaveFixture(fixture);
+  assert.equal(repeatedFinalize.status, "ready-for-apply");
+  const applied = await runStoryCommand({
+    root: fixture.root,
+    command: "apply",
+    stateFile: fixture.stateFile,
+    now: () => "2026-08-06T00:20:00.000Z",
+  });
+  assert.equal(applied.state.phase, "unit-test");
+  const repeatedApply = await runStoryCommand({
+    root: fixture.root,
+    command: "apply",
+    stateFile: fixture.stateFile,
+    now: () => "2026-08-06T00:21:00.000Z",
+  });
+  assert.equal(repeatedApply.status, "already-applied");
+});
+
+test("Wave M3 apply resumes both before and after the state advance boundary", async () => {
+  const before = await createFinalizableWaveFixture();
+  await finalizeWaveFixture(before);
+  await assert.rejects(
+    runStoryCommand({
+      root: before.root,
+      command: "apply",
+      stateFile: before.stateFile,
+      now: () => "2026-08-06T00:22:00.000Z",
+      beforeAdvance: () => { throw new Error("simulated Wave pre-advance interruption"); },
+    }),
+    /pre-advance interruption/i,
+  );
+  assert.equal(JSON.parse(await readFile(path.join(before.root, before.stateFile), "utf8")).phase, "implementation");
+  assert.equal((await runStoryCommand({
+    root: before.root,
+    command: "apply",
+    stateFile: before.stateFile,
+    now: () => "2026-08-06T00:23:00.000Z",
+  })).state.phase, "unit-test");
+
+  const after = await createFinalizableWaveFixture();
+  await finalizeWaveFixture(after);
+  await assert.rejects(
+    runStoryCommand({
+      root: after.root,
+      command: "apply",
+      stateFile: after.stateFile,
+      now: () => "2026-08-06T00:24:00.000Z",
+      afterAdvance: () => { throw new Error("simulated Wave post-advance interruption"); },
+    }),
+    /post-advance interruption/i,
+  );
+  assert.equal(JSON.parse(await readFile(path.join(after.root, after.stateFile), "utf8")).phase, "unit-test");
+  assert.equal((await runStoryCommand({
+    root: after.root,
+    command: "apply",
+    stateFile: after.stateFile,
+    now: () => "2026-08-06T00:25:00.000Z",
+  })).status, "already-applied");
 });
 
 test("execute-wave preserves a successful receipt and leaves a failed task blocked without implicit retry", async () => {
