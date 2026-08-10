@@ -84,9 +84,11 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
-- M5-D-D 已实现单个完整 wave 的审批门控 Worktree 回收闭环；真实 Agent、Fork-Join 和 Git 自动交付继续延期。
+- M5-D-D 已实现并交付单个完整 wave 的审批门控 Worktree 回收闭环；`M5-D-D-001` 为 `done/completed` revision `18`，提交 `2b7269d` 已推送到 `origin/dev`。
+- 下一步推荐 M6-A：选择一个真实、范围较小的业务任务，使用现有单 Story 工作流完成实现、测试、审核、构建和 API/UI 验证，以验收单业务开发闭环。
+- M6-A 不要求自动 Git 提交/推送，不先实现通用 M6 Engine；真实 Agent、Fork-Join、生产发布部署和 Git 自动交付继续延期。
 - 多 wave 批量回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。
-- Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
+- 真实接口验证应在 M6-A 业务环境可用时执行；环境不可用必须记录，不能用草稿或 fixture 结果冒充真实业务验收。
 
 ## Safety Notes
 

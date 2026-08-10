@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 单 Worktree 严格串行多任务批次运行时、M5-D-A 同 wave 多 Worktree 只读规划/状态兼容层，以及 M5-D-B 审批门控 WaveCreate、波次锁和中断恢复均已实现。真实 Agent、同 wave Worker 并行执行、跨 Worktree 汇总/合并、Fork-Join、分支删除和 DevOps 闭环仍未实现。
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 单 Worktree 严格串行多任务批次运行时，以及 M5-D 单 wave 多 Worktree 的计划、审批门控创建、并行 Mock Worker 执行、主树串行集成、M3 apply 和审批门控回收均已实现。真实 Agent 自动派发、多 Story Fork-Join、分支删除、自动 Git 交付和生产发布部署仍未实现。
 
 ## Added Structure
 
@@ -348,11 +348,11 @@ M5-D-C1 在单个完整 implementation wave 上实现 execution-only 闭环。`p
 新 attempt。`recover-attempt` 显式处理 claim-only、lock-before-running、完整 result/receipt、blocked 锁释放中断和
 孤儿 Worktree 候选；恢复不按时间或 PID 自动接管。
 
-## 下一步实施
+## M5-D-C1 当时的下一步（已完成）
 
-后续应以独立 Story 实现 M5-D-C2：冻结 integration manifest、主工作树串行受控集成、wave receipt、`finalize-wave`
-和最终 M3 `apply`。C1 不构成集成、回收、提交、推送、发布或部署授权，也不默认引入自动 merge/remove、Fork-Join、
-分支删除、`prune` 或真实模型。
+该阶段当时要求以独立 Story 实现 M5-D-C2：冻结 integration manifest、主工作树串行受控集成、wave receipt、
+`finalize-wave` 和最终 M3 `apply`。M5-D-C2 与后续 M5-D-D 现均已完成；本段保留为阶段历史，当前下一步以文末
+M6-A 为准。
 
 ## Safety Boundaries
 
@@ -382,3 +382,23 @@ M5-D-D 继续扩展 `worktree-runtime.mjs`，增加 `wave-retire`，不新建第
 task retirement receipt。中断恢复只接受完整有序的 receipt 前缀，允许对“Git 已删除但 receipt 未写”的当前首项
 补写 `recovered: true`。全部任务完成后写 wave retirement receipt，绑定完成态、M3、Wave 与所有 task receipt。
 首版保留任务分支，不执行 `prune`、自动提交、推送、发布或部署。
+
+M5-D-D 已通过完整 Runtime 回归和两轮独立审核，`M5-D-D-001` 在 revision `18` 进入 `done/completed`；
+提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 已推送到 `origin/dev`。
+
+## M6-A 单业务开发闭环验收
+
+M6-A 的目标不是继续扩展 Worktree 或设计通用验收引擎，而是用一个真实、范围较小的业务任务验证现有架构能否完成
+单 Story 开发闭环。该任务应按现有 E2E 工作流推进，实际修改业务源码，并执行与修改范围匹配的测试、构建和 API/UI
+验证；所有阶段证据继续由 State Runtime 绑定。
+
+首版约束：
+
+- 当前会话串行执行，继续使用现有 Skill、State、Dispatcher 和质量门禁。
+- 可以由 Codex 完成真实业务代码修改，但不声称 Mock Worker 已成为恶意代码安全沙箱。
+- 不新增通用 M6 Engine，不引入多 Story Fork-Join、真实 Agent 自动派发或生产部署。
+- Git 暂存、提交、推送和 PR 仍由用户逐次明确批准，不属于自动闭环验收条件。
+- 中断恢复必须依赖 State 和仓库阶段产物，不依赖旧聊天记录。
+
+通过标准是一个真实业务 Story 从 requirement 推进到 `done/completed`，真实测试、审核、构建和接口验证均有可复核证据，
+且过程不需要手工编辑 State。通过 M6-A 后，再依据暴露出的真实缺口决定 M7 加固或真实 Agent 接入范围。

@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-08-04
+> 最后更新：2026-08-10
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：Harness 正在完成 M5-D-B 审批门控 `WaveCreate`。M5-D-A 的 `WavePlan/WaveStatus` 继续负责固定统一基准、派生同 wave 多任务分支/路径和读取 Git 事实；M5-D-B 在同一 Runtime 中增加计划哈希审批、波次锁、`lockId` fencing、部分失败恢复和完成回执。创建只在临时 Git fixture 中验证，正式仓库没有执行 `WaveCreate`。M2/M3 继续独占状态推进权；并行 Worker、跨 Worktree 汇总/合并、Fork-Join、分支清理、真实 Agent、发布和 Git 自动交付仍未实现。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准。
+> 当前重点：M5-D-D `WaveRetire` 已完成并推送到 `origin/dev`，提交为 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558`；`M5-D-D-001` 已进入 `done/completed` revision `18`。M5 已具备单个 implementation wave 从计划、创建、Mock Worker 执行、主树串行集成、M3 apply 到审批门控回收的临时 Git fixture 闭环。下一步推荐 M6-A：选择一个范围较小的真实业务任务，按现有单 Story 工作流完成需求、实现、测试、审核、构建和真实 API/UI 验证，以验收 Harness 的单业务开发闭环。暂不实现自动 Git 提交/推送、通用 M6 Engine、真实 Agent 自动调度、Fork-Join 或生产发布部署。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准。
 
 ---
 
@@ -1733,3 +1733,25 @@ M5-D-C2 已实现 integration manifest 原子冻结、`recover-freeze`、wave �
 - partial recovery 只接受完整有序 receipt 前缀；最终回执绑定完成态、M3、Wave 和全部 task receipt，可完整重验后幂等复用。
 - 首版不删除分支，不执行 `git worktree prune`，不修改完成态 State，不自动提交、推送、发布或部署。
 - 正式仓库没有执行真实 WaveRetire；所有 Git 删除只发生在临时 fixture。
+- Worker Runtime 97/97、Worktree lifecycle 39/39、Wave 35/35、Wave execution 9/9 和 Story Runtime 均通过；两轮独立审核及闭环复审最终无 BLOCKER/WARNING。
+- `M5-D-D-001` 已在 revision `18` 进入 `done/completed`，实现提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 已推送到 `origin/dev`。
+
+### 16.28 2026-08-10 当前推荐：M6-A 单业务开发闭环验收
+
+M6-A 不先新增通用 Runtime，而是选择一个范围较小、验收标准明确的真实业务任务，使用当前 Harness 完成一次真实闭环：
+
+```text
+requirement -> technical-design -> task-dag -> implementation -> unit-test
+-> code-review -> build-publish -> interface-verification -> git-delivery -> done
+```
+
+验收要求：
+
+- 修改真实 `backend/`、`frontend/` 或二者关联的业务代码，不再只依赖 Harness fixture。
+- 由当前会话/Codex 按现有 State Runtime 推进，不手工编辑 State。
+- 按修改范围执行真实测试、构建和 API/UI 验证，并将证据绑定到 State。
+- 中断后能够从活动 State 和阶段产物继续，不依赖旧聊天上下文。
+- Git 提交、推送和 PR 继续逐次由用户批准，不纳入首版自动闭环。
+- 发现缺口时只补完成该业务闭环所需的最小 Adapter，不提前实现通用 M6 Engine、真实 Agent 自动派发或 Fork-Join。
+
+M6-A 是对“单个真实业务任务能否由当前 Harness 完成开发闭环”的正式验收，不代表 Harness 全部路线完成。通过后再根据真实缺口决定 M7 稳定性加固或真实 Agent 接入。

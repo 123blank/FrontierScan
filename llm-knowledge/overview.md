@@ -32,6 +32,8 @@ Current knowledge status:
 
 Current limitations:
 
+以下条目按里程碑记录能力与阶段边界；较早条目中的“未实现”描述是该里程碑当时的范围，当前能力应以后续条目和最后的当前状态为准。
+
 - Static extraction is intentionally bounded and reports unsupported root-level files in `source-coverage.json` instead of claiming full parser coverage.
 - Semantic content remains `pending` until explicitly generated with an approved `OPENAI_API_KEY`.
 - M2 deterministic phase advancement, evidence gates, block/resume, locks, and interrupted-write recovery are implemented for a single Story.
@@ -46,6 +48,7 @@ Current limitations:
 - M5-D-B 在同一 Runtime 中增加审批门控 `WaveCreate`：每个明确 wave 的批准绑定当前 `plan.json` SHA-256；同一 run/Story 的所有 wave 共享创建/恢复锁，恢复在替换前重验完整锁集合、替换后匹配本次生成的随机 `lockId`，所有 Git、状态、回执和释放动作前重新执行计划与 owner fencing。恢复异常保留锁，部分失败保留已创建 Worktree并只补齐缺失项；动态锁事实只出现在 `WaveStatus` 命令结果顶层。首次 WavePlan 后，复用 WavePlan/WaveStatus 不再持久化动态观察，稳定状态只由持锁 WaveCreate 更新；完整 Git 事实为 `ready` 后才写绑定计划、DAG、稳定状态和任务 HEAD 的完成回执。正式仓库未执行 WaveCreate；并行 Worker、跨 Worktree 集成、合并、回收、Fork-Join 和状态推进仍未实现。
 - M5-D-C1/C2 已实现单个完整 implementation wave 的执行与集成闭环：`prepare-wave` 生成 v1.2 dispatch、checkpoint、统一 owner 和 execution ledger；并行 Mock Worker 通过不可变 attempt 与 fencing 收敛到 ready。C2 原子冻结 integration manifest，按稳定任务顺序串行集成主树，保留 partial 前缀并显式恢复；`finalize-wave` 生成正式 phase 产物、wave receipt 和 checkpoint 绑定，既有 M3 `apply` 只推进一次并支持中断恢复。正式仓库未执行 Worker、Worktree 或候选写入；回收、真实 Agent、自动提交、推送和发布仍未实现。
 - M5-D-D 已实现审批门控 `WaveRetire`：仅对 `done/completed`、ledger `finalized`、M3 apply 与正式产物完整的单个 wave 生效。它在首次删除前全局重验所有任务、主树、Worktree、保留分支和冲突锁，使用普通/recovery 双锁与 `lockId` fencing，按 WavePlan 顺序删除 Worktree，并在 Git 注册、目录和分支后验通过后写 task receipt。稳定 receipt 前缀支持中断恢复，最终回执绑定完成态、M3、Wave 与全部任务证据。首版保留分支，不执行 `prune`、自动提交、推送、发布或部署；真实删除仅在临时 fixture。
+- M5-D-D 已以提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 推送到 `origin/dev`，`M5-D-D-001` 为 `done/completed` revision `18`。下一步推荐 M6-A：选择一个范围较小的真实业务任务，按现有单 Story 工作流完成业务实现、真实测试/构建、独立审核和 API/UI 验证，以验收单业务开发闭环。M6-A 不包含自动 Git 提交/推送、通用 M6 Engine、真实 Agent 自动派发、Fork-Join 或生产部署。
 
 Trust rule:
 
