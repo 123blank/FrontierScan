@@ -28,7 +28,7 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | Knowledge input scan script | `.harness/scripts/scan-knowledge-inputs.ps1` | Basic read-only source structure scan done |
 | Knowledge freshness script | `.harness/scripts/check-kb-freshness.ps1` | Backend/frontend/Common baseline, semantic, index, and content-fingerprint freshness check implemented |
 | Worktree plan script | `.harness/scripts/plan-worktrees.ps1` | 旧版只读 DAG-to-worktree 计划保持兼容 |
-| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | 单任务 `Plan/Status/Create/Retire`、批次 `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 与波次 `WavePlan/WaveStatus/WaveCreate` 已实现；WaveCreate 绑定计划哈希、波次锁、`lockId` fencing、部分恢复和完成回执，仍不执行 Worker、合并或回收 |
+| Worktree runtime | `.harness/scripts/run-worktree.ps1` + `lib/worktree-runtime.mjs` | 单任务 `Plan/Status/Create/Retire`、批次 `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 与波次 `WavePlan/WaveStatus/WaveCreate/WaveRetire` 已实现；WaveRetire 仅回收完成态 finalized Wave 的 Worktree 注册和目录，保留分支并支持审批门控、双锁恢复、回执前缀和 owner fencing |
 | Serial batch runtime | `.harness/scripts/lib/batch-runtime.mjs` + `lib/batch-base-contract.mjs` | M5-B3-B ledger、任务顺序、锁、继承快照、逐任务回执和受验证的 `dev` 基准契约已实现；不执行 Git 或状态推进 |
 | Worktree Worker runtime | `.harness/scripts/lib/worktree-worker-runtime.mjs` | v1.0/v1.1 路径保持兼容；v1.2 在每任务独立 Worktree 中运行当前 attempt，收集不可变 result/receipt，并在五类副作用前执行 owner fencing；无 CLI |
 | Wave execution runtime | `.harness/scripts/lib/worktree-wave-execution-runtime.mjs` | M5-D-C1/C2 execution ledger、并行 Worker、manifest freeze、串行集成、partial recovery、wave receipt 和 finalization 已实现 |
@@ -78,13 +78,14 @@ This checklist tracks the project-structure adaptation toward the Harness Engine
 | M5-D-A multi-Worktree wave plan/report | `docs/harness-m5d-multi-worktree-wave/` | 已实现同 wave 多 Worktree 的确定性只读计划与 Git 事实状态；不提供创建、并行 Worker、合并或删除 |
 | M5-D-B wave create plan/report | `docs/harness-m5d-wave-create/` | 已实现计划哈希审批门控、多 Worktree 顺序创建、波次锁恢复、`lockId` fencing、部分失败恢复和完成回执；正式仓库未执行创建 |
 | M5-D-C1/C2 wave execution design/plan/report | `docs/harness-m5d-wave-execution/` | 已实现单个完整 implementation wave 的并行执行、manifest freeze、主树串行集成、partial recovery、finalize-wave 和 M3 apply |
+| M5-D-D wave retirement design/plan/report | `docs/harness-m5d-wave-retire/` | 已实现完整 M3/Wave 证据绑定、完成态记录哈希、双锁恢复、有序 task receipt 前缀、写点 fencing、Git 后验、分支保留和最终回执 |
 
 ## Deferred Functional Work
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
-- M5-D-C1/C2 已实现同 wave Mock Worker 并行执行、主树集成和 phase 收尾；Worktree 回收、真实 Agent、Fork-Join 和 Git 自动交付继续延期。
-- 多 batch/多 Worktree 回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。
+- M5-D-D 已实现单个完整 wave 的审批门控 Worktree 回收闭环；真实 Agent、Fork-Join 和 Git 自动交付继续延期。
+- 多 wave 批量回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。
 - Implement real interface execution, publish, and git delivery behavior only after quality gates are stable and approved.
 
 ## Safety Notes
@@ -103,7 +104,7 @@ Run:
 
 The script is read-only and checks required Harness files, JSON parseability, and Skill frontmatter.
 
-Current verified structure: 30 directories, 201 required files, and 13 Skill files.
+Current verified structure: 31 directories, 216 required files, and 13 Skill files.
 
 ## Knowledge Query
 

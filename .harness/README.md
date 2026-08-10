@@ -130,3 +130,19 @@ Git/Worktree 写入仍只在临时 fixture 中验证；不实现自动冲突解�
 
 `kb-query.ps1` is a read-only keyword search over `llm-knowledge/`. Treat empty results as missing
 knowledge and verify source files directly before implementation.
+
+## M5-D-D WaveRetire
+
+`run-worktree.ps1 -Command WaveRetire` 为已完成的单个完整 implementation wave 提供审批门控的多 Worktree 回收。
+调用方必须提供完成态 `StateFile`、`TaskDagFile`、`WaveIndex`、finalized execution ledger 与 wave receipt 的精确
+SHA-256，并显式传入 `-ConfirmRetire`。任务、分支、路径和 `baseCommit` 全部从已验证的 Wave 证据派生。
+
+回收前会一次性重验 `done/completed` State、M3 apply checkpoint、正式 implementation 产物、Task DAG、
+WavePlan、creation receipt、integration manifest、finalized ledger、wave receipt、每任务 execution/integration
+receipt、主树 applied files、全部 Worktree Git 事实和冲突锁。普通与 recovery 双锁使用随机 `lockId` fencing；
+遗留锁只能在调用方确认旧 owner 已停止并绑定所有现存锁 SHA-256 后接管。
+
+任务严格按 WavePlan 顺序执行 `git worktree remove --force`。每次删除后必须确认 Git 注册消失、目录不存在，
+且保留分支仍指向原 `baseCommit`，之后才写 task retirement receipt。中断后仅允许恢复完整、有序且逐项重验的
+receipt 前缀；最终 wave retirement receipt 完整绑定完成态、M3、Wave 和全部 task receipt。该能力不删除分支，
+不执行 `git worktree prune`，不提交、不推送、不发布，也不修改完成态 State。

@@ -49,6 +49,30 @@ const WAVE_CREATION_RECEIPT_FIELDS = [
 const WAVE_CREATION_RECEIPT_TASK_FIELDS = [
   "taskId", "branch", "worktreePath", "headCommit",
 ];
+const WAVE_RETIREMENT_LOCK_FIELDS = [
+  "schemaVersion", "lockId", "retirementId", "mode", "storyId", "runId", "waveId", "waveIndex",
+  "wavePlanSha256", "creationReceiptSha256", "waveLedgerSha256", "waveReceiptSha256", "pid", "createdAt",
+];
+const WAVE_RETIREMENT_RECOVERY_LOCK_FIELDS = [
+  ...WAVE_RETIREMENT_LOCK_FIELDS, "retirementLockFile", "retirementLockSha256",
+];
+const WAVE_TASK_RETIREMENT_RECEIPT_FIELDS = [
+  "schemaVersion", "storyId", "runId", "waveId", "waveIndex", "retirementId", "taskId",
+  "branch", "worktreePath", "baseCommit", "resultFile", "resultSha256",
+  "executionReceiptFile", "executionReceiptSha256", "integrationReceiptFile",
+  "integrationReceiptSha256", "appliedFiles", "retiredAt", "recovered",
+];
+const WAVE_RETIREMENT_RECEIPT_FIELDS = [
+  "schemaVersion", "storyId", "runId", "waveId", "waveIndex", "retirementId",
+  "statePhase", "stateRuntimeStatus", "stateFile", "stateSha256", "stateEventsFile",
+  "stateEventsSha256", "stateBackupFile", "stateBackupSha256", "taskDagFile", "taskDagSha256",
+  "wavePlanFile", "wavePlanSha256", "creationReceiptFile", "creationReceiptSha256",
+  "integrationManifestFile", "integrationManifestSha256", "waveLedgerFile", "waveLedgerSha256",
+  "waveReceiptFile", "waveReceiptSha256", "implementationTaskFile", "implementationTaskSha256",
+  "implementationResultFile", "implementationResultSha256", "implementationCheckpointFile",
+  "implementationCheckpointSha256", "implementationNotesFile", "implementationNotesSha256",
+  "tasks", "appliedFiles", "retiredAt", "recovered",
+];
 const RETIREMENT_RECEIPT_FIELDS = [
   "schemaVersion", "storyId", "runId", "taskId", "branch", "worktreePath", "baseCommit",
   "planSha256", "statusSha256", "executionReceiptSha256", "integrationPlanSha256",
@@ -71,6 +95,8 @@ const BATCH_INPUT_MANIFEST_FIELDS = [
   "inheritedSnapshotSha256", "inheritedFiles", "inputs", "createdAt",
 ];
 const BATCH_INPUT_MANIFEST_ENTRY_FIELDS = ["source", "sourcePath", "targetPath", "sha256", "bytes"];
+const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+const RFC3339_DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
 function normalizePath(value) {
   return value.replaceAll("\\", "/");
@@ -85,6 +111,18 @@ function assertIdentifier(value, label) {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)) {
     throw new Error(`${label} must be a safe identifier.`);
   }
+}
+
+function isRfc3339DateTime(value) {
+  if (typeof value !== "string") return false;
+  const match = RFC3339_DATE_TIME_PATTERN.exec(value);
+  if (!match || Number.isNaN(Date.parse(value))) return false;
+  const date = new Date(0);
+  date.setUTCFullYear(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  date.setUTCHours(0, 0, 0, 0);
+  return date.getUTCFullYear() === Number(match[1])
+    && date.getUTCMonth() === Number(match[2]) - 1
+    && date.getUTCDate() === Number(match[3]);
 }
 
 function resolveInsideRoot(root, relativeFile, label) {
@@ -154,7 +192,7 @@ async function executeGit(root, args, options = {}) {
     timeout: GIT_TIMEOUT_MS,
     maxBuffer: GIT_MAX_BUFFER_BYTES,
   }));
-  return execute(args);
+  return execute(args, root);
 }
 
 async function tryGit(root, args, options) {
@@ -819,6 +857,38 @@ function assertWaveCreateInputs(options) {
   if (options.confirmWaveLockRecovery !== true
       && (options.expectedCreateLockSha256 || options.expectedRecoveryLockSha256)) {
     throw new Error("Wave lock hash inputs require ConfirmWaveLockRecovery.");
+  }
+}
+
+function assertWaveRetireInputs(options) {
+  if (options.confirmRetire !== true) {
+    throw new Error("Wave Worktree retirement requires explicit approval and ConfirmRetire.");
+  }
+  if (typeof options.taskDagFile !== "string" || !options.taskDagFile.trim()) {
+    throw new Error("Wave Worktree retirement requires TaskDagFile.");
+  }
+  for (const [field, label] of [
+    ["expectedWaveLedgerSha256", "ExpectedWaveLedgerSha256"],
+    ["expectedWaveReceiptSha256", "ExpectedWaveReceiptSha256"],
+  ]) {
+    if (typeof options[field] !== "string" || !/^sha256:[a-f0-9]{64}$/.test(options[field])) {
+      throw new Error(`Wave Worktree retirement requires ${label}.`);
+    }
+  }
+  for (const field of ["taskId", "baseRef", "branch", "worktreePath", "confirmCreate", "confirmWaveCreate", "confirmWaveLockRecovery"]) {
+    if (options[field] !== undefined && options[field] !== null) {
+      throw new Error(`Wave Worktree retirement derives identity, branch, path, and base from finalized Wave evidence; ${field} is not accepted.`);
+    }
+  }
+  for (const field of ["expectedRetirementLockSha256", "expectedRetirementRecoveryLockSha256"]) {
+    const value = options[field];
+    if (value !== undefined && value !== null && !/^sha256:[a-f0-9]{64}$/.test(value)) {
+      throw new Error(`${field} must be a SHA-256 value.`);
+    }
+  }
+  if (options.confirmWaveRetireLockRecovery !== true
+      && (options.expectedRetirementLockSha256 || options.expectedRetirementRecoveryLockSha256)) {
+    throw new Error("Wave retirement lock hash inputs require ConfirmWaveRetireLockRecovery.");
   }
 }
 
@@ -2254,6 +2324,1075 @@ async function waveCreate(root, options) {
   return { ...result, status: refreshed.status, locks: refreshed.locks };
 }
 
+async function readWaveRetirementEvidence(root, relativeFile, label, json = false) {
+  const location = resolveInsideRoot(root, relativeFile, label);
+  await assertSafeTargetParents(root, location.fullPath);
+  const evidence = await readRegularBuffer(location.fullPath, label);
+  if (!json) return { relative: location.relative, ...evidence };
+  try {
+    return { relative: location.relative, value: JSON.parse(evidence.buffer.toString("utf8")), ...evidence };
+  } catch {
+    throw new Error(`${label} contains invalid JSON.`);
+  }
+}
+
+function addWaveRetirementAllowed(allowed, evidence) {
+  const key = pathKey(evidence.relative);
+  const existing = allowed.get(key);
+  if (existing && (existing.sha256 !== evidence.sha256 || existing.bytes !== evidence.bytes)) {
+    throw new Error(`Wave retirement evidence conflicts for ${evidence.relative}.`);
+  }
+  allowed.set(key, evidence);
+}
+
+async function loadWaveRetirementContext(root, options) {
+  await assertRepositoryRoot(root, options);
+  const stateLocation = resolveInsideRoot(root, options.stateFile, "State file");
+  await assertSafeTargetParents(root, stateLocation.fullPath);
+  const state = await readJsonFile(stateLocation.fullPath, "State file");
+  validateRetirementState(state);
+  if (!Number.isInteger(options.waveIndex) || options.waveIndex < 1) {
+    throw new Error("Wave index must be a positive integer.");
+  }
+
+  const outputs = waveOutputPaths(root, state, options.waveIndex);
+  const plan = await validateStoredWavePlan(
+    root,
+    await readJsonFile(outputs.planPath, "Wave Worktree plan"),
+    state,
+    options.waveIndex,
+    options.taskDagFile,
+  );
+  const planSha256 = await fileSha256(outputs.planPath);
+  const status = validateWaveStatusStructure(
+    await readJsonFile(outputs.statusPath, "Wave Worktree status"),
+    plan,
+    planSha256,
+  );
+  if (status.state !== "ready") throw new Error("Wave Worktree status must remain ready before retirement.");
+  const statusSha256 = await fileSha256(outputs.statusPath);
+  const creationReceipt = validateWaveCreationReceipt(
+    await readJsonFile(outputs.receiptPath, "Wave creation receipt"),
+    plan,
+    planSha256,
+    status,
+    statusSha256,
+  );
+  const creationReceiptSha256 = await fileSha256(outputs.receiptPath);
+
+  const phaseRoot = `.harness/runs/${state.runtime.runId}/phases/03-implementation`;
+  const implementation = {
+    taskFile: `${phaseRoot}/task.json`,
+    resultFile: `${phaseRoot}/result.json`,
+    checkpointFile: `${phaseRoot}/checkpoint.json`,
+    notesFile: `${phaseRoot}/implementation-notes.md`,
+  };
+  const checkpoint = await readJsonFile(
+    resolveInsideRoot(root, implementation.checkpointFile, "Implementation checkpoint").fullPath,
+    "Implementation checkpoint",
+  );
+  const binding = checkpoint?.waveFinalization;
+  if (checkpoint?.status !== "completed" || !binding || binding.waveId === undefined) {
+    throw new Error("Completed Story is missing its applied Wave finalization checkpoint.");
+  }
+  const { validateWaveExecutionLedger } = await import("./worktree-wave-execution-runtime.mjs");
+  const ledgerLocation = resolveInsideRoot(root, binding.waveLedgerFile, "Wave execution ledger");
+  const ledger = validateWaveExecutionLedger(await readJsonFile(ledgerLocation.fullPath, "Wave execution ledger"));
+  const ledgerSha256 = await fileSha256(ledgerLocation.fullPath);
+  if (ledger.status !== "finalized") throw new Error("Wave retirement requires a finalized Wave ledger.");
+  if (ledgerSha256 !== options.expectedWaveLedgerSha256) {
+    throw new Error("Wave execution ledger hash does not match ExpectedWaveLedgerSha256.");
+  }
+  if (ledger.storyId !== state.storyId || ledger.runId !== state.runtime.runId
+      || ledger.waveIndex !== options.waveIndex || ledger.baseCommit !== plan.baseCommit) {
+    throw new Error("Finalized Wave ledger no longer matches its planning evidence.");
+  }
+  if (ledger.taskDagFile !== plan.taskDagFile || ledger.taskDagSha256 !== plan.taskDagSha256) {
+    throw new Error("Bound Task DAG changed from the finalized Wave ledger.");
+  }
+  if (ledger.wavePlanFile !== outputs.planFile || ledger.wavePlanSha256 !== planSha256) {
+    throw new Error("Wave Worktree plan hash changed from the finalized Wave ledger.");
+  }
+  if (ledger.creationReceiptFile !== outputs.receiptFile
+      || ledger.creationReceiptSha256 !== creationReceiptSha256) {
+    throw new Error("Wave creation receipt changed from the finalized Wave ledger.");
+  }
+  if (state.runtime.revision < binding.preparedRevision) {
+    throw new Error("Completed State revision predates the finalized Wave checkpoint.");
+  }
+  if (binding.storyId !== state.storyId || binding.runId !== state.runtime.runId
+      || binding.stateFile !== stateLocation.relative || binding.phase !== "implementation"
+      || binding.preparedRevision !== ledger.preparedRevision
+      || binding.waveId !== ledger.waveId || binding.waveLedgerFile !== ledgerLocation.relative
+      || binding.waveLedgerSha256 !== ledgerSha256
+      || binding.waveReceiptFile !== ledger.waveReceiptFile
+      || binding.waveReceiptSha256 !== ledger.waveReceiptSha256
+      || binding.integrationManifestFile !== ledger.integrationManifestFile
+      || binding.integrationManifestSha256 !== ledger.integrationManifestSha256
+      || binding.taskFile !== implementation.taskFile
+      || binding.resultFile !== implementation.resultFile
+      || binding.notesFile !== implementation.notesFile
+      || binding.finalizedAt !== ledger.finalizedAt) {
+    throw new Error("Applied Wave checkpoint no longer matches the finalized ledger.");
+  }
+  const waveReceiptLocation = resolveInsideRoot(root, ledger.waveReceiptFile, "Wave receipt");
+  const waveReceiptSha256 = await fileSha256(waveReceiptLocation.fullPath);
+  if (waveReceiptSha256 !== options.expectedWaveReceiptSha256
+      || waveReceiptSha256 !== ledger.waveReceiptSha256) {
+    throw new Error("Wave receipt changed from ExpectedWaveReceiptSha256.");
+  }
+  const waveReceipt = await readJsonFile(waveReceiptLocation.fullPath, "Wave receipt");
+  if (waveReceipt.storyId !== binding.storyId
+      || waveReceipt.runId !== binding.runId
+      || waveReceipt.phase !== binding.phase
+      || waveReceipt.waveId !== binding.waveId
+      || waveReceipt.waveIndex !== ledger.waveIndex
+      || waveReceipt.preparedRevision !== binding.preparedRevision
+      || waveReceipt.integrationManifestFile !== binding.integrationManifestFile
+      || waveReceipt.integrationManifestSha256 !== binding.integrationManifestSha256
+      || waveReceipt.phaseArtifacts?.taskFile !== binding.taskFile
+      || waveReceipt.phaseArtifacts?.taskSha256 !== binding.taskSha256
+      || waveReceipt.phaseArtifacts?.resultFile !== binding.resultFile
+      || waveReceipt.phaseArtifacts?.resultSha256 !== binding.resultSha256
+      || waveReceipt.phaseArtifacts?.notesFile !== binding.notesFile
+      || waveReceipt.phaseArtifacts?.notesSha256 !== binding.notesSha256
+      || waveReceipt.completedAt !== binding.finalizedAt
+      || !Array.isArray(waveReceipt.tasks)
+      || waveReceipt.tasks.length !== ledger.tasks.length
+      || ledger.tasks.some((task, index) => {
+        const receiptTask = waveReceipt.tasks[index];
+        return receiptTask?.taskId !== task.taskId
+          || receiptTask.dispatchId !== task.dispatchId
+          || receiptTask.executionReceiptFile !== task.executionReceiptFile
+          || receiptTask.executionReceiptSha256 !== task.executionReceiptSha256
+          || receiptTask.integrationReceiptFile !== task.integrationReceiptFile
+          || receiptTask.integrationReceiptSha256 !== task.integrationReceiptSha256;
+      })) {
+    throw new Error("Wave receipt identity no longer matches the finalized ledger and checkpoint.");
+  }
+  const manifestLocation = resolveInsideRoot(root, ledger.integrationManifestFile, "Wave integration manifest");
+  if (await fileSha256(manifestLocation.fullPath) !== ledger.integrationManifestSha256) {
+    throw new Error("Wave integration manifest changed after finalization.");
+  }
+  const manifest = await readJsonFile(manifestLocation.fullPath, "Wave integration manifest");
+  return {
+    state,
+    stateFile: stateLocation.relative,
+    statePath: stateLocation.fullPath,
+    outputs,
+    plan,
+    planSha256,
+    status,
+    statusSha256,
+    creationReceipt,
+    creationReceiptSha256,
+    implementation,
+    checkpoint,
+    binding,
+    ledger,
+    ledgerFile: ledgerLocation.relative,
+    ledgerSha256,
+    waveReceipt,
+    waveReceiptFile: waveReceiptLocation.relative,
+    waveReceiptSha256,
+    manifest,
+    manifestFile: manifestLocation.relative,
+  };
+}
+
+async function collectWaveRetirementEvidence(root, context) {
+  const allowed = new Map();
+  const add = (evidence) => addWaveRetirementAllowed(allowed, evidence);
+  const load = async (relative, label, json = false) => {
+    const evidence = await readWaveRetirementEvidence(root, relative, label, json);
+    add(evidence);
+    return evidence;
+  };
+
+  const state = await load(context.stateFile, "Completed state file", true);
+  await load(context.state.runtime.workflow, "Completed Story workflow");
+  const stateEventsFile = `.harness/states/e2e-${context.state.storyId}.events.jsonl`;
+  const stateEvents = await load(stateEventsFile, "Completed state event log");
+  const stateBackup = await load(`${context.stateFile}.bak`, "Completed state backup", true);
+  if (state.value.phase !== "done" || state.value.runtime?.status !== "completed"
+      || state.value.storyId !== context.state.storyId || state.value.runtime?.runId !== context.state.runtime.runId) {
+    throw new Error("Wave retirement requires a completed Story.");
+  }
+
+  const taskDag = await load(context.plan.taskDagFile, "Bound Task DAG");
+  if (taskDag.sha256 !== context.plan.taskDagSha256) throw new Error("Bound Task DAG changed after Wave planning.");
+  const plan = await load(context.outputs.planFile, "Wave Worktree plan");
+  if (plan.sha256 !== context.planSha256) throw new Error("Wave Worktree plan hash changed.");
+  const status = await load(context.outputs.statusFile, "Wave Worktree status");
+  if (status.sha256 !== context.statusSha256) throw new Error("Wave Worktree status hash changed.");
+  const creation = await load(context.outputs.receiptFile, "Wave creation receipt");
+  if (creation.sha256 !== context.creationReceiptSha256) throw new Error("Wave creation receipt changed.");
+  const ledger = await load(context.ledgerFile, "Finalized Wave ledger");
+  const manifest = await load(context.manifestFile, "Wave integration manifest");
+  const waveReceipt = await load(context.waveReceiptFile, "Wave receipt");
+  if (ledger.sha256 !== context.ledgerSha256 || manifest.sha256 !== context.ledger.integrationManifestSha256
+      || waveReceipt.sha256 !== context.waveReceiptSha256) {
+    throw new Error("Finalized Wave evidence changed during retirement preflight.");
+  }
+
+  const implementationTask = await load(context.implementation.taskFile, "Finalized implementation task", true);
+  const implementationResult = await load(context.implementation.resultFile, "Finalized implementation result", true);
+  const implementationCheckpoint = await load(context.implementation.checkpointFile, "Finalized implementation checkpoint", true);
+  const implementationNotes = await load(context.implementation.notesFile, "Finalized implementation notes");
+  for (const [evidence, expected, label] of [
+    [implementationTask, context.binding.taskSha256, "Finalized implementation task"],
+    [implementationResult, context.binding.resultSha256, "Finalized implementation result"],
+    [implementationNotes, context.binding.notesSha256, "Finalized implementation notes"],
+  ]) {
+    if (evidence.sha256 !== expected) throw new Error(`${label} changed after Wave finalization.`);
+  }
+  if (implementationCheckpoint.value.status !== "completed"
+      || JSON.stringify(implementationCheckpoint.value.waveFinalization) !== JSON.stringify(context.binding)
+      || implementationTask.value.preparedRevision !== context.binding.preparedRevision
+      || context.waveReceipt.phaseArtifacts?.taskSha256 !== implementationTask.sha256
+      || context.waveReceipt.phaseArtifacts?.resultSha256 !== implementationResult.sha256
+      || context.waveReceipt.phaseArtifacts?.notesSha256 !== implementationNotes.sha256) {
+    throw new Error("Applied Wave checkpoint or formal phase artifacts changed.");
+  }
+  if (context.manifest.storyId !== context.state.storyId
+      || context.manifest.runId !== context.state.runtime.runId
+      || context.manifest.waveId !== context.ledger.waveId
+      || context.manifest.waveIndex !== context.ledger.waveIndex
+      || context.manifest.wavePlanSha256 !== context.planSha256
+      || context.manifest.creationReceiptSha256 !== context.creationReceiptSha256
+      || context.manifest.baseCommit !== context.plan.baseCommit
+      || !Array.isArray(context.manifest.tasks)
+      || !Array.isArray(context.manifest.candidateFiles)
+      || !Array.isArray(context.waveReceipt.tasks)
+      || context.waveReceipt.tasks.length !== context.ledger.tasks.length) {
+    throw new Error("Wave integration manifest or receipt identity changed.");
+  }
+
+  const tasks = [];
+  for (let index = 0; index < context.ledger.tasks.length; index += 1) {
+    const ledgerTask = context.ledger.tasks[index];
+    const manifestTask = context.manifest.tasks[index];
+    const receiptTask = context.waveReceipt.tasks[index];
+    const planTask = context.plan.tasks[index];
+    if (!manifestTask || !receiptTask || !planTask
+        || manifestTask.taskId !== ledgerTask.taskId || receiptTask.taskId !== ledgerTask.taskId
+        || planTask.taskId !== ledgerTask.taskId || manifestTask.worktreePath !== planTask.worktreePath
+        || manifestTask.headCommit !== context.plan.baseCommit) {
+      throw new Error(`Finalized Wave task evidence changed: ${ledgerTask.taskId}`);
+    }
+    const taskFile = await load(ledgerTask.taskFile, `Wave task '${ledgerTask.taskId}' dispatch`);
+    const checkpointFile = await load(ledgerTask.checkpointFile, `Wave task '${ledgerTask.taskId}' checkpoint`);
+    const resultFile = await load(manifestTask.resultFile, `Wave task '${ledgerTask.taskId}' result`);
+    const execution = await load(ledgerTask.executionReceiptFile, `Wave task '${ledgerTask.taskId}' execution receipt`, true);
+    const integration = await load(ledgerTask.integrationReceiptFile, `Wave task '${ledgerTask.taskId}' integration receipt`, true);
+    if (taskFile.sha256 !== ledgerTask.taskSha256 || checkpointFile.sha256 !== ledgerTask.checkpointSha256
+        || resultFile.sha256 !== manifestTask.resultSha256
+        || receiptTask.resultFile !== manifestTask.resultFile
+        || receiptTask.resultSha256 !== manifestTask.resultSha256
+        || receiptTask.executionReceiptSha256 !== ledgerTask.executionReceiptSha256
+        || receiptTask.integrationReceiptSha256 !== ledgerTask.integrationReceiptSha256) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' receipt evidence changed.`);
+    }
+    if (execution.sha256 !== ledgerTask.executionReceiptSha256) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' execution receipt changed.`);
+    }
+    if (integration.sha256 !== ledgerTask.integrationReceiptSha256) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' integration receipt changed.`);
+    }
+    const candidates = context.manifest.candidateFiles.filter((file) => file.taskId === ledgerTask.taskId);
+    if (JSON.stringify(integration.value.appliedFiles) !== JSON.stringify(candidates)) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' integration receipt changed from the manifest.`);
+    }
+    if (Array.isArray(execution.value.files)) {
+      const executionFiles = new Map(execution.value.files.map((file) => [pathKey(file.path), file]));
+      if (executionFiles.size !== candidates.length || candidates.some((candidate) => {
+        const file = executionFiles.get(pathKey(candidate.path));
+        return !file || file.kind !== candidate.type || file.sha256 !== candidate.sha256 || file.bytes !== candidate.bytes;
+      })) {
+        throw new Error(`Wave task '${ledgerTask.taskId}' execution receipt changed from the manifest.`);
+      }
+    }
+    for (const candidate of candidates) {
+      const applied = await load(candidate.path, `Applied Wave candidate '${candidate.path}'`);
+      if (applied.sha256 !== candidate.sha256 || applied.bytes !== candidate.bytes) {
+        throw new Error(`Applied Wave candidate changed: ${candidate.path}`);
+      }
+    }
+    await load(
+      `${path.posix.dirname(manifestTask.resultFile)}/claim.json`,
+      `Wave task '${ledgerTask.taskId}' attempt claim`,
+    );
+    const inputSnapshot = await load(
+      `${path.posix.dirname(manifestTask.resultFile)}/input-snapshot.json`,
+      `Wave task '${ledgerTask.taskId}' input snapshot`,
+      true,
+    );
+    if (!Array.isArray(inputSnapshot.value.inputs)) {
+      throw new Error(`Wave task '${ledgerTask.taskId}' input snapshot changed.`);
+    }
+    const worktreeFiles = new Map(candidates.map((candidate) => [pathKey(candidate.path), candidate]));
+    worktreeFiles.set(pathKey(manifestTask.resultFile), {
+      path: manifestTask.resultFile,
+      sha256: resultFile.sha256,
+      bytes: resultFile.bytes,
+    });
+    for (const input of inputSnapshot.value.inputs) {
+      if (!input || typeof input.targetPath !== "string" || typeof input.sha256 !== "string"
+          || !Number.isInteger(input.bytes)) {
+        throw new Error(`Wave task '${ledgerTask.taskId}' input snapshot changed.`);
+      }
+      if (!worktreeFiles.has(pathKey(input.targetPath))) {
+        worktreeFiles.set(pathKey(input.targetPath), {
+          path: input.targetPath,
+          sha256: input.sha256,
+          bytes: input.bytes,
+        });
+      }
+    }
+    tasks.push({
+      taskId: ledgerTask.taskId,
+      plan: { ...planTask, baseCommit: context.plan.baseCommit },
+      candidates,
+      worktreeFiles: [...worktreeFiles.values()],
+      resultFile: manifestTask.resultFile,
+      resultSha256: resultFile.sha256,
+      executionReceiptFile: ledgerTask.executionReceiptFile,
+      executionReceiptSha256: execution.sha256,
+      integrationReceiptFile: ledgerTask.integrationReceiptFile,
+      integrationReceiptSha256: integration.sha256,
+    });
+  }
+
+  await load(
+    `.harness/runs/${context.state.runtime.runId}/phases/03-implementation/implementation-owner.json`,
+    "Implementation owner",
+  );
+  const currentRecords = new Map();
+  for (const record of context.state.runtime.records ?? []) {
+    if (typeof record.path === "string" && record.path) currentRecords.set(record.path, record);
+  }
+  for (const record of currentRecords.values()) {
+    if (!/^sha256:[a-f0-9]{64}$/.test(record.sha256 ?? "")) {
+      throw new Error(`Completed State record is missing a valid SHA-256: ${record.path}`);
+    }
+    const recordEvidence = await load(record.path, "Completed Story record evidence");
+    if (recordEvidence.sha256 !== record.sha256) {
+      throw new Error(`Completed State record evidence changed: ${record.path}`);
+    }
+  }
+  for (const relative of [
+    `.harness/runs/${context.state.runtime.runId}/phases/04-unit-test/test-report.md`,
+    `.harness/runs/${context.state.runtime.runId}/phases/05-code-review/code-review-report.md`,
+    `.harness/runs/${context.state.runtime.runId}/phases/06-build-publish/build-report.md`,
+    `.harness/runs/${context.state.runtime.runId}/phases/07-interface-verification/interface-verification-report.md`,
+    `.harness/runs/${context.state.runtime.runId}/phases/08-git-delivery/delivery-report.md`,
+  ]) {
+    await load(relative, "Completed Story phase output");
+  }
+  return {
+    allowed,
+    tasks,
+    state,
+    stateEvents,
+    stateBackup,
+    implementationTask,
+    implementationResult,
+    implementationCheckpoint,
+    implementationNotes,
+  };
+}
+
+async function assertWaveRetirementMainIntegrity(root, context, evidence, options) {
+  const status = await executeGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], options);
+  const worktreePaths = context.plan.tasks.map((task) => pathKey(task.worktreePath));
+  for (const entry of parsePorcelainPaths(String(status.stdout ?? ""))) {
+    const relative = entry.relative.replace(/\/+$/, "");
+    const expected = evidence.allowed.get(pathKey(relative));
+    if (!expected) throw new Error(`Main repository contains an unexplained Wave retirement change: ${relative}`);
+    const current = await readRegularBuffer(resolveInsideRoot(root, relative, "Wave retirement main evidence").fullPath, "Wave retirement main evidence");
+    if (current.sha256 !== expected.sha256 || current.bytes !== expected.bytes) {
+      throw new Error(`Wave retirement main evidence hash drifted: ${relative}`);
+    }
+  }
+  const ignored = await executeGit(root, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"], options);
+  for (const relative of String(ignored.stdout ?? "").split("\0").filter(Boolean).map(normalizePath)) {
+    const normalized = relative.replace(/\/+$/, "");
+    if (worktreePaths.some((worktreePath) => worktreePath.startsWith(`${pathKey(normalized)}/`) || worktreePath === pathKey(normalized))) {
+      continue;
+    }
+    const expected = evidence.allowed.get(pathKey(normalized));
+    if (!expected) throw new Error(`Main repository contains an unexplained ignored Wave retirement change: ${normalized}`);
+    const current = await readRegularBuffer(resolveInsideRoot(root, normalized, "Ignored Wave retirement evidence").fullPath, "Ignored Wave retirement evidence");
+    if (current.sha256 !== expected.sha256 || current.bytes !== expected.bytes) {
+      throw new Error(`Ignored Wave retirement evidence hash drifted: ${normalized}`);
+    }
+  }
+}
+
+async function assertWaveRetirementWorktreeIntegrity(root, task, options) {
+  const worktreeRoot = resolveInsideRoot(root, task.plan.worktreePath, "Wave Worktree path").fullPath;
+  const allowed = new Map(task.worktreeFiles.map((file) => [pathKey(file.path), file]));
+  for (const candidate of task.worktreeFiles) {
+    const current = await readRegularBuffer(
+      resolveInsideRoot(worktreeRoot, candidate.path, "Wave Worktree candidate").fullPath,
+      "Wave Worktree candidate",
+    );
+    if (current.sha256 !== candidate.sha256 || current.bytes !== candidate.bytes) {
+      throw new Error(`Wave Worktree candidate changed: ${candidate.path}`);
+    }
+  }
+  const status = await executeGit(worktreeRoot, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], options);
+  for (const entry of parsePorcelainPaths(String(status.stdout ?? ""))) {
+    if (!allowed.has(pathKey(entry.relative))) {
+      throw new Error(`Wave Worktree contains an unexplained change: ${entry.relative}`);
+    }
+  }
+  const ignored = await executeGit(worktreeRoot, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"], options);
+  for (const relative of String(ignored.stdout ?? "").split("\0").filter(Boolean).map(normalizePath)) {
+    if (!allowed.has(pathKey(relative))) {
+      throw new Error(`Wave Worktree contains an unexplained ignored file: ${relative}`);
+    }
+  }
+}
+
+function waveRetirementPaths(root, context) {
+  const waveRoot = path.posix.dirname(context.ledgerFile);
+  const lockFile = `${waveRoot}/worktree-retire.lock`;
+  const recoveryLockFile = `${waveRoot}/worktree-retire-recovery.lock`;
+  return {
+    waveRoot,
+    lockFile,
+    recoveryLockFile,
+    lockPath: resolveInsideRoot(root, lockFile, "Wave retirement lock").fullPath,
+    recoveryLockPath: resolveInsideRoot(root, recoveryLockFile, "Wave retirement recovery lock").fullPath,
+  };
+}
+
+function validateWaveRetirementLock(lock, context, mode, paths) {
+  const fields = mode === "recovery"
+    ? WAVE_RETIREMENT_RECOVERY_LOCK_FIELDS
+    : WAVE_RETIREMENT_LOCK_FIELDS;
+  if (!lock || typeof lock !== "object" || Array.isArray(lock)
+      || Object.keys(lock).length !== fields.length
+      || fields.some((field) => !Object.hasOwn(lock, field))
+      || lock.schemaVersion !== "1.0"
+      || typeof lock.lockId !== "string"
+      || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(lock.lockId)
+      || typeof lock.retirementId !== "string"
+      || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(lock.retirementId)
+      || lock.mode !== mode
+      || lock.storyId !== context.state.storyId
+      || lock.runId !== context.state.runtime.runId
+      || lock.waveId !== context.ledger.waveId
+      || lock.waveIndex !== context.ledger.waveIndex
+      || lock.wavePlanSha256 !== context.planSha256
+      || lock.creationReceiptSha256 !== context.creationReceiptSha256
+      || lock.waveLedgerSha256 !== context.ledgerSha256
+      || lock.waveReceiptSha256 !== context.waveReceiptSha256
+      || !Number.isInteger(lock.pid) || lock.pid < 1
+      || !isRfc3339DateTime(lock.createdAt)) {
+    throw new Error(`Wave retirement ${mode} lock has an invalid structure.`);
+  }
+  if (mode === "recovery"
+      && (lock.retirementLockFile !== paths.lockFile
+        || !/^sha256:[a-f0-9]{64}$/.test(lock.retirementLockSha256))) {
+    throw new Error("Wave retirement recovery lock does not bind the normal retirement lock.");
+  }
+  return lock;
+}
+
+async function inspectWaveRetirementLock(root, context, mode, paths = waveRetirementPaths(root, context)) {
+  const relative = mode === "recovery" ? paths.recoveryLockFile : paths.lockFile;
+  const fullPath = mode === "recovery" ? paths.recoveryLockPath : paths.lockPath;
+  const value = await readJsonOptional(fullPath, `Wave retirement ${mode} lock`);
+  if (!value) return null;
+  const evidence = await readRegularBuffer(fullPath, `Wave retirement ${mode} lock`);
+  return {
+    file: relative,
+    value: validateWaveRetirementLock(value, context, mode, paths),
+    sha256: evidence.sha256,
+    bytes: evidence.bytes,
+  };
+}
+
+function assertExpectedWaveRetirementLock(snapshot, expectedSha256, label) {
+  if (snapshot && !expectedSha256) throw new Error(`${label} requires its expected lock hash.`);
+  if (!snapshot && expectedSha256) throw new Error(`${label} does not exist but an expected lock hash was provided.`);
+  if (snapshot && snapshot.sha256 !== expectedSha256) {
+    throw new Error(`${label} hash does not match the approved lock hash.`);
+  }
+}
+
+async function waveRetirementConflictingLocks(root, context) {
+  const paths = waveRetirementPaths(root, context);
+  const relative = [
+    `.harness/runs/${context.state.runtime.runId}/waves/create.lock`,
+    `.harness/runs/${context.state.runtime.runId}/waves/create-recovery.lock`,
+    `${paths.waveRoot}/ledger-mutation.lock`,
+    `${paths.waveRoot}/manifest-preparation.lock`,
+    `${paths.waveRoot}/integration.lock`,
+    `${paths.waveRoot}/integration-recovery.lock`,
+    `.harness/runs/${context.state.runtime.runId}/phases/03-implementation/batch-preparation.lock`,
+    `.harness/runs/${context.state.runtime.runId}/phases/03-implementation/batch-finalization.lock`,
+    ...context.ledger.tasks.map((task) => `${paths.waveRoot}/tasks/${task.taskId}/execute.lock`),
+  ];
+  return [...new Set(relative)].map((file) => resolveInsideRoot(root, file, "Wave retirement conflicting lock"));
+}
+
+async function assertWaveRetirementConflictsAbsent(root, context) {
+  for (const lock of await waveRetirementConflictingLocks(root, context)) {
+    const info = await lstat(lock.fullPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+    if (info) throw new Error(`Wave retirement lifecycle lock already exists: ${lock.relative}`);
+  }
+}
+
+async function addWaveRetirementLockEvidence(root, evidence, snapshot) {
+  if (!snapshot) return;
+  const current = await readRegularBuffer(
+    resolveInsideRoot(root, snapshot.file, "Wave retirement owner lock").fullPath,
+    "Wave retirement owner lock",
+  );
+  if (current.sha256 !== snapshot.sha256 || current.bytes !== snapshot.bytes) {
+    throw new Error("Wave retirement owner lock changed before allowlist binding.");
+  }
+  addWaveRetirementAllowed(evidence.allowed, {
+    relative: snapshot.file,
+    buffer: current.buffer,
+    sha256: current.sha256,
+    bytes: current.bytes,
+  });
+}
+
+async function acquireWaveRetirementOwner(root, context, options) {
+  const paths = waveRetirementPaths(root, context);
+  const normal = await inspectWaveRetirementLock(root, context, "retire", paths);
+  const recovery = await inspectWaveRetirementLock(root, context, "recovery", paths);
+  if (options.confirmWaveRetireLockRecovery !== true) {
+    if (normal || recovery) {
+      throw new Error("Wave retirement lock already exists; inspect it before retrying.");
+    }
+    const value = {
+      schemaVersion: "1.0",
+      lockId: randomUUID(),
+      retirementId: randomUUID(),
+      mode: "retire",
+      storyId: context.state.storyId,
+      runId: context.state.runtime.runId,
+      waveId: context.ledger.waveId,
+      waveIndex: context.ledger.waveIndex,
+      wavePlanSha256: context.planSha256,
+      creationReceiptSha256: context.creationReceiptSha256,
+      waveLedgerSha256: context.ledgerSha256,
+      waveReceiptSha256: context.waveReceiptSha256,
+      pid: process.pid,
+      createdAt: (options.now ?? (() => new Date().toISOString()))(),
+    };
+    await writeExclusiveJson(paths.lockPath, value, "Wave retirement lock already exists; inspect it before retrying.");
+    const owner = await inspectWaveRetirementLock(root, context, "retire", paths);
+    const racedRecovery = await inspectWaveRetirementLock(root, context, "recovery", paths);
+    if (racedRecovery) throw new Error("Wave retirement owner was fenced during acquisition.");
+    return { mode: "retire", paths, normal: owner, recovery: null };
+  }
+
+  if (!normal) throw new Error("Wave retirement recovery requires the existing normal retirement lock.");
+  assertExpectedWaveRetirementLock(normal, options.expectedRetirementLockSha256, "ExpectedRetirementLockSha256");
+  assertExpectedWaveRetirementLock(
+    recovery,
+    options.expectedRetirementRecoveryLockSha256,
+    "ExpectedRetirementRecoveryLockSha256",
+  );
+  const value = {
+    schemaVersion: "1.0",
+    lockId: randomUUID(),
+    retirementId: normal.value.retirementId,
+    mode: "recovery",
+    storyId: context.state.storyId,
+    runId: context.state.runtime.runId,
+    waveId: context.ledger.waveId,
+    waveIndex: context.ledger.waveIndex,
+    wavePlanSha256: context.planSha256,
+    creationReceiptSha256: context.creationReceiptSha256,
+    waveLedgerSha256: context.ledgerSha256,
+    waveReceiptSha256: context.waveReceiptSha256,
+    pid: process.pid,
+    createdAt: (options.now ?? (() => new Date().toISOString()))(),
+    retirementLockFile: paths.lockFile,
+    retirementLockSha256: normal.sha256,
+  };
+  if (options.beforeWaveRetirementRecoveryLockWrite) {
+    await options.beforeWaveRetirementRecoveryLockWrite();
+  }
+  const currentNormal = await inspectWaveRetirementLock(root, context, "retire", paths);
+  const currentRecovery = await inspectWaveRetirementLock(root, context, "recovery", paths);
+  assertExpectedWaveRetirementLock(currentNormal, options.expectedRetirementLockSha256, "ExpectedRetirementLockSha256");
+  assertExpectedWaveRetirementLock(
+    currentRecovery,
+    options.expectedRetirementRecoveryLockSha256,
+    "ExpectedRetirementRecoveryLockSha256",
+  );
+  await writeAtomicJson(paths.recoveryLockPath, value);
+  const owner = await inspectWaveRetirementLock(root, context, "recovery", paths);
+  if (!owner || owner.value.lockId !== value.lockId) {
+    throw new Error("Wave retirement recovery lock ownership changed during acquisition.");
+  }
+  return {
+    mode: "recovery",
+    paths,
+    normal: currentNormal,
+    recovery: owner,
+    expectedNormalSha256: currentNormal.sha256,
+  };
+}
+
+async function assertWaveRetirementOwner(root, context, owner) {
+  const normal = await inspectWaveRetirementLock(root, context, "retire", owner.paths);
+  if (!normal || normal.sha256 !== owner.normal.sha256
+      || normal.value.lockId !== owner.normal.value.lockId) {
+    throw new Error("Wave retirement ownership changed.");
+  }
+  const recovery = await inspectWaveRetirementLock(root, context, "recovery", owner.paths);
+  if (owner.mode === "retire") {
+    if (recovery) throw new Error("Wave retirement owner was fenced by a recovery lock.");
+    return { normal, recovery: null };
+  }
+  if (!recovery || recovery.sha256 !== owner.recovery.sha256
+      || recovery.value.lockId !== owner.recovery.value.lockId
+      || recovery.value.retirementLockSha256 !== normal.sha256) {
+    throw new Error("Wave retirement recovery ownership changed.");
+  }
+  return { normal, recovery };
+}
+
+function waveRetirementReceiptPaths(context) {
+  const waveRoot = path.posix.dirname(context.ledgerFile);
+  return {
+    finalFile: `${waveRoot}/wave-retirement-receipt.json`,
+    taskFile: (taskId) => `${waveRoot}/tasks/${taskId}/retirement-receipt.json`,
+  };
+}
+
+function validateWaveTaskRetirementReceipt(receipt, context, task, retirementId) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)
+      || Object.keys(receipt).length !== WAVE_TASK_RETIREMENT_RECEIPT_FIELDS.length
+      || WAVE_TASK_RETIREMENT_RECEIPT_FIELDS.some((field) => !Object.hasOwn(receipt, field))
+      || receipt.schemaVersion !== "1.0"
+      || !UUID_PATTERN.test(receipt.retirementId)
+      || receipt.storyId !== context.state.storyId
+      || receipt.runId !== context.state.runtime.runId
+      || receipt.waveId !== context.ledger.waveId
+      || receipt.waveIndex !== context.ledger.waveIndex
+      || (retirementId && receipt.retirementId !== retirementId)
+      || receipt.taskId !== task.taskId
+      || receipt.branch !== task.plan.branch
+      || receipt.worktreePath !== task.plan.worktreePath
+      || receipt.baseCommit !== task.plan.baseCommit
+      || receipt.resultFile !== task.resultFile
+      || receipt.resultSha256 !== task.resultSha256
+      || receipt.executionReceiptFile !== task.executionReceiptFile
+      || receipt.executionReceiptSha256 !== task.executionReceiptSha256
+      || receipt.integrationReceiptFile !== task.integrationReceiptFile
+      || receipt.integrationReceiptSha256 !== task.integrationReceiptSha256
+      || JSON.stringify(receipt.appliedFiles) !== JSON.stringify(task.candidates)
+      || !isRfc3339DateTime(receipt.retiredAt)
+      || typeof receipt.recovered !== "boolean") {
+    throw new Error(`Wave task retirement receipt does not match stable evidence: ${task.taskId}`);
+  }
+  return receipt;
+}
+
+async function loadWaveRetirementReceiptPrefix(root, context, evidence, retirementId = null) {
+  const paths = waveRetirementReceiptPaths(context);
+  const receipts = [];
+  let gap = false;
+  let stableRetirementId = retirementId;
+  for (const task of evidence.tasks) {
+    const relative = paths.taskFile(task.taskId);
+    const location = resolveInsideRoot(root, relative, "Wave task retirement receipt");
+    const receipt = await readJsonOptional(location.fullPath, "Wave task retirement receipt");
+    if (!receipt) {
+      gap = true;
+      continue;
+    }
+    if (gap) throw new Error("Wave task retirement receipts do not form a stable ordered prefix.");
+    stableRetirementId ??= receipt.retirementId;
+    validateWaveTaskRetirementReceipt(receipt, context, task, stableRetirementId);
+    const snapshot = await readRegularBuffer(location.fullPath, "Wave task retirement receipt");
+    const bound = { relative: location.relative, ...snapshot };
+    addWaveRetirementAllowed(evidence.allowed, bound);
+    receipts.push({ task, receipt, evidence: bound });
+  }
+  return { receipts, nextIndex: receipts.length, retirementId: stableRetirementId };
+}
+
+function expectedWaveRetirementReceipt(context, evidence, prefix, retirementId, retiredAt, recovered) {
+  return {
+    schemaVersion: "1.0",
+    storyId: context.state.storyId,
+    runId: context.state.runtime.runId,
+    waveId: context.ledger.waveId,
+    waveIndex: context.ledger.waveIndex,
+    retirementId,
+    statePhase: context.state.phase,
+    stateRuntimeStatus: context.state.runtime.status,
+    stateFile: context.stateFile,
+    stateSha256: evidence.state.sha256,
+    stateEventsFile: evidence.stateEvents.relative,
+    stateEventsSha256: evidence.stateEvents.sha256,
+    stateBackupFile: evidence.stateBackup.relative,
+    stateBackupSha256: evidence.stateBackup.sha256,
+    taskDagFile: context.plan.taskDagFile,
+    taskDagSha256: context.plan.taskDagSha256,
+    wavePlanFile: context.outputs.planFile,
+    wavePlanSha256: context.planSha256,
+    creationReceiptFile: context.outputs.receiptFile,
+    creationReceiptSha256: context.creationReceiptSha256,
+    integrationManifestFile: context.manifestFile,
+    integrationManifestSha256: context.ledger.integrationManifestSha256,
+    waveLedgerFile: context.ledgerFile,
+    waveLedgerSha256: context.ledgerSha256,
+    waveReceiptFile: context.waveReceiptFile,
+    waveReceiptSha256: context.waveReceiptSha256,
+    implementationTaskFile: context.implementation.taskFile,
+    implementationTaskSha256: evidence.implementationTask.sha256,
+    implementationResultFile: context.implementation.resultFile,
+    implementationResultSha256: evidence.implementationResult.sha256,
+    implementationCheckpointFile: context.implementation.checkpointFile,
+    implementationCheckpointSha256: evidence.implementationCheckpoint.sha256,
+    implementationNotesFile: context.implementation.notesFile,
+    implementationNotesSha256: evidence.implementationNotes.sha256,
+    tasks: prefix.receipts.map(({ task, evidence: receiptEvidence }) => ({
+      taskId: task.taskId,
+      retirementReceiptFile: receiptEvidence.relative,
+      retirementReceiptSha256: receiptEvidence.sha256,
+    })),
+    appliedFiles: context.manifest.candidateFiles.map((file) => ({ ...file })),
+    retiredAt,
+    recovered,
+  };
+}
+
+function validateWaveRetirementReceipt(receipt, expected) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)
+      || Object.keys(receipt).length !== WAVE_RETIREMENT_RECEIPT_FIELDS.length
+      || WAVE_RETIREMENT_RECEIPT_FIELDS.some((field) => !Object.hasOwn(receipt, field))
+      || receipt.schemaVersion !== "1.0"
+      || !UUID_PATTERN.test(receipt.retirementId)
+      || !isRfc3339DateTime(receipt.retiredAt)
+      || typeof receipt.recovered !== "boolean") {
+    throw new Error("Wave retirement receipt has an invalid structure.");
+  }
+  for (const field of WAVE_RETIREMENT_RECEIPT_FIELDS) {
+    if (field === "retiredAt" || field === "recovered") continue;
+    if (JSON.stringify(receipt[field]) !== JSON.stringify(expected[field])) {
+      throw new Error("Wave retirement receipt no longer matches finalized Wave evidence.");
+    }
+  }
+  return receipt;
+}
+
+async function inspectExistingWaveRetirementReceipt(root, context, evidence, prefix) {
+  const paths = waveRetirementReceiptPaths(context);
+  const location = resolveInsideRoot(root, paths.finalFile, "Wave retirement receipt");
+  const receipt = await readJsonOptional(location.fullPath, "Wave retirement receipt");
+  if (!receipt) return null;
+  if (prefix.receipts.length !== evidence.tasks.length || !prefix.retirementId) {
+    throw new Error("Wave retirement receipt requires a complete stable task receipt prefix.");
+  }
+  const expected = expectedWaveRetirementReceipt(
+    context,
+    evidence,
+    prefix,
+    prefix.retirementId,
+    receipt.retiredAt,
+    receipt.recovered,
+  );
+  validateWaveRetirementReceipt(receipt, expected);
+  const snapshot = await readRegularBuffer(location.fullPath, "Wave retirement receipt");
+  addWaveRetirementAllowed(evidence.allowed, { relative: location.relative, ...snapshot });
+  return { receipt, file: location.relative, evidence: snapshot };
+}
+
+async function assertWaveRetirementTaskAbsent(root, task, options) {
+  const observed = await inspectRetirementWorktree(root, task.plan, options);
+  if (observed.state !== "absent") throw new Error(`Retired Wave task is still registered: ${task.taskId}`);
+  const info = await lstat(observed.targetPath).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  if (info) throw new Error(`Retired Wave task directory still exists: ${task.taskId}`);
+}
+
+async function releaseWaveRetirementOwner(root, context, owner, options = {}) {
+  await assertWaveRetirementOwner(root, context, owner);
+  if (owner.mode === "recovery") {
+    if (options.beforeWaveRetirementLockRelease) {
+      await options.beforeWaveRetirementLockRelease({ ownerMode: owner.mode, lockMode: "recovery" });
+    }
+    await assertWaveRetirementOwner(root, context, owner);
+    await unlink(owner.paths.recoveryLockPath);
+    const normal = await inspectWaveRetirementLock(root, context, "retire", owner.paths);
+    if (!normal || normal.sha256 !== owner.normal.sha256
+        || normal.value.lockId !== owner.normal.value.lockId) {
+      throw new Error("Wave retirement ownership changed before normal lock release.");
+    }
+  }
+  if (options.beforeWaveRetirementLockRelease) {
+    await options.beforeWaveRetirementLockRelease({ ownerMode: owner.mode, lockMode: "retire" });
+  }
+  const recovery = await inspectWaveRetirementLock(root, context, "recovery", owner.paths);
+  if (recovery) throw new Error("Wave retirement recovery lock was replaced before release.");
+  const normal = await inspectWaveRetirementLock(root, context, "retire", owner.paths);
+  if (!normal || normal.sha256 !== owner.normal.sha256
+      || normal.value.lockId !== owner.normal.value.lockId) {
+    throw new Error("Wave retirement ownership changed before release.");
+  }
+  await unlink(owner.paths.lockPath);
+}
+
+async function waveRetire(root, options) {
+  assertWaveRetireInputs(options);
+  let context = await loadWaveRetirementContext(root, options);
+  let evidence = await collectWaveRetirementEvidence(root, context);
+  await assertWaveRetirementConflictsAbsent(root, context);
+  let prefix = await loadWaveRetirementReceiptPrefix(root, context, evidence);
+  const existingFinal = await inspectExistingWaveRetirementReceipt(root, context, evidence, prefix);
+  const existingPaths = waveRetirementPaths(root, context);
+  const existingNormal = await inspectWaveRetirementLock(root, context, "retire", existingPaths);
+  const existingRecovery = await inspectWaveRetirementLock(root, context, "recovery", existingPaths);
+  if (existingFinal) {
+    if (existingNormal || existingRecovery) {
+      if (options.confirmWaveRetireLockRecovery !== true) {
+        throw new Error("Completed Wave retirement still has owner locks; explicit recovery is required.");
+      }
+      assertExpectedWaveRetirementLock(
+        existingNormal,
+        options.expectedRetirementLockSha256,
+        "ExpectedRetirementLockSha256",
+      );
+      assertExpectedWaveRetirementLock(
+        existingRecovery,
+        options.expectedRetirementRecoveryLockSha256,
+        "ExpectedRetirementRecoveryLockSha256",
+      );
+      await addWaveRetirementLockEvidence(root, evidence, existingNormal);
+      await addWaveRetirementLockEvidence(root, evidence, existingRecovery);
+      await assertWaveRetirementMainIntegrity(root, context, evidence, options);
+      for (const task of evidence.tasks) await assertWaveRetirementTaskAbsent(root, task, options);
+      const owner = await acquireWaveRetirementOwner(root, context, options);
+      if (options.afterWaveRetirementOwnerAcquired) {
+        await options.afterWaveRetirementOwnerAcquired({ context, evidence, owner });
+      }
+      await assertWaveRetirementOwner(root, context, owner);
+      await releaseWaveRetirementOwner(root, context, owner, options);
+    } else {
+      await assertWaveRetirementMainIntegrity(root, context, evidence, options);
+      for (const task of evidence.tasks) await assertWaveRetirementTaskAbsent(root, task, options);
+    }
+    return {
+      command: "wave-retire",
+      reused: true,
+      receiptFile: existingFinal.file,
+      receipt: existingFinal.receipt,
+    };
+  }
+  if (options.confirmWaveRetireLockRecovery === true) {
+    assertExpectedWaveRetirementLock(
+      existingNormal,
+      options.expectedRetirementLockSha256,
+      "ExpectedRetirementLockSha256",
+    );
+    assertExpectedWaveRetirementLock(
+      existingRecovery,
+      options.expectedRetirementRecoveryLockSha256,
+      "ExpectedRetirementRecoveryLockSha256",
+    );
+    await addWaveRetirementLockEvidence(root, evidence, existingNormal);
+    await addWaveRetirementLockEvidence(root, evidence, existingRecovery);
+  } else if (existingNormal || existingRecovery) {
+    throw new Error("Wave retirement lock already exists; inspect it before retrying.");
+  }
+  await assertWaveRetirementMainIntegrity(root, context, evidence, options);
+  for (let index = 0; index < evidence.tasks.length; index += 1) {
+    const task = evidence.tasks[index];
+    const observed = await inspectRetirementWorktree(root, task.plan, options);
+    if (index < prefix.nextIndex) {
+      if (observed.state !== "absent") {
+        throw new Error(`Stable Wave retirement receipt requires an absent Worktree: ${task.taskId}`);
+      }
+      continue;
+    }
+    if (observed.state === "absent") {
+      if (index !== prefix.nextIndex || !existingNormal) {
+        throw new Error(`Wave task '${task.taskId}' is absent without recoverable retirement ownership.`);
+      }
+      continue;
+    }
+    await assertWaveRetirementWorktreeIntegrity(root, task, options);
+  }
+  if (options.afterWaveRetirePreflight) await options.afterWaveRetirePreflight({ context, evidence });
+  const owner = await acquireWaveRetirementOwner(root, context, options);
+  if (prefix.retirementId && prefix.retirementId !== owner.normal.value.retirementId) {
+    throw new Error("Stable Wave retirement receipt prefix belongs to a different retirement owner.");
+  }
+  if (options.afterWaveRetirementOwnerAcquired) {
+    await options.afterWaveRetirementOwnerAcquired({ context, evidence, owner });
+  }
+  await assertWaveRetirementOwner(root, context, owner);
+  context = await loadWaveRetirementContext(root, options);
+  evidence = await collectWaveRetirementEvidence(root, context);
+  const owned = await assertWaveRetirementOwner(root, context, owner);
+  await addWaveRetirementLockEvidence(root, evidence, owned.normal);
+  await addWaveRetirementLockEvidence(root, evidence, owned.recovery);
+  prefix = await loadWaveRetirementReceiptPrefix(
+    root,
+    context,
+    evidence,
+    owner.normal.value.retirementId,
+  );
+  await assertWaveRetirementConflictsAbsent(root, context);
+  await assertWaveRetirementMainIntegrity(root, context, evidence, options);
+  for (let index = 0; index < evidence.tasks.length; index += 1) {
+    const task = evidence.tasks[index];
+    const observed = await inspectRetirementWorktree(root, task.plan, options);
+    if (index < prefix.nextIndex) {
+      if (observed.state !== "absent") {
+        throw new Error(`Stable Wave retirement receipt requires an absent Worktree: ${task.taskId}`);
+      }
+      continue;
+    }
+    if (observed.state === "created") await assertWaveRetirementWorktreeIntegrity(root, task, options);
+    else if (index !== prefix.nextIndex) {
+      throw new Error(`Wave retirement suffix contains an out-of-order absent Worktree: ${task.taskId}`);
+    }
+  }
+  await assertWaveRetirementOwner(root, context, owner);
+
+  const receiptPaths = waveRetirementReceiptPaths(context);
+  for (let index = prefix.nextIndex; index < evidence.tasks.length; index += 1) {
+    await assertWaveRetirementOwner(root, context, owner);
+    await assertWaveRetirementConflictsAbsent(root, context);
+    context = await loadWaveRetirementContext(root, options);
+    evidence = await collectWaveRetirementEvidence(root, context);
+    const currentOwner = await assertWaveRetirementOwner(root, context, owner);
+    await addWaveRetirementLockEvidence(root, evidence, currentOwner.normal);
+    await addWaveRetirementLockEvidence(root, evidence, currentOwner.recovery);
+    prefix = await loadWaveRetirementReceiptPrefix(
+      root,
+      context,
+      evidence,
+      owner.normal.value.retirementId,
+    );
+    if (prefix.nextIndex !== index) {
+      throw new Error("Wave task retirement receipt prefix changed during ordered retirement.");
+    }
+    await assertWaveRetirementMainIntegrity(root, context, evidence, options);
+    for (let suffixIndex = index; suffixIndex < evidence.tasks.length; suffixIndex += 1) {
+      const suffixTask = evidence.tasks[suffixIndex];
+      const suffixObserved = await inspectRetirementWorktree(root, suffixTask.plan, options);
+      if (suffixIndex === index && suffixObserved.state === "absent") continue;
+      if (suffixObserved.state !== "created") {
+        throw new Error(`Wave retirement suffix is not stable: ${suffixTask.taskId}`);
+      }
+      await assertWaveRetirementWorktreeIntegrity(root, suffixTask, options);
+    }
+
+    const task = evidence.tasks[index];
+    const observed = await inspectRetirementWorktree(root, task.plan, options);
+    const recovered = observed.state === "absent";
+    if (!recovered) {
+      await assertWaveRetirementOwner(root, context, owner);
+      try {
+        await executeGit(root, ["worktree", "remove", "--force", observed.targetPath], options);
+      } catch (error) {
+        const diagnostic = String(error?.stderr ?? error?.message ?? "unknown Git error").trim();
+        throw new Error(`git worktree remove failed for Wave task '${task.taskId}': ${diagnostic}`);
+      }
+      if (options.afterWaveRetireRemove) {
+        await options.afterWaveRetireRemove({ taskId: task.taskId, targetPath: observed.targetPath });
+      }
+    }
+    await assertWaveRetirementOwner(root, context, owner);
+    await assertWaveRetirementTaskAbsent(root, task, options);
+    const receipt = {
+      schemaVersion: "1.0",
+      storyId: context.state.storyId,
+      runId: context.state.runtime.runId,
+      waveId: context.ledger.waveId,
+      waveIndex: context.ledger.waveIndex,
+      retirementId: owner.normal.value.retirementId,
+      taskId: task.taskId,
+      branch: task.plan.branch,
+      worktreePath: task.plan.worktreePath,
+      baseCommit: task.plan.baseCommit,
+      resultFile: task.resultFile,
+      resultSha256: task.resultSha256,
+      executionReceiptFile: task.executionReceiptFile,
+      executionReceiptSha256: task.executionReceiptSha256,
+      integrationReceiptFile: task.integrationReceiptFile,
+      integrationReceiptSha256: task.integrationReceiptSha256,
+      appliedFiles: task.candidates.map((file) => ({ ...file })),
+      retiredAt: (options.now ?? (() => new Date().toISOString()))(),
+      recovered,
+    };
+    validateWaveTaskRetirementReceipt(receipt, context, task, owner.normal.value.retirementId);
+    const receiptFile = receiptPaths.taskFile(task.taskId);
+    if (options.beforeWaveTaskRetirementReceiptWrite) {
+      await options.beforeWaveTaskRetirementReceiptWrite({ taskId: task.taskId, receiptFile, receipt });
+    }
+    await assertWaveRetirementOwner(root, context, owner);
+    await writeAtomicJson(
+      resolveInsideRoot(root, receiptFile, "Wave task retirement receipt").fullPath,
+      receipt,
+    );
+    if (options.afterWaveTaskRetirementReceipt) {
+      await options.afterWaveTaskRetirementReceipt({ taskId: task.taskId, receiptFile, receipt });
+    }
+  }
+
+  await assertWaveRetirementOwner(root, context, owner);
+  context = await loadWaveRetirementContext(root, options);
+  evidence = await collectWaveRetirementEvidence(root, context);
+  const finalOwner = await assertWaveRetirementOwner(root, context, owner);
+  await addWaveRetirementLockEvidence(root, evidence, finalOwner.normal);
+  await addWaveRetirementLockEvidence(root, evidence, finalOwner.recovery);
+  prefix = await loadWaveRetirementReceiptPrefix(
+    root,
+    context,
+    evidence,
+    owner.normal.value.retirementId,
+  );
+  if (prefix.nextIndex !== evidence.tasks.length) {
+    throw new Error("Wave retirement cannot finalize an incomplete task receipt prefix.");
+  }
+  await assertWaveRetirementMainIntegrity(root, context, evidence, options);
+  for (const task of evidence.tasks) await assertWaveRetirementTaskAbsent(root, task, options);
+  const retiredAt = (options.now ?? (() => new Date().toISOString()))();
+  const finalReceipt = expectedWaveRetirementReceipt(
+    context,
+    evidence,
+    prefix,
+    owner.normal.value.retirementId,
+    retiredAt,
+    owner.mode === "recovery" || prefix.receipts.some(({ receipt }) => receipt.recovered),
+  );
+  validateWaveRetirementReceipt(finalReceipt, finalReceipt);
+  if (options.beforeWaveRetirementReceiptWrite) {
+    await options.beforeWaveRetirementReceiptWrite({ receiptFile: receiptPaths.finalFile, receipt: finalReceipt });
+  }
+  await assertWaveRetirementOwner(root, context, owner);
+  await writeAtomicJson(
+    resolveInsideRoot(root, receiptPaths.finalFile, "Wave retirement receipt").fullPath,
+    finalReceipt,
+  );
+  if (options.afterWaveRetirementReceipt) {
+    await options.afterWaveRetirementReceipt({ receiptFile: receiptPaths.finalFile, receipt: finalReceipt });
+  }
+  await releaseWaveRetirementOwner(root, context, owner, options);
+  return {
+    command: "wave-retire",
+    reused: false,
+    receiptFile: receiptPaths.finalFile,
+    receipt: finalReceipt,
+  };
+}
+
 async function create(root, options) {
   if (options.confirmCreate !== true) throw new Error("Worktree creation requires explicit approval and ConfirmCreate.");
   const context = await loadContext(root, options);
@@ -2408,6 +3547,7 @@ export async function runWorktreeCommand(options = {}) {
   if (options.command === "wave-plan") return wavePlan(root, options);
   if (options.command === "wave-status") return waveStatus(root, options);
   if (options.command === "wave-create") return waveCreate(root, options);
+  if (options.command === "wave-retire") return waveRetire(root, options);
   if (options.command === "plan") return plan(root, options);
   if (options.command === "status") return status(root, options);
   if (options.command === "create") return create(root, options);
@@ -2432,6 +3572,10 @@ function parseCliArguments(argv) {
     "--expected-plan-sha256": "expectedPlanSha256",
     "--expected-create-lock-sha256": "expectedCreateLockSha256",
     "--expected-recovery-lock-sha256": "expectedRecoveryLockSha256",
+    "--expected-wave-ledger-sha256": "expectedWaveLedgerSha256",
+    "--expected-wave-receipt-sha256": "expectedWaveReceiptSha256",
+    "--expected-retirement-lock-sha256": "expectedRetirementLockSha256",
+    "--expected-retirement-recovery-lock-sha256": "expectedRetirementRecoveryLockSha256",
   };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
@@ -2441,6 +3585,10 @@ function parseCliArguments(argv) {
     if (token === "--confirm-wave-create") { options.confirmWaveCreate = true; continue; }
     if (token === "--confirm-wave-lock-recovery") {
       options.confirmWaveLockRecovery = true;
+      continue;
+    }
+    if (token === "--confirm-wave-retire-lock-recovery") {
+      options.confirmWaveRetireLockRecovery = true;
       continue;
     }
     const key = keyMap[token];
@@ -2457,7 +3605,7 @@ async function runCli() {
     options = parseCliArguments(process.argv.slice(2));
     const result = await runWorktreeCommand(options);
     const scopeId = result.plan?.taskId ?? result.plan?.batchId ?? result.plan?.wave
-      ?? result.receipt?.taskId ?? result.receipt?.batchId;
+      ?? result.receipt?.taskId ?? result.receipt?.batchId ?? result.receipt?.waveId;
     console.log(options.json ? JSON.stringify(result) : `Worktree command '${result.command}' completed for ${scopeId}.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

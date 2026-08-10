@@ -31,6 +31,7 @@ required_directories:
   - docs/harness-m5d-multi-worktree-wave
   - docs/harness-m5d-wave-create
   - docs/harness-m5d-wave-execution
+  - docs/harness-m5d-wave-retire
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -72,6 +73,10 @@ required_files:
   - .harness/schemas/worktree-wave-integration-recovery-lock.schema.json
   - .harness/schemas/worktree-wave-integration-receipt.schema.json
   - .harness/schemas/worktree-wave-receipt.schema.json
+  - .harness/schemas/worktree-wave-retirement-lock.schema.json
+  - .harness/schemas/worktree-wave-retirement-recovery-lock.schema.json
+  - .harness/schemas/worktree-wave-task-retirement-receipt.schema.json
+  - .harness/schemas/worktree-wave-retirement-receipt.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
   - .harness/workflows/e2e-development.yaml
@@ -241,6 +246,9 @@ required_files:
   - docs/harness-m5d-wave-execution/REPORT-C1.md
   - docs/harness-m5d-wave-execution/PLAN-C2.md
   - docs/harness-m5d-wave-execution/REPORT-C2.md
+  - docs/harness-m5d-wave-retire/DESIGN.md
+  - docs/harness-m5d-wave-retire/PLAN.md
+  - docs/harness-m5d-wave-retire/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -248,6 +256,6 @@ status_notes:
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
   state_runtime: implemented-v1
-  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1
+  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1
   deterministic_scripts: mixed-read-only-helpers-state-story-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
-  business_code_changes: none-required-for-m0-m5dc1
+  business_code_changes: none-required-for-m0-m5dd

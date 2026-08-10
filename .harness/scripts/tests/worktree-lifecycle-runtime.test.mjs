@@ -1339,3 +1339,88 @@ test("retire rejects ignored Worktree files before forced removal", async () => 
   );
   assert.equal(await readFile(ignoredFile, "utf8"), "LOCAL_ONLY=value\n");
 });
+
+test("wave-retire requires approval and complete derived wave inputs before loading evidence", async () => {
+  const hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+  const base = {
+    root: repositoryRoot,
+    command: "wave-retire",
+    stateFile: ".harness/states/missing-wave-retire-state.json",
+    waveIndex: 1,
+  };
+
+  await assert.rejects(runWorktreeCommand(base), /ConfirmRetire/i);
+  await assert.rejects(
+    runWorktreeCommand({ ...base, confirmRetire: true }),
+    /TaskDagFile/i,
+  );
+  await assert.rejects(
+    runWorktreeCommand({ ...base, confirmRetire: true, taskDagFile: "missing-task-dag.json" }),
+    /ExpectedWaveLedgerSha256/i,
+  );
+  await assert.rejects(
+    runWorktreeCommand({
+      ...base,
+      confirmRetire: true,
+      taskDagFile: "missing-task-dag.json",
+      expectedWaveLedgerSha256: hash,
+    }),
+    /ExpectedWaveReceiptSha256/i,
+  );
+});
+
+test("wave retirement schemas define strict lock and receipt evidence contracts", async () => {
+  const schemas = new Map();
+  for (const name of [
+    "worktree-wave-retirement-lock.schema.json",
+    "worktree-wave-retirement-recovery-lock.schema.json",
+    "worktree-wave-task-retirement-receipt.schema.json",
+    "worktree-wave-retirement-receipt.schema.json",
+  ]) {
+    schemas.set(name, JSON.parse(await readFile(path.join(repositoryRoot, ".harness/schemas", name), "utf8")));
+  }
+
+  const lockFields = [
+    "schemaVersion", "lockId", "retirementId", "mode", "storyId", "runId", "waveId", "waveIndex",
+    "wavePlanSha256", "creationReceiptSha256", "waveLedgerSha256", "waveReceiptSha256", "pid", "createdAt",
+  ];
+  const lock = schemas.get("worktree-wave-retirement-lock.schema.json");
+  assert.equal(lock.additionalProperties, false);
+  assert.deepEqual(lock.required, lockFields);
+  assert.deepEqual(lock.properties.mode.enum, ["retire"]);
+
+  const recovery = schemas.get("worktree-wave-retirement-recovery-lock.schema.json");
+  assert.equal(recovery.additionalProperties, false);
+  assert.deepEqual(
+    recovery.required,
+    [...lockFields, "retirementLockFile", "retirementLockSha256"],
+  );
+  assert.deepEqual(recovery.properties.mode.enum, ["recovery"]);
+
+  const taskReceipt = schemas.get("worktree-wave-task-retirement-receipt.schema.json");
+  assert.equal(taskReceipt.additionalProperties, false);
+  assert.ok(taskReceipt.properties.appliedFiles.items.required.includes("taskId"));
+  for (const field of [
+    "storyId", "runId", "waveId", "waveIndex", "retirementId", "taskId", "branch", "worktreePath",
+    "baseCommit", "executionReceiptFile", "executionReceiptSha256", "integrationReceiptFile",
+    "integrationReceiptSha256", "appliedFiles", "retiredAt", "recovered",
+  ]) {
+    assert.ok(taskReceipt.required.includes(field), `task retirement schema must require ${field}`);
+  }
+
+  const waveReceipt = schemas.get("worktree-wave-retirement-receipt.schema.json");
+  assert.equal(waveReceipt.additionalProperties, false);
+  assert.ok(waveReceipt.properties.appliedFiles.items.required.includes("taskId"));
+  for (const field of [
+    "storyId", "runId", "waveId", "waveIndex", "retirementId", "stateFile", "stateSha256",
+    "stateEventsFile", "stateEventsSha256", "stateBackupFile", "stateBackupSha256", "taskDagFile",
+    "taskDagSha256", "wavePlanFile", "wavePlanSha256", "creationReceiptFile", "creationReceiptSha256",
+    "integrationManifestFile", "integrationManifestSha256", "waveLedgerFile", "waveLedgerSha256",
+    "waveReceiptFile", "waveReceiptSha256", "implementationTaskFile", "implementationTaskSha256",
+    "implementationResultFile", "implementationResultSha256", "implementationCheckpointFile",
+    "implementationCheckpointSha256", "implementationNotesFile", "implementationNotesSha256",
+    "tasks", "appliedFiles", "retiredAt", "recovered",
+  ]) {
+    assert.ok(waveReceipt.required.includes(field), `wave retirement schema must require ${field}`);
+  }
+});

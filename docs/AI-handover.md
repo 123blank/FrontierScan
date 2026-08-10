@@ -1720,3 +1720,16 @@ M5-D-C2 已实现 integration manifest 原子冻结、`recover-freeze`、wave �
 主树集成、partial 前缀恢复、wave receipt、`finalize-wave` 与 M3 `apply` 单次推进。所有真实 Git/Worktree
 变更只在临时 fixture 中验证；正式仓库未执行 Worker 或候选集成。Worktree/分支回收、真实 Agent、自动提交、
 推送、PR、发布和部署仍不在范围内。
+
+### 16.27 2026-08-07 当前状态：M5-D-D WaveRetire
+
+权威设计、实施计划和报告位于 `docs/harness-m5d-wave-retire/`，活动 Story 为 `M5-D-D-001`。
+
+- `run-worktree.ps1` 与 `worktree-runtime.mjs` 新增 `WaveRetire/wave-retire`。
+- 只接受 `done/completed` Story、finalized execution ledger、wave receipt、M3 apply checkpoint 和正式产物完整的单个 wave。
+- 首次删除前执行全局零删除预检；任一任务、主树、分支、Worktree 或 writer lock 漂移时不删除任何 Worktree。
+- 普通/recovery 双锁绑定 WavePlan、creation receipt、ledger 与 wave receipt SHA-256，并以 `lockId` fencing。
+- 按 WavePlan 顺序删除 Worktree，删除后重验注册消失、目录不存在、保留分支仍指向 `baseCommit`，再写 task receipt。
+- partial recovery 只接受完整有序 receipt 前缀；最终回执绑定完成态、M3、Wave 和全部 task receipt，可完整重验后幂等复用。
+- 首版不删除分支，不执行 `git worktree prune`，不修改完成态 State，不自动提交、推送、发布或部署。
+- 正式仓库没有执行真实 WaveRetire；所有 Git 删除只发生在临时 fixture。

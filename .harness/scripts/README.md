@@ -50,3 +50,16 @@ smoke-harness-flow.ps1
 - 回归测试位于 `tests/source-fingerprint.test.mjs`、`tests/harness-status.test.mjs`、`tests/generate-kb.test.mjs`、`tests/kb-query.test.ps1`、`tests/kb-freshness.test.ps1`、`tests/task-dag.test.ps1`、`tests/worktree-runtime.test.mjs`、`tests/worktree-wave-runtime.test.mjs`、`tests/worktree-wave-execution-runtime.test.mjs`、`tests/worktree-worker-runtime.test.mjs`、`tests/worktree-integration-runtime.test.mjs`、`tests/worktree-lifecycle-runtime.test.mjs`、`tests/batch-runtime.test.mjs` 和 `tests/serial-batch-runtime.test.mjs`。DAG 测试覆盖 UTF-8、wave/依赖/冲突；Worktree 与批次测试仅在临时 Git 仓库覆盖计划、审批门禁、真实创建、逐任务 Worker/集成、单次状态推进、回收、幂等、锁 fencing 和中断恢复。M5-D-C1 用 barrier 验证多 Worker 真实并发，并覆盖 partial、retry、完整/blocked/孤儿恢复和五个写点 owner fencing；正式仓库未执行 Worker 或 Worktree 写操作。
 - 禁止在此处放置业务逻辑。
 - 脚本应从仓库读取数据，并且只有在文档明确说明时才能写入 `.harness/` 产物。
+
+## WaveRetire
+
+- PowerShell 入口：`run-worktree.ps1 -Command WaveRetire`。
+- 必需参数：`StateFile`、`TaskDagFile`、`WaveIndex`、`ExpectedWaveLedgerSha256`、
+  `ExpectedWaveReceiptSha256`、`ConfirmRetire`。
+- recovery 参数：`ExpectedRetirementLockSha256`、`ExpectedRetirementRecoveryLockSha256`、
+  `ConfirmWaveRetireLockRecovery`。
+- 命令拒绝调用方提供 `TaskId`、`BaseRef`、`ConfirmCreate` 或其他外部任务身份；所有删除目标均由完成态
+  Wave 证据派生。
+- 删除前执行全局零删除预检；删除期间每个 Git、task receipt、final receipt 和锁释放写点前均重验 owner。
+- 成功只移除 Worktree 注册与目录，保留任务分支；不执行 `prune`、分支删除、状态推进、提交、推送或发布。
+- 正式仓库不执行真实 WaveRetire；真实 Git 副作用只在临时测试仓库覆盖。

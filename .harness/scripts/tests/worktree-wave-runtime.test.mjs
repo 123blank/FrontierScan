@@ -1498,6 +1498,54 @@ test("PowerShell WaveCreate requires the approved plan hash and rejects external
   );
 });
 
+test("PowerShell WaveRetire requires wave evidence and rejects external identity inputs", async () => {
+  const runner = path.join(repositoryRoot, ".harness/scripts/run-worktree.ps1");
+  const powershell = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", runner];
+  const hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+  const common = [
+    "-Command", "WaveRetire",
+    "-Root", repositoryRoot,
+    "-StateFile", ".harness/states/missing-wave-retire-state.json",
+    "-TaskDagFile", ".harness/runs/missing/task-dag.json",
+    "-WaveIndex", "1",
+    "-ExpectedWaveLedgerSha256", hash,
+    "-ExpectedWaveReceiptSha256", hash,
+    "-ConfirmRetire",
+  ];
+
+  await assert.rejects(
+    execFileAsync("powershell.exe", [
+      ...powershell,
+      "-Command", "WaveRetire",
+      "-Root", repositoryRoot,
+      "-StateFile", ".harness/states/missing-wave-retire-state.json",
+    ], { windowsHide: true }),
+    /TaskDagFile/i,
+  );
+  await assert.rejects(
+    execFileAsync("powershell.exe", [
+      ...powershell,
+      "-Command", "WaveRetire",
+      "-Root", repositoryRoot,
+      "-StateFile", ".harness/states/missing-wave-retire-state.json",
+      "-TaskDagFile", ".harness/runs/missing/task-dag.json",
+      "-WaveIndex", "1",
+      "-ConfirmRetire",
+    ], { windowsHide: true }),
+    /ExpectedWaveLedgerSha256/i,
+  );
+  for (const forbidden of [
+    ["-TaskId", "T1"],
+    ["-BaseRef", "dev"],
+    ["-ConfirmCreate"],
+  ]) {
+    await assert.rejects(
+      execFileAsync("powershell.exe", [...powershell, ...common, ...forbidden], { windowsHide: true }),
+      /not accepted/i,
+    );
+  }
+});
+
 test("wave status rejects a linked Worktree wave parent even when task paths are absent", async () => {
   const fixture = await createFixture({ storyId: "M5-D-A-LINKED-PARENT" });
   await runWorktreeCommand({

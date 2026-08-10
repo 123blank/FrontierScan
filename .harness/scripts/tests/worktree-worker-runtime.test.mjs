@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFile, mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,7 @@ import {
   runWaveExecutionCommand,
 } from "../lib/worktree-wave-execution-runtime.mjs";
 import { acquireImplementationOwner } from "../lib/implementation-owner-contract.mjs";
+import { runStateCommand } from "../lib/state-runtime.mjs";
 import { runWorktreeWorker } from "../lib/worktree-worker-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
 import { resolveBatchBase, runWorktreeCommand } from "../lib/worktree-runtime.mjs";
@@ -2694,6 +2695,7 @@ test("execute-wave runs all claimed Workers concurrently and trusts settled disk
 
 async function createReadyWaveIntegrationFixture() {
   const fixture = await createWaveWorkerFixture({ claimTask: false });
+  let workerQueue = Promise.resolve();
   const uuidValues = [
     "00000000-0000-4000-8000-000000000041",
     "00000000-0000-4000-8000-000000000042",
@@ -2711,6 +2713,11 @@ async function createReadyWaveIntegrationFixture() {
     expectedWaveLedgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
     expectedCreationReceiptSha256: fixture.wave.creationReceiptSha256,
     randomUUID: () => uuidValues.shift(),
+    workerRunner: (options) => {
+      const current = workerQueue.then(() => runWorktreeWorker(options));
+      workerQueue = current.catch(() => {});
+      return current;
+    },
     provider: async ({ task }) => {
       const isBackend = task.taskId === "T1";
       return {
@@ -2740,7 +2747,18 @@ async function createReadyWaveIntegrationFixture() {
       };
     },
   });
-  assert.equal(executed.ledger.status, "ready-for-integration");
+  assert.equal(
+    executed.ledger.status,
+    "ready-for-integration",
+    JSON.stringify({
+      settled: executed.settled,
+      tasks: executed.ledger.tasks.map((task) => ({
+        taskId: task.taskId,
+        status: task.status,
+        currentAttemptId: task.currentAttemptId,
+      })),
+    }),
+  );
   return { ...fixture, executed };
 }
 
@@ -3108,6 +3126,891 @@ async function finalizeWaveFixture(fixture) {
     now: () => "2026-08-06T00:19:00.000Z",
   });
 }
+
+async function advanceWaveStoryToDone(fixture) {
+  const phases = [
+    {
+      output: `.harness/runs/${fixture.state.storyId}/phases/04-unit-test/test-report.md`,
+      record: { recordType: "test", status: "passed", message: "Wave retirement fixture tests passed." },
+    },
+    {
+      output: `.harness/runs/${fixture.state.storyId}/phases/05-code-review/code-review-report.md`,
+      record: { recordType: "review", status: "passed", message: "Wave retirement fixture review passed." },
+    },
+    { output: `.harness/runs/${fixture.state.storyId}/phases/06-build-publish/build-report.md` },
+    { output: `.harness/runs/${fixture.state.storyId}/phases/07-interface-verification/interface-verification-report.md` },
+    {
+      output: `.harness/runs/${fixture.state.storyId}/phases/08-git-delivery/delivery-report.md`,
+      record: {
+        recordType: "approval",
+        status: "approved",
+        actor: "user",
+        message: "Approve the temporary Wave retirement fixture delivery.",
+      },
+      complete: true,
+    },
+  ];
+  for (const [index, phase] of phases.entries()) {
+    await mkdir(path.join(fixture.root, path.dirname(phase.output)), { recursive: true });
+    await writeFile(path.join(fixture.root, phase.output), `fixture phase ${index + 4}\n`, "utf8");
+    if (phase.record) {
+      await runStateCommand({
+        root: fixture.root,
+        command: "record",
+        stateFile: fixture.stateFile,
+        path: phase.output,
+        ...phase.record,
+        now: () => `2026-08-06T00:2${index}:00.000Z`,
+      });
+    }
+    await runStateCommand({
+      root: fixture.root,
+      command: phase.complete ? "complete" : "next",
+      stateFile: fixture.stateFile,
+      now: () => `2026-08-06T00:2${index}:30.000Z`,
+    });
+  }
+}
+
+async function createCompletedWaveRetirementFixture() {
+  const fixture = await createFinalizableWaveFixture();
+  const finalized = await finalizeWaveFixture(fixture);
+  await runStoryCommand({
+    root: fixture.root,
+    command: "apply",
+    stateFile: fixture.stateFile,
+    now: () => "2026-08-06T00:20:00.000Z",
+  });
+  await advanceWaveStoryToDone(fixture);
+  const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile), "utf8"));
+  return {
+    ...fixture,
+    finalized,
+    ledgerFile: fixture.ledger.ledgerFile,
+    ledger,
+    ledgerSha256: sha256(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile))),
+    waveReceiptSha256: sha256(await readFile(path.join(fixture.root, ledger.waveReceiptFile))),
+  };
+}
+
+function waveRetireOptions(fixture, overrides = {}) {
+  return {
+    root: fixture.root,
+    command: "wave-retire",
+    stateFile: fixture.stateFile,
+    taskDagFile: fixture.taskDagFile,
+    waveIndex: 1,
+    expectedWaveLedgerSha256: fixture.ledgerSha256,
+    expectedWaveReceiptSha256: fixture.waveReceiptSha256,
+    confirmRetire: true,
+    ...overrides,
+  };
+}
+
+async function registeredWaveWorktreeCount(fixture) {
+  const worktrees = (await git(fixture.root, "worktree", "list", "--porcelain")).stdout
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.slice("worktree ".length).replaceAll("\\", "/").toLowerCase());
+  return fixture.planned.plan.tasks.filter((task) => (
+    worktrees.includes(path.resolve(fixture.root, task.worktreePath).replaceAll("\\", "/").toLowerCase())
+  )).length;
+}
+
+function waveRetirementLockFiles(fixture) {
+  const waveRoot = path.posix.dirname(fixture.ledgerFile);
+  return {
+    normal: `${waveRoot}/worktree-retire.lock`,
+    recovery: `${waveRoot}/worktree-retire-recovery.lock`,
+  };
+}
+
+function waveRetirementLockValue(fixture, mode = "retire") {
+  return {
+    schemaVersion: "1.0",
+    lockId: mode === "retire"
+      ? "00000000-0000-4000-8000-000000000201"
+      : "00000000-0000-4000-8000-000000000202",
+    retirementId: "00000000-0000-4000-8000-000000000200",
+    mode,
+    storyId: fixture.state.storyId,
+    runId: fixture.state.storyId,
+    waveId: fixture.ledger.waveId,
+    waveIndex: fixture.ledger.waveIndex,
+    wavePlanSha256: fixture.ledger.wavePlanSha256,
+    creationReceiptSha256: fixture.ledger.creationReceiptSha256,
+    waveLedgerSha256: fixture.ledgerSha256,
+    waveReceiptSha256: fixture.waveReceiptSha256,
+    pid: process.pid,
+    createdAt: "2026-08-06T00:30:00.000Z",
+  };
+}
+
+test("wave-retire requires a completed Story and a finalized ledger before preflight", async () => {
+  const active = await createFinalizableWaveFixture();
+  await assert.rejects(
+    runWorktreeCommand({
+      root: active.root,
+      command: "wave-retire",
+      stateFile: active.stateFile,
+      taskDagFile: active.taskDagFile,
+      waveIndex: 1,
+      expectedWaveLedgerSha256: sha256(await readFile(path.join(active.root, active.ledger.ledgerFile))),
+      expectedWaveReceiptSha256: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      confirmRetire: true,
+    }),
+    /completed Story/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(active), 2);
+
+  const completed = await createCompletedWaveRetirementFixture();
+  const ledgerPath = path.join(completed.root, completed.ledgerFile);
+  const ledger = JSON.parse(await readFile(ledgerPath, "utf8"));
+  ledger.status = "integrated";
+  ledger.waveReceiptFile = null;
+  ledger.waveReceiptSha256 = null;
+  ledger.finalizedAt = null;
+  await writeFile(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(completed, {
+      expectedWaveLedgerSha256: sha256(await readFile(ledgerPath)),
+    })),
+    /finalized.*ledger/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(completed), 2);
+});
+
+test("wave-retire validates all completion evidence before any Worktree removal", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const checkpoint = JSON.parse(await readFile(path.join(fixture.root, fixture.finalized.checkpointFile), "utf8"));
+  const manifest = JSON.parse(await readFile(path.join(fixture.root, fixture.ledger.integrationManifestFile), "utf8"));
+  const receipt = JSON.parse(await readFile(path.join(fixture.root, fixture.ledger.waveReceiptFile), "utf8"));
+  const cases = [
+    [fixture.taskDagFile, /Task DAG.*changed|bound Task DAG/i],
+    [fixture.planned.planFile, /Wave Worktree plan.*changed|plan.*hash|status.*invalid/i],
+    [fixture.created.receiptFile, /creation receipt.*changed|creation receipt.*hash/i],
+    [fixture.ledger.integrationManifestFile, /integration manifest.*changed|manifest.*hash/i],
+    [fixture.ledger.waveReceiptFile, /ExpectedWaveReceiptSha256|Wave receipt.*changed/i],
+    [checkpoint.waveFinalization.notesFile, /implementation notes.*changed/i],
+    [receipt.tasks[0].executionReceiptFile, /execution receipt.*changed/i],
+    [receipt.tasks[0].integrationReceiptFile, /integration receipt.*changed/i],
+    [
+      manifest.candidateFiles.find((file) => file.type !== "phase-output").path,
+      /applied.*changed|candidate.*changed|business.*changed/i,
+    ],
+  ];
+
+  for (const [relativeFile, expectedError] of cases) {
+    const filePath = path.join(fixture.root, relativeFile);
+    const original = await readFile(filePath);
+    await writeFile(filePath, Buffer.concat([original, Buffer.from("\n ")]));
+    await assert.rejects(
+      runWorktreeCommand(waveRetireOptions(fixture)),
+      expectedError,
+      relativeFile,
+    );
+    assert.equal(await registeredWaveWorktreeCount(fixture), 2, relativeFile);
+    await writeFile(filePath, original);
+  }
+});
+
+test("wave-retire rejects M3 Wave finalization binding drift before any Worktree removal", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const checkpointPath = path.join(fixture.root, fixture.finalized.checkpointFile);
+  const original = await readFile(checkpointPath);
+  const cases = [
+    ["preparedRevision", (binding) => { binding.preparedRevision += 1; }],
+    ["finalizedAt", (binding) => { binding.finalizedAt = "2026-08-06T00:19:01.000Z"; }],
+    ["taskFile", (binding) => { binding.taskFile = `${path.posix.dirname(binding.taskFile)}/other-task.json`; }],
+    ["resultFile", (binding) => { binding.resultFile = `${path.posix.dirname(binding.resultFile)}/other-result.json`; }],
+    ["notesFile", (binding) => { binding.notesFile = `${path.posix.dirname(binding.notesFile)}/other-notes.md`; }],
+  ];
+
+  for (const [field, mutate] of cases) {
+    const checkpoint = JSON.parse(original.toString("utf8"));
+    mutate(checkpoint.waveFinalization);
+    await writeFile(checkpointPath, `${JSON.stringify(checkpoint, null, 2)}\n`, "utf8");
+    await assert.rejects(
+      runWorktreeCommand(waveRetireOptions(fixture, {
+        afterWaveRetirePreflight: () => {
+          throw new Error(`unrejected ${field} drift`);
+        },
+      })),
+      /checkpoint|finalized ledger|Wave finalization|implementation phase/i,
+      field,
+    );
+    assert.equal(await registeredWaveWorktreeCount(fixture), 2, field);
+  }
+});
+
+test("wave-retire rejects a completed State revision older than the finalized Wave", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const checkpoint = JSON.parse(await readFile(
+    path.join(fixture.root, fixture.finalized.checkpointFile),
+    "utf8",
+  ));
+  const statePath = path.join(fixture.root, fixture.stateFile);
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.runtime.revision = checkpoint.waveFinalization.preparedRevision - 1;
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      afterWaveRetirePreflight: () => {
+        throw new Error("unexpectedly reached preflight");
+      },
+    })),
+    /State revision|checkpoint|finalized Wave/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 2);
+});
+
+test("wave-retire rejects Wave receipt identity drift before any Worktree removal", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const receiptPath = path.join(fixture.root, fixture.ledger.waveReceiptFile);
+  const ledgerPath = path.join(fixture.root, fixture.ledgerFile);
+  const checkpointPath = path.join(fixture.root, fixture.finalized.checkpointFile);
+  const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+  receipt.storyId = "M5-D-D-OTHER";
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+  const receiptSha256 = sha256(await readFile(receiptPath));
+  const ledger = JSON.parse(await readFile(ledgerPath, "utf8"));
+  ledger.waveReceiptSha256 = receiptSha256;
+  await writeFile(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+  const ledgerSha256 = sha256(await readFile(ledgerPath));
+  const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8"));
+  checkpoint.waveFinalization.waveReceiptSha256 = receiptSha256;
+  checkpoint.waveFinalization.waveLedgerSha256 = ledgerSha256;
+  await writeFile(checkpointPath, `${JSON.stringify(checkpoint, null, 2)}\n`, "utf8");
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      expectedWaveLedgerSha256: ledgerSha256,
+      expectedWaveReceiptSha256: receiptSha256,
+      afterWaveRetirePreflight: () => {
+        throw new Error("unexpectedly reached preflight");
+      },
+    })),
+    /Wave receipt.*identity|checkpoint|finalized ledger/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 2);
+});
+
+test("wave-retire rejects completed State record hash drift before any Worktree removal", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const files = [
+    `.harness/runs/${fixture.state.storyId}/phases/04-unit-test/test-report.md`,
+    `.harness/runs/${fixture.state.storyId}/phases/05-code-review/code-review-report.md`,
+  ];
+
+  for (const relativeFile of files) {
+    const filePath = path.join(fixture.root, relativeFile);
+    const original = await readFile(filePath);
+    await writeFile(filePath, Buffer.concat([original, Buffer.from("drift\n")]));
+    await assert.rejects(
+      runWorktreeCommand(waveRetireOptions(fixture, {
+        afterWaveRetirePreflight: () => {
+          throw new Error("unexpectedly reached preflight");
+        },
+      })),
+      /State record|record evidence.*changed|record.*SHA-256/i,
+      relativeFile,
+    );
+    assert.equal(await registeredWaveWorktreeCount(fixture), 2, relativeFile);
+    await writeFile(filePath, original);
+  }
+});
+
+test("wave-retire performs a global zero-deletion preflight across every task", async () => {
+  const drifted = await createCompletedWaveRetirementFixture();
+  const secondTask = drifted.planned.plan.tasks[1];
+  const tree = (await git(drifted.root, "rev-parse", `${secondTask.branch}^{tree}`)).stdout.trim();
+  const driftCommit = (await git(drifted.root, "commit-tree", tree, "-m", "retirement branch drift")).stdout.trim();
+  await git(drifted.root, "update-ref", `refs/heads/${secondTask.branch}`, driftCommit);
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(drifted)),
+    /branch.*base commit|branch.*drift/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(drifted), 2);
+
+  const ready = await createCompletedWaveRetirementFixture();
+  let reachedPreflight = false;
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(ready, {
+      afterWaveRetirePreflight: () => {
+        reachedPreflight = true;
+        throw new Error("stop after Wave retirement preflight");
+      },
+    })),
+    /stop after Wave retirement preflight/i,
+  );
+  assert.equal(reachedPreflight, true);
+  assert.equal(await registeredWaveWorktreeCount(ready), 2);
+});
+
+test("wave-retire preserves an interrupted owner and requires explicit recovery hashes", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      afterWaveRetirementOwnerAcquired: () => {
+        throw new Error("simulated Wave retirement owner interruption");
+      },
+    })),
+    /owner interruption/i,
+  );
+  const normalSource = await readFile(path.join(fixture.root, locks.normal));
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture)),
+    /retirement lock already exists|inspect.*lock/i,
+  );
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      confirmWaveRetireLockRecovery: true,
+    })),
+    /ExpectedRetirementLockSha256/i,
+  );
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      confirmWaveRetireLockRecovery: true,
+      expectedRetirementLockSha256: sha256(normalSource),
+      afterWaveRetirementOwnerAcquired: () => {
+        throw new Error("simulated Wave retirement recovery interruption");
+      },
+    })),
+    /recovery interruption/i,
+  );
+  await readFile(path.join(fixture.root, locks.recovery));
+  assert.equal(await registeredWaveWorktreeCount(fixture), 2);
+});
+
+test("wave-retire fences an owner when its recovery lock is replaced", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  const normal = waveRetirementLockValue(fixture);
+  await mkdir(path.dirname(path.join(fixture.root, locks.normal)), { recursive: true });
+  await writeFile(path.join(fixture.root, locks.normal), `${JSON.stringify(normal, null, 2)}\n`, "utf8");
+  const replacement = {
+    ...waveRetirementLockValue(fixture, "recovery"),
+    lockId: "00000000-0000-4000-8000-000000000299",
+    retirementLockFile: locks.normal,
+    retirementLockSha256: sha256(await readFile(path.join(fixture.root, locks.normal))),
+  };
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      confirmWaveRetireLockRecovery: true,
+      expectedRetirementLockSha256: replacement.retirementLockSha256,
+      afterWaveRetirementOwnerAcquired: async () => {
+        await writeFile(path.join(fixture.root, locks.recovery), `${JSON.stringify(replacement, null, 2)}\n`, "utf8");
+      },
+    })),
+    /ownership.*changed|fenced/i,
+  );
+  assert.equal(
+    JSON.parse(await readFile(path.join(fixture.root, locks.recovery), "utf8")).lockId,
+    replacement.lockId,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 2);
+});
+
+test("wave-retire rejects a retirement lock whose identifiers violate the strict schema", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  const invalid = {
+    ...waveRetirementLockValue(fixture),
+    lockId: "not-a-uuid",
+  };
+  await mkdir(path.dirname(path.join(fixture.root, locks.normal)), { recursive: true });
+  await writeFile(path.join(fixture.root, locks.normal), `${JSON.stringify(invalid, null, 2)}\n`, "utf8");
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      confirmWaveRetireLockRecovery: true,
+      expectedRetirementLockSha256: sha256(await readFile(path.join(fixture.root, locks.normal))),
+    })),
+    /retirement.*lock.*invalid structure/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 2);
+});
+
+test("wave-retire rejects normal and recovery locks with non-RFC3339 createdAt values", async () => {
+  const normalFixture = await createCompletedWaveRetirementFixture();
+  const normalLocks = waveRetirementLockFiles(normalFixture);
+  const invalidNormal = {
+    ...waveRetirementLockValue(normalFixture),
+    createdAt: "2026-08-06",
+  };
+  await mkdir(path.dirname(path.join(normalFixture.root, normalLocks.normal)), { recursive: true });
+  await writeFile(
+    path.join(normalFixture.root, normalLocks.normal),
+    `${JSON.stringify(invalidNormal, null, 2)}\n`,
+    "utf8",
+  );
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(normalFixture, {
+      confirmWaveRetireLockRecovery: true,
+      expectedRetirementLockSha256: sha256(
+        await readFile(path.join(normalFixture.root, normalLocks.normal)),
+      ),
+      afterWaveRetirementOwnerAcquired: () => {
+        throw new Error("unexpectedly acquired normal owner");
+      },
+    })),
+    /retirement.*lock.*invalid structure/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(normalFixture), 2);
+
+  const recoveryFixture = await createCompletedWaveRetirementFixture();
+  const recoveryLocks = waveRetirementLockFiles(recoveryFixture);
+  const normal = waveRetirementLockValue(recoveryFixture);
+  await mkdir(path.dirname(path.join(recoveryFixture.root, recoveryLocks.normal)), { recursive: true });
+  await writeFile(
+    path.join(recoveryFixture.root, recoveryLocks.normal),
+    `${JSON.stringify(normal, null, 2)}\n`,
+    "utf8",
+  );
+  const normalSource = await readFile(path.join(recoveryFixture.root, recoveryLocks.normal));
+  const invalidRecovery = {
+    ...waveRetirementLockValue(recoveryFixture, "recovery"),
+    createdAt: "2026-08-06",
+    retirementLockFile: recoveryLocks.normal,
+    retirementLockSha256: sha256(normalSource),
+  };
+  await writeFile(
+    path.join(recoveryFixture.root, recoveryLocks.recovery),
+    `${JSON.stringify(invalidRecovery, null, 2)}\n`,
+    "utf8",
+  );
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(recoveryFixture, {
+      confirmWaveRetireLockRecovery: true,
+      expectedRetirementLockSha256: sha256(normalSource),
+      expectedRetirementRecoveryLockSha256: sha256(
+        await readFile(path.join(recoveryFixture.root, recoveryLocks.recovery)),
+      ),
+      afterWaveRetirementOwnerAcquired: () => {
+        throw new Error("unexpectedly acquired recovery owner");
+      },
+    })),
+    /retirement.*lock.*invalid structure/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(recoveryFixture), 2);
+});
+
+test("wave-retire rejects every Wave and implementation writer lock before ownership", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const waveRoot = path.posix.dirname(fixture.ledgerFile);
+  const conflicts = [
+    `.harness/runs/${fixture.state.storyId}/waves/create.lock`,
+    `.harness/runs/${fixture.state.storyId}/waves/create-recovery.lock`,
+    `${waveRoot}/ledger-mutation.lock`,
+    `${waveRoot}/manifest-preparation.lock`,
+    `${waveRoot}/integration.lock`,
+    `${waveRoot}/integration-recovery.lock`,
+    `.harness/runs/${fixture.state.storyId}/phases/03-implementation/batch-preparation.lock`,
+    `.harness/runs/${fixture.state.storyId}/phases/03-implementation/batch-finalization.lock`,
+    ...fixture.ledger.tasks.map((task) => `${waveRoot}/tasks/${task.taskId}/execute.lock`),
+  ];
+  const locks = waveRetirementLockFiles(fixture);
+
+  for (const relativeFile of conflicts) {
+    const lockPath = path.join(fixture.root, relativeFile);
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    await writeFile(lockPath, "active writer\n", "utf8");
+    await assert.rejects(
+      runWorktreeCommand(waveRetireOptions(fixture)),
+      /lifecycle lock|writer lock|conflicting lock/i,
+      relativeFile,
+    );
+    await assert.rejects(access(path.join(fixture.root, locks.normal)), (error) => error?.code === "ENOENT");
+    await unlink(lockPath);
+  }
+  assert.equal(await registeredWaveWorktreeCount(fixture), 2);
+});
+
+test("wave-retire removes a finalized Wave in order, preserves branches, and reuses its final receipt", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile));
+  const result = await runWorktreeCommand(waveRetireOptions(fixture, {
+    now: () => "2026-08-06T00:40:00.000Z",
+  }));
+
+  assert.equal(result.command, "wave-retire");
+  assert.equal(result.reused, false);
+  assert.equal(await registeredWaveWorktreeCount(fixture), 0);
+  for (const task of fixture.planned.plan.tasks) {
+    assert.equal(
+      (await git(fixture.root, "show-ref", "--verify", "--hash", `refs/heads/${task.branch}`)).stdout.trim(),
+      fixture.planned.plan.baseCommit,
+    );
+    const receiptFile = `${path.posix.dirname(fixture.ledgerFile)}/tasks/${task.taskId}/retirement-receipt.json`;
+    const receipt = JSON.parse(await readFile(path.join(fixture.root, receiptFile), "utf8"));
+    assert.equal(receipt.taskId, task.taskId);
+    assert.equal(receipt.recovered, false);
+  }
+  assert.deepEqual(await readFile(path.join(fixture.root, fixture.stateFile)), stateBefore);
+
+  const repeated = await runWorktreeCommand(waveRetireOptions(fixture));
+  assert.equal(repeated.reused, true);
+  assert.equal(repeated.receipt.retirementId, result.receipt.retirementId);
+});
+
+test("PowerShell WaveRetire completes a temporary Wave and reports its Wave identity", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const script = path.join(repositoryRoot, ".harness/scripts/run-worktree.ps1");
+  const common = [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
+    "-Command", "WaveRetire",
+    "-Root", fixture.root,
+    "-StateFile", fixture.stateFile,
+    "-TaskDagFile", fixture.taskDagFile,
+    "-WaveIndex", "1",
+    "-ExpectedWaveLedgerSha256", fixture.ledgerSha256,
+    "-ExpectedWaveReceiptSha256", fixture.waveReceiptSha256,
+    "-ConfirmRetire",
+  ];
+  const completed = await execFileAsync("powershell.exe", [...common, "-Json"], { windowsHide: true });
+  assert.equal(JSON.parse(completed.stdout).command, "wave-retire");
+  const repeated = await execFileAsync("powershell.exe", common, { windowsHide: true });
+  assert.match(repeated.stdout, new RegExp(fixture.ledger.waveId, "i"));
+  assert.doesNotMatch(repeated.stdout, /undefined/i);
+});
+
+test("wave-retire recovers a task removed before its receipt and completes the remaining suffix", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      afterWaveRetireRemove: ({ taskId }) => {
+        if (taskId === "T1") throw new Error("simulated task retirement receipt interruption");
+      },
+    })),
+    /receipt interruption/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 1);
+  const normalSha256 = sha256(await readFile(path.join(fixture.root, locks.normal)));
+
+  const recovered = await runWorktreeCommand(waveRetireOptions(fixture, {
+    confirmWaveRetireLockRecovery: true,
+    expectedRetirementLockSha256: normalSha256,
+    now: () => "2026-08-06T00:41:00.000Z",
+  }));
+  assert.equal(recovered.receipt.recovered, true);
+  assert.equal(await registeredWaveWorktreeCount(fixture), 0);
+  const firstReceipt = JSON.parse(await readFile(
+    path.join(fixture.root, path.posix.dirname(fixture.ledgerFile), "tasks/T1/retirement-receipt.json"),
+    "utf8",
+  ));
+  assert.equal(firstReceipt.recovered, true);
+});
+
+test("wave-retire recovers when every task receipt exists but the final receipt is missing", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  const finalReceiptPath = path.join(
+    fixture.root,
+    path.posix.dirname(fixture.ledgerFile),
+    "wave-retirement-receipt.json",
+  );
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      afterWaveTaskRetirementReceipt: ({ taskId }) => {
+        if (taskId === "T2") throw new Error("simulated final retirement receipt interruption");
+      },
+    })),
+    /final retirement receipt interruption/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 0);
+  await assert.rejects(access(finalReceiptPath), (error) => error?.code === "ENOENT");
+
+  const recovered = await runWorktreeCommand(waveRetireOptions(fixture, {
+    confirmWaveRetireLockRecovery: true,
+    expectedRetirementLockSha256: sha256(await readFile(path.join(fixture.root, locks.normal))),
+  }));
+  assert.equal(recovered.receipt.recovered, true);
+  await readFile(finalReceiptPath);
+});
+
+test("wave-retire rejects a tampered stable receipt prefix before touching the suffix", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      afterWaveTaskRetirementReceipt: ({ taskId }) => {
+        if (taskId === "T1") throw new Error("stop after stable T1 retirement receipt");
+      },
+    })),
+    /stable T1 retirement receipt/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 1);
+  const firstReceiptPath = path.join(
+    fixture.root,
+    path.posix.dirname(fixture.ledgerFile),
+    "tasks/T1/retirement-receipt.json",
+  );
+  const receipt = JSON.parse(await readFile(firstReceiptPath, "utf8"));
+  receipt.executionReceiptSha256 = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+  await writeFile(firstReceiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      confirmWaveRetireLockRecovery: true,
+      expectedRetirementLockSha256: sha256(await readFile(path.join(fixture.root, locks.normal))),
+    })),
+    /task retirement receipt|stable.*prefix/i,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 1);
+});
+
+test("wave-retire rejects existing task receipts with non-schema UUIDs or date-times", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      afterWaveTaskRetirementReceipt: ({ taskId }) => {
+        if (taskId === "T1") throw new Error("stop after T1 receipt");
+      },
+    })),
+    /stop after T1 receipt/i,
+  );
+  const receiptPath = path.join(
+    fixture.root,
+    path.posix.dirname(fixture.ledgerFile),
+    "tasks/T1/retirement-receipt.json",
+  );
+  const original = await readFile(receiptPath);
+  const cases = [
+    ["retirementId", "not-a-uuid"],
+    ["retiredAt", "2026-08-06"],
+  ];
+
+  for (const [field, value] of cases) {
+    const receipt = JSON.parse(original.toString("utf8"));
+    receipt[field] = value;
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+    await assert.rejects(
+      runWorktreeCommand(waveRetireOptions(fixture, {
+        confirmWaveRetireLockRecovery: true,
+        expectedRetirementLockSha256: sha256(await readFile(path.join(fixture.root, locks.normal))),
+        afterWaveRetirePreflight: () => {
+          throw new Error("unexpectedly reached preflight");
+        },
+      })),
+      /task retirement receipt.*stable evidence|invalid structure/i,
+      field,
+    );
+    assert.equal(await registeredWaveWorktreeCount(fixture), 1, field);
+  }
+});
+
+test("wave-retire rejects existing final receipts with non-schema UUIDs or date-times", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  await runWorktreeCommand(waveRetireOptions(fixture));
+  const waveRoot = path.posix.dirname(fixture.ledgerFile);
+  const finalPath = path.join(fixture.root, waveRoot, "wave-retirement-receipt.json");
+  const taskPaths = fixture.planned.plan.tasks.map((task) => (
+    path.join(fixture.root, waveRoot, `tasks/${task.taskId}/retirement-receipt.json`)
+  ));
+  const originalFinal = await readFile(finalPath);
+  const originalTasks = await Promise.all(taskPaths.map((taskPath) => readFile(taskPath)));
+
+  const invalidUuidFinal = JSON.parse(originalFinal.toString("utf8"));
+  invalidUuidFinal.retirementId = "not-a-uuid";
+  for (const [index, taskPath] of taskPaths.entries()) {
+    const taskReceipt = JSON.parse(originalTasks[index].toString("utf8"));
+    taskReceipt.retirementId = "not-a-uuid";
+    await writeFile(taskPath, `${JSON.stringify(taskReceipt, null, 2)}\n`, "utf8");
+    invalidUuidFinal.tasks[index].retirementReceiptSha256 = sha256(await readFile(taskPath));
+  }
+  await writeFile(finalPath, `${JSON.stringify(invalidUuidFinal, null, 2)}\n`, "utf8");
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture)),
+    /retirement receipt.*invalid structure|task retirement receipt.*stable evidence/i,
+  );
+
+  for (const [index, taskPath] of taskPaths.entries()) await writeFile(taskPath, originalTasks[index]);
+  const invalidDateFinal = JSON.parse(originalFinal.toString("utf8"));
+  invalidDateFinal.retiredAt = "2026-08-06";
+  await writeFile(finalPath, `${JSON.stringify(invalidDateFinal, null, 2)}\n`, "utf8");
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture)),
+    /retirement receipt.*invalid structure/i,
+  );
+});
+
+test("wave-retire writes no task receipt when Git reports success without satisfying postconditions", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const waveRoot = path.posix.dirname(fixture.ledgerFile);
+  const executeGit = async (args, cwd) => {
+    if (args[0] === "worktree" && args[1] === "remove") return { stdout: "", stderr: "" };
+    return git(cwd, ...args);
+  };
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, { executeGit })),
+    /postcondition|still registered|directory still exists/i,
+  );
+  await assert.rejects(
+    access(path.join(fixture.root, `${waveRoot}/tasks/T1/retirement-receipt.json`)),
+    (error) => error?.code === "ENOENT",
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 2);
+});
+
+test("wave-retire fences replacement ownership at the task receipt write point", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  const taskReceiptPath = path.join(
+    fixture.root,
+    path.posix.dirname(fixture.ledgerFile),
+    "tasks/T1/retirement-receipt.json",
+  );
+  let replacement;
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      beforeWaveTaskRetirementReceiptWrite: async ({ taskId }) => {
+        if (taskId !== "T1") return;
+        const normalSource = await readFile(path.join(fixture.root, locks.normal));
+        const normal = JSON.parse(normalSource.toString("utf8"));
+        replacement = {
+          ...waveRetirementLockValue(fixture, "recovery"),
+          lockId: "00000000-0000-4000-8000-000000000291",
+          retirementId: normal.retirementId,
+          retirementLockFile: locks.normal,
+          retirementLockSha256: sha256(normalSource),
+        };
+        await writeFile(
+          path.join(fixture.root, locks.recovery),
+          `${JSON.stringify(replacement, null, 2)}\n`,
+          "utf8",
+        );
+      },
+    })),
+    /ownership.*changed|fenced/i,
+  );
+  await assert.rejects(access(taskReceiptPath), (error) => error?.code === "ENOENT");
+  assert.equal(
+    JSON.parse(await readFile(path.join(fixture.root, locks.recovery), "utf8")).lockId,
+    replacement.lockId,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 1);
+});
+
+test("wave-retire fences replacement ownership at the final receipt write point", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  const finalReceiptPath = path.join(
+    fixture.root,
+    path.posix.dirname(fixture.ledgerFile),
+    "wave-retirement-receipt.json",
+  );
+  let replacement;
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      beforeWaveRetirementReceiptWrite: async () => {
+        const normalSource = await readFile(path.join(fixture.root, locks.normal));
+        const normal = JSON.parse(normalSource.toString("utf8"));
+        replacement = {
+          ...waveRetirementLockValue(fixture, "recovery"),
+          lockId: "00000000-0000-4000-8000-000000000292",
+          retirementId: normal.retirementId,
+          retirementLockFile: locks.normal,
+          retirementLockSha256: sha256(normalSource),
+        };
+        await writeFile(
+          path.join(fixture.root, locks.recovery),
+          `${JSON.stringify(replacement, null, 2)}\n`,
+          "utf8",
+        );
+      },
+    })),
+    /ownership.*changed|fenced/i,
+  );
+  await assert.rejects(access(finalReceiptPath), (error) => error?.code === "ENOENT");
+  assert.equal(
+    JSON.parse(await readFile(path.join(fixture.root, locks.recovery), "utf8")).lockId,
+    replacement.lockId,
+  );
+  assert.equal(await registeredWaveWorktreeCount(fixture), 0);
+});
+
+test("wave-retire preserves a replacement normal lock at the release point", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  let replacement;
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      beforeWaveRetirementLockRelease: async ({ lockMode }) => {
+        if (lockMode !== "retire") return;
+        const normal = JSON.parse(await readFile(path.join(fixture.root, locks.normal), "utf8"));
+        replacement = {
+          ...waveRetirementLockValue(fixture),
+          lockId: "00000000-0000-4000-8000-000000000293",
+          retirementId: normal.retirementId,
+        };
+        await writeFile(
+          path.join(fixture.root, locks.normal),
+          `${JSON.stringify(replacement, null, 2)}\n`,
+          "utf8",
+        );
+      },
+    })),
+    /ownership.*changed|lock.*changed|fenced/i,
+  );
+  assert.equal(
+    JSON.parse(await readFile(path.join(fixture.root, locks.normal), "utf8")).lockId,
+    replacement.lockId,
+  );
+});
+
+test("wave-retire rejects a drifted final receipt instead of trusting absent Worktrees", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  await runWorktreeCommand(waveRetireOptions(fixture));
+  const receiptPath = path.join(
+    fixture.root,
+    path.posix.dirname(fixture.ledgerFile),
+    "wave-retirement-receipt.json",
+  );
+  const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+  receipt.waveReceiptSha256 = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture)),
+    /wave retirement receipt|final receipt/i,
+  );
+});
+
+test("wave-retire explicitly recovers a final receipt written before owner lock release", async () => {
+  const fixture = await createCompletedWaveRetirementFixture();
+  const locks = waveRetirementLockFiles(fixture);
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture, {
+      afterWaveRetirementReceipt: () => {
+        throw new Error("simulated retirement lock release interruption");
+      },
+    })),
+    /lock release interruption/i,
+  );
+  const normalSha256 = sha256(await readFile(path.join(fixture.root, locks.normal)));
+
+  await assert.rejects(
+    runWorktreeCommand(waveRetireOptions(fixture)),
+    /owner locks|explicit recovery/i,
+  );
+  const recovered = await runWorktreeCommand(waveRetireOptions(fixture, {
+    confirmWaveRetireLockRecovery: true,
+    expectedRetirementLockSha256: normalSha256,
+  }));
+  assert.equal(recovered.reused, true);
+  await assert.rejects(access(path.join(fixture.root, locks.normal)), (error) => error?.code === "ENOENT");
+  await assert.rejects(access(path.join(fixture.root, locks.recovery)), (error) => error?.code === "ENOENT");
+});
 
 test("finalize-wave binds formal phase artifacts and M3 apply advances exactly once", async () => {
   const fixture = await createFinalizableWaveFixture();

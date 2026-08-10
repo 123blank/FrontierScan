@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("Plan", "Status", "Create", "Retire", "BatchPlan", "BatchStatus", "BatchCreate", "BatchRetire", "WavePlan", "WaveStatus", "WaveCreate")]
+  [ValidateSet("Plan", "Status", "Create", "Retire", "BatchPlan", "BatchStatus", "BatchCreate", "BatchRetire", "WavePlan", "WaveStatus", "WaveCreate", "WaveRetire")]
   [string]$Command,
 
   [Parameter(Mandatory = $true)]
@@ -15,11 +15,16 @@ param(
   [string]$ExpectedPlanSha256,
   [string]$ExpectedCreateLockSha256,
   [string]$ExpectedRecoveryLockSha256,
+  [string]$ExpectedWaveLedgerSha256,
+  [string]$ExpectedWaveReceiptSha256,
+  [string]$ExpectedRetirementLockSha256,
+  [string]$ExpectedRetirementRecoveryLockSha256,
   [string]$Root,
   [switch]$ConfirmCreate,
   [switch]$ConfirmRetire,
   [switch]$ConfirmWaveCreate,
   [switch]$ConfirmWaveLockRecovery,
+  [switch]$ConfirmWaveRetireLockRecovery,
   [switch]$Json
 )
 
@@ -30,8 +35,9 @@ if ([string]::IsNullOrWhiteSpace($Root)) {
 
 $runtime = Join-Path $PSScriptRoot "lib\worktree-runtime.mjs"
 $isBatchCommand = $Command -in @("BatchPlan", "BatchStatus", "BatchCreate", "BatchRetire")
-$isWaveCommand = $Command -in @("WavePlan", "WaveStatus", "WaveCreate")
+$isWaveCommand = $Command -in @("WavePlan", "WaveStatus", "WaveCreate", "WaveRetire")
 $isWaveCreate = $Command -eq "WaveCreate"
+$isWaveRetire = $Command -eq "WaveRetire"
 $runtimeCommand = switch ($Command) {
   "BatchPlan" { "batch-plan" }
   "BatchStatus" { "batch-status" }
@@ -40,6 +46,7 @@ $runtimeCommand = switch ($Command) {
   "WavePlan" { "wave-plan" }
   "WaveStatus" { "wave-status" }
   "WaveCreate" { "wave-create" }
+  "WaveRetire" { "wave-retire" }
   default { $Command.ToLowerInvariant() }
 }
 $arguments = @($runtime, $runtimeCommand, "--root", $Root, "--state-file", $StateFile)
@@ -80,13 +87,54 @@ if ($isBatchCommand) {
     if ($ConfirmWaveLockRecovery) {
       $arguments += "--confirm-wave-lock-recovery"
     }
+  } elseif ($isWaveRetire) {
+    foreach ($parameterName in @(
+      "BaseRef",
+      "ExpectedPlanSha256",
+      "ExpectedCreateLockSha256",
+      "ExpectedRecoveryLockSha256",
+      "ConfirmCreate",
+      "ConfirmWaveCreate",
+      "ConfirmWaveLockRecovery"
+    )) {
+      if ($PSBoundParameters.ContainsKey($parameterName)) {
+        throw "WaveRetire derives identity, branch, path, and base from finalized Wave evidence; -$parameterName is not accepted."
+      }
+    }
+    if ([string]::IsNullOrWhiteSpace($ExpectedWaveLedgerSha256)) {
+      throw "-ExpectedWaveLedgerSha256 is required for WaveRetire."
+    }
+    if ([string]::IsNullOrWhiteSpace($ExpectedWaveReceiptSha256)) {
+      throw "-ExpectedWaveReceiptSha256 is required for WaveRetire."
+    }
+    if (-not $ConfirmRetire) {
+      throw "-ConfirmRetire is required for WaveRetire."
+    }
+    $arguments += @(
+      "--expected-wave-ledger-sha256", $ExpectedWaveLedgerSha256,
+      "--expected-wave-receipt-sha256", $ExpectedWaveReceiptSha256
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRetirementLockSha256)) {
+      $arguments += @("--expected-retirement-lock-sha256", $ExpectedRetirementLockSha256)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRetirementRecoveryLockSha256)) {
+      $arguments += @("--expected-retirement-recovery-lock-sha256", $ExpectedRetirementRecoveryLockSha256)
+    }
+    if ($ConfirmWaveRetireLockRecovery) {
+      $arguments += "--confirm-wave-retire-lock-recovery"
+    }
   } else {
     foreach ($parameterName in @(
       "ExpectedPlanSha256",
       "ExpectedCreateLockSha256",
       "ExpectedRecoveryLockSha256",
+      "ExpectedWaveLedgerSha256",
+      "ExpectedWaveReceiptSha256",
+      "ExpectedRetirementLockSha256",
+      "ExpectedRetirementRecoveryLockSha256",
       "ConfirmWaveCreate",
-      "ConfirmWaveLockRecovery"
+      "ConfirmWaveLockRecovery",
+      "ConfirmWaveRetireLockRecovery"
     )) {
       if ($PSBoundParameters.ContainsKey($parameterName)) {
         throw "$Command does not accept -$parameterName."

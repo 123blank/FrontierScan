@@ -367,3 +367,18 @@ M5-D-C2 在全部任务 `ready-for-integration` 后原子冻结 integration mani
 主工作树只允许按 WavePlan 稳定任务顺序形成“已集成前缀 + 当前任务”差异；中断保留前缀，由显式 recovery owner
 继续剩余任务。全部任务集成后，`finalize-wave` 生成正式 phase 产物、wave receipt、finalized ledger 与
 `checkpoint.waveFinalization`，随后仍由 M3 `apply` 唯一推进 phase。
+
+## M5-D-D Wave Worktree 回收
+
+M5-D-D 继续扩展 `worktree-runtime.mjs`，增加 `wave-retire`，不新建第二套回收 Runtime。入口只接受
+`done/completed` Story、`finalized` execution ledger、已完成 M3 apply 的 checkpoint 和完整正式产物证据。
+调用方必须批准当前 ledger 与 wave receipt 的精确 SHA-256，不能自行指定任务、分支、路径或基准。
+
+首次删除前执行全局预检，覆盖所有任务 Worktree、保留分支、主树 applied files、execution/integration receipt
+和全部 Wave/implementation writer 锁。普通 `worktree-retire.lock` 与
+`worktree-retire-recovery.lock` 形成显式 recovery owner；替换锁会立即 fence 旧 owner。
+
+回收按 WavePlan 稳定顺序进行。每个 Worktree 删除后必须完成 Git 注册、目录与分支后验，之后才写
+task retirement receipt。中断恢复只接受完整有序的 receipt 前缀，允许对“Git 已删除但 receipt 未写”的当前首项
+补写 `recovered: true`。全部任务完成后写 wave retirement receipt，绑定完成态、M3、Wave 与所有 task receipt。
+首版保留任务分支，不执行 `prune`、自动提交、推送、发布或部署。
