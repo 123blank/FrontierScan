@@ -283,6 +283,6 @@ class ArticleServiceFilterTest {
                 1000L + articleId, articleId, title, summary,
                 "要点1\n要点2", "标签1,标签2",
                 "https://example.com/" + articleId,
-                publishedAt, OffsetDateTime.now(), OffsetDateTime.now());
+                publishedAt, OffsetDateTime.now(), null, OffsetDateTime.now());
     }
 }

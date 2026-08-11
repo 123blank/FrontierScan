@@ -187,6 +187,15 @@ class UserDataIsolationIntegrationTest {
         }
 
         @Test
+        @DisplayName("用户不能修改其他用户文章的阅读状态")
+        void shouldRejectChangingOtherUsersReadStatus() {
+            assertThatThrownBy(() -> articleService.markAsRead(intruder.getId(), ownerArticle.getId()))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            assertThat(articleRepository.findById(ownerArticle.getId()).orElseThrow().getReadAt()).isNull();
+        }
+
+        @Test
         @DisplayName("用户可以取消收藏自己的文章")
         void shouldRemoveFavoriteForOwnArticle() {
             articleService.toggleFavorite(owner.getId(), ownerArticle.getId());
@@ -211,6 +220,7 @@ class UserDataIsolationIntegrationTest {
         @Test
         @DisplayName("收藏页只能返回当前用户收藏的文章卡片信息")
         void shouldOnlyListOwnFavoriteArticleViews() {
+            ownerArticle = articleService.markAsRead(owner.getId(), ownerArticle.getId());
             articleService.toggleFavorite(owner.getId(), ownerArticle.getId());
 
             // 手工写入一条异常收藏关系，模拟历史脏数据或误操作写库场景。
@@ -302,6 +312,9 @@ class UserDataIsolationIntegrationTest {
                 .isEqualTo(article.getPublishedAt().toInstant().toEpochMilli());
         assertThat(view.collectedAt().toInstant().toEpochMilli())
                 .isEqualTo(article.getCollectedAt().toInstant().toEpochMilli());
+        assertThat(view.readAt()).isNotNull();
+        assertThat(view.readAt().toInstant().toEpochMilli())
+                .isEqualTo(article.getReadAt().toInstant().toEpochMilli());
         assertThat(view.favoritedAt()).isNotNull();
     }
 }

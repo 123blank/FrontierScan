@@ -30,7 +30,7 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
     @Query("""
             select new com.frontierscan.article.FavoriteArticleView(
                 f.id, a.id, a.title, a.summary, a.keyPoints, a.tags,
-                a.sourceUrl, a.publishedAt, a.collectedAt, f.createdAt
+                a.sourceUrl, a.publishedAt, a.collectedAt, a.readAt, f.createdAt
             )
             from Favorite f
             join Article a on a.id = f.articleId
@@ -52,7 +52,7 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
     @Query("""
             select new com.frontierscan.article.FavoriteArticleView(
                 f.id, a.id, a.title, a.summary, a.keyPoints, a.tags,
-                a.sourceUrl, a.publishedAt, a.collectedAt, f.createdAt
+                a.sourceUrl, a.publishedAt, a.collectedAt, a.readAt, f.createdAt
             )
             from Favorite f
             join Article a on a.id = f.articleId

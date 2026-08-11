@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M6-A-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "按 TDD 增加文章阅读状态后端能力",
+      "type": "backend",
+      "status": "pending",
+      "predictedFiles": [
+        "backend/src/test/java/com/frontierscan/article/ArticleReadStatusIntegrationTest.java",
+        "backend/src/test/java/com/frontierscan/security/UserDataIsolationIntegrationTest.java",
+        "backend/src/main/resources/db/migration/V11__add_article_read_status.sql",
+        "backend/src/main/java/com/frontierscan/article/Article.java",
+        "backend/src/main/java/com/frontierscan/article/ArticleService.java",
+        "backend/src/main/java/com/frontierscan/article/ArticleController.java",
+        "backend/src/main/java/com/frontierscan/article/FavoriteArticleView.java",
+        "backend/src/main/java/com/frontierscan/article/FavoriteRepository.java"
+      ],
+      "acceptanceCriteria": [
+        "新文章默认未读并以 readAt=null 返回。",
+        "当前用户可以幂等标记已读或未读。",
+        "其他用户不能修改文章阅读状态。",
+        "收藏文章视图返回 readAt。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T2",
+      "title": "在看板和收藏页接入阅读状态交互",
+      "type": "frontend",
+      "status": "pending",
+      "predictedFiles": [
+        "frontend/src/types.ts",
+        "frontend/src/api/articles.ts",
+        "frontend/src/views/DashboardView.vue",
+        "frontend/src/views/FavoritesView.vue"
+      ],
+      "acceptanceCriteria": [
+        "卡片显示已读或未读状态。",
+        "打开详情后自动标记已读并同步列表。",
+        "详情可以重新标记未读并同步列表。",
+        "状态操作失败时不虚构成功状态。"
+      ],
+      "ownerAgent": "frontend-developer"
+    },
+    {
+      "taskId": "T3",
+      "title": "完成测试、审核、构建与接口验证",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/runs/M6-A-001/phases/03-implementation/implementation-notes.md",
+        ".harness/runs/M6-A-001/phases/04-unit-test/test-report.md",
+        ".harness/runs/M6-A-001/phases/05-code-review/code-review-report.md",
+        ".harness/runs/M6-A-001/phases/06-build-publish/build-report.md",
+        ".harness/runs/M6-A-001/phases/07-interface-verification/interface-verification-report.md",
+        ".harness/runs/M6-A-001/phases/08-git-delivery/delivery-report.md"
+      ],
+      "acceptanceCriteria": [
+        "后端测试和前端构建通过。",
+        "代码审核无 BLOCKER。",
+        "接口与 UI 验证覆盖核心验收标准。",
+        "交付停在 Git 操作批准前。"
+      ],
+      "ownerAgent": "unit-tester"
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "前端依赖后端 readAt 字段和阅读状态接口契约。"
+    },
+    {
+      "from": "T2",
+      "to": "T3",
+      "reason": "闭环验证需要前后端实现全部完成。"
+    }
+  ],
+  "waves": [
+    [
+      "T1"
+    ],
+    [
+      "T2"
+    ],
+    [
+      "T3"
+    ]
+  ],
+  "globalChanges": [
+    "数据库：新增 V11 Flyway 迁移，为 articles 增加 read_at 可空时间字段。"
+  ],
+  "risks": [
+    "前端没有自动化测试框架，交互行为需通过构建和真实 UI/API 验证补足。"
+  ]
+}

@@ -31,6 +31,14 @@ export const articleApi = {
   get(id: number) {
     return apiClient.get<ApiResponse<Article>>(`/articles/${id}`);
   },
+  /** 标记文章已读 */
+  markRead(id: number) {
+    return apiClient.put<ApiResponse<Article>>(`/articles/${id}/read`);
+  },
+  /** 标记文章未读 */
+  markUnread(id: number) {
+    return apiClient.delete<ApiResponse<Article>>(`/articles/${id}/read`);
+  },
   /** 重新生成文章摘要 */
   retrySummary(id: number) {
     return apiClient.post<ApiResponse<Article>>(`/articles/${id}/summary/retry`);

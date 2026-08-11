@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -65,6 +66,22 @@ public class ArticleController {
             @PathVariable Long id
     ) {
         return ApiResponse.ok(articleService.getById(principal.userId(), id));
+    }
+
+    @PutMapping("/{id}/read")
+    public ApiResponse<Article> markAsRead(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long id
+    ) {
+        return ApiResponse.ok(articleService.markAsRead(principal.userId(), id));
+    }
+
+    @DeleteMapping("/{id}/read")
+    public ApiResponse<Article> markAsUnread(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long id
+    ) {
+        return ApiResponse.ok(articleService.markAsUnread(principal.userId(), id));
     }
 
     /**

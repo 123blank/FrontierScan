@@ -75,6 +75,22 @@ public class ArticleService {
         return article;
     }
 
+    @Transactional
+    public Article markAsRead(Long userId, Long articleId) {
+        Article article = getById(userId, articleId);
+        if (article.getReadAt() == null) {
+            article.setReadAt(OffsetDateTime.now());
+        }
+        return articleRepository.save(article);
+    }
+
+    @Transactional
+    public Article markAsUnread(Long userId, Long articleId) {
+        Article article = getById(userId, articleId);
+        article.setReadAt(null);
+        return articleRepository.save(article);
+    }
+
     /**
      * 批量去重并保存采集到的文章。
      * <p>

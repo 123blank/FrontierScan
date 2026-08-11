@@ -92,6 +92,7 @@
         </div>
         <p class="article-meta">
           <span>发布时间 {{ formatDate(article.publishedAt) }}</span>
+          <span class="read-status" :class="{ unread: !article.readAt }">{{ readStatusText(article.readAt) }}</span>
         </p>
         <div v-if="splitCsv(article.tags).length" class="tag-list article-card-tags" aria-label="文章标签">
           <span v-for="tag in splitCsv(article.tags)" :key="tag">{{ tag }}</span>
@@ -148,8 +149,25 @@
           >
             {{ summaryRetrying ? '生成中...' : '重新生成摘要' }}
           </button>
+          <button
+            v-if="!selectedArticle.readAt"
+            class="secondary-button"
+            :disabled="readStatusPending"
+            @click="markSelectedArticleRead"
+          >
+            {{ readStatusPending ? '处理中...' : '标记已读' }}
+          </button>
+          <button
+            v-if="selectedArticle.readAt"
+            class="secondary-button"
+            :disabled="readStatusPending"
+            @click="markSelectedArticleUnread"
+          >
+            {{ readStatusPending ? '处理中...' : '标记未读' }}
+          </button>
           <a class="primary-link" :href="selectedArticle.sourceUrl" target="_blank" rel="noopener">打开原文</a>
         </div>
+        <p v-if="readStatusError" class="action-error" role="alert">{{ readStatusError }}</p>
 
         <section class="summary-governance">
           <span>{{ summaryStatusLabel(selectedArticle) }}</span>
@@ -238,6 +256,12 @@ const detailLoading = ref(false);
 const detailError = ref('');
 /** 当前详情文章 */
 const selectedArticle = ref<Article | null>(null);
+/** 阅读状态提交中，防止重复标记。 */
+const readStatusPending = ref(false);
+/** 阅读状态操作失败反馈。 */
+const readStatusError = ref('');
+/** 详情请求序号，阻止旧响应覆盖后来打开的文章。 */
+const detailRequestId = ref(0);
 /** 摘要重新生成提交状态，防止用户在 LLM 调用期间重复点击。 */
 const summaryRetrying = ref(false);
 
@@ -335,27 +359,132 @@ async function reloadArticlePage() {
 
 /** 打开文章详情抽屉并加载最新详情数据。 */
 async function openArticleDetail(articleId: number) {
+  const requestId = ++detailRequestId.value;
   detailOpen.value = true;
   detailLoading.value = true;
   detailError.value = '';
+  readStatusError.value = '';
   selectedArticle.value = null;
   summaryRetrying.value = false;
+  readStatusPending.value = false;
   try {
     const res = await articleApi.get(articleId);
+    if (requestId !== detailRequestId.value || !detailOpen.value) {
+      return;
+    }
     selectedArticle.value = res.data.data;
+    if (!selectedArticle.value.readAt) {
+      readStatusPending.value = true;
+      try {
+        const readRes = await articleApi.markRead(articleId);
+        if (requestId !== detailRequestId.value || !detailOpen.value) {
+          return;
+        }
+        selectedArticle.value = readRes.data.data;
+        syncArticleReadStatus(articleId, readRes.data.data.readAt);
+      } catch {
+        if (requestId === detailRequestId.value && detailOpen.value) {
+          readStatusError.value = '阅读状态更新失败，请重试。';
+        }
+      } finally {
+        if (requestId === detailRequestId.value) {
+          readStatusPending.value = false;
+        }
+      }
+    }
   } catch {
-    detailError.value = '请稍后重试，或刷新页面后再次打开。';
+    if (requestId === detailRequestId.value && detailOpen.value) {
+      detailError.value = '请稍后重试，或刷新页面后再次打开。';
+    }
   } finally {
-    detailLoading.value = false;
+    if (requestId === detailRequestId.value) {
+      detailLoading.value = false;
+    }
   }
 }
 
 /** 关闭文章详情抽屉并清理临时状态。 */
 function closeArticleDetail() {
+  detailRequestId.value += 1;
   detailOpen.value = false;
   detailError.value = '';
+  readStatusError.value = '';
   selectedArticle.value = null;
   summaryRetrying.value = false;
+  readStatusPending.value = false;
+}
+
+/** 手动重试将当前详情文章标记为已读。 */
+async function markSelectedArticleRead() {
+  if (!selectedArticle.value || readStatusPending.value) {
+    return;
+  }
+  const articleId = selectedArticle.value.id;
+  const requestId = detailRequestId.value;
+  readStatusPending.value = true;
+  readStatusError.value = '';
+  try {
+    const res = await articleApi.markRead(articleId);
+    if (requestId !== detailRequestId.value
+      || !detailOpen.value
+      || selectedArticle.value?.id !== articleId) {
+      return;
+    }
+    selectedArticle.value = res.data.data;
+    syncArticleReadStatus(articleId, res.data.data.readAt);
+  } catch {
+    if (requestId === detailRequestId.value
+      && detailOpen.value
+      && selectedArticle.value?.id === articleId) {
+      readStatusError.value = '阅读状态更新失败，请重试。';
+    }
+  } finally {
+    if (requestId === detailRequestId.value) {
+      readStatusPending.value = false;
+    }
+  }
+}
+
+/** 将当前详情文章重新标记为未读，并同步当前分页卡片。 */
+async function markSelectedArticleUnread() {
+  if (!selectedArticle.value || readStatusPending.value) {
+    return;
+  }
+  const articleId = selectedArticle.value.id;
+  const requestId = detailRequestId.value;
+  readStatusPending.value = true;
+  readStatusError.value = '';
+  try {
+    const res = await articleApi.markUnread(articleId);
+    if (requestId !== detailRequestId.value
+      || !detailOpen.value
+      || selectedArticle.value?.id !== articleId) {
+      return;
+    }
+    selectedArticle.value = res.data.data;
+    syncArticleReadStatus(res.data.data.id, res.data.data.readAt);
+  } catch {
+    if (requestId === detailRequestId.value
+      && detailOpen.value
+      && selectedArticle.value?.id === articleId) {
+      readStatusError.value = '阅读状态更新失败，请重试。';
+    }
+  } finally {
+    if (requestId === detailRequestId.value) {
+      readStatusPending.value = false;
+    }
+  }
+}
+
+/** 同步列表中的阅读时间。 */
+function syncArticleReadStatus(articleId: number, readAt: string | null) {
+  articles.value = articles.value.map((article) =>
+    article.id === articleId ? { ...article, readAt } : article
+  );
+}
+
+function readStatusText(readAt?: string | null) {
+  return readAt ? '已读' : '未读';
 }
 
 /** 收藏或取消收藏文章，并同步列表/详情中的收藏状态。 */
@@ -580,6 +709,8 @@ function formatDateTime(value?: string | null) {
   margin: 0 0 8px;
 }
 .article-meta span + span::before { content: "·"; margin: 0 6px; }
+.read-status { color: #67726f; font-weight: 600; }
+.read-status.unread { color: #b42318; }
 .article-card-tags { margin: 0 0 10px; }
 .article-summary { color: #3e4c48; font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
 .summary-status-chip {
@@ -659,6 +790,7 @@ function formatDateTime(value?: string | null) {
 .close-button { font-size: 24px; line-height: 1; }
 .drawer-content { display: grid; gap: 20px; padding-top: 18px; }
 .drawer-actions { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+.action-error { color: #b42318; font-size: 13px; margin: -8px 0 0; }
 .summary-governance {
   align-items: center;
   background: #f8faf9;
