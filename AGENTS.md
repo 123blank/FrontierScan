@@ -82,9 +82,11 @@ FrontierScan 正在参考腾讯相关文章向 Harness Engineering 工作流演�
 - `.codex/skills/`：项目本地 Skill 脚手架。
 - `llm-knowledge/`：供 AI 消费的结构化项目知识。
 - `docs/`：面向开发人员的业务计划、报告、Harness 方案和检查清单。
+- `docs/harness-engineering-target-and-gap.md`：Harness Engineering 长期目标、当前进度和防偏移基线。
 
 处理 Harness 结构时：
 
+- 设计或调整 Harness 架构前必须读取 `docs/harness-engineering-target-and-gap.md`，并说明本次修改对应的目标、差距或经批准的偏离。
 - 将 `.harness/states/` 视为工作流状态，而不是源码。
 - 将 `llm-knowledge/` 视为自动生成或人工维护的 AI 知识。
 - Skill 和 Agent 脚手架必须与运行时状态分离。

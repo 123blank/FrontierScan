@@ -201,6 +201,7 @@ required_files:
   - llm-knowledge/common/conventions/execution-verification.md
   - llm-knowledge/common/conventions/quality-gates.md
   - docs/harness-m0-m1/PLAN.md
+  - docs/harness-engineering-target-and-gap.md
   - docs/harness-architecture-adaptation.md
   - docs/harness-m0-m1/REPORT.md
   - docs/harness-m1-1-source-fingerprint/PLAN.md
