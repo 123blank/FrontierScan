@@ -1,9 +1,10 @@
 # FrontierScan Harness Engineering 目标与差距基线
 
 > 文档状态：目标基线
-> 基线版本：1.0
+> 基线版本：1.1
 > 建立日期：2026-08-11
-> 项目基线提交：`b676c2a feat(article): add read and unread status`
+> 最近更新：2026-08-12
+> 项目基线提交：`53c1f29 docs(harness): establish target and gap baseline`
 > 参考文章：[从 AI Coding 到 Harness Engineering 的端到端工程开发实践](https://mp.weixin.qq.com/s/UE-RZH9hnbBd06CVapFGrA)
 > 文章发布：腾讯技术工程，2026-07-03
 > 原文核验方式：2026-08-11 在 Chrome 浏览器中直接阅读微信原文
@@ -22,6 +23,7 @@
 
 - `docs/harness-architecture-adaptation.md`：记录 FrontierScan 已有 Harness 结构和历史适配。
 - `docs/harness-structure-checklist.md`：记录具体文件、脚本和里程碑交付情况。
+- `docs/harness-m7-m12-roadmap/`：记录 M7-M12 已批准的总体设计、实施顺序、依赖和验收门禁。
 - 各里程碑目录中的 `DESIGN.md`、`PLAN.md`、`REPORT.md`：记录具体实现过程。
 - `.harness/states/` 与 `.harness/runs/`：记录当前运行事实和阶段证据。
 
@@ -257,7 +259,7 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 | 工作流层 | 使用 `.harness/workflows/` 定义阶段、产物、门禁和允许的状态转换 |
 | 认知执行层 | Codex 或未来 Agent 负责需求、设计、实现、审核和诊断 |
 | 确定性执行层 | `.harness/scripts/` 负责校验、状态推进、测试选择、构建规划和受控工作区操作 |
-| 外部副作用层 | Git、发布、部署、外部服务写入继续由明确批准控制，并将结果写回 State |
+| 外部副作用层 | Git、发布、部署、外部服务写入继续由明确批准控制；完成前批准写入 State，完成后的 Git 事实写入独立版本化回执 |
 
 ## 6. 当前范围边界
 
@@ -290,7 +292,7 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 
 ## 7. 当前实现对比
 
-以下进度以 2026-08-11、提交 `b676c2a` 和 M6-A 单业务闭环为基线。
+以下进度以 2026-08-12、提交 `53c1f29` 和 M6-A 单业务闭环为基线。M7-M12 当前仅完成路线规划，没有新增 Runtime、Schema、Provider 或真实业务验收证据，因此本节完成度保持不变。
 
 | 文章能力 | FrontierScan 当前证据 | 状态 | 估算完成度 |
 | --- | --- | --- | ---: |
@@ -361,7 +363,7 @@ delivery.ownedFiles
 delivery.commit
 ```
 
-关键事实主要存在于 Markdown 和通用 `runtime.records` 中。机器不能仅通过 State 回答“验收项是否完成、执行了哪些任务、验证有什么缺口、交付了哪些文件、提交是什么”。
+关键事实主要存在于 Markdown 和通用 `runtime.records` 中。机器不能仅通过 State 回答“验收项是否完成、执行了哪些任务、验证有什么缺口、交付准备覆盖了哪些文件”。M7 已确认不把完成后的 Git 提交事实回写不可变 State，而是由独立 `delivery-receipt.json` 记录。
 
 ### 9.2 工作流仍由对话中的 Codex 手动串联
 
@@ -410,87 +412,64 @@ failed
 已确认的问题包括：
 
 - `summarize-delivery.ps1` 未优先使用任务 DAG 和实际 Git 变更判断 owned files。
-- Git 提交结果没有写入 State。
+- 当前缺少绑定 completed State、交付摘要和真实 Git 事实的独立版本化交付回执。
 - 手动 record 与阶段推进自动记录产生重复证据。
 - resume 后 `runtime.blocked` 仍保留为类似活动阻塞的结构。
 - `select-tests.ps1` 的模块测试和运行态 DAG 识别不足。
 - `plan-build.ps1` 主要按路径判断，缺少迁移和 API 风险感知。
 
-## 10. 推荐演进顺序
+## 10. 已批准的 M7-M12 演进路线
 
-### 10.1 P0：M7-A 结构化 State 与验收语义加固
+完整设计和逐项实施计划保存在：
 
-M7-A 应优先完成：
+- `docs/harness-m7-m12-roadmap/DESIGN.md`
+- `docs/harness-m7-m12-roadmap/PLAN.md`
 
-1. 从需求、DAG、测试、审核、验证和交付产物自动回填结构化 State。
-2. 为各阶段增加语义完整性校验，禁止空结构绕过 `done`。
-3. 增加接口验证结果状态：
+当前只批准了路线文档，不构成任何 Runtime、Schema、Provider、Worktree、Docker 或 Git 写操作的实施授权。技术子里程碑必须按依赖顺序通过 fixture 和审核；前一主里程碑未通过计划指定的真实任务验收时，不启动下一主里程碑。
 
-```text
-verified
-accepted-with-known-gaps
-blocked
-failed
-```
+### 10.1 M7：单 Story 确定性闭环硬化
 
-4. 将知识 stale、缺失知识和 accepted-stale 决策写入 State。
-5. 将 owned files 和 commit receipt 写入 State。
-6. 去除相同路径和哈希的重复 output evidence。
-7. 区分活动阻塞与历史阻塞记录。
+1. `M7-A1`：建立 State v2 契约和 v1 只读兼容。
+2. `M7-A2`：统一各阶段 `result.json`，由 Runtime 原子投影 State。
+3. `M7-A3`：建立验收项、DAG、测试和验证之间的可判定追踪门禁。
+4. `M7-A4`：修复证据幂等、阻塞恢复、owned files 和交付语义。
+5. `M7-B`：增加最小确定性串行驱动器，不调用真实 Agent。
+6. `M7-C`：将任务相关知识新鲜度纳入 State、刷新和逐项接受门禁。
+7. `M7-D`：通过异常 fixture 和一个真实 Story 完成双重闭环验收。
 
-M7-A 完成标准：
+M7 完成后，仅读取最终 State 即可回答需求、决策、知识、DAG、修改、测试、审核、验证、缺口和交付准备事实；完成不要求 Git 提交。
 
-- 仅读取最终 State 即可回答需求、任务、测试、审核、验证和交付状态。
-- 缺失必需结构化字段时不能进入 `done/completed`。
-- M6-A 的已知 UI 环境缺口能够表示为 `accepted-with-known-gaps`，而不是依赖报告正文解释。
-- 状态恢复不依赖旧聊天记录。
+### 10.2 M8：真实受限 Agent Provider
 
-### 10.2 P1：确定性端到端调度入口
+- `M8-A` 首先接入只读 `code-reviewer` Provider，由 Runtime 控制输入、权限、超时、结果校验和正式写入。
+- `M8-B` 在审核 Provider 验收后，接入单任务、单 Worktree、串行的 backend/frontend developer Provider。
+- Provider 不决定全局流程，不直接写主 State，不越过 Git、发布和外部写入批准边界。
 
-在 M7-A 稳定后，实现一个最小外部调度入口：
+### 10.3 M9：条件式单 Story 并行
 
-```text
-读取并校验 State
--> 确定当前阶段
--> 准备该阶段输入
--> 调用 AI 或确定性脚本
--> 校验阶段结果
--> 回填 State
--> 返回下一动作或批准请求
-```
+仅当同一 wave 至少存在两个无依赖、预测文件不冲突且无共享全局变化的任务时提出并行建议。用户批准正式 Worktree 操作后才执行；主树始终串行集成，不符合条件时保持串行。
 
-第一版只覆盖单 Story 串行工作流，不需要真实多 Agent，也不需要自动 Git 提交和推送。
+### 10.4 M10：多 Story Fork-Join
 
-### 10.3 P1：知识新鲜度闭环
+当产品请求可拆为至少两个独立验收 Story 时，由 Harness 提出 Fork-Join 建议，用户确认后才创建产品级 State、Story 状态和集成资源。子 Story 独立推进，Join 阶段统一集成、构建、验证和交付准备。
 
-需要实现：
+### 10.5 M11：本地测试环境 DevOps 闭环
 
-- stale 自动进入 State。
-- 根据当前任务判断 stale 是否阻塞。
-- 生成最小刷新任务。
-- 刷新后重新验证指纹和索引。
-- 保留 `custom/` 和追加 `log.md`。
+首版只覆盖本地 Docker Compose 测试环境。`build`、`up`、`down` 分别在执行时获得批准；环境不可用时记录 blocked，不访问生产环境或外部业务平台。
 
-### 10.4 P2：真实 Agent Provider
+### 10.6 M12：评估与持续改进
 
-真实 Agent 接入应满足：
+从 M7 开始采集可追溯事件，累计至少 5 个真实 Story 后评估闭环成功率、失败与恢复、门禁发现、人工批准、accepted gap/stale 和越权情况。首版不强制 Token、费用和耗时统计，也不允许自动修改规则或代码。
 
-- 调度器而不是 Agent 决定全局流程。
-- 每个 Agent 获得最小上下文和最小权限。
-- 任务输入和输出使用结构化协议。
-- Agent 不能直接修改主 State 或越过批准边界。
-- 可以替换 Provider，不将 Harness 绑定到单一 AI Coding 工具。
+### 10.7 通用启动门禁
 
-### 10.5 P2：正式并行和 DevOps 集成
-
-只有单 Story 串行闭环稳定并且存在明确效率需求时，才继续：
-
-- 正式业务 Worktree Wave。
-- 多 Story Fork-Join。
-- 测试环境自动部署。
-- 外部配置、日志和需求平台集成。
-
-自动 Git 提交、推送和生产发布仍需单独设计安全边界和获得用户明确批准。
+- 专项设计获得用户批准。
+- 计划不存在未决架构选择。
+- Runtime 或 Schema 变更按 TDD 完成 fixture 验证。
+- 相关回归、结构校验和差异检查通过。
+- 独立只读审核无未解决 BLOCKER/WARNING。
+- 每个对外宣称完成的主里程碑至少通过一次真实任务验收。
+- 目标基线、结构清单、交接文档和知识状态同步。
 
 ## 11. 防偏移原则
 
@@ -576,7 +555,7 @@ git diff --check
 
 ## 13. 当前架构决策摘要
 
-截至 2026-08-11，FrontierScan Harness 的正式方向为：
+截至 2026-08-12，FrontierScan Harness 的正式方向为：
 
 1. 继续以“知识库工程 + 端到端开发工程”为总体结构。
 2. 以 `AGENTS.md` 作为用户自然语言任务的默认入口。
@@ -587,4 +566,10 @@ git diff --check
 7. 以能否稳定完成真实业务、发现问题、记录缺口并安全恢复作为验收标准。
 8. 不将云平台、多租户和无人值守发布纳入当前目标。
 9. Git、发布、部署和外部写操作继续由用户明确批准。
-10. 下一优先里程碑为 `M7-A：结构化 State 与验收语义加固`。
+10. `done/completed` 表示业务开发和交付准备完成，不表示已经提交或推送。
+11. 完成后的 Git 事实进入独立版本化 `delivery-receipt.json`，不得修改 completed State。
+12. State v2 移除顶层 `tasks`，以 `dag.nodes` 作为唯一任务事实源；State v1 只读兼容且不迁移。
+13. 每个 v2 阶段使用统一结构化 `result.json`，Markdown 不作为 Runtime 的核心事实解析源。
+14. `accepted-with-known-gaps` 和 `accepted-stale` 必须逐项获得用户批准并绑定理由与证据。
+15. M8 首个真实 Provider 为只读 `code-reviewer`；并行、Fork-Join 和本地 Docker Compose 闭环按 M9-M11 依次推进。
+16. 下一优先子里程碑为 `M7-A1：State v2 契约与版本共存`。
