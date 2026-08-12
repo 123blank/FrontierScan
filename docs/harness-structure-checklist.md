@@ -14,8 +14,8 @@
 | 报告与输出目录 | `.harness/reports/`、`.harness/outputs/` | 已完成 |
 | Deterministic script area | `.harness/scripts/` | M2 状态、M3 Dispatcher、M4-B Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 串行批次、M5-D-A/B wave 规划创建和 M5-D-C1/C2 执行集成 Runtime 已实现 |
 | 结构校验脚本 | `.harness/scripts/validate-structure.ps1` | 已完成 |
-| State validation script | `.harness/scripts/validate-state.ps1` | E2E、Product 模板/状态与 `active-run` 指针只读校验已实现 |
-| State runtime entry | `.harness/scripts/run-state.ps1` | M2 单 Story 状态推进、门禁、锁与恢复已实现 V1 |
+| State validation script | `.harness/scripts/validate-state.ps1` + `lib/state-contract.mjs` | PowerShell 薄入口与单一 Node 契约已支持 E2E v1/v2、Product State 和 `active-run` 指针 |
+| State runtime entry | `.harness/scripts/run-state.ps1` | M7-A1 已实现新 Story 默认 v2、v1 拒写、Git baseline、版本化 workflow、`activeBlock` 和 `delivery-preparation -> done` |
 | Story Dispatcher entry | `.harness/scripts/run-story.ps1` | v1.0 单任务与 v1.1 serial batch 保持兼容；M5-D `prepare-wave/finalize-wave` 完成 v1.2 Wave 准备、正式 phase 产物和 M3 apply 绑定 |
 | Mock Worker runtime | `.harness/scripts/lib/worker-runtime.mjs` | M4-B 显式 context、角色权限、2/8 MiB 限额、30 秒超时、result-last 和重试恢复已实现 |
 | Worker policy registry | `.codex/agents/worker-policies.json` | 12 角色与 `agents.yaml` 名称、类别一一对应；无 shell、网络、状态、发布或 Git 能力 |
@@ -80,6 +80,7 @@
 | M5-D-C1/C2 wave execution design/plan/report | `docs/harness-m5d-wave-execution/` | 已实现单个完整 implementation wave 的并行执行、manifest freeze、主树串行集成、partial recovery、finalize-wave 和 M3 apply |
 | M5-D-D wave retirement design/plan/report | `docs/harness-m5d-wave-retire/` | 已实现完整 M3/Wave 证据绑定、完成态记录哈希、双锁恢复、有序 task receipt 前缀、写点 fencing、Git 后验、分支保留和最终回执 |
 | M7-M12 总体路线设计与计划 | `docs/harness-m7-m12-roadmap/DESIGN.md`、`docs/harness-m7-m12-roadmap/PLAN.md` | 路线文档已完成；未实现任何 M7-M12 Runtime、Schema、Provider、Worktree、Docker 或 Git 自动化能力 |
+| M7-A1 State v2 专项设计、计划与报告 | `docs/harness-m7a1-state-v2/` | 已实施并通过 fixture 验证；真实 Story 验收统一延期到 M7-D |
 
 ## 延期功能工作
 
@@ -87,7 +88,7 @@
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
 - M5-D-D 已实现并交付单个完整 wave 的审批门控 Worktree 回收闭环；`M5-D-D-001` 为 `done/completed` revision `18`，提交 `2b7269d` 已推送到 `origin/dev`。
 - M6-A 已完成真实单业务闭环验收，并暴露结构化 State、验收追踪、知识新鲜度、交付归属和串行编排差距。
-- 下一步是 `M7-A1：State v2 契约与版本共存`。启动前必须创建并批准独立 `DESIGN.md` 和 `PLAN.md`；当前 M7-M12 总路线不构成代码实施授权。
+- 下一步是 `M7-A2：统一阶段结果与 State 投影`；启动前仍需独立设计、计划、审核和用户批准。
 - M7 按 A1、A2、A3、A4、B、C、D 顺序推进；M7-D 真实 Story 验收通过后才允许启动 M8。
 - 真实 Agent、正式并行、Fork-Join 和本地 Docker Compose 闭环分别延期到 M8、M9、M10 和 M11。
 - 多 wave 批量回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。

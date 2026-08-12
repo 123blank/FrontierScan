@@ -74,6 +74,7 @@ foreach ($file in $files) {
 @(
   ".harness/schemas/product-state.schema.json",
   ".harness/schemas/e2e-state.schema.json",
+  ".harness/schemas/e2e-state-v2.schema.json",
   ".harness/schemas/active-run.schema.json",
   ".harness/schemas/task-dag.schema.json",
   ".harness/schemas/dispatch-task.schema.json",
@@ -105,6 +106,7 @@ foreach ($file in $files) {
   ".codex/agents/worker-policies.json",
   ".harness/states/product-state.template.json",
   ".harness/states/e2e-state.template.json"
+  ".harness/states/e2e-state-v2.template.json"
 ) | ForEach-Object {
   Assert-Json -RelativePath $_
 }

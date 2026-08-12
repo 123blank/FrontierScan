@@ -51,6 +51,12 @@ async function readJson(root, relativePath) {
 
 async function createFixture(storyId = "M3-PREP", fixtureParent = os.tmpdir()) {
   const root = await mkdtemp(path.join(fixtureParent, "frontier-story-runtime-"));
+  await git(root, "init", "-b", "dev");
+  await git(root, "config", "user.email", "story-runtime@example.test");
+  await git(root, "config", "user.name", "Story Runtime Test");
+  await write(root, "seed.txt", "seed\n");
+  await git(root, "add", "seed.txt");
+  await git(root, "commit", "-m", "seed");
   const template = {
     schemaVersion: "1.0",
     storyId: "S1",
@@ -67,8 +73,14 @@ async function createFixture(storyId = "M3-PREP", fixtureParent = os.tmpdir()) {
     logs: [],
   };
   await write(root, ".harness/states/e2e-state.template.json", `${JSON.stringify(template, null, 2)}\n`);
-  await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
-name: frontier-e2e-development
+  await write(
+    root,
+    ".harness/states/e2e-state-v2.template.json",
+    await readFile(path.join(REPOSITORY_ROOT, ".harness/states/e2e-state-v2.template.json"), "utf8"),
+  );
+  await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
 phases:
   - id: requirement
     order: 0
@@ -124,6 +136,8 @@ quality_gates:
   - phase: code-review
     rule: BLOCKER findings block.
 `);
+  await git(root, "add", ".harness");
+  await git(root, "commit", "-m", "add harness fixtures");
   await runStateCommand({ root, command: "init", storyId, summary: "M3 fixture", now: () => FIXED_NOW });
   return { root, storyId };
 }
@@ -163,16 +177,16 @@ function waitForSignal(promise, label) {
 }
 
 async function createBatchPrepareFixture(storyId = "M3-BATCH-PREPARE") {
-  const fixture = await createFixture(storyId);
-  await git(fixture.root, "init", "-b", "dev");
-  await git(fixture.root, "config", "user.email", "m3-batch@example.test");
-  await git(fixture.root, "config", "user.name", "M3 Batch Test");
-  await write(fixture.root, "seed.txt", "seed\n");
-  await git(fixture.root, "add", "seed.txt");
-  await git(fixture.root, "commit", "-m", "fixture");
-
-  await write(fixture.root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
+  const root = await mkdtemp(path.join(os.tmpdir(), "frontier-story-runtime-v1-batch-"));
+  await git(root, "init", "-b", "dev");
+  await git(root, "config", "user.email", "m3-batch@example.test");
+  await git(root, "config", "user.name", "M3 Batch Test");
+  await write(root, "seed.txt", "seed\n");
+  await git(root, "add", "seed.txt");
+  await git(root, "commit", "-m", "seed");
+  await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
 name: frontier-e2e-development
+state_file: .harness/states/e2e-state.template.json
 phases:
   - id: implementation
     order: 3
@@ -192,13 +206,45 @@ phases:
       - done
 quality_gates: []
 `);
-  await setFixtureState(fixture.root, fixture.storyId, (state) => {
-    state.phase = "implementation";
-  });
-  const taskDagFile = `.harness/runs/${fixture.storyId}/phases/02-task-dag/task-dag.json`;
-  await write(fixture.root, taskDagFile, `${JSON.stringify({
+  const stateFile = `.harness/states/e2e-${storyId}.json`;
+  await write(root, stateFile, `${JSON.stringify({
     schemaVersion: "1.0",
-    storyId: fixture.storyId,
+    storyId,
+    phase: "implementation",
+    requirement: { summary: "M3 batch fixture", openQuestions: [], acceptanceCriteria: [] },
+    knowledge: { loadedFiles: [], staleFiles: [], missingAreas: [] },
+    tasks: [],
+    dag: { nodes: [], edges: [], waves: [] },
+    worktrees: [],
+    tests: { commands: [], results: [] },
+    review: { findings: [], status: "pending" },
+    verification: { cases: [], results: [] },
+    delivery: { ownedFiles: [], commit: null, pr: null },
+    logs: [],
+    runtime: {
+      runId: storyId,
+      workflow: ".harness/workflows/e2e-development.yaml",
+      status: "active",
+      revision: 1,
+      previousPhase: null,
+      blocked: null,
+      records: [],
+      createdAt: FIXED_NOW,
+      updatedAt: FIXED_NOW,
+    },
+  }, null, 2)}\n`);
+  await write(root, ".harness/states/active-run.json", `${JSON.stringify({
+    schemaVersion: "1.0",
+    runId: storyId,
+    stateFile,
+    status: "active",
+    revision: 1,
+    updatedAt: FIXED_NOW,
+  }, null, 2)}\n`);
+  const taskDagFile = `.harness/runs/${storyId}/phases/02-task-dag/task-dag.json`;
+  await write(root, taskDagFile, `${JSON.stringify({
+    schemaVersion: "1.0",
+    storyId,
     nodes: [
       {
         taskId: "T1",
@@ -225,8 +271,9 @@ quality_gates: []
     risks: [],
   }, null, 2)}\n`);
   return {
-    ...fixture,
-    stateFile: `.harness/states/e2e-${fixture.storyId}.json`,
+    root,
+    storyId,
+    stateFile,
     taskDagFile,
   };
 }
@@ -1223,15 +1270,18 @@ async function testFinalizeBatchMaterializesPhaseArtifactsAndLeavesStateForApply
     assert.match(notes, new RegExp(ledger.batchReceiptFile.replaceAll(".", "\\.")));
     assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
 
-    const applied = await runStoryCommand(storyOptions(fixture.root, {
-      command: "apply",
-      stateFile: fixture.stateFile,
-    }));
-    assert.equal(applied.state.phase, "unit-test");
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, {
+        command: "apply",
+        stateFile: fixture.stateFile,
+      })),
+      /State v1 is read-only/i,
+    );
     const stateAfterApply = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
+    assert.equal(stateAfterApply, stateBefore);
     await assert.rejects(
       runStoryCommand(storyOptions(fixture.root, { command: "apply", stateFile: fixture.stateFile })),
-      /prepare|result/i,
+      /State v1 is read-only/i,
     );
     assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateAfterApply);
   } finally {
@@ -1404,7 +1454,7 @@ async function testCoordinatedResultAndCheckpointHashDriftBlocksBatchApplyWithou
   }
 }
 
-async function testBatchApplyResumesAfterRecordBeforeAdvance() {
+async function testFinalizedV1BatchCannotMutateReadOnlyState() {
   const fixture = await createBatchPrepareFixture("M3-BATCH-APPLY-RESUME");
   try {
     const prepared = await runStoryCommand(storyOptions(fixture.root, {
@@ -1413,11 +1463,12 @@ async function testBatchApplyResumesAfterRecordBeforeAdvance() {
       taskDagFile: fixture.taskDagFile,
     }));
     await readyFixtureBatch(fixture, prepared);
-    const finalized = await runStoryCommand(storyOptions(fixture.root, {
+    await runStoryCommand(storyOptions(fixture.root, {
       command: "finalize-batch",
       stateFile: fixture.stateFile,
       batchFile: prepared.batchFile,
     }));
+    const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
 
     await assert.rejects(
       runStoryCommand(storyOptions(fixture.root, {
@@ -1425,22 +1476,9 @@ async function testBatchApplyResumesAfterRecordBeforeAdvance() {
         stateFile: fixture.stateFile,
         beforeAdvance: async () => { throw new Error("simulated pre-advance interruption"); },
       })),
-      /pre-advance interruption/i,
+      /State v1 is read-only/i,
     );
-    const interrupted = await readJson(fixture.root, fixture.stateFile);
-    assert.equal(interrupted.phase, "implementation");
-    assert.ok(interrupted.runtime.revision > finalized.task.preparedRevision);
-    assert.equal(interrupted.runtime.records.length, 3);
-    assert.equal((await readJson(fixture.root, finalized.checkpointFile)).status, "result-received");
-
-    const resumed = await runStoryCommand(storyOptions(fixture.root, {
-      command: "apply",
-      stateFile: fixture.stateFile,
-    }));
-    assert.equal(resumed.state.phase, "unit-test");
-    const completed = await readJson(fixture.root, fixture.stateFile);
-    assert.equal(completed.runtime.records.filter((record) => record.type === "note").length, 3);
-    assert.equal(completed.runtime.revision, interrupted.runtime.revision + 1);
+    assert.equal(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"), stateBefore);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
@@ -1461,17 +1499,6 @@ async function testBatchRecoveryRejectsReceiptDriftAfterStateAdvance() {
       batchFile: prepared.batchFile,
     }));
 
-    await assert.rejects(
-      runStoryCommand(storyOptions(fixture.root, {
-        command: "apply",
-        stateFile: fixture.stateFile,
-        afterAdvance: async () => { throw new Error("simulated post-advance interruption"); },
-      })),
-      /post-advance interruption/i,
-    );
-    assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "unit-test");
-    assert.equal((await readJson(fixture.root, finalized.checkpointFile)).status, "result-received");
-
     const receipt = await readFile(path.join(fixture.root, finalized.receiptFile), "utf8");
     await write(fixture.root, finalized.receiptFile, `${receipt}\n`);
     const checkpointBeforeRetry = await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8");
@@ -1481,7 +1508,7 @@ async function testBatchRecoveryRejectsReceiptDriftAfterStateAdvance() {
       /receipt.*drift|batch.*binding|finalized.*batch/i,
     );
     assert.equal(await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8"), checkpointBeforeRetry);
-    assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "unit-test");
+    assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "implementation");
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
@@ -1541,15 +1568,6 @@ async function testBatchRecoveryRejectsLedgerAndBindingDriftAfterStateAdvance() 
         stateFile: fixture.stateFile,
         batchFile: prepared.batchFile,
       }));
-      await assert.rejects(
-        runStoryCommand(storyOptions(fixture.root, {
-          command: "apply",
-          stateFile: fixture.stateFile,
-          afterAdvance: async () => { throw new Error("simulated post-advance interruption"); },
-        })),
-        /post-advance interruption/i,
-      );
-
       await scenario.mutate(fixture, prepared, finalized);
       const checkpointBeforeRetry = await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8");
       await assert.rejects(
@@ -1557,7 +1575,7 @@ async function testBatchRecoveryRejectsLedgerAndBindingDriftAfterStateAdvance() 
         scenario.expected,
       );
       assert.equal(await readFile(path.join(fixture.root, finalized.checkpointFile), "utf8"), checkpointBeforeRetry);
-      assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "unit-test");
+      assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "implementation");
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
     }
@@ -1578,15 +1596,6 @@ async function testBatchRecoveryRejectsCoordinatedLedgerStateFileAndBindingDrift
       stateFile: fixture.stateFile,
       batchFile: prepared.batchFile,
     }));
-
-    await assert.rejects(
-      runStoryCommand(storyOptions(fixture.root, {
-        command: "apply",
-        stateFile: fixture.stateFile,
-        afterAdvance: async () => { throw new Error("simulated post-advance interruption"); },
-      })),
-      /post-advance interruption/i,
-    );
 
     const ledger = await readJson(fixture.root, prepared.batchFile);
     ledger.stateFile = ".harness/states/tampered.json";
@@ -1609,8 +1618,53 @@ async function testBatchRecoveryRejectsCoordinatedLedgerStateFileAndBindingDrift
 }
 
 async function testOrdinaryImplementationRecoveryAfterStateAdvance() {
-  const fixture = await createBatchPrepareFixture("M3-ORDINARY-IMPLEMENTATION-RECOVERY");
+  const fixture = await createFixture("M3-ORDINARY-IMPLEMENTATION-RECOVERY");
   try {
+    fixture.stateFile = `.harness/states/e2e-${fixture.storyId}.json`;
+    await write(fixture.root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
+  - id: implementation
+    order: 3
+    owner_agent: backend-developer
+    purpose: Implement changes.
+    required_outputs:
+      - .harness/runs/{runId}/phases/03-implementation/implementation-notes.md
+    next:
+      - unit-test
+  - id: unit-test
+    order: 4
+    owner_agent: unit-tester
+    purpose: Run tests.
+    required_outputs:
+      - .harness/runs/{runId}/phases/04-unit-test/test-report.md
+    next:
+      - done
+quality_gates: []
+`);
+    await setFixtureState(fixture.root, fixture.storyId, (state) => { state.phase = "implementation"; });
+    await write(
+      fixture.root,
+      `.harness/runs/${fixture.storyId}/phases/02-task-dag/task-dag.json`,
+      `${JSON.stringify({
+        schemaVersion: "1.0",
+        storyId: fixture.storyId,
+        nodes: [{
+          taskId: "T1",
+          title: "Implement ordinary candidate",
+          type: "backend",
+          status: "pending",
+          ownerAgent: "backend-developer",
+          predictedFiles: ["backend/src/T1.java"],
+          acceptanceCriteria: ["Ordinary candidate is ready."],
+        }],
+        edges: [],
+        waves: [["T1"]],
+        globalChanges: [],
+        risks: [],
+      }, null, 2)}\n`,
+    );
     const prepared = await runStoryCommand(storyOptions(fixture.root, {
       command: "prepare",
       stateFile: fixture.stateFile,
@@ -2059,8 +2113,9 @@ async function testPrepareRejectsTaskOrCheckpointContractMismatch() {
 async function testPrepareRejectsNormalizedOutputOutsidePhaseDirectory() {
   const { root } = await createFixture("M3-TRAVERSAL");
   try {
-    await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
-name: frontier-e2e-development
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
 phases:
   - id: requirement
     order: 0
@@ -2351,7 +2406,7 @@ async function testApplyFailedAndBlockedResultsKeepDeterministicState() {
     const applied = await runStoryCommand(storyOptions(blocked.root, { command: "apply" }));
     assert.equal(applied.status, "blocked");
     assert.equal(applied.state.phase, "blocked");
-    assert.equal(applied.state.runtime.blocked.previousPhase, "requirement");
+    assert.equal(applied.state.runtime.activeBlock.previousPhase, "requirement");
     assert.equal((await readJson(blocked.root, prepared.checkpointFile)).status, "blocked");
   } finally {
     await rm(blocked.root, { recursive: true, force: true });
@@ -2581,8 +2636,9 @@ async function testCodeReviewRequiresPassedReviewEvidence() {
 async function testCompleteSingleStoryVerticalSlice() {
   const { root, storyId } = await createFixture("M3-VERTICAL");
   try {
-    await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
-name: frontier-e2e-development
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
 phases:
   - id: requirement
     order: 0
@@ -2647,13 +2703,13 @@ phases:
     required_outputs:
       - .harness/runs/{runId}/phases/07-interface-verification/interface-verification-report.md
     next:
-      - git-delivery
-  - id: git-delivery
+      - delivery-preparation
+  - id: delivery-preparation
     order: 8
     owner_agent: git-committer
     purpose: Prepare delivery summary.
     required_outputs:
-      - .harness/runs/{runId}/phases/08-git-delivery/delivery-report.md
+      - .harness/runs/{runId}/phases/08-delivery-preparation/delivery-report.md
     next:
       - done
 quality_gates:
@@ -2663,13 +2719,11 @@ quality_gates:
     rule: Failed tests block.
   - phase: code-review
     rule: BLOCKER findings block.
-  - phase: git-delivery
-    rule: User approval is required.
 `);
     await write(root, ".harness/scripts/validate-task-dag.ps1", "param([string]$TaskDagFile)\nexit 0\n");
     const phases = [
       "requirement", "technical-design", "task-dag", "implementation", "unit-test",
-      "code-review", "build-publish", "interface-verification", "git-delivery",
+      "code-review", "build-publish", "interface-verification", "delivery-preparation",
     ];
 
     for (let index = 0; index < phases.length; index += 1) {
@@ -2702,18 +2756,6 @@ quality_gates:
         ? [{ type: "review", status: "passed", path: outputPath, message: "review passed" }]
         : [];
       await writePreparedResult(root, prepared, dispatchResult(prepared.task, { records }));
-      if (phase === "git-delivery") {
-        await runStateCommand({
-          root,
-          command: "record",
-          recordType: "approval",
-          status: "approved",
-          actor: "user",
-          message: "fixture approval for state completion only",
-          path: outputPath,
-          now: () => FIXED_NOW,
-        });
-      }
       const applied = await runStoryCommand(storyOptions(root, { command: "apply" }));
       const expected = phases[index + 1] ?? "done";
       assert.equal(applied.state.phase, expected);
@@ -2798,7 +2840,7 @@ await testFinalizedBatchReceiptDriftBlocksApplyWithoutMutation();
 await testFinalizeBatchRejectsLinkedImplementationPhaseBeforeExternalWrites();
 await testConcurrentFinalizeBatchRejectsOverlappingCheckpointBinding();
 await testCoordinatedResultAndCheckpointHashDriftBlocksBatchApplyWithoutMutation();
-await testBatchApplyResumesAfterRecordBeforeAdvance();
+await testFinalizedV1BatchCannotMutateReadOnlyState();
 await testBatchRecoveryRejectsReceiptDriftAfterStateAdvance();
 await testBatchRecoveryRejectsLedgerAndBindingDriftAfterStateAdvance();
 await testBatchRecoveryRejectsCoordinatedLedgerStateFileAndBindingDriftAfterStateAdvance();

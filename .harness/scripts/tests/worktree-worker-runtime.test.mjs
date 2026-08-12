@@ -3127,61 +3127,91 @@ async function finalizeWaveFixture(fixture) {
   });
 }
 
-async function advanceWaveStoryToDone(fixture) {
-  const phases = [
-    {
-      output: `.harness/runs/${fixture.state.storyId}/phases/04-unit-test/test-report.md`,
-      record: { recordType: "test", status: "passed", message: "Wave retirement fixture tests passed." },
-    },
-    {
-      output: `.harness/runs/${fixture.state.storyId}/phases/05-code-review/code-review-report.md`,
-      record: { recordType: "review", status: "passed", message: "Wave retirement fixture review passed." },
-    },
-    { output: `.harness/runs/${fixture.state.storyId}/phases/06-build-publish/build-report.md` },
-    { output: `.harness/runs/${fixture.state.storyId}/phases/07-interface-verification/interface-verification-report.md` },
-    {
-      output: `.harness/runs/${fixture.state.storyId}/phases/08-git-delivery/delivery-report.md`,
-      record: {
-        recordType: "approval",
-        status: "approved",
-        actor: "user",
-        message: "Approve the temporary Wave retirement fixture delivery.",
-      },
-      complete: true,
-    },
-  ];
-  for (const [index, phase] of phases.entries()) {
-    await mkdir(path.join(fixture.root, path.dirname(phase.output)), { recursive: true });
-    await writeFile(path.join(fixture.root, phase.output), `fixture phase ${index + 4}\n`, "utf8");
-    if (phase.record) {
-      await runStateCommand({
-        root: fixture.root,
-        command: "record",
-        stateFile: fixture.stateFile,
-        path: phase.output,
-        ...phase.record,
-        now: () => `2026-08-06T00:2${index}:00.000Z`,
-      });
-    }
-    await runStateCommand({
-      root: fixture.root,
-      command: phase.complete ? "complete" : "next",
-      stateFile: fixture.stateFile,
-      now: () => `2026-08-06T00:2${index}:30.000Z`,
-    });
-  }
-}
-
 async function createCompletedWaveRetirementFixture() {
   const fixture = await createFinalizableWaveFixture();
   const finalized = await finalizeWaveFixture(fixture);
-  await runStoryCommand({
-    root: fixture.root,
-    command: "apply",
-    stateFile: fixture.stateFile,
-    now: () => "2026-08-06T00:20:00.000Z",
+  const checkpointPath = path.join(fixture.root, finalized.checkpointFile);
+  const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8"));
+  checkpoint.status = "completed";
+  checkpoint.completedAt = "2026-08-06T00:20:00.000Z";
+  checkpoint.updatedAt = checkpoint.completedAt;
+  await writeFile(checkpointPath, `${JSON.stringify(checkpoint, null, 2)}\n`, "utf8");
+  const statePath = path.join(fixture.root, fixture.stateFile);
+  const activeState = await readFile(statePath);
+  const state = JSON.parse(activeState);
+  const phaseOutputs = [
+    {
+      phase: "unit-test",
+      path: `.harness/runs/${fixture.state.storyId}/phases/04-unit-test/test-report.md`,
+      type: "test",
+      status: "passed",
+    },
+    {
+      phase: "code-review",
+      path: `.harness/runs/${fixture.state.storyId}/phases/05-code-review/code-review-report.md`,
+      type: "review",
+      status: "passed",
+    },
+    {
+      phase: "build-publish",
+      path: `.harness/runs/${fixture.state.storyId}/phases/06-build-publish/build-report.md`,
+    },
+    {
+      phase: "interface-verification",
+      path: `.harness/runs/${fixture.state.storyId}/phases/07-interface-verification/interface-verification-report.md`,
+    },
+    {
+      phase: "git-delivery",
+      path: `.harness/runs/${fixture.state.storyId}/phases/08-git-delivery/delivery-report.md`,
+    },
+  ];
+  for (const [index, output] of phaseOutputs.entries()) {
+    const outputPath = path.join(fixture.root, output.path);
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    const content = Buffer.from(`fixture phase ${index + 4}\n`);
+    await writeFile(outputPath, content);
+    if (output.type) {
+      state.runtime.records.push({
+        id: `historical-v1-record-${index}`,
+        type: output.type,
+        phase: output.phase,
+        status: output.status,
+        path: output.path,
+        sha256: sha256(content),
+        message: "Historical v1 completion evidence.",
+        actor: "fixture",
+        createdAt: "2026-08-06T00:20:15.000Z",
+      });
+    }
+  }
+  state.phase = "done";
+  state.runtime.status = "completed";
+  state.runtime.previousPhase = "git-delivery";
+  state.runtime.revision += 1;
+  state.runtime.updatedAt = "2026-08-06T00:20:30.000Z";
+  state.logs.push({
+    type: "completed",
+    from: "git-delivery",
+    revision: state.runtime.revision,
+    createdAt: state.runtime.updatedAt,
   });
-  await advanceWaveStoryToDone(fixture);
+  await writeFile(`${statePath}.bak`, activeState);
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await writeFile(
+    path.join(
+      fixture.root,
+      `.harness/states/e2e-${fixture.state.storyId}.events.jsonl`,
+    ),
+    `${JSON.stringify({
+      event: "committed",
+      action: "complete",
+      transactionId: "historical-v1-wave-completion",
+      runId: state.runtime.runId,
+      revision: state.runtime.revision,
+      createdAt: state.runtime.updatedAt,
+    })}\n`,
+    "utf8",
+  );
   const ledger = JSON.parse(await readFile(path.join(fixture.root, fixture.ledger.ledgerFile), "utf8"));
   return {
     ...fixture,
@@ -4012,7 +4042,7 @@ test("wave-retire explicitly recovers a final receipt written before owner lock 
   await assert.rejects(access(path.join(fixture.root, locks.recovery)), (error) => error?.code === "ENOENT");
 });
 
-test("finalize-wave binds formal phase artifacts and M3 apply advances exactly once", async () => {
+test("finalize-wave binds formal phase artifacts and v1 M3 apply is rejected", async () => {
   const fixture = await createFinalizableWaveFixture();
   const stateBefore = await readFile(path.join(fixture.root, fixture.stateFile), "utf8");
   const finalized = await finalizeWaveFixture(fixture);
@@ -4031,23 +4061,19 @@ test("finalize-wave binds formal phase artifacts and M3 apply advances exactly o
 
   const repeatedFinalize = await finalizeWaveFixture(fixture);
   assert.equal(repeatedFinalize.status, "ready-for-apply");
-  const applied = await runStoryCommand({
-    root: fixture.root,
-    command: "apply",
-    stateFile: fixture.stateFile,
-    now: () => "2026-08-06T00:20:00.000Z",
-  });
-  assert.equal(applied.state.phase, "unit-test");
-  const repeatedApply = await runStoryCommand({
-    root: fixture.root,
-    command: "apply",
-    stateFile: fixture.stateFile,
-    now: () => "2026-08-06T00:21:00.000Z",
-  });
-  assert.equal(repeatedApply.status, "already-applied");
+  await assert.rejects(
+    runStoryCommand({
+      root: fixture.root,
+      command: "apply",
+      stateFile: fixture.stateFile,
+      now: () => "2026-08-06T00:20:00.000Z",
+    }),
+    /State v1 is read-only/i,
+  );
+  assert.equal(JSON.parse(await readFile(path.join(fixture.root, fixture.stateFile), "utf8")).phase, "implementation");
 });
 
-test("Wave M3 apply resumes both before and after the state advance boundary", async () => {
+test("Wave M3 apply preserves pre-advance interruption and rejects v1 before after-advance", async () => {
   const before = await createFinalizableWaveFixture();
   await finalizeWaveFixture(before);
   await assert.rejects(
@@ -4061,32 +4087,34 @@ test("Wave M3 apply resumes both before and after the state advance boundary", a
     /pre-advance interruption/i,
   );
   assert.equal(JSON.parse(await readFile(path.join(before.root, before.stateFile), "utf8")).phase, "implementation");
-  assert.equal((await runStoryCommand({
-    root: before.root,
-    command: "apply",
-    stateFile: before.stateFile,
-    now: () => "2026-08-06T00:23:00.000Z",
-  })).state.phase, "unit-test");
+  await assert.rejects(
+    runStoryCommand({
+      root: before.root,
+      command: "apply",
+      stateFile: before.stateFile,
+      now: () => "2026-08-06T00:23:00.000Z",
+    }),
+    /State v1 is read-only/i,
+  );
 
   const after = await createFinalizableWaveFixture();
   await finalizeWaveFixture(after);
+  let afterAdvanceCalled = false;
   await assert.rejects(
     runStoryCommand({
       root: after.root,
       command: "apply",
       stateFile: after.stateFile,
       now: () => "2026-08-06T00:24:00.000Z",
-      afterAdvance: () => { throw new Error("simulated Wave post-advance interruption"); },
+      afterAdvance: () => {
+        afterAdvanceCalled = true;
+        throw new Error("simulated Wave post-advance interruption");
+      },
     }),
-    /post-advance interruption/i,
+    /State v1 is read-only/i,
   );
-  assert.equal(JSON.parse(await readFile(path.join(after.root, after.stateFile), "utf8")).phase, "unit-test");
-  assert.equal((await runStoryCommand({
-    root: after.root,
-    command: "apply",
-    stateFile: after.stateFile,
-    now: () => "2026-08-06T00:25:00.000Z",
-  })).status, "already-applied");
+  assert.equal(afterAdvanceCalled, false);
+  assert.equal(JSON.parse(await readFile(path.join(after.root, after.stateFile), "utf8")).phase, "implementation");
 });
 
 test("execute-wave preserves a successful receipt and leaves a failed task blocked without implicit retry", async () => {
@@ -4399,7 +4427,7 @@ test("rejects a retirement lock after acquiring the execution lock", async () =>
   await assert.rejects(readFile(executionLock), /ENOENT/);
 });
 
-test("advances exactly once only after the caller explicitly applies a ready result", async () => {
+test("collects a ready result but rejects explicit apply for v1 State", async () => {
   const fixture = await createFixture();
   const collected = await runWorktreeWorker({
     root: fixture.root,
@@ -4425,15 +4453,18 @@ test("advances exactly once only after the caller explicitly applies a ready res
   assert.equal(beforeApply.phase, "implementation");
   assert.equal(beforeApply.runtime.revision, 4);
 
-  const applied = await runStoryCommand({
-    root: fixture.root,
-    command: "apply",
-    stateFile: fixture.stateFile,
-    now: () => "2026-07-21T00:01:00.000Z",
-  });
-  assert.equal(applied.status, "completed");
-  assert.equal(applied.state.phase, "unit-test");
-  assert.equal(applied.state.runtime.revision, 5);
+  await assert.rejects(
+    runStoryCommand({
+      root: fixture.root,
+      command: "apply",
+      stateFile: fixture.stateFile,
+      now: () => "2026-07-21T00:01:00.000Z",
+    }),
+    /State v1 is read-only/i,
+  );
+  const afterApply = JSON.parse(await readFile(path.join(fixture.root, fixture.stateFile), "utf8"));
+  assert.equal(afterApply.phase, "implementation");
+  assert.equal(afterApply.runtime.revision, 4);
 });
 
 test("reuses a verified input snapshot after a Provider failure", async () => {

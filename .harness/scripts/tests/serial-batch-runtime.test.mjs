@@ -52,49 +52,35 @@ function workerResponse(task, businessFile, content) {
   };
 }
 
-async function advanceStoryToDone(root, stateFile, runId) {
-  const phases = [
-    {
-      output: `.harness/runs/${runId}/phases/04-unit-test/test-report.md`,
-      record: { recordType: "test", status: "passed", message: "Serial batch fixture tests passed." },
-    },
-    {
-      output: `.harness/runs/${runId}/phases/05-code-review/code-review-report.md`,
-      record: { recordType: "review", status: "passed", message: "Serial batch fixture review passed." },
-    },
-    { output: `.harness/runs/${runId}/phases/06-build-publish/build-report.md` },
-    { output: `.harness/runs/${runId}/phases/07-interface-verification/interface-verification-report.md` },
-    {
-      output: `.harness/runs/${runId}/phases/08-git-delivery/delivery-report.md`,
-      record: {
-        recordType: "approval",
-        status: "approved",
-        actor: "user",
-        message: "Approve temporary serial batch fixture delivery.",
-      },
-      complete: true,
-    },
-  ];
-  for (const [index, phase] of phases.entries()) {
-    await mkdir(path.dirname(path.join(root, phase.output)), { recursive: true });
-    await writeFile(path.join(root, phase.output), `fixture phase ${index + 4}\n`, "utf8");
-    if (phase.record) {
-      await runStateCommand({
-        root,
-        command: "record",
-        stateFile,
-        path: phase.output,
-        ...phase.record,
-        now: () => `2026-07-28T01:00:${String(10 + index * 2).padStart(2, "0")}.000Z`,
-      });
-    }
-    await runStateCommand({
-      root,
-      command: phase.complete ? "complete" : "next",
-      stateFile,
-      now: () => `2026-07-28T01:00:${String(11 + index * 2).padStart(2, "0")}.000Z`,
-    });
-  }
+async function materializeCompletedV1State(root, stateFile) {
+  const statePath = path.join(root, stateFile);
+  const activeState = await readFile(statePath);
+  const state = JSON.parse(activeState);
+  state.phase = "done";
+  state.runtime.status = "completed";
+  state.runtime.previousPhase = "git-delivery";
+  state.runtime.revision += 1;
+  state.runtime.updatedAt = "2026-07-28T01:01:30.000Z";
+  state.logs.push({
+    type: "completed",
+    from: "git-delivery",
+    revision: state.runtime.revision,
+    createdAt: state.runtime.updatedAt,
+  });
+  await writeFile(`${statePath}.bak`, activeState);
+  await writeJson(statePath, state);
+  await writeFile(
+    statePath.replace(/\.json$/, ".events.jsonl"),
+    `${JSON.stringify({
+      event: "committed",
+      action: "complete",
+      transactionId: "historical-v1-completion",
+      runId: state.runtime.runId,
+      revision: state.runtime.revision,
+      createdAt: state.runtime.updatedAt,
+    })}\n`,
+    "utf8",
+  );
 }
 
 async function createFixture() {
@@ -326,20 +312,23 @@ test("runs two serial batch tasks through one explicit phase apply and idempoten
   });
   assert.equal(finalized.status, "ready-for-apply");
   assert.deepEqual(await readJson(fixture.root, fixture.stateFile), beforeFinalization);
-  const applied = await runStoryCommand({
-    root: fixture.root,
-    command: "apply",
-    stateFile: fixture.stateFile,
-    now: () => "2026-07-28T01:01:21.000Z",
-  });
-  assert.equal(applied.state.phase, "unit-test");
-  assert.equal(applied.state.runtime.revision, beforeFinalization.runtime.revision + 1);
   await assert.rejects(
     runStoryCommand({ root: fixture.root, command: "apply", stateFile: fixture.stateFile }),
-    /Prepare the current phase before applying|result/i,
+    /State v1 is read-only/i,
   );
 
-  await advanceStoryToDone(fixture.root, fixture.stateFile, fixture.runId);
+  const checkpoint = await readJson(
+    fixture.root,
+    `.harness/runs/${fixture.runId}/phases/03-implementation/checkpoint.json`,
+  );
+  checkpoint.status = "completed";
+  checkpoint.completedAt = "2026-07-28T01:01:29.000Z";
+  checkpoint.updatedAt = checkpoint.completedAt;
+  await writeJson(
+    path.join(fixture.root, `.harness/runs/${fixture.runId}/phases/03-implementation/checkpoint.json`),
+    checkpoint,
+  );
+  await materializeCompletedV1State(fixture.root, fixture.stateFile);
   await git(fixture.root, "add", "-f", ".harness/states", ".harness/runs");
   await git(fixture.root, "commit", "-m", "complete serial batch fixture");
   const completedState = await readFile(path.join(fixture.root, fixture.stateFile));

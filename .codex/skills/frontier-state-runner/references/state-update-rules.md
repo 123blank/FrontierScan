@@ -1,48 +1,46 @@
-# Frontier State Update Rules
+# Frontier State 更新规则
 
-Use these rules before creating or editing active Harness state files.
+## 创建
 
-## Creation
-
-1. Copy the closest template from `.harness/states/`.
-2. Save the active file under `.harness/states/` with a task-specific name.
-3. Fill identifiers before doing phase work:
-   - Product state: `requestId`, `sourceRequest`
-   - E2E state: `storyId`, `requirement.summary`
-4. Run:
+新 Story 只能通过确定性入口初始化：
 
 ```powershell
-.\.harness\scripts\validate-state.ps1 -StateFile <state-file>
+.\.harness\scripts\run-state.ps1 -Command init -StoryId <story-id> -Summary "<摘要>"
 ```
 
-## Update Discipline
+初始化默认使用 State v2，并要求：
 
-- Update only the fields owned by the current phase.
-- Append evidence to `logs`; do not erase prior decisions.
-- Record paths to generated outputs in the relevant phase fields when possible.
-- Keep templates unchanged.
-- If a required external environment is unavailable, record that fact instead of pretending verification passed.
+- 当前目录是 Git 仓库根目录。
+- `HEAD` 已提交且分支处于 attached 状态。
+- 初始化期间 HEAD 和 branch 不发生变化。
+- Runtime 冻结 HEAD、branch 和初始 dirty paths。
 
-## Phase Advancement
+不要复制模板后手工创建活动 State。历史 v1 State 不迁移、不补写。
 
-Before advancing `phase`:
+## 更新纪律
 
-1. Validate the current state file.
-2. Confirm required output artifacts for the current phase exist.
-3. Confirm relevant quality gates passed or were explicitly skipped with a reason.
-4. Record the phase transition in `logs`.
-5. Set the next phase.
-6. Validate the state file again.
+- 活动 State 只能通过 `run-state.ps1` 修改。
+- State v1 只允许 `status` 和 `validate`。
+- 模板和 completed State 不可修改。
+- 阶段、revision、指针和事件必须由 Runtime 原子更新。
+- 外部环境不可用时记录真实阻塞或缺口，不得伪造验证通过。
 
-## Blocking
+## 推进
 
-Set `phase` to `blocked` when the workflow cannot continue without a user decision or external dependency.
+推进前必须：
 
-Every blocked state must record:
+1. 校验 State 与版本化 workflow 绑定。
+2. 确认当前阶段 required outputs 存在。
+3. 确认当前质量门禁通过。
+4. 使用 `next` 进入普通后续阶段。
+5. 当前阶段唯一转移到 `done` 时使用 `complete`。
 
-- Blocking reason
-- Owner or next decision-maker
-- Last completed phase
-- Suggested next action
+v2 的 `delivery-preparation -> done` 表示交付准备完成，不表示 Git 提交或推送已经发生。
 
-Do not use `blocked` for ordinary failing tests or review findings when the next fix is clear.
+## 阻塞
+
+`block` 将当前阶段保存到 `runtime.activeBlock.previousPhase`，并写入理由、Owner、建议动作和时间。
+
+`resume` 恢复原阶段并将 `runtime.activeBlock` 清空。历史阻塞保留在 `logs` 和事件文件中。
+
+普通测试失败或审核问题已有明确修复动作时，不应滥用 `blocked`。

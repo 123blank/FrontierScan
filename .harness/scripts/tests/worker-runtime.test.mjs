@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   validateDispatchResultStructure,
@@ -14,6 +16,7 @@ import { loadWorkerPolicies, runWorkerTask } from "../lib/worker-runtime.mjs";
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const DISPATCH_ID = "00000000-0000-4000-8000-000000000001";
 const FIXED_NOW = "2026-07-17T00:00:00.000Z";
+const execFileAsync = promisify(execFile);
 
 async function write(root, relativePath, content) {
   const filePath = path.join(root, relativePath);
@@ -190,6 +193,12 @@ async function createWorkerFixture() {
 
 async function createVerticalFixture(storyId = "M4-B-VERTICAL") {
   const root = await createPolicyFixture();
+  await execFileAsync("git", ["init", "-b", "dev"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["config", "user.email", "worker-runtime@example.test"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["config", "user.name", "Worker Runtime Test"], { cwd: root, windowsHide: true });
+  await write(root, "seed.txt", "seed\n");
+  await execFileAsync("git", ["add", "seed.txt"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["commit", "-m", "seed"], { cwd: root, windowsHide: true });
   const template = {
     schemaVersion: "1.0",
     storyId: "S1",
@@ -206,8 +215,14 @@ async function createVerticalFixture(storyId = "M4-B-VERTICAL") {
     logs: [],
   };
   await write(root, ".harness/states/e2e-state.template.json", `${JSON.stringify(template, null, 2)}\n`);
-  await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
-name: frontier-e2e-development
+  await write(
+    root,
+    ".harness/states/e2e-state-v2.template.json",
+    await readFile(path.join(REPOSITORY_ROOT, ".harness/states/e2e-state-v2.template.json"), "utf8"),
+  );
+  await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
 phases:
   - id: requirement
     order: 0
@@ -227,6 +242,8 @@ phases:
       - done
 quality_gates: []
 `);
+  await execFileAsync("git", ["add", ".harness", ".codex"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["commit", "-m", "add harness fixtures"], { cwd: root, windowsHide: true });
   await runStateCommand({ root, command: "init", storyId, summary: "M4-B fixture", now: () => FIXED_NOW });
   const prepared = await runStoryCommand({
     root,

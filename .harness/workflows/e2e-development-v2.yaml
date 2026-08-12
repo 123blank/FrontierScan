@@ -1,0 +1,86 @@
+schema_version: "2.0"
+name: frontier-e2e-development-v2
+description: State v2 single-story development workflow for FrontierScan.
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
+  - id: requirement
+    order: 0
+    owner_agent: requirement-analyst
+    purpose: Clarify the story, acceptance criteria, affected modules, and blocking questions.
+    required_outputs:
+      - .harness/runs/{runId}/phases/00-requirement/requirement-breakdown.md
+    next:
+      - technical-design
+  - id: technical-design
+    order: 1
+    owner_agent: requirement-analyst
+    purpose: Produce a technical design using only relevant knowledge files.
+    required_outputs:
+      - .harness/runs/{runId}/phases/01-technical-design/technical-design.md
+    next:
+      - task-dag
+  - id: task-dag
+    order: 2
+    owner_agent: task-planner
+    purpose: Split work into tasks, dependencies, waves, predicted file touches, and global changes.
+    required_outputs:
+      - .harness/runs/{runId}/phases/02-task-dag/task-dag.json
+    next:
+      - implementation
+  - id: implementation
+    order: 3
+    owner_agent: backend-developer
+    purpose: Implement task-owned changes only.
+    required_outputs:
+      - .harness/runs/{runId}/phases/03-implementation/implementation-notes.md
+    next:
+      - unit-test
+  - id: unit-test
+    order: 4
+    owner_agent: unit-tester
+    purpose: Run selected backend/frontend tests and record results.
+    required_outputs:
+      - .harness/runs/{runId}/phases/04-unit-test/test-report.md
+    next:
+      - code-review
+  - id: code-review
+    order: 5
+    owner_agent: code-reviewer
+    purpose: Review code changes and emit findings without modifying files.
+    required_outputs:
+      - .harness/runs/{runId}/phases/05-code-review/code-review-report.md
+    next:
+      - build-publish
+  - id: build-publish
+    order: 6
+    owner_agent: publisher
+    purpose: Build and optionally publish after explicit confirmation.
+    required_outputs:
+      - .harness/runs/{runId}/phases/06-build-publish/build-report.md
+    next:
+      - interface-verification
+  - id: interface-verification
+    order: 7
+    owner_agent: interface-verifier
+    purpose: Verify API/UI behavior against acceptance criteria where an environment is available.
+    required_outputs:
+      - .harness/runs/{runId}/phases/07-interface-verification/interface-verification-report.md
+    next:
+      - delivery-preparation
+  - id: delivery-preparation
+    order: 8
+    owner_agent: git-committer
+    purpose: Summarize owned changes, remaining risks, and delivery readiness without executing Git.
+    required_outputs:
+      - .harness/runs/{runId}/phases/08-delivery-preparation/delivery-report.md
+    next:
+      - done
+quality_gates:
+  - phase: task-dag
+    rule: DAG must be acyclic and global changes must be explicit.
+  - phase: unit-test
+    rule: Failed required tests block the workflow.
+  - phase: code-review
+    rule: BLOCKER findings block build, publish, and delivery preparation.
+  - phase: build-publish
+    rule: Publish requires explicit user approval.

@@ -33,10 +33,12 @@ required_directories:
   - docs/harness-m5d-wave-execution
   - docs/harness-m5d-wave-retire
   - docs/harness-m7-m12-roadmap
+  - docs/harness-m7a1-state-v2
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
   - .harness/schemas/e2e-state.schema.json
+  - .harness/schemas/e2e-state-v2.schema.json
   - .harness/schemas/active-run.schema.json
   - .harness/schemas/task-dag.schema.json
   - .harness/schemas/dispatch-task.schema.json
@@ -80,7 +82,9 @@ required_files:
   - .harness/schemas/worktree-wave-retirement-receipt.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
+  - .harness/states/e2e-state-v2.template.json
   - .harness/workflows/e2e-development.yaml
+  - .harness/workflows/e2e-development-v2.yaml
   - .harness/workflows/product-fork-join.yaml
   - .harness/templates/requirement-breakdown.md
   - .harness/templates/technical-design.md
@@ -97,6 +101,7 @@ required_files:
   - .harness/scripts/lib/generate-kb.mjs
   - .harness/scripts/lib/source-fingerprint.mjs
   - .harness/scripts/lib/state-runtime.mjs
+  - .harness/scripts/lib/state-contract.mjs
   - .harness/scripts/lib/story-runtime.mjs
   - .harness/scripts/lib/dispatch-contract.mjs
   - .harness/scripts/lib/worker-runtime.mjs
@@ -253,14 +258,18 @@ required_files:
   - docs/harness-m5d-wave-retire/REPORT.md
   - docs/harness-m7-m12-roadmap/DESIGN.md
   - docs/harness-m7-m12-roadmap/PLAN.md
+  - docs/harness-m7a1-state-v2/DESIGN.md
+  - docs/harness-m7a1-state-v2/PLAN.md
+  - docs/harness-m7a1-state-v2/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
   knowledge_generation: implemented-v1
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
-  state_runtime: implemented-v1
+  state_runtime: implemented-v2-with-v1-read-only-compatibility
   agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1
   deterministic_scripts: mixed-read-only-helpers-state-story-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
   business_code_changes: none-required-for-m0-m5dd
-  roadmap_planning: m7-m12-documentation-approved-no-runtime-implementation
+  roadmap_planning: m7-m12-documentation-approved-m7a1-implemented
+  m7a1_state_v2: implemented-fixture-verified-independent-review-passed

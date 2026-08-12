@@ -1,0 +1,461 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/e2e-state-v2.schema.json",
+  "title": "FrontierScan E2E Harness State v2",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "phase",
+    "runtime",
+    "baseline",
+    "requirement",
+    "knowledge",
+    "design",
+    "dag",
+    "implementation",
+    "tests",
+    "review",
+    "build",
+    "verification",
+    "delivery",
+    "approvals",
+    "worktrees",
+    "logs"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "storyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "phase": {
+      "enum": [
+        "requirement",
+        "technical-design",
+        "task-dag",
+        "implementation",
+        "unit-test",
+        "code-review",
+        "build-publish",
+        "interface-verification",
+        "delivery-preparation",
+        "done",
+        "blocked"
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "required": [
+        "runId",
+        "workflow",
+        "workflowVersion",
+        "status",
+        "revision",
+        "previousPhase",
+        "activeBlock",
+        "records",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+        "workflow": { "const": ".harness/workflows/e2e-development-v2.yaml" },
+        "workflowVersion": { "const": "2.0" },
+        "status": { "enum": ["template", "active", "blocked", "completed"] },
+        "revision": { "type": "integer", "minimum": 0 },
+        "previousPhase": { "type": ["string", "null"] },
+        "activeBlock": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["previousPhase", "reason", "owner", "suggestedAction", "blockedAt"],
+              "properties": {
+                "previousPhase": {
+                  "enum": [
+                    "requirement",
+                    "technical-design",
+                    "task-dag",
+                    "implementation",
+                    "unit-test",
+                    "code-review",
+                    "build-publish",
+                    "interface-verification",
+                    "delivery-preparation"
+                  ]
+                },
+                "reason": { "type": "string", "minLength": 1 },
+                "owner": { "type": "string", "minLength": 1 },
+                "suggestedAction": { "type": "string", "minLength": 1 },
+                "blockedAt": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "phase", "status", "path", "message", "actor", "createdAt"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "type": { "enum": ["output", "test", "review", "approval", "note"] },
+              "phase": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "minLength": 1 },
+              "path": { "type": ["string", "null"] },
+              "message": { "type": "string" },
+              "actor": { "type": "string", "minLength": 1 },
+              "createdAt": { "type": "string", "minLength": 1 },
+              "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "createdAt": { "type": ["string", "null"] },
+        "updatedAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "baseline": {
+      "type": "object",
+      "required": ["head", "branch", "initialDirtyPaths", "capturedAt"],
+      "properties": {
+        "head": { "type": ["string", "null"], "pattern": "^[a-f0-9]{40}$" },
+        "branch": { "type": ["string", "null"] },
+        "initialDirtyPaths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "indexStatus", "worktreeStatus", "untracked"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "indexStatus": { "type": "string", "minLength": 1, "maxLength": 1 },
+              "worktreeStatus": { "type": "string", "minLength": 1, "maxLength": 1 },
+              "untracked": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "capturedAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "requirement": {
+      "type": "object",
+      "required": ["summary", "openQuestions", "acceptanceCriteria", "inScope", "outOfScope"],
+      "properties": {
+        "summary": { "type": "string" },
+        "openQuestions": { "type": "array" },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["criterionId", "description", "source", "required"],
+            "properties": {
+              "criterionId": { "type": "string", "minLength": 1 },
+              "description": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "minLength": 1 },
+              "required": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "inScope": { "type": "array" },
+        "outOfScope": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "knowledge": {
+      "type": "object",
+      "required": ["areas"],
+      "properties": {
+        "areas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "area",
+              "relevant",
+              "status",
+              "sourceFingerprint",
+              "loadedFiles",
+              "missing",
+              "checkedAt"
+            ],
+            "properties": {
+              "area": { "type": "string", "minLength": 1 },
+              "relevant": { "type": "boolean" },
+              "status": { "type": "string", "minLength": 1 },
+              "sourceFingerprint": { "type": ["string", "null"] },
+              "loadedFiles": { "type": "array" },
+              "missing": { "type": "array" },
+              "checkedAt": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "design": {
+      "type": "object",
+      "required": ["decisions", "affectedAreas", "risks"],
+      "properties": {
+        "decisions": { "type": "array" },
+        "affectedAreas": { "type": "array" },
+        "risks": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "dag": {
+      "type": "object",
+      "required": ["sourceFile", "sourceSha256", "nodes", "edges", "waves", "globalChanges", "risks"],
+      "properties": {
+        "sourceFile": { "type": ["string", "null"] },
+        "sourceSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+        "nodes": { "type": "array" },
+        "edges": { "type": "array" },
+        "waves": { "type": "array" },
+        "globalChanges": { "type": "array" },
+        "risks": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "implementation": {
+      "type": "object",
+      "required": ["method", "exceptionReason", "actualFiles", "completedTaskIds", "notes"],
+      "properties": {
+        "method": { "enum": [null, "tdd", "exception"] },
+        "exceptionReason": { "type": ["string", "null"] },
+        "actualFiles": { "type": "array" },
+        "completedTaskIds": { "type": "array" },
+        "notes": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "tests": {
+      "type": "object",
+      "required": ["cases", "commands", "results"],
+      "properties": {
+        "cases": { "type": "array" },
+        "commands": { "type": "array" },
+        "results": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "review": {
+      "type": "object",
+      "required": ["findings", "status"],
+      "properties": {
+        "findings": { "type": "array" },
+        "status": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "build": {
+      "type": "object",
+      "required": ["results", "artifacts", "externalActions"],
+      "properties": {
+        "results": { "type": "array" },
+        "artifacts": { "type": "array" },
+        "externalActions": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "required": ["cases", "results", "environment"],
+      "properties": {
+        "cases": { "type": "array" },
+        "results": { "type": "array" },
+        "environment": {
+          "type": "object",
+          "required": ["status", "summary"],
+          "properties": {
+            "status": { "type": "string" },
+            "summary": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "delivery": {
+      "type": "object",
+      "required": [
+        "status",
+        "ownedFiles",
+        "outOfPredictionFiles",
+        "unrelatedDirtyFiles",
+        "remainingRisks",
+        "summaryFile",
+        "summarySha256",
+        "gitStatus"
+      ],
+      "properties": {
+        "status": { "enum": ["pending", "ready", "blocked"] },
+        "ownedFiles": { "type": "array" },
+        "outOfPredictionFiles": { "type": "array" },
+        "unrelatedDirtyFiles": { "type": "array" },
+        "remainingRisks": { "type": "array" },
+        "summaryFile": { "type": ["string", "null"] },
+        "summarySha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+        "gitStatus": { "enum": ["not-requested", "requested"] }
+      },
+      "additionalProperties": false
+    },
+    "approvals": { "type": "array" },
+    "worktrees": { "type": "array" },
+    "logs": { "type": "array" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "template" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "revision": { "const": 0 },
+              "createdAt": { "type": "null" },
+              "updatedAt": { "type": "null" }
+            }
+          },
+          "baseline": {
+            "properties": {
+              "head": { "type": "null" },
+              "branch": { "type": "null" },
+              "capturedAt": { "type": "null" }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "revision": { "type": "integer", "minimum": 1 },
+              "createdAt": { "type": "string", "minLength": 1 },
+              "updatedAt": { "type": "string", "minLength": 1 }
+            }
+          },
+          "baseline": {
+            "properties": {
+              "head": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+              "branch": { "type": "string", "minLength": 1 },
+              "capturedAt": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "template" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": { "phase": { "const": "requirement" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "blocked" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "phase": { "const": "blocked" },
+          "runtime": {
+            "properties": { "activeBlock": { "type": "object" } },
+            "required": ["activeBlock"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "runtime": {
+            "properties": { "activeBlock": { "type": "null" } },
+            "required": ["activeBlock"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "completed" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": { "phase": { "const": "done" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "active" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "phase": {
+            "enum": [
+              "requirement",
+              "technical-design",
+              "task-dag",
+              "implementation",
+              "unit-test",
+              "code-review",
+              "build-publish",
+              "interface-verification",
+              "delivery-preparation"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "blocked" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "blocked" } },
+            "required": ["status"]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "done" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "completed" } },
+            "required": ["status"]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

@@ -1184,7 +1184,7 @@ test("PowerShell batch entry plans checks and applies only with confirmation", a
   assert.equal(JSON.parse(applied.stdout).outcome, "integrated");
 });
 
-test("vertical flow advances exactly once only after explicit M3 apply", async () => {
+test("vertical flow leaves v1 State unchanged after integration and rejects M3 apply", async () => {
   const fixture = await createFixture();
   const before = await readJson(fixture.root, fixture.stateFile);
   await runWorktreeIntegration(fixture.input);
@@ -1194,15 +1194,16 @@ test("vertical flow advances exactly once only after explicit M3 apply", async (
   assert.equal(afterIntegration.runtime.revision, before.runtime.revision);
   assert.equal(afterIntegration.phase, before.phase);
 
-  const applied = await runStoryCommand({
-    root: fixture.root,
-    command: "apply",
-    stateFile: fixture.stateFile,
-    now: () => "2026-07-21T00:00:06.000Z",
-  });
-  assert.equal(applied.status, "completed");
-  assert.equal(applied.state.phase, "unit-test");
-  assert.equal(applied.state.runtime.revision, before.runtime.revision + 1);
+  await assert.rejects(
+    runStoryCommand({
+      root: fixture.root,
+      command: "apply",
+      stateFile: fixture.stateFile,
+      now: () => "2026-07-21T00:00:06.000Z",
+    }),
+    /State v1 is read-only/i,
+  );
+  assert.deepEqual(await readJson(fixture.root, fixture.stateFile), before);
   const checkpoint = await readJson(fixture.root, fixture.checkpointFile);
-  assert.equal(checkpoint.status, "completed");
+  assert.equal(checkpoint.status, "result-received");
 });

@@ -4,11 +4,16 @@ import { lstat, mkdir, open, readFile, rename, truncate, unlink, writeFile } fro
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertStateCommandAllowed,
+  validateActivePointer as validatePointerContract,
+  validateStateDocument,
+} from "./state-contract.mjs";
 
 const STORY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ACTIVE_POINTER = ".harness/states/active-run.json";
-const E2E_TEMPLATE = ".harness/states/e2e-state.template.json";
-const E2E_WORKFLOW = ".harness/workflows/e2e-development.yaml";
+const E2E_TEMPLATE = ".harness/states/e2e-state-v2.template.json";
+const E2E_WORKFLOW = ".harness/workflows/e2e-development-v2.yaml";
 
 function normalizePath(filePath) {
   return filePath.replaceAll("\\", "/");
@@ -279,21 +284,83 @@ function assertPointerDoesNotLeadState(pointer, state) {
 }
 
 function validateActivePointer(pointer) {
-  if (!pointer || typeof pointer !== "object") throw new Error("Active pointer must be an object.");
-  if (typeof pointer.schemaVersion !== "string" || !pointer.schemaVersion) {
-    throw new Error("Active pointer schemaVersion is required.");
+  validatePointerContract(pointer);
+}
+
+async function executeGit(root, args, options) {
+  if (options.executeGit) return options.executeGit(args);
+  return new Promise((resolve, reject) => {
+    execFile("git", args, { cwd: root, windowsHide: true, encoding: "utf8" }, (error, stdout, stderr) => {
+      if (error) reject(new Error((stderr || error.message || "Git command failed.").trim()));
+      else resolve({ stdout, stderr });
+    });
+  });
+}
+
+function normalizeGitPath(filePath) {
+  const normalized = normalizePath(filePath);
+  if (!normalized || path.isAbsolute(normalized) || normalized === ".." || normalized.startsWith("../")) {
+    throw new Error(`Git status path must stay inside the repository root: ${filePath}`);
   }
-  if (!STORY_ID_PATTERN.test(pointer.runId ?? "")) throw new Error("Active pointer runId is invalid.");
-  if (pointer.stateFile !== stateRelativePath(pointer.runId)) throw new Error("Active pointer stateFile is invalid.");
-  if (!["active", "blocked", "completed"].includes(pointer.status)) {
-    throw new Error(`Active pointer has invalid status '${pointer.status ?? ""}'.`);
+  return normalized;
+}
+
+export function parsePorcelainV1Z(source) {
+  const entries = source.split("\0");
+  const paths = new Map();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!entry) continue;
+    if (entry.length < 4 || entry[2] !== " ") throw new Error("Git status contains an invalid porcelain record.");
+    const indexStatus = entry[0];
+    const worktreeStatus = entry[1];
+    const targetPath = normalizeGitPath(entry.slice(3));
+    const renamedOrCopied = ["R", "C"].includes(indexStatus) || ["R", "C"].includes(worktreeStatus);
+    if (renamedOrCopied) {
+      const sourcePath = entries[index + 1];
+      if (!sourcePath) throw new Error("Git status rename/copy record is missing its source path.");
+      normalizeGitPath(sourcePath);
+      index += 1;
+    }
+    const untracked = indexStatus === "?" && worktreeStatus === "?";
+    paths.set(targetPath, { path: targetPath, indexStatus, worktreeStatus, untracked });
   }
-  if (!Number.isInteger(pointer.revision) || pointer.revision < 1) {
-    throw new Error("Active pointer revision must be a positive integer.");
+  return [...paths.values()].sort((left, right) => left.path.localeCompare(right.path, "en"));
+}
+
+async function readGitIdentity(root, options) {
+  const [{ stdout: headOutput }, { stdout: branchOutput }] = await Promise.all([
+    executeGit(root, ["rev-parse", "--verify", "HEAD"], options),
+    executeGit(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], options),
+  ]);
+  const head = headOutput.trim();
+  const branch = branchOutput.trim();
+  if (!/^[a-f0-9]{40}$/.test(head)) throw new Error("Git HEAD must resolve to a 40-character commit.");
+  if (!branch) throw new Error("Git branch must be attached.");
+  return { head, branch };
+}
+
+async function captureGitBaseline(root, timestamp, options) {
+  let before;
+  try {
+    before = await readGitIdentity(root, options);
+  } catch {
+    throw new Error("State v2 initialization requires a Git repository with an attached branch and committed HEAD.");
   }
-  if (typeof pointer.updatedAt !== "string" || !pointer.updatedAt) {
-    throw new Error("Active pointer updatedAt is required.");
+  const { stdout } = await executeGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], options);
+  const after = await readGitIdentity(root, options);
+  if (before.head !== after.head || before.branch !== after.branch) {
+    throw new Error("Git HEAD or branch changed while capturing the State v2 baseline.");
   }
+  const initialDirtyPaths = parsePorcelainV1Z(stdout).filter(
+    (item) => item.path !== ".harness/states/active-run.lock",
+  );
+  return {
+    head: before.head,
+    branch: before.branch,
+    initialDirtyPaths,
+    capturedAt: timestamp,
+  };
 }
 
 function nowValue(options) {
@@ -320,6 +387,7 @@ function expandWorkflowPath(template, state) {
 
 function parseWorkflow(source) {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
+  const metadata = {};
   const phases = [];
   const qualityGates = [];
   let section = "top";
@@ -341,7 +409,15 @@ function parseWorkflow(source) {
       listField = null;
       continue;
     }
-    if (section === "top" && /^[a-z_]+:\s*.+$/.test(line)) continue;
+    const topMatch = section === "top" ? line.match(/^([a-z_]+):\s*(.+)$/) : null;
+    if (topMatch) {
+      const [, key, raw] = topMatch;
+      if (!["schema_version", "name", "description", "state_file"].includes(key)) {
+        throw new Error(`Workflow has unsupported top-level field '${key}' at line ${index + 1}.`);
+      }
+      metadata[key] = yamlScalar(raw);
+      continue;
+    }
 
     const itemMatch = line.match(/^  - (id|phase):\s*(.+)$/);
     if (itemMatch) {
@@ -377,6 +453,11 @@ function parseWorkflow(source) {
     throw new Error(`Workflow contains unsupported structure at line ${index + 1}.`);
   }
 
+  for (const field of ["schema_version", "name", "state_file"]) {
+    if (typeof metadata[field] !== "string" || !metadata[field]) {
+      throw new Error(`Workflow must define top-level '${field}'.`);
+    }
+  }
   if (!phases.length) throw new Error("Workflow must define at least one phase.");
   const ids = new Set();
   const orders = new Set();
@@ -393,17 +474,49 @@ function parseWorkflow(source) {
       if (next !== "done" && !ids.has(next)) throw new Error(`Workflow phase '${phase.id}' has unknown next phase '${next}'.`);
     }
   }
-  return { phases };
+  return {
+    schemaVersion: metadata.schema_version,
+    name: metadata.name,
+    description: metadata.description ?? "",
+    stateFile: metadata.state_file,
+    phases,
+  };
 }
 
 async function readWorkflow(root, state) {
   const resolved = resolveInsideRoot(root, state.runtime.workflow, "Workflow file");
-  return parseWorkflow(await readFile(resolved.fullPath, "utf8"));
+  const expected = {
+    "1.0": {
+      workflow: ".harness/workflows/e2e-development.yaml",
+      template: ".harness/states/e2e-state.template.json",
+    },
+    "2.0": {
+      workflow: ".harness/workflows/e2e-development-v2.yaml",
+      template: ".harness/states/e2e-state-v2.template.json",
+    },
+  }[state.schemaVersion];
+  if (!expected) throw new Error(`Unsupported E2E state schemaVersion '${state.schemaVersion}'.`);
+  if (resolved.relative !== expected.workflow) {
+    throw new Error(`State ${state.schemaVersion} must use workflow '${expected.workflow}'.`);
+  }
+  const workflow = parseWorkflow(await readFile(resolved.fullPath, "utf8"));
+  const workflowVersion = state.runtime.workflowVersion ?? state.schemaVersion;
+  if (workflow.schemaVersion !== workflowVersion) {
+    throw new Error(
+      `Workflow schema_version '${workflow.schemaVersion}' does not match runtime.workflowVersion '${workflowVersion}'.`,
+    );
+  }
+  if (workflow.stateFile !== expected.template) {
+    throw new Error(`Workflow state_file must be '${expected.template}'.`);
+  }
+  return workflow;
 }
 
 export async function readWorkflowDefinition(root, state) {
   const workflow = await readWorkflow(path.resolve(root), state);
   return {
+    schemaVersion: workflow.schemaVersion,
+    stateFile: workflow.stateFile,
     phases: workflow.phases.map((phase) => ({
       ...phase,
       required_outputs: phase.required_outputs.map((output) => expandWorkflowPath(output, state)),
@@ -510,13 +623,17 @@ async function assertQualityGate(root, state, phaseId, requiredOutputs, options)
 }
 
 async function persistLocated(root, located, state, pointer, command, options) {
+  validateStateDocument(state);
   const statePath = resolveInsideRoot(root, located.stateFile, "State file").fullPath;
   const pointerPath = resolveInsideRoot(root, ACTIVE_POINTER, "Active pointer").fullPath;
   const eventPath = resolveInsideRoot(root, eventRelativePath(state.storyId), "Event file").fullPath;
   const transactionId = randomUUID();
   const shouldPersistPointer = pointer?.runId === state.runtime.runId
     && pointer?.stateFile === located.stateFile;
-  if (shouldPersistPointer) pointer.revision = state.runtime.revision;
+  if (shouldPersistPointer) {
+    pointer.revision = state.runtime.revision;
+    validateActivePointer(pointer);
+  }
   await appendEvent(eventPath, {
     event: "intent",
     action: command,
@@ -581,13 +698,11 @@ async function advanceState(root, located, options) {
 }
 
 async function completeRun(root, located, options) {
-  if (located.state.phase !== "git-delivery" || located.state.runtime.status !== "active") {
-    throw new Error("A run can only complete from the git-delivery phase.");
-  }
+  if (located.state.runtime.status !== "active") throw new Error("Only an active run can complete.");
   const workflow = await readWorkflow(root, located.state);
-  const current = workflow.phases.find((phase) => phase.id === "git-delivery");
+  const current = workflow.phases.find((phase) => phase.id === located.state.phase);
   if (!current || current.next.length !== 1 || current.next[0] !== "done") {
-    throw new Error("Workflow git-delivery phase must transition to done.");
+    throw new Error(`Workflow phase '${located.state.phase}' must transition to done.`);
   }
   const timestamp = nowValue(options);
   const evidence = [];
@@ -598,12 +713,12 @@ async function completeRun(root, located, options) {
   await assertQualityGate(root, located.state, current.id, requiredOutputs, options);
   const state = structuredClone(located.state);
   state.runtime.records.push(...evidence);
-  state.runtime.previousPhase = "git-delivery";
+  state.runtime.previousPhase = current.id;
   state.phase = "done";
   state.runtime.status = "completed";
   state.runtime.revision += 1;
   state.runtime.updatedAt = timestamp;
-  state.logs.push({ type: "completed", from: "git-delivery", revision: state.runtime.revision, createdAt: timestamp });
+  state.logs.push({ type: "completed", from: current.id, revision: state.runtime.revision, createdAt: timestamp });
   const pointer = { ...located.pointer, status: "completed", updatedAt: timestamp };
   return persistLocated(root, located, state, pointer, "complete", options);
 }
@@ -700,13 +815,12 @@ async function blockRun(root, located, options) {
   state.phase = "blocked";
   state.runtime.status = "blocked";
   state.runtime.previousPhase = previousPhase;
-  state.runtime.blocked = {
+  state.runtime.activeBlock = {
     previousPhase,
     reason: options.reason.trim(),
     owner: options.owner.trim(),
     suggestedAction: options.suggestedAction.trim(),
     blockedAt: timestamp,
-    resumedAt: null,
   };
   state.runtime.revision += 1;
   state.runtime.updatedAt = timestamp;
@@ -719,14 +833,14 @@ async function resumeRun(root, located, options) {
   if (located.state.phase !== "blocked" || located.state.runtime.status !== "blocked") {
     throw new Error("Only a blocked run can be resumed.");
   }
-  const previousPhase = located.state.runtime.blocked?.previousPhase;
+  const previousPhase = located.state.runtime.activeBlock?.previousPhase;
   if (!previousPhase) throw new Error("Blocked state does not record previousPhase.");
   const timestamp = nowValue(options);
   const state = structuredClone(located.state);
   state.phase = previousPhase;
   state.runtime.status = "active";
   state.runtime.previousPhase = "blocked";
-  state.runtime.blocked.resumedAt = timestamp;
+  state.runtime.activeBlock = null;
   state.runtime.revision += 1;
   state.runtime.updatedAt = timestamp;
   state.logs.push({ type: "resumed", to: previousPhase, revision: state.runtime.revision, createdAt: timestamp });
@@ -749,41 +863,10 @@ async function initializeRun(root, options) {
     throw new Error(`An active run already exists: ${existingPointer.runId}`);
   }
 
-  const templatePath = resolveInsideRoot(root, E2E_TEMPLATE, "E2E template").fullPath;
-  const template = await readJson(templatePath, "E2E template");
   const timestamp = nowValue(options);
   const stateFile = stateRelativePath(options.storyId);
   const statePath = resolveInsideRoot(root, stateFile, "State file").fullPath;
   const eventPath = resolveInsideRoot(root, eventRelativePath(options.storyId), "Event file").fullPath;
-  const state = structuredClone(template);
-  state.storyId = options.storyId;
-  state.phase = "requirement";
-  state.requirement.summary = options.summary.trim();
-  state.runtime = {
-    runId: options.storyId,
-    workflow: E2E_WORKFLOW,
-    status: "active",
-    revision: 1,
-    previousPhase: null,
-    blocked: null,
-    records: [],
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-  state.logs.push({
-    type: "initialized",
-    phase: "requirement",
-    revision: 1,
-    createdAt: timestamp,
-  });
-  const pointer = {
-    schemaVersion: "1.0",
-    runId: options.storyId,
-    stateFile,
-    status: "active",
-    revision: 1,
-    updatedAt: timestamp,
-  };
   const transactionId = randomUUID();
   const lockPath = resolveInsideRoot(root, ".harness/states/active-run.lock", "Initialization lock").fullPath;
   return withRunLock(lockPath, options, async () => {
@@ -811,6 +894,42 @@ async function initializeRun(root, options) {
     if (existingState.some(Boolean)) {
       throw new Error(`State file already exists for storyId '${options.storyId}'.`);
     }
+    const templatePath = resolveInsideRoot(root, E2E_TEMPLATE, "E2E template").fullPath;
+    const template = await readJson(templatePath, "E2E template");
+    validateStateDocument(template);
+    const baseline = await captureGitBaseline(root, timestamp, options);
+    const state = structuredClone(template);
+    state.storyId = options.storyId;
+    state.phase = "requirement";
+    state.requirement.summary = options.summary.trim();
+    state.baseline = baseline;
+    state.runtime = {
+      runId: options.storyId,
+      workflow: E2E_WORKFLOW,
+      workflowVersion: "2.0",
+      status: "active",
+      revision: 1,
+      previousPhase: null,
+      activeBlock: null,
+      records: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    state.logs.push({
+      type: "initialized",
+      phase: "requirement",
+      revision: 1,
+      createdAt: timestamp,
+    });
+    validateStateDocument(state);
+    const pointer = {
+      schemaVersion: "1.0",
+      runId: options.storyId,
+      stateFile,
+      status: "active",
+      revision: 1,
+      updatedAt: timestamp,
+    };
     await appendEvent(eventPath, { event: "intent", action: "init", transactionId, runId: options.storyId, revision: 1, createdAt: timestamp });
     if (options.beforeCommit) await options.beforeCommit();
     await stageAtomicJson(pointerPath, pointer);
@@ -863,28 +982,7 @@ async function locateState(root, explicitStateFile) {
 }
 
 function validateRuntimeState(state) {
-  const runtime = state.runtime;
-  if (!runtime || typeof runtime !== "object") throw new Error("State is missing runtime metadata.");
-  if (runtime.runId !== state.storyId) throw new Error("State runtime identity does not match storyId.");
-  if (typeof runtime.workflow !== "string" || !runtime.workflow) throw new Error("State runtime workflow is required.");
-  if (!["active", "blocked", "completed"].includes(runtime.status)) {
-    throw new Error(`State runtime has invalid status '${runtime.status ?? ""}'.`);
-  }
-  if (!Number.isInteger(runtime.revision) || runtime.revision < 1) {
-    throw new Error("State runtime revision must be a positive integer.");
-  }
-  if (!Array.isArray(runtime.records)) throw new Error("State runtime records must be an array.");
-  for (const record of runtime.records) {
-    if (!recordStatusAllowed(record.type, record.status)) {
-      throw new Error(`State runtime contains an invalid ${record.type ?? "unknown"} record.`);
-    }
-  }
-  if (runtime.status === "blocked" && (state.phase !== "blocked" || !runtime.blocked?.previousPhase)) {
-    throw new Error("Blocked runtime state must include its previous phase.");
-  }
-  if (runtime.status === "completed" && state.phase !== "done") {
-    throw new Error("Completed runtime state must be in the done phase.");
-  }
+  validateStateDocument(state);
 }
 
 async function validateLocated(root, located) {
@@ -910,13 +1008,15 @@ export async function runStateCommand(options = {}) {
   if (!mutatingCommands.has(options.command)) {
     throw new Error(`Unsupported state command: ${options.command ?? "(missing)"}`);
   }
+  if (located.state.schemaVersion === "1.0" || located.state.runtime.status === "template") {
+    assertStateCommandAllowed(located.state, options.command);
+  }
   const lockPath = resolveInsideRoot(root, lockRelativePath(located.stateFile), "Run lock").fullPath;
   return withRunLock(lockPath, options, async () => {
     const fresh = await locateState(root, located.stateFile);
     await reconcileEventLog(root, fresh.state);
-    if (fresh.state.runtime.status === "completed") {
-      throw new Error("A completed run is immutable.");
-    }
+    validateRuntimeState(fresh.state);
+    assertStateCommandAllowed(fresh.state, options.command);
     if (options.command === "next") return advanceState(root, fresh, options);
     if (options.command === "record") return recordEvidence(root, fresh, options);
     if (options.command === "block") return blockRun(root, fresh, options);

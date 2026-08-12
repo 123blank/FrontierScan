@@ -5,7 +5,7 @@
   "type": "object",
   "required": ["schemaVersion", "runId", "stateFile", "status", "revision", "updatedAt"],
   "properties": {
-    "schemaVersion": { "type": "string" },
+    "schemaVersion": { "const": "1.0" },
     "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
     "stateFile": { "type": "string", "pattern": "^\\.harness/states/e2e-[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.json$" },
     "status": { "type": "string", "enum": ["active", "blocked", "completed"] },

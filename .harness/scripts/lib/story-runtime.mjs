@@ -2214,7 +2214,7 @@ async function applyResult(root, options) {
   if (options.beforeAdvance) await options.beforeAdvance();
   const advanced = await runStateCommand({
     root,
-    command: phase.id === "git-delivery" ? "complete" : "next",
+    command: phase.next.includes("done") ? "complete" : "next",
     stateFile: located.stateFile,
     now: options.now,
   });

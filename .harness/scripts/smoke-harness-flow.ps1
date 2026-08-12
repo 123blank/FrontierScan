@@ -31,13 +31,32 @@ Invoke-Step -Name "Product State" -Action {
 Invoke-Step -Name "State Runtime" -Action {
   $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) "frontierscan-harness-smoke-$([guid]::NewGuid().ToString('N'))"
   try {
+    New-Item -ItemType Directory -Path $temporaryRoot -Force | Out-Null
+    & git -C $temporaryRoot init -b dev | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "State Runtime smoke git init failed with exit code $LASTEXITCODE" }
+    & git -C $temporaryRoot config user.email "state-smoke@example.test"
+    if ($LASTEXITCODE -ne 0) { throw "State Runtime smoke git config email failed with exit code $LASTEXITCODE" }
+    & git -C $temporaryRoot config user.name "State Runtime Smoke"
+    if ($LASTEXITCODE -ne 0) { throw "State Runtime smoke git config name failed with exit code $LASTEXITCODE" }
+    Set-Content -LiteralPath (Join-Path $temporaryRoot "seed.txt") -Value "seed" -NoNewline -Encoding utf8
+    & git -C $temporaryRoot add seed.txt
+    if ($LASTEXITCODE -ne 0) { throw "State Runtime smoke git add failed with exit code $LASTEXITCODE" }
+    & git -C $temporaryRoot commit -m "state runtime smoke fixture" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "State Runtime smoke git commit failed with exit code $LASTEXITCODE" }
+
     New-Item -ItemType Directory -Path (Join-Path $temporaryRoot ".harness\states") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $temporaryRoot ".harness\workflows") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $temporaryRoot ".codex\agents") -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $Root ".harness\states\e2e-state.template.json") -Destination (Join-Path $temporaryRoot ".harness\states\e2e-state.template.json")
+    Copy-Item -LiteralPath (Join-Path $Root ".harness\states\e2e-state-v2.template.json") -Destination (Join-Path $temporaryRoot ".harness\states\e2e-state-v2.template.json")
     Copy-Item -LiteralPath (Join-Path $Root ".harness\workflows\e2e-development.yaml") -Destination (Join-Path $temporaryRoot ".harness\workflows\e2e-development.yaml")
+    Copy-Item -LiteralPath (Join-Path $Root ".harness\workflows\e2e-development-v2.yaml") -Destination (Join-Path $temporaryRoot ".harness\workflows\e2e-development-v2.yaml")
     Copy-Item -LiteralPath (Join-Path $Root ".codex\agents\agents.yaml") -Destination (Join-Path $temporaryRoot ".codex\agents\agents.yaml")
     Copy-Item -LiteralPath (Join-Path $Root ".codex\agents\worker-policies.json") -Destination (Join-Path $temporaryRoot ".codex\agents\worker-policies.json")
+    & git -C $temporaryRoot add .harness .codex
+    if ($LASTEXITCODE -ne 0) { throw "State Runtime smoke git add Harness assets failed with exit code $LASTEXITCODE" }
+    & git -C $temporaryRoot commit -m "add Harness smoke assets" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "State Runtime smoke Harness asset commit failed with exit code $LASTEXITCODE" }
     $stateRunner = Join-Path $Root ".harness\scripts\run-state.ps1"
     $storyRunner = Join-Path $Root ".harness\scripts\run-story.ps1"
     & $stateRunner -Command init -Root $temporaryRoot -StoryId "SMOKE-M3" -Summary "验证单 Story Dispatcher" -Json | Out-Null
@@ -113,9 +132,21 @@ const state = {
   schemaVersion: '1.0',
   storyId: 'SMOKE-BATCH',
   phase: 'implementation',
+  requirement: { summary: 'Serial batch smoke', openQuestions: [], acceptanceCriteria: [] },
+  knowledge: { loadedFiles: [], staleFiles: [], missingAreas: [] },
+  tasks: [],
+  dag: { nodes: [], edges: [], waves: [] },
+  worktrees: [],
+  tests: { commands: [], results: [] },
+  review: { findings: [], status: 'pending' },
+  verification: { cases: [], results: [] },
+  delivery: { ownedFiles: [], commit: null, pr: null },
+  logs: [],
   runtime: {
     runId: 'SMOKE-BATCH', status: 'active', revision: 4,
     workflow: '.harness/workflows/e2e-development.yaml', records: [],
+    previousPhase: null, blocked: null,
+    createdAt: '2026-07-28T02:00:00.000Z', updatedAt: '2026-07-28T02:00:00.000Z',
   },
 };
 const dag = {
@@ -148,7 +179,10 @@ await mkdir(path.dirname(path.join(root, state.runtime.workflow)), { recursive: 
 await writeFile(path.join(root, stateFile), JSON.stringify(state, null, 2) + '\n', 'utf8');
 await writeFile(path.join(root, taskDagFile), JSON.stringify(dag, null, 2) + '\n', 'utf8');
 await writeFile(path.join(root, state.runtime.workflow),
-  'phases:\n'
+  'schema_version: "1.0"\n'
+  + 'name: frontier-e2e-development\n'
+  + 'state_file: .harness/states/e2e-state.template.json\n'
+  + 'phases:\n'
   + '  - id: implementation\n'
   + '    order: 1\n'
   + '    owner_agent: backend-developer\n'

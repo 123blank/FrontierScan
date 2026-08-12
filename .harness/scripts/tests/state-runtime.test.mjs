@@ -1,21 +1,41 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm as removePath, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { runStateCommand } from "../lib/state-runtime.mjs";
+import {
+  parsePorcelainV1Z,
+  readWorkflowDefinition,
+  runStateCommand,
+} from "../lib/state-runtime.mjs";
+import {
+  assertStateCommandAllowed,
+  detectE2EStateVersion,
+  validateStateDocument,
+} from "../lib/state-contract.mjs";
 
 const FIXED_NOW = "2026-07-16T00:00:00.000Z";
 const RUN_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "run-state.ps1");
 const RUN_STORY_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "run-story.ps1");
 const STATE_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "state-runtime.mjs");
+const STATE_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "state-contract.mjs");
 const STORY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "story-runtime.mjs");
 const DISPATCH_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "dispatch-contract.mjs");
 const BATCH_FINALIZATION_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "batch-finalization-contract.mjs");
 const IMPLEMENTATION_OWNER_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "implementation-owner-contract.mjs");
 const VALIDATE_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "validate-state.ps1");
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const execFileAsync = promisify(execFile);
+
+function rm(filePath, options = {}) {
+  return removePath(filePath, {
+    maxRetries: 5,
+    retryDelay: 100,
+    ...options,
+  });
+}
 
 function execPowerShellScript(script, argumentsList) {
   return new Promise((resolve) => {
@@ -47,6 +67,12 @@ async function readJson(root, relativePath) {
 
 async function createFixture(fixtureParent = os.tmpdir()) {
   const root = await mkdtemp(path.join(fixtureParent, "frontier-state-runtime-"));
+  await execFileAsync("git", ["init", "-b", "dev"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["config", "user.email", "state-runtime@example.test"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["config", "user.name", "State Runtime Test"], { cwd: root, windowsHide: true });
+  await write(root, "seed.txt", "seed");
+  await execFileAsync("git", ["add", "seed.txt"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["commit", "-m", "seed"], { cwd: root, windowsHide: true });
   const template = {
     schemaVersion: "1.0",
     storyId: "S1",
@@ -63,6 +89,11 @@ async function createFixture(fixtureParent = os.tmpdir()) {
     logs: [],
   };
   await write(root, ".harness/states/e2e-state.template.json", `${JSON.stringify(template, null, 2)}\n`);
+  await write(
+    root,
+    ".harness/states/e2e-state-v2.template.json",
+    await readFile(path.join(REPOSITORY_ROOT, ".harness/states/e2e-state-v2.template.json"), "utf8"),
+  );
   await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
 name: frontier-e2e-development
 phases:
@@ -80,12 +111,20 @@ phases:
       - done
 quality_gates: []
 `);
+  await write(
+    root,
+    ".harness/workflows/e2e-development-v2.yaml",
+    await readFile(path.join(REPOSITORY_ROOT, ".harness/workflows/e2e-development-v2.yaml"), "utf8"),
+  );
+  await execFileAsync("git", ["add", ".harness"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["commit", "-m", "add harness fixtures"], { cwd: root, windowsHide: true });
   return { root, template };
 }
 
 async function writeGateWorkflow(root) {
-  await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
-name: frontier-e2e-development
+  await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
 phases:
   - id: unit-test
     order: 0
@@ -124,7 +163,7 @@ async function setRunPhase(root, storyId, phase) {
 async function testInitCreatesRunAndPointerWithoutEditingTemplate() {
   const { root } = await createFixture();
   try {
-    const templatePath = path.join(root, ".harness/states/e2e-state.template.json");
+    const templatePath = path.join(root, ".harness/states/e2e-state-v2.template.json");
     const originalTemplate = await readFile(templatePath, "utf8");
     const result = await runStateCommand({
       root,
@@ -135,9 +174,15 @@ async function testInitCreatesRunAndPointerWithoutEditingTemplate() {
     });
 
     assert.equal(result.state.phase, "requirement");
+    assert.equal(result.state.schemaVersion, "2.0");
     assert.equal(result.state.storyId, "M2-001");
     assert.equal(result.state.requirement.summary, "验证状态运行时");
     assert.equal(result.state.runtime.revision, 1);
+    assert.equal(result.state.runtime.workflow, ".harness/workflows/e2e-development-v2.yaml");
+    assert.equal(result.state.runtime.workflowVersion, "2.0");
+    assert.match(result.state.baseline.head, /^[a-f0-9]{40}$/);
+    assert.equal(result.state.baseline.branch, "dev");
+    assert.deepEqual(result.state.baseline.initialDirtyPaths, []);
     assert.equal(result.pointer.stateFile, ".harness/states/e2e-M2-001.json");
     assert.equal(await readFile(templatePath, "utf8"), originalTemplate);
 
@@ -345,7 +390,11 @@ async function testNextRequiresOutputsAndFollowsWorkflow() {
     assert.equal(unchanged.phase, before.phase);
     assert.equal(unchanged.runtime.revision, before.runtime.revision);
 
-    await write(root, ".harness/outputs/requirement-breakdown.md", "# Requirement\n");
+    await write(
+      root,
+      ".harness/runs/M2-010/phases/00-requirement/requirement-breakdown.md",
+      "# Requirement\n",
+    );
     const advanced = await runStateCommand({ root, command: "next", now: () => "2026-07-16T00:01:00.000Z" });
     assert.equal(advanced.state.phase, "technical-design");
     assert.equal(advanced.state.runtime.previousPhase, "requirement");
@@ -360,8 +409,9 @@ async function testNextRequiresOutputsAndFollowsWorkflow() {
 async function testNextExpandsRunScopedRequiredOutput() {
   const { root } = await createFixture();
   try {
-    await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
-name: frontier-e2e-development
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
 phases:
   - id: requirement
     order: 0
@@ -397,8 +447,9 @@ quality_gates: []
 async function testTaskDagGateUsesExpandedRequiredOutput() {
   const { root } = await createFixture();
   try {
-    await write(root, ".harness/workflows/e2e-development.yaml", `schema_version: "1.0"
-name: frontier-e2e-development
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
 phases:
   - id: task-dag
     order: 0
@@ -442,7 +493,7 @@ async function testNextRejectsMalformedWorkflow() {
   try {
     await runStateCommand({ root, command: "init", storyId: "M2-011", summary: "workflow", now: () => FIXED_NOW });
     await write(root, ".harness/outputs/requirement-breakdown.md", "# Requirement\n");
-    await write(root, ".harness/workflows/e2e-development.yaml", "phases:\n   - id: requirement\n");
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", "phases:\n   - id: requirement\n");
     await assert.rejects(
       runStateCommand({ root, command: "next", now: () => FIXED_NOW }),
       /workflow/i,
@@ -548,13 +599,24 @@ async function testBlockAndResumeRestorePreviousPhase() {
     });
     assert.equal(blocked.state.phase, "blocked");
     assert.equal(blocked.state.runtime.status, "blocked");
-    assert.equal(blocked.state.runtime.blocked.previousPhase, "requirement");
+    assert.equal(blocked.state.runtime.activeBlock.previousPhase, "requirement");
+    assert.equal(blocked.state.logs.at(-1).type, "blocked");
     assert.equal(blocked.pointer.status, "blocked");
 
     const resumed = await runStateCommand({ root, command: "resume", now: () => "2026-07-16T00:04:00.000Z" });
     assert.equal(resumed.state.phase, "requirement");
     assert.equal(resumed.state.runtime.status, "active");
-    assert.equal(resumed.state.runtime.blocked.resumedAt, "2026-07-16T00:04:00.000Z");
+    assert.equal(resumed.state.runtime.previousPhase, "blocked");
+    assert.equal(resumed.state.runtime.activeBlock, null);
+    assert.deepEqual(resumed.state.logs.slice(-2).map((item) => item.type), ["blocked", "resumed"]);
+    const events = (await readFile(
+      path.join(root, ".harness/states/e2e-M2-022.events.jsonl"),
+      "utf8",
+    )).trim().split("\n").map(JSON.parse);
+    assert.deepEqual(
+      events.filter((event) => ["block", "resume"].includes(event.action)).map((event) => event.event),
+      ["intent", "committed", "intent", "committed"],
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -579,7 +641,10 @@ async function testPassedTestsAdvanceAndTaskDagValidatorBlocks() {
     const advanced = await runStateCommand({ root, command: "next", now: () => FIXED_NOW });
     assert.equal(advanced.state.phase, "code-review");
 
-    await write(root, ".harness/workflows/e2e-development.yaml", `phases:
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
   - id: task-dag
     order: 0
     required_outputs:
@@ -614,7 +679,10 @@ async function testBuildOnlyCanAdvanceWithoutApproval() {
   const { root } = await createFixture();
   try {
     await runStateCommand({ root, command: "init", storyId: "M2-023A", summary: "build only", now: () => FIXED_NOW });
-    await write(root, ".harness/workflows/e2e-development.yaml", `phases:
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
   - id: build-publish
     order: 0
     required_outputs:
@@ -637,13 +705,16 @@ quality_gates: []
   }
 }
 
-async function testCompleteOnlyFromGitDelivery() {
+async function testCompleteFromDeliveryPreparationWithoutGitApproval() {
   const { root } = await createFixture();
   try {
     await runStateCommand({ root, command: "init", storyId: "M2-024", summary: "complete", now: () => FIXED_NOW });
-    await assert.rejects(runStateCommand({ root, command: "complete", now: () => FIXED_NOW }), /git-delivery/i);
-    await write(root, ".harness/workflows/e2e-development.yaml", `phases:
-  - id: git-delivery
+    await assert.rejects(runStateCommand({ root, command: "complete", now: () => FIXED_NOW }), /transition to done/i);
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
+  - id: delivery-preparation
     order: 0
     required_outputs:
       - .harness/reports/delivery-report.md
@@ -651,75 +722,50 @@ async function testCompleteOnlyFromGitDelivery() {
       - done
 quality_gates: []
 `);
-    await setRunPhase(root, "M2-024", "git-delivery");
+    await setRunPhase(root, "M2-024", "delivery-preparation");
+    const before = await readJson(root, ".harness/states/e2e-M2-024.json");
+    await assert.rejects(
+      runStateCommand({ root, command: "complete", now: () => FIXED_NOW }),
+      /required output.*delivery-report/i,
+    );
+    assert.equal((await readJson(root, ".harness/states/e2e-M2-024.json")).runtime.revision, before.runtime.revision);
+
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
+  - id: delivery-preparation
+    order: 0
+    required_outputs:
+      - .harness/reports/delivery-report.md
+    next:
+      - requirement
+  - id: requirement
+    order: 1
+    required_outputs: []
+    next:
+      - done
+quality_gates: []
+`);
     await write(root, ".harness/reports/delivery-report.md", "# Delivery\n");
-    await assert.rejects(runStateCommand({ root, command: "complete", now: () => FIXED_NOW }), /approval/i);
-    await assert.rejects(runStateCommand({
-      root,
-      command: "record",
-      recordType: "approval",
-      status: "approved",
-      message: "missing evidence path",
-      actor: "user",
-      now: () => FIXED_NOW,
-    }), /evidence path/i);
-    await assert.rejects(runStateCommand({
-      root,
-      command: "record",
-      recordType: "approval",
-      status: "approved",
-      path: ".harness/reports/delivery-report.md",
-      message: "wrong actor",
-      actor: "codex",
-      now: () => FIXED_NOW,
-    }), /actor.*user/i);
-    const approval = await runStateCommand({
-      root,
-      command: "record",
-      recordType: "approval",
-      status: "approved",
-      path: ".harness/reports/delivery-report.md",
-      message: "approved git delivery completion",
-      actor: "user",
-      now: () => FIXED_NOW,
-    });
-    assert.match(approval.state.runtime.records.at(-1).sha256, /^sha256:[a-f0-9]{64}$/);
-    await runStateCommand({
-      root,
-      command: "record",
-      recordType: "approval",
-      status: "denied",
-      path: ".harness/reports/delivery-report.md",
-      message: "revoked git delivery approval",
-      actor: "user",
-      now: () => FIXED_NOW,
-    });
-    await assert.rejects(runStateCommand({ root, command: "complete", now: () => FIXED_NOW }), /explicit user approval/i);
-    await runStateCommand({
-      root,
-      command: "record",
-      recordType: "approval",
-      status: "approved",
-      path: ".harness/reports/delivery-report.md",
-      message: "approved delivery report again",
-      actor: "user",
-      now: () => FIXED_NOW,
-    });
-    await write(root, ".harness/reports/delivery-report.md", "# Changed after approval\n");
-    await assert.rejects(runStateCommand({ root, command: "complete", now: () => FIXED_NOW }), /approval evidence.*changed/i);
-    await runStateCommand({
-      root,
-      command: "record",
-      recordType: "approval",
-      status: "approved",
-      path: ".harness/reports/delivery-report.md",
-      message: "approved changed delivery report",
-      actor: "user",
-      now: () => FIXED_NOW,
-    });
+    await assert.rejects(runStateCommand({ root, command: "complete", now: () => FIXED_NOW }), /transition to done/i);
+
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
+  - id: delivery-preparation
+    order: 0
+    required_outputs:
+      - .harness/reports/delivery-report.md
+    next:
+      - done
+quality_gates: []
+`);
     const completed = await runStateCommand({ root, command: "complete", now: () => FIXED_NOW });
     assert.equal(completed.state.phase, "done");
     assert.equal(completed.state.runtime.status, "completed");
+    assert.equal(completed.state.runtime.previousPhase, "delivery-preparation");
     assert.equal(completed.pointer.status, "completed");
     const completedRevision = completed.state.runtime.revision;
     const eventFile = path.join(root, ".harness/states/e2e-M2-024.events.jsonl");
@@ -994,8 +1040,11 @@ async function testInitCannotRaceCompletingRun() {
   try {
     const oldStoryId = "M2-CONCURRENT-COMPLETE";
     await runStateCommand({ root, command: "init", storyId: oldStoryId, summary: "concurrent complete", now: () => FIXED_NOW });
-    await write(root, ".harness/workflows/e2e-development.yaml", `phases:
-  - id: git-delivery
+    await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
+  - id: delivery-preparation
     order: 0
     required_outputs:
       - .harness/reports/delivery-report.md
@@ -1003,18 +1052,8 @@ async function testInitCannotRaceCompletingRun() {
       - done
 quality_gates: []
 `);
-    await setRunPhase(root, oldStoryId, "git-delivery");
+    await setRunPhase(root, oldStoryId, "delivery-preparation");
     await write(root, ".harness/reports/delivery-report.md", "# Delivery\n");
-    await runStateCommand({
-      root,
-      command: "record",
-      recordType: "approval",
-      status: "approved",
-      path: ".harness/reports/delivery-report.md",
-      message: "approved concurrent completion",
-      actor: "user",
-      now: () => FIXED_NOW,
-    });
 
     let completeEntered;
     const entered = new Promise((resolve) => { completeEntered = resolve; });
@@ -1331,7 +1370,7 @@ async function testStatusRejectsInvalidRuntimeContract() {
 
     await assert.rejects(
       runStateCommand({ root, command: "status" }),
-      /invalid status 'unknown'/i,
+      /runtime\.status.*invalid value 'unknown'/i,
     );
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -1353,7 +1392,7 @@ async function testInitRejectsInvalidRecoverablePointerContract() {
 
     await assert.rejects(
       runStateCommand({ root, command: "init", storyId: "M2-MUST-NOT-START", summary: "invalid pointer", now: () => FIXED_NOW }),
-      /active pointer.*invalid status 'unknown'/i,
+      /active pointer status.*invalid value 'unknown'/i,
     );
     await assert.rejects(
       readFile(path.join(root, ".harness/states/e2e-M2-MUST-NOT-START.json"), "utf8"),
@@ -1412,6 +1451,7 @@ quality_gates: []
       [RUN_STATE_SCRIPT, ".harness/scripts/run-state.ps1"],
       [RUN_STORY_SCRIPT, ".harness/scripts/run-story.ps1"],
       [STATE_RUNTIME_MODULE, ".harness/scripts/lib/state-runtime.mjs"],
+      [STATE_CONTRACT_MODULE, ".harness/scripts/lib/state-contract.mjs"],
       [STORY_RUNTIME_MODULE, ".harness/scripts/lib/story-runtime.mjs"],
       [DISPATCH_CONTRACT_MODULE, ".harness/scripts/lib/dispatch-contract.mjs"],
       [BATCH_FINALIZATION_CONTRACT_MODULE, ".harness/scripts/lib/batch-finalization-contract.mjs"],
@@ -1484,7 +1524,7 @@ async function testStateValidatorAcceptsAndRejectsActivePointer() {
     await write(root, ".harness/states/active-run.json", `${JSON.stringify(pointer, null, 2)}\n`);
     const wrongType = await execPowerShellScript(VALIDATE_STATE_SCRIPT, ["-StateFile", pointerFile]);
     assert.notEqual(wrongType.exitCode, 0);
-    assert.match(wrongType.stderr, /schemaVersion.*string|string.*schemaVersion/i);
+    assert.match(wrongType.stderr, /schemaVersion.*1\.0/i);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1513,6 +1553,465 @@ async function testRuntimeIsRegisteredInHarnessContracts() {
   assert.match(smoke, /-Command validate/);
 }
 
+async function testStateContractDispatchesVersionsAndReadOnlyCommands() {
+  const v1 = {
+    schemaVersion: "1.0",
+    storyId: "V1",
+    phase: "requirement",
+    runtime: {
+      runId: "V1",
+      workflow: ".harness/workflows/e2e-development.yaml",
+      status: "active",
+      revision: 1,
+      previousPhase: null,
+      blocked: null,
+      records: [],
+      createdAt: FIXED_NOW,
+      updatedAt: FIXED_NOW,
+    },
+    requirement: { summary: "v1", openQuestions: [], acceptanceCriteria: [] },
+    knowledge: { loadedFiles: [], staleFiles: [], missingAreas: [] },
+    tasks: [],
+    dag: { nodes: [], edges: [], waves: [] },
+    worktrees: [],
+    tests: { commands: [], results: [] },
+    review: { findings: [], status: "pending" },
+    verification: { cases: [], results: [] },
+    delivery: { ownedFiles: [], commit: null, pr: null },
+    logs: [],
+  };
+  const v2Template = {
+    schemaVersion: "2.0",
+    storyId: "S1",
+    phase: "requirement",
+    runtime: {
+      runId: "S1",
+      workflow: ".harness/workflows/e2e-development-v2.yaml",
+      workflowVersion: "2.0",
+      status: "template",
+      revision: 0,
+      previousPhase: null,
+      activeBlock: null,
+      records: [],
+      createdAt: null,
+      updatedAt: null,
+    },
+    baseline: { head: null, branch: null, initialDirtyPaths: [], capturedAt: null },
+    requirement: { summary: "", openQuestions: [], acceptanceCriteria: [], inScope: [], outOfScope: [] },
+    knowledge: { areas: [] },
+    design: { decisions: [], affectedAreas: [], risks: [] },
+    dag: { sourceFile: null, sourceSha256: null, nodes: [], edges: [], waves: [], globalChanges: [], risks: [] },
+    implementation: { method: null, exceptionReason: null, actualFiles: [], completedTaskIds: [], notes: [] },
+    tests: { cases: [], commands: [], results: [] },
+    review: { findings: [], status: "pending" },
+    build: { results: [], artifacts: [], externalActions: [] },
+    verification: {
+      cases: [],
+      results: [],
+      environment: { status: "not-checked", summary: "" },
+    },
+    delivery: {
+      status: "pending",
+      ownedFiles: [],
+      outOfPredictionFiles: [],
+      unrelatedDirtyFiles: [],
+      remainingRisks: [],
+      summaryFile: null,
+      summarySha256: null,
+      gitStatus: "not-requested",
+    },
+    approvals: [],
+    worktrees: [],
+    logs: [],
+  };
+
+  assert.equal(detectE2EStateVersion(v1), "1.0");
+  assert.equal(detectE2EStateVersion(v2Template), "2.0");
+  assert.equal(validateStateDocument(v1).schemaVersion, "1.0");
+  assert.equal(validateStateDocument(v2Template).schemaVersion, "2.0");
+  assert.doesNotThrow(() => assertStateCommandAllowed(v1, "status"));
+  assert.doesNotThrow(() => assertStateCommandAllowed(v2Template, "validate"));
+  assert.throws(() => assertStateCommandAllowed(v1, "record"), /State v1 is read-only/i);
+  assert.throws(() => assertStateCommandAllowed(v2Template, "record"), /template is read-only/i);
+  assert.throws(() => detectE2EStateVersion({ ...v1, schemaVersion: "3.0" }), /unsupported.*3\.0/i);
+  assert.throws(() => validateStateDocument({ ...v2Template, tasks: [] }), /unsupported field.*tasks/i);
+  assert.throws(
+    () => validateStateDocument({
+      ...v2Template,
+      runtime: { ...v2Template.runtime, blocked: null },
+    }),
+    /unsupported field.*blocked/i,
+  );
+
+  const activeV2 = structuredClone(v2Template);
+  activeV2.storyId = "ACTIVE";
+  activeV2.runtime = {
+    ...activeV2.runtime,
+    runId: "ACTIVE",
+    status: "active",
+    revision: 1,
+    createdAt: FIXED_NOW,
+    updatedAt: FIXED_NOW,
+  };
+  activeV2.baseline = {
+    head: "a".repeat(40),
+    branch: "dev",
+    initialDirtyPaths: [],
+    capturedAt: FIXED_NOW,
+  };
+  for (const invalid of [
+    { ...structuredClone(activeV2), phase: "done" },
+    { ...structuredClone(activeV2), phase: "blocked" },
+  ]) {
+    assert.throws(() => validateStateDocument(invalid), /phase.*status|status.*phase/i);
+  }
+  assert.throws(
+    () => validateStateDocument({
+      ...structuredClone(v2Template),
+      phase: "done",
+    }),
+    /template.*requirement|phase.*template/i,
+  );
+  assert.throws(
+    () => validateStateDocument({
+      ...structuredClone(activeV2),
+      requirement: {
+        ...activeV2.requirement,
+        acceptanceCriteria: [{
+          criterionId: "AC-001",
+          description: "Expected behavior",
+          source: "user",
+          required: true,
+          unexpected: true,
+        }],
+      },
+    }),
+    /acceptanceCriteria.*unsupported field.*unexpected/i,
+  );
+  assert.throws(
+    () => validateStateDocument({
+      ...structuredClone(activeV2),
+      knowledge: {
+        areas: [{
+          area: "common",
+          relevant: true,
+          status: "fresh",
+          sourceFingerprint: null,
+          loadedFiles: [],
+          missing: [],
+          checkedAt: FIXED_NOW,
+          unexpected: true,
+        }],
+      },
+    }),
+    /knowledge\.areas.*unsupported field.*unexpected/i,
+  );
+  assert.throws(
+    () => validateStateDocument({
+      ...structuredClone(activeV2),
+      runtime: {
+        ...activeV2.runtime,
+        records: [{
+          id: "record-1",
+          type: "note",
+          phase: "requirement",
+          status: "recorded",
+          path: null,
+          message: "",
+          actor: "codex",
+          createdAt: FIXED_NOW,
+          unexpected: true,
+        }],
+      },
+    }),
+    /runtime\.records.*unsupported field.*unexpected/i,
+  );
+  for (const previousPhase of ["nonsense", "done", "blocked"]) {
+    const blockedV2 = structuredClone(activeV2);
+    blockedV2.phase = "blocked";
+    blockedV2.runtime.status = "blocked";
+    blockedV2.runtime.activeBlock = {
+      previousPhase,
+      reason: "decision required",
+      owner: "user",
+      suggestedAction: "choose an option",
+      blockedAt: FIXED_NOW,
+    };
+    assert.throws(
+      () => validateStateDocument(blockedV2),
+      /activeBlock\.previousPhase.*invalid/i,
+    );
+  }
+  assert.throws(
+    () => validateStateDocument({
+      schemaVersion: "9.9",
+      runId: "ACTIVE",
+      stateFile: ".harness/states/e2e-ACTIVE.json",
+      status: "active",
+      revision: 1,
+      updatedAt: FIXED_NOW,
+    }),
+    /Active pointer schemaVersion.*1\.0/i,
+  );
+}
+
+async function testResumeRejectsInvalidPreviousPhaseWithoutPersistence() {
+  const { root } = await createFixture();
+  try {
+    const storyId = "M7-A1-INVALID-RESUME";
+    await runStateCommand({ root, command: "init", storyId, summary: "invalid resume", now: () => FIXED_NOW });
+    await runStateCommand({
+      root,
+      command: "block",
+      reason: "decision required",
+      owner: "user",
+      suggestedAction: "choose an option",
+      now: () => FIXED_NOW,
+    });
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const state = await readJson(root, stateFile);
+    state.runtime.activeBlock.previousPhase = "done";
+    await write(root, stateFile, `${JSON.stringify(state, null, 2)}\n`);
+    const beforeState = await readFile(path.join(root, stateFile), "utf8");
+    const beforeEvents = await readFile(
+      path.join(root, `.harness/states/e2e-${storyId}.events.jsonl`),
+      "utf8",
+    );
+
+    await assert.rejects(
+      runStateCommand({ root, command: "resume", now: () => FIXED_NOW }),
+      /activeBlock\.previousPhase.*invalid/i,
+    );
+    assert.equal(await readFile(path.join(root, stateFile), "utf8"), beforeState);
+    assert.equal(
+      await readFile(path.join(root, `.harness/states/e2e-${storyId}.events.jsonl`), "utf8"),
+      beforeEvents,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testGitBaselineCapturesDirtyPathsAndRenameOrdering() {
+  const { root } = await createFixture();
+  try {
+    await write(root, "unstaged.txt", "base\n");
+    await execFileAsync("git", ["add", "unstaged.txt"], { cwd: root, windowsHide: true });
+    await execFileAsync("git", ["commit", "-m", "add unstaged base"], { cwd: root, windowsHide: true });
+    await write(root, "unstaged.txt", "changed\n");
+    await write(root, "untracked.txt", "untracked\n");
+    await write(root, "source.txt", "rename\n");
+    await execFileAsync("git", ["add", "source.txt"], { cwd: root, windowsHide: true });
+    await execFileAsync("git", ["commit", "-m", "add rename source"], { cwd: root, windowsHide: true });
+    await write(root, "staged.txt", "staged\n");
+    await execFileAsync("git", ["add", "staged.txt"], { cwd: root, windowsHide: true });
+    await execFileAsync("git", ["mv", "source.txt", "target.txt"], { cwd: root, windowsHide: true });
+
+    const initialized = await runStateCommand({
+      root,
+      command: "init",
+      storyId: "M7-A1-DIRTY",
+      summary: "dirty baseline",
+      now: () => FIXED_NOW,
+    });
+    const dirty = initialized.state.baseline.initialDirtyPaths;
+    assert.deepEqual(dirty.map((item) => item.path), [
+      "staged.txt",
+      "target.txt",
+      "unstaged.txt",
+      "untracked.txt",
+    ]);
+    assert.deepEqual(dirty.find((item) => item.path === "staged.txt"), {
+      path: "staged.txt",
+      indexStatus: "A",
+      worktreeStatus: " ",
+      untracked: false,
+    });
+    assert.deepEqual(dirty.find((item) => item.path === "unstaged.txt"), {
+      path: "unstaged.txt",
+      indexStatus: " ",
+      worktreeStatus: "M",
+      untracked: false,
+    });
+    assert.deepEqual(dirty.find((item) => item.path === "untracked.txt"), {
+      path: "untracked.txt",
+      indexStatus: "?",
+      worktreeStatus: "?",
+      untracked: true,
+    });
+    assert.equal(dirty.some((item) => item.path === "source.txt"), false);
+
+    assert.deepEqual(
+      parsePorcelainV1Z("C  copy-target.txt\0copy-source.txt\0"),
+      [{
+        path: "copy-target.txt",
+        indexStatus: "C",
+        worktreeStatus: " ",
+        untracked: false,
+      }],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testGitBaselineRejectsInvalidRepositoryStatesWithoutPersistence() {
+  const cases = [
+    {
+      storyId: "M7-A1-DETACHED",
+      prepare: async (root) => {
+        await execFileAsync("git", ["checkout", "--detach"], { cwd: root, windowsHide: true });
+      },
+    },
+    {
+      storyId: "M7-A1-UNBORN",
+      prepare: async (root) => {
+        await execFileAsync("git", ["checkout", "--orphan", "unborn"], { cwd: root, windowsHide: true });
+        await execFileAsync("git", ["rm", "-rf", "--cached", "."], { cwd: root, windowsHide: true });
+      },
+    },
+  ];
+  for (const scenario of cases) {
+    const { root } = await createFixture();
+    try {
+      await scenario.prepare(root);
+      await assert.rejects(
+        runStateCommand({
+          root,
+          command: "init",
+          storyId: scenario.storyId,
+          summary: "invalid git state",
+          now: () => FIXED_NOW,
+        }),
+        /attached branch and committed HEAD/i,
+      );
+      for (const relative of [
+        `.harness/states/e2e-${scenario.storyId}.json`,
+        `.harness/states/e2e-${scenario.storyId}.events.jsonl`,
+        ".harness/states/active-run.json",
+      ]) {
+        await assert.rejects(
+          readFile(path.join(root, relative)),
+          (error) => error?.code === "ENOENT",
+        );
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+}
+
+async function testGitBaselineRejectsIdentityDriftAndGitFailureWithoutPersistence() {
+  for (const scenario of ["head-drift", "branch-drift", "status-failure"]) {
+    const { root } = await createFixture();
+    try {
+      let headReads = 0;
+      let branchReads = 0;
+      const executeGit = async (args) => {
+        if (args[0] === "rev-parse") {
+          headReads += 1;
+          return {
+            stdout: `${headReads === 2 && scenario === "head-drift" ? "b".repeat(40) : "a".repeat(40)}\n`,
+            stderr: "",
+          };
+        }
+        if (args[0] === "symbolic-ref") {
+          branchReads += 1;
+          return {
+            stdout: `${branchReads === 2 && scenario === "branch-drift" ? "other" : "dev"}\n`,
+            stderr: "",
+          };
+        }
+        if (scenario === "status-failure") throw new Error("injected status failure");
+        return { stdout: "", stderr: "" };
+      };
+      const storyId = `M7-A1-${scenario.toUpperCase()}`;
+      await assert.rejects(
+        runStateCommand({
+          root,
+          command: "init",
+          storyId,
+          summary: "baseline failure",
+          now: () => FIXED_NOW,
+          executeGit,
+        }),
+        scenario === "status-failure" ? /injected status failure/i : /HEAD or branch changed/i,
+      );
+      for (const relative of [
+        `.harness/states/e2e-${storyId}.json`,
+        `.harness/states/e2e-${storyId}.events.jsonl`,
+        ".harness/states/active-run.json",
+      ]) {
+        await assert.rejects(
+          readFile(path.join(root, relative)),
+          (error) => error?.code === "ENOENT",
+        );
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+}
+
+async function testV2TemplateAndWorkflowAssetsMatchContract() {
+  const templatePath = path.join(REPOSITORY_ROOT, ".harness/states/e2e-state-v2.template.json");
+  const workflowPath = path.join(REPOSITORY_ROOT, ".harness/workflows/e2e-development-v2.yaml");
+  const template = JSON.parse(await readFile(templatePath, "utf8"));
+  const workflow = await readFile(workflowPath, "utf8");
+
+  const metadata = validateStateDocument(template);
+  assert.equal(metadata.schemaVersion, "2.0");
+  assert.equal(Object.hasOwn(template, "tasks"), false);
+  assert.deepEqual(template.dag.nodes, []);
+  assert.equal(template.runtime.activeBlock, null);
+  assert.equal(template.runtime.status, "template");
+  assert.equal(template.baseline.head, null);
+
+  assert.match(workflow, /^schema_version: "2\.0"$/m);
+  assert.match(workflow, /^state_file: \.harness\/states\/e2e-state-v2\.template\.json$/m);
+  assert.match(workflow, /^  - id: delivery-preparation$/m);
+  assert.doesNotMatch(workflow, /^  - id: git-delivery$/m);
+}
+
+async function testWorkflowMetadataIsReturnedAndBoundToStateVersion() {
+  const { root } = await createFixture();
+  try {
+    const initialized = await runStateCommand({
+      root,
+      command: "init",
+      storyId: "M7-A1-WORKFLOW",
+      summary: "workflow metadata",
+      now: () => FIXED_NOW,
+    });
+    const workflow = await readWorkflowDefinition(root, initialized.state);
+    assert.equal(workflow.schemaVersion, "2.0");
+    assert.equal(workflow.stateFile, ".harness/states/e2e-state-v2.template.json");
+
+    const workflowPath = ".harness/workflows/e2e-development-v2.yaml";
+    const validSource = await readFile(path.join(root, workflowPath), "utf8");
+    await write(root, workflowPath, validSource.replace('schema_version: "2.0"', 'schema_version: "1.0"'));
+    await assert.rejects(
+      readWorkflowDefinition(root, initialized.state),
+      /workflow schema_version.*runtime\.workflowVersion/i,
+    );
+
+    await write(
+      root,
+      workflowPath,
+      validSource.replace(
+        "state_file: .harness/states/e2e-state-v2.template.json",
+        "state_file: .harness/states/e2e-state.template.json",
+      ),
+    );
+    await assert.rejects(
+      readWorkflowDefinition(root, initialized.state),
+      /workflow state_file.*e2e-state-v2\.template\.json/i,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 await testInitCreatesRunAndPointerWithoutEditingTemplate();
 await testStatusLocatesRunThroughPointer();
 await testExplicitStateFileIsIndependentFromActivePointer();
@@ -1530,7 +2029,7 @@ await testReviewBlockerGate();
 await testBlockAndResumeRestorePreviousPhase();
 await testPassedTestsAdvanceAndTaskDagValidatorBlocks();
 await testBuildOnlyCanAdvanceWithoutApproval();
-await testCompleteOnlyFromGitDelivery();
+await testCompleteFromDeliveryPreparationWithoutGitApproval();
 await testRunLockRejectsConcurrentUpdate();
 await testStatusReadsHighestValidInterruptedState();
 await testStatusRejectsPointerAheadOfRecoverableState();
@@ -1555,4 +2054,11 @@ await testInitRejectsInvalidRecoverablePointerContract();
 await testStateValidatorRequiresRuntimeMetadata();
 await testStateValidatorAcceptsAndRejectsActivePointer();
 await testRuntimeIsRegisteredInHarnessContracts();
+await testStateContractDispatchesVersionsAndReadOnlyCommands();
+await testV2TemplateAndWorkflowAssetsMatchContract();
+await testWorkflowMetadataIsReturnedAndBoundToStateVersion();
+await testResumeRejectsInvalidPreviousPhaseWithoutPersistence();
+await testGitBaselineCapturesDirtyPathsAndRenameOrdering();
+await testGitBaselineRejectsInvalidRepositoryStatesWithoutPersistence();
+await testGitBaselineRejectsIdentityDriftAndGitFailureWithoutPersistence();
 console.log("state-runtime tests passed");
