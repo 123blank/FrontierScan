@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/delivery-receipt.schema.json",
+  "title": "FrontierScan Delivery Receipt",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "path": { "type": "string", "minLength": 1, "pattern": "^(?!/|[A-Za-z]:|.*\\\\|.*(?:^|/)\\.\\.?/).+$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "pathArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/path" },
+      "uniqueItems": true
+    }
+  },
+  "type": "object",
+  "required": [
+    "schemaVersion", "receiptId", "storyId", "runId", "stateFile", "stateSha256",
+    "eventsFile", "eventsSha256", "baselineHead", "deliverySummaryFile",
+    "deliverySummarySha256", "ownedManifestFile", "ownedManifestSha256",
+    "commit", "push", "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "receiptId": { "type": "string", "pattern": "^DR-[a-f0-9]{32}$" },
+    "storyId": { "$ref": "#/$defs/id" },
+    "runId": { "$ref": "#/$defs/id" },
+    "stateFile": { "$ref": "#/$defs/path" },
+    "stateSha256": { "$ref": "#/$defs/sha256" },
+    "eventsFile": { "$ref": "#/$defs/path" },
+    "eventsSha256": { "$ref": "#/$defs/sha256" },
+    "baselineHead": { "$ref": "#/$defs/commit" },
+    "deliverySummaryFile": { "$ref": "#/$defs/path" },
+    "deliverySummarySha256": { "$ref": "#/$defs/sha256" },
+    "ownedManifestFile": { "$ref": "#/$defs/path" },
+    "ownedManifestSha256": { "$ref": "#/$defs/sha256" },
+    "commit": {
+      "type": "object",
+      "required": ["status", "sha", "parents", "filesSinceBaseline", "extraFiles"],
+      "properties": {
+        "status": { "enum": ["not-requested", "recorded"] },
+        "sha": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/commit" }] },
+        "parents": { "type": "array", "items": { "$ref": "#/$defs/commit" }, "uniqueItems": true },
+        "filesSinceBaseline": { "$ref": "#/$defs/pathArray" },
+        "extraFiles": { "$ref": "#/$defs/pathArray" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "not-requested" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "sha": { "type": "null" },
+              "parents": { "maxItems": 0 },
+              "filesSinceBaseline": { "maxItems": 0 },
+              "extraFiles": { "maxItems": 0 }
+            }
+          },
+          "else": { "properties": { "sha": { "$ref": "#/$defs/commit" } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "push": {
+      "type": "object",
+      "required": ["status", "remote", "ref", "commit"],
+      "properties": {
+        "status": { "enum": ["not-requested", "recorded"] },
+        "remote": { "type": ["string", "null"], "minLength": 1 },
+        "ref": { "type": ["string", "null"], "pattern": "^refs/.+" },
+        "commit": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/commit" }] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "not-requested" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "remote": { "type": "null" },
+              "ref": { "type": "null" },
+              "commit": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "remote": { "type": "string", "minLength": 1 },
+              "ref": { "type": "string", "pattern": "^refs/.+" },
+              "commit": { "$ref": "#/$defs/commit" }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "recordedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

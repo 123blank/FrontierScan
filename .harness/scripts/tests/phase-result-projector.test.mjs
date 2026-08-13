@@ -116,8 +116,10 @@ async function testAllPhaseOwnershipAndImplementationTaskUpdates() {
       outOfPredictionFiles: [],
       unrelatedDirtyFiles: [],
       remainingRisks: [],
-      summaryFile: null,
-      summarySha256: null,
+      summaryFile: ".harness/runs/M7-A2-PROJECT/phases/08-delivery-preparation/delivery-report.md",
+      summarySha256: `sha256:${"c".repeat(64)}`,
+      ownedManifestFile: ".harness/runs/M7-A2-PROJECT/delivery/owned-manifest.json",
+      ownedManifestSha256: `sha256:${"d".repeat(64)}`,
       gitStatus: "not-requested",
     }, "delivery"],
   ];

@@ -450,10 +450,23 @@
             "required": ["path", "indexStatus", "worktreeStatus", "untracked"],
             "properties": {
               "path": { "type": "string", "minLength": 1 },
+              "sourcePath": { "$ref": "#/$defs/path" },
               "indexStatus": { "type": "string", "minLength": 1, "maxLength": 1 },
               "worktreeStatus": { "type": "string", "minLength": 1, "maxLength": 1 },
               "untracked": { "type": "boolean" }
             },
+            "allOf": [
+              {
+                "if": {
+                  "anyOf": [
+                    { "properties": { "indexStatus": { "enum": ["R", "C"] } }, "required": ["indexStatus"] },
+                    { "properties": { "worktreeStatus": { "enum": ["R", "C"] } }, "required": ["worktreeStatus"] }
+                  ]
+                },
+                "then": { "required": ["sourcePath"] },
+                "else": { "not": { "required": ["sourcePath"] } }
+              }
+            ],
             "additionalProperties": false
           }
         },
@@ -663,6 +676,8 @@
         "remainingRisks",
         "summaryFile",
         "summarySha256",
+        "ownedManifestFile",
+        "ownedManifestSha256",
         "gitStatus"
       ],
       "properties": {
@@ -673,6 +688,8 @@
         "remainingRisks": { "type": "array", "items": { "$ref": "#/$defs/remainingRisk" } },
         "summaryFile": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
         "summarySha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "ownedManifestFile": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "ownedManifestSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
         "gitStatus": { "enum": ["not-requested", "requested"] }
       },
       "additionalProperties": false
@@ -705,6 +722,52 @@
         "properties": {
           "delivery": {
             "properties": { "summarySha256": { "$ref": "#/$defs/sha256" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "delivery": {
+            "properties": { "ownedManifestFile": { "type": "null" } },
+            "required": ["ownedManifestFile"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "delivery": {
+            "properties": { "ownedManifestSha256": { "type": "null" } }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "delivery": {
+            "properties": { "ownedManifestSha256": { "$ref": "#/$defs/sha256" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "delivery": {
+            "properties": { "status": { "const": "ready" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "delivery": {
+            "properties": {
+              "summaryFile": { "$ref": "#/$defs/path" },
+              "summarySha256": { "$ref": "#/$defs/sha256" },
+              "ownedManifestFile": { "$ref": "#/$defs/path" },
+              "ownedManifestSha256": { "$ref": "#/$defs/sha256" }
+            }
           }
         }
       }

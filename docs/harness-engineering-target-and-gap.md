@@ -571,4 +571,5 @@ git diff --check
 13. 每个 v2 阶段使用统一结构化 `result.json`，Markdown 不作为 Runtime 的核心事实解析源。
 14. `accepted-with-known-gaps` 和 `accepted-stale` 必须逐项获得用户批准并绑定理由与证据。
 15. M8 首个真实 Provider 为只读 `code-reviewer`；并行、Fork-Join 和本地 Docker Compose 闭环按 M9-M11 依次推进。
-16. M7-A3 已实现稳定 criterion、DAG/test/verification 覆盖和 `verification-gap` 逐项批准；下一优先子里程碑为 `M7-A4：运行时一致性与交付语义`。
+16. M7-A3 已实现稳定 criterion、DAG/test/verification 覆盖和 `verification-gap` 逐项批准。
+17. M7-A4 已通过 fixture、兼容回归和独立审核，实现 record 语义幂等、actual-only owned 推导、受控 manifest、delivery apply 对账和独立 delivery receipt；下一优先子里程碑为 `M7-B：最小确定性串行驱动器`。

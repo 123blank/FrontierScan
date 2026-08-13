@@ -23,4 +23,6 @@
 - M7-A3 已实现稳定 `criterionId`、DAG 2.0 `criterionIds`、测试与验证覆盖门禁、验收汇总重算，以及 `verification-gap` 的逐项用户批准回执。
 - `accepted-with-known-gaps` 只能引用当前 attempt、当前 case 和当前证据对应的正式 approval；optional-only 的失败或阻塞如实保留但不阻止完成。
 - `approve-gap` 与 `apply` 使用同一 Story 写锁；批准命令只更新 attempt 内 result 和 receipt，不单独推进 State。
-- 知识新鲜度门禁、owned files 推导和交付回执仍分别属于 M7-C 和 M7-A4；确定性串行驱动器属于 M7-B。
+- M7-A4 已实现 State v2 record 语义幂等、baseline 到工作树净变化、actual-only owned 推导、受控 owned manifest、delivery apply 对账和 completed State 外的版本化 delivery receipt。
+- `run-delivery.ps1` 不执行 Git 写操作。`PrepareManifest` 只在 active `delivery-preparation` 阶段运行；`Record` 只接受 completed State v2，并可只读核对 commit tree 和 remote ref。
+- 知识新鲜度门禁仍属于 M7-C；确定性串行驱动器属于 M7-B。

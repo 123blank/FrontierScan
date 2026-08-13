@@ -32,6 +32,9 @@ const PHASE_RESULT_PROJECTOR_MODULE = path.resolve(path.dirname(fileURLToPath(im
 const TASK_DAG_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "task-dag-contract.mjs");
 const BATCH_FINALIZATION_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "batch-finalization-contract.mjs");
 const IMPLEMENTATION_OWNER_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "implementation-owner-contract.mjs");
+const RECORD_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "record-contract.mjs");
+const DELIVERY_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "delivery-contract.mjs");
+const DELIVERY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "delivery-runtime.mjs");
 const VALIDATE_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "validate-state.ps1");
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const execFileAsync = promisify(execFile);
@@ -567,6 +570,73 @@ async function testRecordAndTestGate() {
     });
     const advanced = await runStateCommand({ root, command: "next", now: () => FIXED_NOW });
     assert.equal(advanced.state.phase, "code-review");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testV2RecordIsSemanticallyIdempotent() {
+  const { root } = await createFixture();
+  try {
+    const storyId = "M7-A4-RECORD";
+    await runStateCommand({ root, command: "init", storyId, summary: "record idempotency", now: () => FIXED_NOW });
+    const evidencePath = ".harness/reports/record-idempotency.md";
+    await write(root, evidencePath, "# First\n");
+
+    const first = await runStateCommand({
+      root,
+      command: "record",
+      recordType: "output",
+      status: "present",
+      path: evidencePath,
+      message: "first presentation",
+      actor: "codex",
+      now: () => "2026-07-16T00:01:00.000Z",
+    });
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const pointerFile = ".harness/states/active-run.json";
+    const eventFile = `.harness/states/e2e-${storyId}.events.jsonl`;
+    const afterFirst = await Promise.all([
+      readFile(path.join(root, stateFile), "utf8"),
+      readFile(path.join(root, pointerFile), "utf8"),
+      readFile(path.join(root, eventFile), "utf8"),
+    ]);
+
+    const duplicate = await runStateCommand({
+      root,
+      command: "record",
+      recordType: "output",
+      status: "missing",
+      path: evidencePath,
+      message: "different presentation",
+      actor: "other",
+      now: () => "2026-07-16T00:02:00.000Z",
+    });
+    assert.equal(duplicate.command, "already-recorded");
+    assert.equal(duplicate.state.runtime.revision, first.state.runtime.revision);
+    assert.equal(duplicate.state.runtime.records.length, first.state.runtime.records.length);
+    assert.deepEqual(
+      await Promise.all([
+        readFile(path.join(root, stateFile), "utf8"),
+        readFile(path.join(root, pointerFile), "utf8"),
+        readFile(path.join(root, eventFile), "utf8"),
+      ]),
+      afterFirst,
+    );
+
+    await write(root, evidencePath, "# Changed\n");
+    const changed = await runStateCommand({
+      root,
+      command: "record",
+      recordType: "output",
+      status: "present",
+      path: evidencePath,
+      message: "new evidence",
+      now: () => "2026-07-16T00:03:00.000Z",
+    });
+    assert.equal(changed.command, "record");
+    assert.equal(changed.state.runtime.revision, first.state.runtime.revision + 1);
+    assert.equal(changed.state.runtime.records.length, first.state.runtime.records.length + 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1481,6 +1551,9 @@ quality_gates: []
       [TASK_DAG_CONTRACT_MODULE, ".harness/scripts/lib/task-dag-contract.mjs"],
       [BATCH_FINALIZATION_CONTRACT_MODULE, ".harness/scripts/lib/batch-finalization-contract.mjs"],
       [IMPLEMENTATION_OWNER_CONTRACT_MODULE, ".harness/scripts/lib/implementation-owner-contract.mjs"],
+      [RECORD_CONTRACT_MODULE, ".harness/scripts/lib/record-contract.mjs"],
+      [DELIVERY_CONTRACT_MODULE, ".harness/scripts/lib/delivery-contract.mjs"],
+      [DELIVERY_RUNTIME_MODULE, ".harness/scripts/lib/delivery-runtime.mjs"],
     ]) {
       await write(root, target, await readFile(source, "utf8"));
     }
@@ -1649,6 +1722,8 @@ async function testStateContractDispatchesVersionsAndReadOnlyCommands() {
       remainingRisks: [],
       summaryFile: null,
       summarySha256: null,
+      ownedManifestFile: null,
+      ownedManifestSha256: null,
       gitStatus: "not-requested",
     },
     approvals: [],
@@ -1945,12 +2020,19 @@ async function testGitBaselineCapturesDirtyPathsAndRenameOrdering() {
       worktreeStatus: "?",
       untracked: true,
     });
-    assert.equal(dirty.some((item) => item.path === "source.txt"), false);
+    assert.deepEqual(dirty.find((item) => item.path === "target.txt"), {
+      path: "target.txt",
+      sourcePath: "source.txt",
+      indexStatus: "R",
+      worktreeStatus: " ",
+      untracked: false,
+    });
 
     assert.deepEqual(
       parsePorcelainV1Z("C  copy-target.txt\0copy-source.txt\0"),
       [{
         path: "copy-target.txt",
+        sourcePath: "copy-source.txt",
         indexStatus: "C",
         worktreeStatus: " ",
         untracked: false,
@@ -2247,6 +2329,7 @@ await testNextExpandsRunScopedRequiredOutput();
 await testTaskDagGateUsesExpandedRequiredOutput();
 await testNextRejectsMalformedWorkflow();
 await testRecordAndTestGate();
+await testV2RecordIsSemanticallyIdempotent();
 await testReviewBlockerGate();
 await testBlockAndResumeRestorePreviousPhase();
 await testPassedTestsAdvanceAndTaskDagValidatorBlocks();

@@ -213,7 +213,7 @@
       "type": "object",
       "required": [
         "status", "ownedFiles", "outOfPredictionFiles", "unrelatedDirtyFiles", "remainingRisks",
-        "summaryFile", "summarySha256", "gitStatus"
+        "summaryFile", "summarySha256", "ownedManifestFile", "ownedManifestSha256", "gitStatus"
       ],
       "properties": {
         "status": { "enum": ["pending", "ready", "blocked"] },
@@ -236,6 +236,18 @@
             { "$ref": "#/$defs/sha256" }
           ]
         },
+        "ownedManifestFile": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "e2e-state-v2.schema.json#/$defs/path" }
+          ]
+        },
+        "ownedManifestSha256": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/sha256" }
+          ]
+        },
         "gitStatus": { "enum": ["not-requested", "requested"] }
       },
       "allOf": [
@@ -243,6 +255,22 @@
           "if": { "properties": { "summaryFile": { "type": "null" } }, "required": ["summaryFile"] },
           "then": { "properties": { "summarySha256": { "type": "null" } } },
           "else": { "properties": { "summarySha256": { "$ref": "#/$defs/sha256" } } }
+        },
+        {
+          "if": { "properties": { "ownedManifestFile": { "type": "null" } }, "required": ["ownedManifestFile"] },
+          "then": { "properties": { "ownedManifestSha256": { "type": "null" } } },
+          "else": { "properties": { "ownedManifestSha256": { "$ref": "#/$defs/sha256" } } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "ready" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "summaryFile": { "$ref": "e2e-state-v2.schema.json#/$defs/path" },
+              "summarySha256": { "$ref": "#/$defs/sha256" },
+              "ownedManifestFile": { "$ref": "e2e-state-v2.schema.json#/$defs/path" },
+              "ownedManifestSha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
         }
       ],
       "additionalProperties": false

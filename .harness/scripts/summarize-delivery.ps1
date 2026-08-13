@@ -1,5 +1,6 @@
 param(
   [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
+  [string]$StateFile,
   [string[]]$OwnedPathPrefix = @(".harness/", ".codex/", "llm-knowledge/", "docs/harness", "docs/AI-handover.md", "AGENTS.md", ".gitignore"),
   [switch]$Json
 )
@@ -43,6 +44,42 @@ function Test-OwnedPath {
 
 if (-not (Test-Path -LiteralPath (Join-Path $Root ".git"))) {
   throw "Root is not a git repository: ${Root}"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($StateFile)) {
+  $runtime = Join-Path $PSScriptRoot "lib\delivery-runtime.mjs"
+  $runtimeOutput = & node $runtime "summarize" "--root" $Root "--state-file" $StateFile "--json"
+  if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+  }
+  $runtimeResult = $runtimeOutput | ConvertFrom-Json
+  $result = [pscustomobject]@{
+    root = $Root
+    state_file = $runtimeResult.stateFile
+    owned_changes = @($runtimeResult.facts.ownedFiles)
+    out_of_prediction_files = @($runtimeResult.facts.outOfPredictionFiles)
+    unrelated_dirty_files = @($runtimeResult.facts.unrelatedDirtyFiles)
+    delivery_policy = "This script does not stage, commit, push, create PRs, or rewrite history."
+  }
+  if ($Json) {
+    $result | ConvertTo-Json -Depth 8
+    exit 0
+  }
+  Write-Output "# FrontierScan Delivery Summary"
+  Write-Output ""
+  Write-Output "State: $($result.state_file)"
+  Write-Output ""
+  Write-Output "## Owned Changes"
+  if ($result.owned_changes.Count -eq 0) { Write-Output "None." } else { $result.owned_changes | ForEach-Object { Write-Output "- $_" } }
+  Write-Output ""
+  Write-Output "## Out Of Prediction"
+  if ($result.out_of_prediction_files.Count -eq 0) { Write-Output "None." } else { $result.out_of_prediction_files | ForEach-Object { Write-Output "- $_" } }
+  Write-Output ""
+  Write-Output "## Unrelated Dirty Files"
+  if ($result.unrelated_dirty_files.Count -eq 0) { Write-Output "None." } else { $result.unrelated_dirty_files | ForEach-Object { Write-Output "- $_" } }
+  Write-Output ""
+  Write-Output "Delivery policy: $($result.delivery_policy)"
+  exit 0
 }
 
 $statusLines = @(Invoke-RepoGit -Arguments @("status", "--short", "--untracked-files=all"))

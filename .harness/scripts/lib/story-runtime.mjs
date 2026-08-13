@@ -45,6 +45,11 @@ import {
   runStateTransaction,
   withStateWriteLock,
 } from "./state-runtime.mjs";
+import { recordSemanticIdentity } from "./record-contract.mjs";
+import {
+  deriveDeliveryFacts,
+  verifyOwnedManifest,
+} from "./delivery-runtime.mjs";
 
 const PHASE_ADAPTERS = {
   "unit-test": ["harness-state-tests", "harness-m3-tests", "harness-structure", "backend-tests", "frontend-build"],
@@ -1161,13 +1166,26 @@ async function prepareWave(root, options) {
 }
 
 function phaseOutputs(root, phase, expectedPhaseRoot) {
-  return phase.required_outputs.map((output) => {
+  const outputs = phase.required_outputs.map((output) => {
     const resolved = resolveInsideRoot(root, output, "Required output");
     if (!resolved.relative.startsWith(`${expectedPhaseRoot}/`)) {
       throw new Error(`Required output must stay inside the current phase directory: ${output}`);
     }
     return resolved.relative;
   });
+  if (phase.id === "delivery-preparation") {
+    const runRoot = expectedPhaseRoot.slice(0, expectedPhaseRoot.indexOf("/phases/"));
+    outputs.push(`${runRoot}/delivery/owned-manifest.json`);
+  }
+  return outputs;
+}
+
+function isAllowedPhaseOutput(output, phaseRoot, state) {
+  return output.startsWith(`${phaseRoot}/`)
+    || (
+      state.phase === "delivery-preparation"
+      && output === `.harness/runs/${state.runtime.runId}/delivery/owned-manifest.json`
+    );
 }
 
 function validateTask(root, task, state, phase, expectedPhaseRoot) {
@@ -1197,7 +1215,7 @@ function validateTask(root, task, state, phase, expectedPhaseRoot) {
     throw new Error("Dispatch task does not match the workflow contract.");
   }
   for (const output of task.expectedOutputs) {
-    if (!output.startsWith(`${expectedPhaseRoot}/`)) {
+    if (!isAllowedPhaseOutput(output, expectedPhaseRoot, state)) {
       throw new Error("Dispatch task output is outside the current phase directory.");
     }
   }
@@ -2100,7 +2118,7 @@ async function validateResult(root, result, task, state, phaseRoot) {
     }
     for (const output of result.outputs) {
       const resolved = resolveInsideRoot(root, output.path, "Result output");
-      if (!resolved.relative.startsWith(`${phaseRoot}/`)) {
+      if (!isAllowedPhaseOutput(resolved.relative, phaseRoot, state)) {
         throw new Error(`Result output must stay inside the current phase directory: ${output.path}`);
       }
       const content = await readRegularFile(resolved.fullPath, "Result output");
@@ -2139,7 +2157,7 @@ async function validateResult(root, result, task, state, phaseRoot) {
   }
   const normalizedOutputs = outputPaths.map((output) => {
     const resolved = resolveInsideRoot(root, output, "Result output");
-    if (!resolved.relative.startsWith(`${phaseRoot}/`)) {
+    if (!isAllowedPhaseOutput(resolved.relative, phaseRoot, state)) {
       throw new Error(`Result output must stay inside the current phase directory: ${output}`);
     }
     return resolved.relative;
@@ -2308,21 +2326,53 @@ function outputRecord(result, output, timestamp, index) {
   };
 }
 
-function recordIdentity(record) {
-  return [
-    record.type, record.phase, record.status, record.path ?? "",
-    record.sha256 ?? "", record.actor,
-  ].join("\0");
-}
-
 function appendUniqueRecords(state, records) {
-  const identities = new Set(state.runtime.records.map(recordIdentity));
+  const identities = new Set(state.runtime.records.map(recordSemanticIdentity));
   for (const record of records) {
-    const identity = recordIdentity(record);
+    const identity = recordSemanticIdentity(record);
     if (!identities.has(identity)) {
       state.runtime.records.push(record);
       identities.add(identity);
     }
+  }
+}
+
+function assertSamePaths(actual, expected, label) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`${label} does not match Runtime-derived delivery facts.`);
+  }
+}
+
+async function assertDeliveryPreparation(root, state, result) {
+  const payload = result.payload;
+  const verified = await verifyOwnedManifest({
+    root,
+    state,
+    manifestFile: payload.ownedManifestFile,
+    manifestSha256: payload.ownedManifestSha256,
+  });
+  assertSamePaths(payload.ownedFiles, verified.facts.ownedFiles, "Delivery ownedFiles");
+  assertSamePaths(
+    payload.outOfPredictionFiles,
+    verified.facts.outOfPredictionFiles,
+    "Delivery outOfPredictionFiles",
+  );
+  assertSamePaths(
+    payload.unrelatedDirtyFiles,
+    verified.facts.unrelatedDirtyFiles,
+    "Delivery unrelatedDirtyFiles",
+  );
+  const summary = resolveInsideRoot(root, payload.summaryFile, "Delivery summary");
+  const summaryContent = await readRegularFile(summary.fullPath, "Delivery summary");
+  if (sha256Buffer(summaryContent) !== payload.summarySha256) {
+    throw new Error("Delivery summary hash changed.");
+  }
+  const outputByPath = new Map(result.outputs.map((item) => [item.path, item.sha256]));
+  if (outputByPath.get(payload.summaryFile) !== payload.summarySha256) {
+    throw new Error("Delivery summary must be bound as a result output.");
+  }
+  if (outputByPath.get(payload.ownedManifestFile) !== payload.ownedManifestSha256) {
+    throw new Error("Owned manifest must be bound as a result output.");
   }
 }
 
@@ -2477,6 +2527,9 @@ async function applyCompletedV2(root, options, context) {
       if (await fileSha256(dagPath, "Task DAG") !== result.payload.taskDagSha256) {
         throw new Error("Task DAG hash changed before State projection.");
       }
+    }
+    if (phase.id === "delivery-preparation") {
+      await assertDeliveryPreparation(root, fresh.state, result);
     }
     const candidate = projectCompletedPhaseResult({ state: fresh.state, result, taskDag });
     if (phase.id === "interface-verification") {

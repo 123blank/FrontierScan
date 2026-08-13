@@ -277,5 +277,18 @@ export function validateDeliveryData(value, label = "Delivery") {
     pathValue(value.summaryFile, `${label}.summaryFile`);
     if (!SHA256_PATTERN.test(value.summarySha256)) throw new Error(`${label}.summarySha256 is invalid.`);
   }
+  if ((value.ownedManifestFile === null) !== (value.ownedManifestSha256 === null)) {
+    throw new Error(`${label} owned manifest file and hash must both be null or both be present.`);
+  }
+  if (value.ownedManifestFile !== null) {
+    pathValue(value.ownedManifestFile, `${label}.ownedManifestFile`);
+    if (!SHA256_PATTERN.test(value.ownedManifestSha256)) throw new Error(`${label}.ownedManifestSha256 is invalid.`);
+  }
+  if (value.status === "ready" && value.summaryFile === null) {
+    throw new Error(`${label} ready status requires a summary file and hash.`);
+  }
+  if (value.status === "ready" && value.ownedManifestFile === null) {
+    throw new Error(`${label} ready status requires an owned manifest file and hash.`);
+  }
   enumValue(value.gitStatus, ["not-requested", "requested"], `${label}.gitStatus`);
 }

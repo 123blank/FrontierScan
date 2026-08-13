@@ -2,7 +2,7 @@
 
 > 适用仓库：`D:\ProjectStudy\FrontierScan`
 >
-> 快照日期：2026-08-10
+> 快照日期：2026-08-13
 >
 > 维护目的：让新的 Codex 会话在不依赖旧聊天记录的情况下，尽可能准确地恢复项目事实、工作阶段、安全边界、用户习惯和下一步方向。
 >
@@ -1037,13 +1037,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 截至 2026-08-13：
 
-- 当前分支为 `dev`，本轮实施基线为 `fe65b0b feat(harness): implement M7-A2 phase result projection`。
-- M6-A 已完成真实单业务闭环；M7-A1 State v2 和 M7-A2 阶段结果投影已提交并推送。
-- M7-A3 验收追踪与语义门禁已完成实现和 fixture 回归；首轮 3 个 BLOCKER 和 1 个 WARNING 修复后通过第二轮独立只读代码审核。当前工作区仍未提交。
-- M7-A3 已实现稳定 `criterionId`、DAG 2.0、required DAG/test/verification 覆盖门禁、验收汇总重算、optional 非阻塞语义和 `verification-gap` 逐项用户批准回执。
-- `approve-gap` 与 `apply` 使用同一 Story 写锁；完成门禁只消费九阶段唯一 applied 结果，并允许由 blocked/resume 日志解释的合法 revision 间隔。
-- 全量兼容回归已通过：Batch 32/32、串行批次 1/1、Worktree 28/28、集成 44/44、生命周期 39/39、Wave 35/35、执行 ledger 9/9、Worktree Worker/Wave 集成与回收 97/97。
-- Harness smoke、结构校验、State v2 模板、DAG 2.0 示例和 `git diff --check` 已通过；知识 backend/frontend/common 仍为 `stale-or-incomplete`，闭环属于 M7-C。
+- 当前分支为 `dev`，本轮实施基线为 `cea21a8 feat(harness): implement M7-A3 acceptance gates`。
+- M6-A 已完成真实单业务闭环；M7-A1、M7-A2 和 M7-A3 已提交，M7-A4 当前工作区尚未提交。
+- M7-A4 已完成 State v2 record 语义幂等、baseline 到当前工作树净变化、`implementation.actualFiles` 唯一 owned 来源、prediction 风险分类、控制资产排除、owned manifest 和 delivery apply 原子对账。
+- `done/completed` 仍不表示 Git 已提交或推送；completed State 外可生成 append-only delivery receipt，只读核对 commit tree 和 remote ref，不执行 Git 写操作。
+- 三轮独立审核发现的删除重建归并、跨控制资产 rename/copy、manifest 锁/阶段约束、POSIX mode、receipt 漂移、遗留锁恢复和 CLI 参数问题已全部关闭；最终结论为无 BLOCKER/WARNING。
+- 核心 Runtime、结构、smoke 和兼容回归通过；大型 Worker/Wave 综合套件运行到 72 条均通过后触发 10 分钟超时，未产生失败证据。
+- 知识 backend/frontend/common 的 stale 闭环仍属于 M7-C。
 - 当前正式仓库没有执行 `git add`、`git commit`、`git push`、Worktree、Docker、发布或部署。
-- M7-A3 审核通过后，下一子里程碑为 `M7-A4：运行时一致性与交付语义`；M7 整体真实 Story 验收仍由 M7-D 完成。
-- 项目仍不具备确定性串行驱动器、knowledge stale 闭环、owned files 与 delivery receipt、真实 Agent Provider、多 Story Fork-Join、本地 Compose 验收和自动 Git 交付。
+- M7-A4 当前仅待提交；提交后下一子里程碑为 `M7-B：最小确定性串行驱动器`，M7 整体真实 Story 验收仍由 M7-D 完成。
+- 项目仍不具备确定性串行驱动器、knowledge stale 闭环、真实 Agent Provider、多 Story Fork-Join、本地 Compose 验收和自动 Git 交付。

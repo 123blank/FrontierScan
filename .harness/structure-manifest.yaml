@@ -86,6 +86,8 @@ required_files:
   - .harness/schemas/worktree-wave-retirement-recovery-lock.schema.json
   - .harness/schemas/worktree-wave-task-retirement-receipt.schema.json
   - .harness/schemas/worktree-wave-retirement-receipt.schema.json
+  - .harness/schemas/owned-manifest.schema.json
+  - .harness/schemas/delivery-receipt.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
   - .harness/states/e2e-state-v2.template.json
@@ -124,6 +126,9 @@ required_files:
   - .harness/scripts/lib/batch-finalization-contract.mjs
   - .harness/scripts/lib/batch-runtime.mjs
   - .harness/scripts/lib/implementation-owner-contract.mjs
+  - .harness/scripts/lib/record-contract.mjs
+  - .harness/scripts/lib/delivery-contract.mjs
+  - .harness/scripts/lib/delivery-runtime.mjs
   - .harness/scripts/lib/worktree-wave-execution-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
@@ -145,6 +150,9 @@ required_files:
   - .harness/scripts/tests/serial-batch-runtime.test.mjs
   - .harness/scripts/tests/worktree-wave-runtime.test.mjs
   - .harness/scripts/tests/worktree-wave-execution-runtime.test.mjs
+  - .harness/scripts/tests/record-contract.test.mjs
+  - .harness/scripts/tests/delivery-runtime.test.mjs
+  - .harness/scripts/tests/delivery-cli.test.ps1
   - .harness/scripts/tests/task-dag.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
@@ -159,6 +167,7 @@ required_files:
   - .harness/scripts/run-state.ps1
   - .harness/scripts/run-story.ps1
   - .harness/scripts/run-worktree.ps1
+  - .harness/scripts/run-delivery.ps1
   - .codex/agents/agents.yaml
   - .codex/agents/worker-policies.json
   - .codex/skills/README.md

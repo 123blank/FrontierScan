@@ -190,7 +190,7 @@ function validateDirtyPaths(items) {
     const label = `E2E v2 baseline.initialDirtyPaths[${index}]`;
     assertKeys(
       item,
-      new Set(["path", "indexStatus", "worktreeStatus", "untracked"]),
+      new Set(["path", "sourcePath", "indexStatus", "worktreeStatus", "untracked"]),
       ["path", "indexStatus", "worktreeStatus", "untracked"],
       label,
     );
@@ -200,6 +200,12 @@ function validateDirtyPaths(items) {
     }
     if (paths.has(item.path)) throw new Error(`${label}.path must be unique.`);
     paths.add(item.path);
+    if (Object.hasOwn(item, "sourcePath")) {
+      assertString(item.sourcePath, `${label}.sourcePath`);
+      if (path.isAbsolute(item.sourcePath) || item.sourcePath.replaceAll("\\", "/").startsWith("../")) {
+        throw new Error(`${label}.sourcePath must be repository-relative.`);
+      }
+    }
     if (typeof item.indexStatus !== "string" || item.indexStatus.length !== 1) {
       throw new Error(`${label}.indexStatus must be one character.`);
     }
@@ -207,6 +213,10 @@ function validateDirtyPaths(items) {
       throw new Error(`${label}.worktreeStatus must be one character.`);
     }
     if (typeof item.untracked !== "boolean") throw new Error(`${label}.untracked must be boolean.`);
+    const renameOrCopy = ["R", "C"].includes(item.indexStatus) || ["R", "C"].includes(item.worktreeStatus);
+    if (renameOrCopy !== Object.hasOwn(item, "sourcePath")) {
+      throw new Error(`${label}.sourcePath must be present exactly for rename/copy entries.`);
+    }
   }
 }
 
@@ -403,7 +413,7 @@ export function validateE2EStateV2(state) {
 
   const deliveryFields = [
     "status", "ownedFiles", "outOfPredictionFiles", "unrelatedDirtyFiles", "remainingRisks",
-    "summaryFile", "summarySha256", "gitStatus",
+    "summaryFile", "summarySha256", "ownedManifestFile", "ownedManifestSha256", "gitStatus",
   ];
   assertKeys(state.delivery, new Set(deliveryFields), deliveryFields, "E2E v2 delivery");
   assertEnum(state.delivery.status, new Set(["pending", "ready", "blocked"]), "E2E v2 delivery.status");
@@ -413,6 +423,12 @@ export function validateE2EStateV2(state) {
   if (state.delivery.summaryFile !== null) assertString(state.delivery.summaryFile, "E2E v2 delivery.summaryFile");
   if (state.delivery.summarySha256 !== null && !SHA256_PATTERN.test(state.delivery.summarySha256)) {
     throw new Error("E2E v2 delivery.summarySha256 must be a SHA-256 hash.");
+  }
+  if (state.delivery.ownedManifestFile !== null) {
+    assertString(state.delivery.ownedManifestFile, "E2E v2 delivery.ownedManifestFile");
+  }
+  if (state.delivery.ownedManifestSha256 !== null && !SHA256_PATTERN.test(state.delivery.ownedManifestSha256)) {
+    throw new Error("E2E v2 delivery.ownedManifestSha256 must be a SHA-256 hash.");
   }
   assertEnum(state.delivery.gitStatus, new Set(["not-requested", "requested"]), "E2E v2 delivery.gitStatus");
   validateDeliveryData(state.delivery, "E2E v2 delivery");

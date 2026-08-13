@@ -474,7 +474,7 @@ function validateInterfaceVerificationPayload(payload) {
 function validateDeliveryPreparationPayload(payload) {
   const fields = [
     "status", "ownedFiles", "outOfPredictionFiles", "unrelatedDirtyFiles", "remainingRisks",
-    "summaryFile", "summarySha256", "gitStatus",
+    "summaryFile", "summarySha256", "ownedManifestFile", "ownedManifestSha256", "gitStatus",
   ];
   assertStrictObject(payload, fields, "Delivery preparation payload");
   validateDeliveryData(payload, "Delivery preparation payload");

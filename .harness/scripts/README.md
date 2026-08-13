@@ -8,6 +8,7 @@
 validate-state.ps1
 run-state.ps1
 run-story.ps1
+run-delivery.ps1
 run-worktree.ps1
 run-worktree-integration.ps1
 validate-task-dag.ps1
@@ -27,6 +28,9 @@ smoke-harness-flow.ps1
 
 - `validate-state.ps1`、`validate-task-dag.ps1`、`validate-structure.ps1`、`kb-query.ps1`、`select-tests.ps1`、`collect-diff-context.ps1`、`scan-knowledge-inputs.ps1`、`check-kb-freshness.ps1`、`plan-worktrees.ps1`、`derive-interface-cases.ps1`、`plan-build.ps1`、`summarize-delivery.ps1` 和 `smoke-harness-flow.ps1` 已实现为只读辅助脚本；状态校验覆盖 E2E、Product 和 `active-run` 指针。
 - `run-state.ps1` 是单 Story 确定性状态运行时入口，支持 `init/status/validate/record/next/block/resume/complete`。更新命令使用独占锁、原子 JSON 写入和 JSONL 事务事件；`status/validate` 保持只读。
+- `run-delivery.ps1` 是 M7-A4 交付事实入口，支持 `PrepareManifest/Summarize/Record`。它只读取 Git 或写入 Harness 控制证据，不执行 `git add/commit/push`；`PrepareManifest` 在 Story 写锁内生成 owned manifest，`Record` 在 completed State 外追加版本化交付回执。
+- `lib/delivery-runtime.mjs` 从 baseline、`implementation.actualFiles`、DAG prediction 和当前 Git 净变化推导 owned、预测外与 unrelated；State 模式不再按固定路径前缀认领业务文件。`summarize-delivery.ps1` 无 `StateFile` 时保留旧兼容模式，有 `StateFile` 时使用该 Runtime。
+- `lib/record-contract.mjs` 为 State v2 手工 evidence 与 Story 自动 evidence 提供共享语义身份；相同事实重放不增加 revision、events 或 records。
 - 状态运行时核心与回归测试分别位于 `lib/state-runtime.mjs` 和 `tests/state-runtime.test.mjs`。
 - `run-story.ps1` 是 M3 单 Story文件式 Dispatcher 入口，支持 `prepare/status/run-adapter/apply`、M5-B3-B 的 `prepare-batch/finalize-batch`，以及 M5-D 的 `prepare-wave/finalize-wave`。`prepare-wave` 生成 v1.2 task/checkpoint、implementation owner 与 execution ledger；`finalize-wave` 在全部任务完成受控集成后生成正式 v1.0 phase 产物和 `checkpoint.waveFinalization`。`apply` 仍是唯一状态推进入口。
 - Dispatcher 的 task、result、checkpoint、阶段产物和命令证据位于 `.harness/runs/<storyId>/phases/`；核心与回归测试分别位于 `lib/story-runtime.mjs` 和 `tests/story-runtime.test.mjs`。

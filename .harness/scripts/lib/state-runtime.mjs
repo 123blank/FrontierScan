@@ -9,6 +9,7 @@ import {
   validateActivePointer as validatePointerContract,
   validateStateDocument,
 } from "./state-contract.mjs";
+import { recordSemanticIdentity } from "./record-contract.mjs";
 
 const STORY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ACTIVE_POINTER = ".harness/states/active-run.json";
@@ -331,8 +332,16 @@ export function parsePorcelainV1Z(source) {
     if (renamedOrCopied) {
       const sourcePath = entries[index + 1];
       if (!sourcePath) throw new Error("Git status rename/copy record is missing its source path.");
-      normalizeGitPath(sourcePath);
+      const normalizedSourcePath = normalizeGitPath(sourcePath);
       index += 1;
+      paths.set(targetPath, {
+        path: targetPath,
+        sourcePath: normalizedSourcePath,
+        indexStatus,
+        worktreeStatus,
+        untracked: false,
+      });
+      continue;
     }
     const untracked = indexStatus === "?" && worktreeStatus === "?";
     paths.set(targetPath, { path: targetPath, indexStatus, worktreeStatus, untracked });
@@ -790,6 +799,17 @@ async function recordEvidence(root, located, options) {
     createdAt: timestamp,
     ...(sha256 ? { sha256 } : {}),
   };
+  if (
+    state.schemaVersion === "2.0"
+    && state.runtime.records.some((item) => recordSemanticIdentity(item) === recordSemanticIdentity(record))
+  ) {
+    return {
+      command: "already-recorded",
+      stateFile: located.stateFile,
+      state: located.state,
+      pointer: located.pointer,
+    };
+  }
   state.runtime.records.push(record);
   if (state.schemaVersion !== "2.0" && record.type === "test") {
     state.tests.results.push({ ...record });

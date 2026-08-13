@@ -19,6 +19,7 @@ import {
 import { runStateCommand } from "../lib/state-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
 import { runWorktreeCommand } from "../lib/worktree-runtime.mjs";
+import { prepareOwnedManifest } from "../lib/delivery-runtime.mjs";
 
 const FIXED_NOW = "2026-07-16T00:00:00.000Z";
 const FIXED_DISPATCH_ID = "00000000-0000-4000-8000-000000000001";
@@ -2399,6 +2400,8 @@ function defaultV2Payload(task, records = []) {
     remainingRisks: [],
     summaryFile: null,
     summarySha256: null,
+    ownedManifestFile: null,
+    ownedManifestSha256: null,
     gitStatus: "not-requested",
   };
 }
@@ -2635,8 +2638,10 @@ async function testDispatchV2PhasePayloadsAreStrict() {
         status: "open",
         approvalId: null,
       }],
-      summaryFile: null,
-      summarySha256: null,
+      summaryFile: ".harness/runs/M7-A2-CONTRACT/phases/08-delivery-preparation/delivery-report.md",
+      summarySha256: `sha256:${"b".repeat(64)}`,
+      ownedManifestFile: ".harness/runs/M7-A2-CONTRACT/delivery/owned-manifest.json",
+      ownedManifestSha256: `sha256:${"c".repeat(64)}`,
       gitStatus: "not-requested",
     }],
   ]);
@@ -2654,6 +2659,23 @@ async function testDispatchV2PhasePayloadsAreStrict() {
         dispatchResultV2(phaseTask, { phase, payload: { ...payload, unexpected: true } }),
       ),
       /unsupported field.*unexpected/i,
+    );
+  }
+  const readyDelivery = payloads.get("delivery-preparation");
+  for (const invalid of [
+    { ...readyDelivery, summaryFile: null, summarySha256: null },
+    { ...readyDelivery, ownedManifestFile: null, ownedManifestSha256: null },
+  ]) {
+    assert.throws(
+      () => validateDispatchResultStructure(dispatchResultV2({
+        ...task,
+        phase: "delivery-preparation",
+        next: "done",
+      }, {
+        phase: "delivery-preparation",
+        payload: invalid,
+      })),
+      /ready.*summary|ready.*manifest/i,
     );
   }
 
@@ -2787,6 +2809,48 @@ async function testApplyCompletedResultAdvancesThroughM2() {
     assert.equal(
       state.runtime.records.find((record) => record.type === "phase-result")?.path,
       prepared.resultFile,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testApplyDeduplicatesManualAndAutomaticOutputRecords() {
+  const { root, storyId } = await createFixture("M7-A4-OUTPUT-DEDUPE");
+  try {
+    const stateBefore = await readJson(root, `.harness/states/e2e-${storyId}.json`);
+    const outputPath = `.harness/runs/${stateBefore.runtime.runId}/phases/00-requirement/requirement-breakdown.md`;
+    await write(root, outputPath, "# Requirement\n");
+    await runStateCommand({
+      root,
+      command: "record",
+      recordType: "output",
+      status: "present",
+      path: outputPath,
+      message: "manual evidence",
+      actor: "codex",
+      now: () => FIXED_NOW,
+    });
+
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task));
+    const applied = await runStoryCommand(storyOptions(root, { command: "apply" }));
+
+    assert.equal(
+      applied.state.runtime.records.filter((record) => (
+        record.type === "output"
+        && record.phase === "requirement"
+        && record.path === outputPath
+      )).length,
+      1,
+    );
+    assert.equal(
+      applied.state.runtime.records.filter((record) => (
+        record.type === "phase-result"
+        && record.dispatchId === prepared.task.dispatchId
+        && record.status === "applied"
+      )).length,
+      1,
     );
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -3461,6 +3525,8 @@ quality_gates:
           outOfScope: [],
         };
       } else if (phase === "implementation") {
+        await write(root, "backend/src/T1.java", "backend implementation\n");
+        await write(root, "frontend/src/T2.ts", "frontend implementation\n");
         payload = {
           taskUpdates: [
             { taskId: "T1", status: "done" },
@@ -3613,6 +3679,31 @@ quality_gates:
         ));
         assert.equal(blockedRecords.length, 1);
         continue;
+      } else if (phase === "delivery-preparation") {
+        const current = await runStateCommand({
+          root,
+          command: "status",
+          stateFile: `.harness/states/e2e-${storyId}.json`,
+        });
+        const manifest = await prepareOwnedManifest({
+          root,
+          state: current.state,
+          now: () => FIXED_NOW,
+        });
+        assert.equal(prepared.task.expectedOutputs[1], manifest.manifestFile);
+        const summaryContent = await readFile(path.join(root, outputPath));
+        payload = {
+          status: "ready",
+          ownedFiles: manifest.facts.ownedFiles,
+          outOfPredictionFiles: manifest.facts.outOfPredictionFiles,
+          unrelatedDirtyFiles: manifest.facts.unrelatedDirtyFiles,
+          remainingRisks: [],
+          summaryFile: outputPath,
+          summarySha256: `sha256:${createHash("sha256").update(summaryContent).digest("hex")}`,
+          ownedManifestFile: manifest.manifestFile,
+          ownedManifestSha256: manifest.manifestSha256,
+          gitStatus: "not-requested",
+        };
       }
       await writePreparedResult(root, prepared, dispatchResult(prepared.task, { records, payload }));
       if (phase === "requirement") historicalResultPath = prepared.resultFile;
@@ -3646,7 +3737,10 @@ quality_gates:
     const finalState = await readJson(root, `.harness/states/e2e-${storyId}.json`);
     assert.equal(finalState.runtime.status, "completed");
     assert.equal(finalState.phase, "done");
-    assert.equal(finalState.runtime.records.filter((record) => record.type === "output").length, phases.length);
+    assert.equal(
+      finalState.runtime.records.filter((record) => record.type === "output").length,
+      phases.length + 1,
+    );
     assert.equal(
       finalState.runtime.records.filter((record) => (
         record.type === "phase-result"
@@ -4252,6 +4346,7 @@ await testRunAdapterSupportsNormalLargeCommandOutput();
 await testDispatchV2ContractsUseAttemptScopedIdentity();
 await testDispatchV2PhasePayloadsAreStrict();
 await testApplyCompletedResultAdvancesThroughM2();
+await testApplyDeduplicatesManualAndAutomaticOutputRecords();
 await testApplyRejectsMissingOutputAndIdentityMismatchWithoutStateChange();
 await testApplyFailedAndBlockedResultsKeepDeterministicState();
 await testApplyKeepsStateUnchangedBeforeAtomicProjection();
