@@ -1,4 +1,5 @@
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { validateDispatchResultStructure, validateDispatchTaskStructure } from "./dispatch-contract.mjs";
 import { matchesPredictedFile } from "./task-dag-contract.mjs";
@@ -148,6 +149,18 @@ function filesystemPathKey(relativePath) {
 }
 
 function phaseRootForTask(taskFile, task) {
+  if (task.schemaVersion === "2.0") {
+    if (taskFile !== `${task.attemptRoot}/task.json`) {
+      throw new Error("Worker task file path does not match its attempt-scoped dispatch identity.");
+    }
+    const phaseRoot = path.posix.dirname(path.posix.dirname(task.attemptRoot));
+    for (const output of task.expectedOutputs) {
+      if (!output.startsWith(`${phaseRoot}/`)) {
+        throw new Error("Worker task expected output is outside its current phase directory.");
+      }
+    }
+    return phaseRoot;
+  }
   if (task.schemaVersion === "1.1" || task.schemaVersion === "1.2") {
     const expectedTaskFile = `${task.taskRoot}/task.json`;
     if (taskFile !== expectedTaskFile) {
@@ -178,6 +191,12 @@ function phaseRootForTask(taskFile, task) {
 }
 
 function resultFileForTask(task, phaseRoot, resultFile) {
+  if (task.schemaVersion === "2.0") {
+    if (resultFile !== undefined) {
+      throw new Error("An explicit Worker resultFile is not supported for attempt-scoped dispatch.");
+    }
+    return task.resultFile;
+  }
   if (task.schemaVersion !== "1.2") {
     if (resultFile !== undefined) {
       throw new Error("An explicit Worker resultFile is only supported for wave-scoped dispatch.");
@@ -276,6 +295,10 @@ function validateProviderResponse(response, task, policy, phaseRoot, predictedFi
         || result.taskRoot !== task.taskRoot)) {
     throw new Error("Worker result wave-scoped identity does not match the current task.");
   }
+  if (task.schemaVersion === "2.0"
+      && (result.runId !== task.runId || result.preparedRevision !== task.preparedRevision)) {
+    throw new Error("Worker result attempt-scoped identity does not match the current task.");
+  }
   if (result.status === "blocked" && !result.blocker) throw new Error("Blocked worker result requires blocker details.");
   const outputPaths = result.outputs.map((output) => resolveRepositoryPath(".", output.path, "Worker result output").relative);
   for (const output of outputPaths) {
@@ -287,10 +310,20 @@ function validateProviderResponse(response, task, policy, phaseRoot, predictedFi
   for (const output of outputPaths) {
     if (!pathKeys.has(filesystemPathKey(output))) throw new Error(`Worker result output does not reference a candidate file: ${output}`);
   }
+  if (task.schemaVersion === "2.0") {
+    for (const output of result.outputs) {
+      const candidate = files.find((file) => filesystemPathKey(file.path) === filesystemPathKey(output.path));
+      const sha256 = `sha256:${createHash("sha256").update(candidate.content, "utf8").digest("hex")}`;
+      if (output.bytes !== candidate.bytes || output.sha256 !== sha256) {
+        throw new Error(`Worker result output hash or bytes do not match candidate content: ${output.path}`);
+      }
+    }
+  }
   for (const record of result.records) {
     if (!record.path) continue;
     const recordPath = resolveRepositoryPath(".", record.path, "Worker result record").relative;
-    if (!recordPath.startsWith(`${phaseRoot}/`)) {
+    const evidenceRoot = task.schemaVersion === "2.0" ? `${task.attemptRoot}/evidence/` : `${phaseRoot}/`;
+    if (!recordPath.startsWith(evidenceRoot)) {
       throw new Error(`Worker result record must stay inside the current phase directory: ${recordPath}`);
     }
     if (!pathKeys.has(filesystemPathKey(recordPath))) throw new Error(`Worker result record does not reference a candidate file: ${recordPath}`);

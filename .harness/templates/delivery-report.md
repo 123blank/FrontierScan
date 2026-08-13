@@ -20,3 +20,7 @@ TBD
 ## Commit / PR Plan
 
 TBD
+
+## Result Payload
+
+`status`、`ownedFiles`、`outOfPredictionFiles`、`unrelatedDirtyFiles`、`remainingRisks`、`summaryFile`、`summarySha256`、`gitStatus`

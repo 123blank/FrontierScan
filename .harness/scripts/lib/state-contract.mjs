@@ -1,6 +1,16 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  validateBuildData,
+  validateDeliveryData,
+  validateImplementationData,
+  validateRequirementData,
+  validateReviewData,
+  validateTechnicalDesignData,
+  validateTestData,
+  validateVerificationData,
+} from "./phase-data-contract.mjs";
 
 export const E2E_STATE_V1 = "1.0";
 export const E2E_STATE_V2 = "2.0";
@@ -8,6 +18,7 @@ export const E2E_STATE_V2 = "2.0";
 const STORY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const READ_COMMANDS = new Set(["status", "validate"]);
 const WRITE_COMMANDS = new Set(["record", "next", "block", "resume", "complete"]);
 const V1_PHASES = new Set([
@@ -20,7 +31,7 @@ const V2_PHASES = new Set([
 ]);
 const V2_ACTIVE_PHASES = new Set([...V2_PHASES].filter((phase) => !["done", "blocked"].includes(phase)));
 const RUNTIME_STATUSES = new Set(["template", "active", "blocked", "completed"]);
-const RECORD_TYPES = new Set(["output", "test", "review", "approval", "note"]);
+const RECORD_TYPES = new Set(["output", "test", "review", "approval", "note", "phase-result"]);
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -71,6 +82,31 @@ function validateRecords(records, label, { strict = false } = {}) {
   assertArray(records, label);
   for (const [index, record] of records.entries()) {
     const recordLabel = `${label}[${index}]`;
+    if (strict && record?.type === "phase-result") {
+      const required = [
+        "id", "type", "phase", "status", "path", "sha256", "bytes", "message", "actor",
+        "dispatchId", "preparedRevision", "appliedRevision", "createdAt",
+      ];
+      assertKeys(record, new Set(required), required, recordLabel);
+      for (const field of ["id", "phase", "path", "message", "actor", "dispatchId"]) {
+        assertString(record[field], `${recordLabel}.${field}`, { allowEmpty: field === "message" });
+      }
+      assertEnum(record.status, new Set(["applied", "blocked"]), `${recordLabel}.status`);
+      assertEnum(record.phase, V2_ACTIVE_PHASES, `${recordLabel}.phase`);
+      if (!UUID_PATTERN.test(record.dispatchId)) throw new Error(`${recordLabel}.dispatchId must be a UUID.`);
+      if (record.id !== `result:${record.dispatchId}`) {
+        throw new Error(`${recordLabel}.id must match its dispatchId.`);
+      }
+      if (!SHA256_PATTERN.test(record.sha256)) throw new Error(`${recordLabel}.sha256 must be a SHA-256 hash.`);
+      assertInteger(record.bytes, `${recordLabel}.bytes`);
+      assertInteger(record.preparedRevision, `${recordLabel}.preparedRevision`, 1);
+      assertInteger(record.appliedRevision, `${recordLabel}.appliedRevision`, 1);
+      if (record.preparedRevision >= record.appliedRevision) {
+        throw new Error(`${recordLabel}.preparedRevision must be less than appliedRevision.`);
+      }
+      assertNullableDate(record.createdAt, `${recordLabel}.createdAt`, false);
+      continue;
+    }
     const required = ["id", "type", "phase", "status", "path", "message", "actor", "createdAt"];
     if (strict) assertKeys(record, new Set([...required, "sha256"]), required, recordLabel);
     else {
@@ -273,6 +309,7 @@ export function validateE2EStateV2(state) {
     }
     if (typeof criterion.required !== "boolean") throw new Error(`${label}.required must be boolean.`);
   }
+  validateRequirementData(state.requirement, "E2E v2 requirement");
   assertKeys(state.knowledge, new Set(["areas"]), ["areas"], "E2E v2 knowledge");
   assertArray(state.knowledge.areas, "E2E v2 knowledge.areas");
   for (const [index, area] of state.knowledge.areas.entries()) {
@@ -290,6 +327,10 @@ export function validateE2EStateV2(state) {
     assertNullableDate(area.checkedAt, `${label}.checkedAt`, true);
   }
   validateSimpleArrayObject(state.design, ["decisions", "affectedAreas", "risks"], "E2E v2 design");
+  validateTechnicalDesignData(
+    { ...state.design, knowledgeSnapshot: state.knowledge.areas },
+    "E2E v2 technical design",
+  );
 
   const dagFields = ["sourceFile", "sourceSha256", "nodes", "edges", "waves", "globalChanges", "risks"];
   assertKeys(state.dag, new Set(dagFields), dagFields, "E2E v2 dag");
@@ -308,12 +349,19 @@ export function validateE2EStateV2(state) {
   for (const field of ["actualFiles", "completedTaskIds", "notes"]) {
     assertArray(state.implementation[field], `E2E v2 implementation.${field}`);
   }
+  validateImplementationData(state.implementation, "E2E v2 implementation");
+  state.implementation.completedTaskIds.forEach((taskId) => {
+    if (!STORY_ID_PATTERN.test(taskId)) throw new Error("E2E v2 implementation.completedTaskIds item is invalid.");
+  });
 
   validateSimpleArrayObject(state.tests, ["cases", "commands", "results"], "E2E v2 tests");
+  validateTestData(state.tests, "E2E v2 tests");
   assertKeys(state.review, new Set(["findings", "status"]), ["findings", "status"], "E2E v2 review");
   assertArray(state.review.findings, "E2E v2 review.findings");
   assertString(state.review.status, "E2E v2 review.status");
+  validateReviewData(state.review, "E2E v2 review");
   validateSimpleArrayObject(state.build, ["results", "artifacts", "externalActions"], "E2E v2 build");
+  validateBuildData(state.build, "E2E v2 build");
 
   assertKeys(
     state.verification,
@@ -325,12 +373,27 @@ export function validateE2EStateV2(state) {
   assertArray(state.verification.results, "E2E v2 verification.results");
   assertKeys(
     state.verification.environment,
-    new Set(["status", "summary"]),
-    ["status", "summary"],
+    new Set(["status", "summary", "evidencePath", "evidenceSha256"]),
+    ["status", "summary", "evidencePath", "evidenceSha256"],
     "E2E v2 verification.environment",
   );
-  assertString(state.verification.environment.status, "E2E v2 verification.environment.status");
+  assertEnum(
+    state.verification.environment.status,
+    new Set(["not-checked", "available", "unavailable"]),
+    "E2E v2 verification.environment.status",
+  );
   assertString(state.verification.environment.summary, "E2E v2 verification.environment.summary", { allowEmpty: true });
+  if ((state.verification.environment.evidencePath === null)
+      !== (state.verification.environment.evidenceSha256 === null)) {
+    throw new Error("E2E v2 verification.environment evidence path and hash must both be null or both be present.");
+  }
+  if (state.verification.environment.evidencePath !== null) {
+    assertString(state.verification.environment.evidencePath, "E2E v2 verification.environment.evidencePath");
+    if (!SHA256_PATTERN.test(state.verification.environment.evidenceSha256)) {
+      throw new Error("E2E v2 verification.environment.evidenceSha256 must be a SHA-256 hash.");
+    }
+  }
+  validateVerificationData(state.verification, "E2E v2 verification");
 
   const deliveryFields = [
     "status", "ownedFiles", "outOfPredictionFiles", "unrelatedDirtyFiles", "remainingRisks",
@@ -346,6 +409,7 @@ export function validateE2EStateV2(state) {
     throw new Error("E2E v2 delivery.summarySha256 must be a SHA-256 hash.");
   }
   assertEnum(state.delivery.gitStatus, new Set(["not-requested", "requested"]), "E2E v2 delivery.gitStatus");
+  validateDeliveryData(state.delivery, "E2E v2 delivery");
   assertArray(state.approvals, "E2E v2 approvals");
   assertArray(state.worktrees, "E2E v2 worktrees");
   assertArray(state.logs, "E2E v2 logs");

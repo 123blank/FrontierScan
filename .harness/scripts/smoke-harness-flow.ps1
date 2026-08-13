@@ -68,24 +68,45 @@ Invoke-Step -Name "State Runtime" -Action {
     $workerModuleUri = ([System.Uri]::new((Resolve-Path (Join-Path $Root ".harness\scripts\lib\worker-runtime.mjs")).Path)).AbsoluteUri
     $workerSource = @"
 import { runWorkerTask } from '$workerModuleUri';
+import { createHash } from 'node:crypto';
 const root = process.argv[1];
 const taskFile = process.argv[2];
 await runWorkerTask({
   root,
   taskFile,
-  provider: ({ task }) => ({
-    files: task.expectedOutputs.map((output) => ({ path: output, content: '# Smoke requirement\n', capability: 'phase-output' })),
-    result: {
-      schemaVersion: '1.0',
-      dispatchId: task.dispatchId,
-      storyId: task.storyId,
-      phase: task.phase,
-      status: 'completed',
-      summary: 'Smoke mock worker completed.',
-      outputs: task.expectedOutputs.map((output) => ({ path: output })),
-      records: []
-    }
-  })
+  provider: ({ task }) => {
+    const content = '# Smoke requirement\n';
+    return {
+      files: task.expectedOutputs.map((output) => ({ path: output, content, capability: 'phase-output' })),
+      result: {
+        schemaVersion: task.schemaVersion,
+        dispatchId: task.dispatchId,
+        storyId: task.storyId,
+        runId: task.runId,
+        phase: task.phase,
+        preparedRevision: task.preparedRevision,
+        status: 'completed',
+        summary: 'Smoke mock worker completed.',
+        outputs: task.expectedOutputs.map((output) => ({
+          path: output,
+          sha256: 'sha256:' + createHash('sha256').update(content, 'utf8').digest('hex'),
+          bytes: Buffer.byteLength(content, 'utf8')
+        })),
+        records: [],
+        payload: {
+          acceptanceCriteria: [{
+            criterionId: 'AC-001',
+            description: 'The smoke requirement is captured.',
+            source: 'smoke-fixture',
+            required: true
+          }],
+          openQuestions: [],
+          inScope: ['Harness smoke flow'],
+          outOfScope: []
+        }
+      }
+    };
+  }
 });
 "@
     & node --input-type=module --eval $workerSource $temporaryRoot $prepared.taskFile

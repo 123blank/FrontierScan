@@ -28,3 +28,7 @@ TBD
 ## Risks
 
 - TBD
+
+## Result Payload
+
+`acceptanceCriteria`、`openQuestions`、`inScope`、`outOfScope`

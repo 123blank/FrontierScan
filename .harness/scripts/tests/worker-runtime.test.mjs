@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -42,7 +43,40 @@ function dispatchTask(overrides = {}) {
   };
 }
 
-function dispatchResult(task, overrides = {}) {
+function dispatchResult(task, overrides = {}, files = []) {
+  if (task.schemaVersion === "2.0") {
+    return {
+      schemaVersion: "2.0",
+      dispatchId: task.dispatchId,
+      storyId: task.storyId,
+      runId: task.runId,
+      phase: task.phase,
+      preparedRevision: task.preparedRevision,
+      status: "completed",
+      summary: "Mock worker completed the phase.",
+      outputs: task.expectedOutputs.map((output) => {
+        const content = files.find((file) => file.path === output)?.content ?? "";
+        return {
+          path: output,
+          sha256: `sha256:${createHash("sha256").update(content, "utf8").digest("hex")}`,
+          bytes: Buffer.byteLength(content, "utf8"),
+        };
+      }),
+      records: [],
+      payload: {
+        acceptanceCriteria: [{
+          criterionId: "AC-001",
+          description: "The requirement is captured.",
+          source: "fixture",
+          required: true,
+        }],
+        openQuestions: [],
+        inScope: ["Worker vertical fixture"],
+        outOfScope: [],
+      },
+      ...overrides,
+    };
+  }
   return {
     schemaVersion: "1.0",
     dispatchId: task.dispatchId,
@@ -589,10 +623,10 @@ async function testWorkerRejectsInvalidTimeoutBeforeProvider() {
 
 function workerResponse(task, overrides = {}) {
   const output = task.expectedOutputs[0];
+  const files = overrides.files ?? [{ path: output, content: "# Requirement\n", capability: "phase-output" }];
   return {
-    files: [{ path: output, content: "# Requirement\n", capability: "phase-output" }],
-    result: dispatchResult(task),
-    ...overrides,
+    files,
+    result: overrides.result ?? dispatchResult(task, {}, files),
   };
 }
 
@@ -1041,9 +1075,13 @@ async function testWorkerRecoversAfterFilesWrittenInterruption() {
       root,
       taskFile: prepared.taskFile,
       provider: ({ task }) => {
-        const response = workerResponse(task);
-        response.files[0].content = "# Retried requirement\n";
-        return response;
+        return workerResponse(task, {
+          files: [{
+            path: task.expectedOutputs[0],
+            content: "# Retried requirement\n",
+            capability: "phase-output",
+          }],
+        });
       },
     });
     assert.equal(await readFile(path.join(root, prepared.task.expectedOutputs[0]), "utf8"), "# Retried requirement\n");
@@ -1096,9 +1134,13 @@ async function testWorkerRejectsRepeatedDispatchAfterResultExists() {
       taskFile: prepared.taskFile,
       provider: ({ task }) => {
         repeatedProviderCalls += 1;
-        const response = workerResponse(task);
-        response.files[0].content = "# Duplicate execution\n";
-        return response;
+        return workerResponse(task, {
+          files: [{
+            path: task.expectedOutputs[0],
+            content: "# Duplicate execution\n",
+            capability: "phase-output",
+          }],
+        });
       },
     });
 

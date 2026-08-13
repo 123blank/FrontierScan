@@ -579,7 +579,9 @@ async function assertQualityGate(root, state, phaseId, requiredOutputs, options)
     await runTaskDagValidator(root, dagOutput, options);
   }
   if (phaseId === "unit-test") {
-    const results = state.tests.results.filter((item) => item.phase === phaseId);
+    const results = state.schemaVersion === "2.0"
+      ? state.runtime.records.filter((item) => item.type === "test" && item.phase === phaseId)
+      : state.tests.results.filter((item) => item.phase === phaseId);
     const latestResults = [...new Map(results.map((item) => [item.path ?? item.id, item])).values()];
     for (const result of latestResults) {
       if (!await evidenceMatches(root, result, "Test evidence")) {
@@ -594,9 +596,17 @@ async function assertQualityGate(root, state, phaseId, requiredOutputs, options)
     }
   }
   if (phaseId === "code-review") {
-    const blockers = state.review.findings.filter((item) => (
-      item.severity === "BLOCKER" && item.status !== "resolved"
-    ));
+    const blockers = state.schemaVersion === "2.0"
+      ? state.runtime.records.filter((item) => item.type === "review" && item.phase === phaseId)
+        .filter((item, index, records) => (
+          item.status === "BLOCKER"
+          && !records.slice(index + 1).some((later) => (
+            later.status === "resolved" && later.message === item.message
+          ))
+        ))
+      : state.review.findings.filter((item) => (
+        item.severity === "BLOCKER" && item.status !== "resolved"
+      ));
     if (blockers.length) throw new Error("Cannot advance with unresolved BLOCKER findings.");
   }
   if (phaseId === "git-delivery") {
@@ -769,10 +779,10 @@ async function recordEvidence(root, located, options) {
     ...(sha256 ? { sha256 } : {}),
   };
   state.runtime.records.push(record);
-  if (record.type === "test") {
+  if (state.schemaVersion !== "2.0" && record.type === "test") {
     state.tests.results.push({ ...record });
   }
-  if (record.type === "review") {
+  if (state.schemaVersion !== "2.0" && record.type === "review") {
     if (record.status === "BLOCKER") {
       state.review.findings.push({
         id: record.id,
@@ -1022,6 +1032,31 @@ export async function runStateCommand(options = {}) {
     if (options.command === "block") return blockRun(root, fresh, options);
     if (options.command === "resume") return resumeRun(root, fresh, options);
     return completeRun(root, fresh, options);
+  });
+}
+
+export async function runStateTransaction(options, mutate) {
+  const root = path.resolve(options.root ?? process.cwd());
+  const located = await locateState(root, options.stateFile);
+  validateRuntimeState(located.state);
+  const lockPath = resolveInsideRoot(root, lockRelativePath(located.stateFile), "Run lock").fullPath;
+  return withRunLock(lockPath, options, async () => {
+    const fresh = await locateState(root, located.stateFile);
+    await reconcileEventLog(root, fresh.state);
+    validateRuntimeState(fresh.state);
+    assertStateCommandAllowed(fresh.state, "next");
+    const mutation = await mutate(fresh);
+    if (!mutation?.state || !Object.hasOwn(mutation, "pointer")) {
+      throw new Error("State transaction must return a candidate state and pointer field.");
+    }
+    return persistLocated(
+      root,
+      fresh,
+      mutation.state,
+      mutation.pointer,
+      options.transactionCommand ?? "apply-result",
+      options,
+    );
   });
 }
 

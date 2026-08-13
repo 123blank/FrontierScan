@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, test } from "node:test";
 import { claimBatchTask } from "../lib/batch-runtime.mjs";
-import { runStateCommand } from "../lib/state-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
 import { runWorktreeIntegration } from "../lib/worktree-integration-runtime.mjs";
 import { runWorktreeCommand } from "../lib/worktree-runtime.mjs";
@@ -36,48 +35,44 @@ async function sha256File(filePath) {
 }
 
 async function advanceStoryToDone(root, stateFile, runId) {
-  const phases = [
-    {
-      output: `.harness/runs/${runId}/phases/04-unit-test/test-report.md`,
-      record: { recordType: "test", status: "passed", message: "Lifecycle fixture tests passed." },
-    },
-    {
-      output: `.harness/runs/${runId}/phases/05-code-review/code-review-report.md`,
-      record: { recordType: "review", status: "passed", message: "Lifecycle fixture review passed." },
-    },
-    { output: `.harness/runs/${runId}/phases/06-build-publish/build-report.md` },
-    { output: `.harness/runs/${runId}/phases/07-interface-verification/interface-verification-report.md` },
-    {
-      output: `.harness/runs/${runId}/phases/08-git-delivery/delivery-report.md`,
-      record: {
-        recordType: "approval",
-        status: "approved",
-        actor: "user",
-        message: "Approve the temporary fixture delivery.",
-      },
-      complete: true,
-    },
+  const statePath = path.join(root, stateFile);
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  const completedAt = "2026-07-22T00:00:19.000Z";
+  const outputs = [
+    `.harness/runs/${runId}/phases/04-unit-test/test-report.md`,
+    `.harness/runs/${runId}/phases/05-code-review/code-review-report.md`,
+    `.harness/runs/${runId}/phases/06-build-publish/build-report.md`,
+    `.harness/runs/${runId}/phases/07-interface-verification/interface-verification-report.md`,
+    `.harness/runs/${runId}/phases/08-git-delivery/delivery-report.md`,
   ];
-  for (const [index, phase] of phases.entries()) {
-    await mkdir(path.dirname(path.join(root, phase.output)), { recursive: true });
-    await writeFile(path.join(root, phase.output), `fixture phase ${index + 4}\n`, "utf8");
-    if (phase.record) {
-      await runStateCommand({
-        root,
-        command: "record",
-        stateFile,
-        path: phase.output,
-        ...phase.record,
-        now: () => `2026-07-22T00:00:${String(10 + index * 2).padStart(2, "0")}.000Z`,
-      });
-    }
-    await runStateCommand({
-      root,
-      command: phase.complete ? "complete" : "next",
-      stateFile,
-      now: () => `2026-07-22T00:00:${String(11 + index * 2).padStart(2, "0")}.000Z`,
-    });
+  for (const [index, output] of outputs.entries()) {
+    await mkdir(path.dirname(path.join(root, output)), { recursive: true });
+    await writeFile(path.join(root, output), `fixture phase ${index + 4}\n`, "utf8");
   }
+
+  await copyFile(statePath, `${statePath}.bak`);
+  state.phase = "done";
+  state.runtime.status = "completed";
+  state.runtime.revision = Math.max(state.runtime.revision + 1, 9);
+  state.runtime.previousPhase = "git-delivery";
+  state.runtime.blocked = null;
+  state.runtime.updatedAt = completedAt;
+  await writeJson(statePath, state);
+  await writeFile(
+    path.join(root, `.harness/states/e2e-${state.storyId}.events.jsonl`),
+    `${JSON.stringify({
+      schemaVersion: "1.0",
+      storyId: state.storyId,
+      runId,
+      revision: state.runtime.revision,
+      command: "complete",
+      phase: "done",
+      status: "completed",
+      occurredAt: completedAt,
+    })}\n`,
+    "utf8",
+  );
+  await rm(path.join(root, ".harness/states/active-run.json"), { force: true });
 }
 
 async function createCompletedIntegrationFixture({ refreshStatusBeforeCompletion = false, realFlow = false } = {}) {
@@ -234,12 +229,6 @@ async function createCompletedIntegrationFixture({ refreshStatusBeforeCompletion
     await runWorktreeIntegration(integrationInput);
     const statusSha256AfterIntegrationPlan = await sha256File(path.join(root, statusFile));
     await runWorktreeIntegration({ ...integrationInput, command: "apply", confirmApply: true, now: () => "2026-07-22T00:00:03.000Z" });
-    await runStoryCommand({
-      root,
-      command: "apply",
-      stateFile,
-      now: () => "2026-07-22T00:00:04.000Z",
-    });
     await git(root, "add", candidatePath);
     await git(root, "commit", "-m", "integrate lifecycle fixture");
     await advanceStoryToDone(root, stateFile, runId);
@@ -547,12 +536,6 @@ async function createCompletedBatchFixture({ includeCurrentRunContext = false, c
     stateFile,
     batchFile: prepared.batchFile,
     now: () => "2026-07-28T00:00:20.000Z",
-  });
-  await runStoryCommand({
-    root,
-    command: "apply",
-    stateFile,
-    now: () => "2026-07-28T00:00:21.000Z",
   });
   await advanceStoryToDone(root, stateFile, runId);
 

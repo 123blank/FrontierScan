@@ -23,6 +23,9 @@ const STATE_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta
 const STATE_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "state-contract.mjs");
 const STORY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "story-runtime.mjs");
 const DISPATCH_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "dispatch-contract.mjs");
+const PHASE_DATA_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "phase-data-contract.mjs");
+const PHASE_RESULT_PROJECTOR_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "phase-result-projector.mjs");
+const TASK_DAG_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "task-dag-contract.mjs");
 const BATCH_FINALIZATION_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "batch-finalization-contract.mjs");
 const IMPLEMENTATION_OWNER_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "implementation-owner-contract.mjs");
 const VALIDATE_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "validate-state.ps1");
@@ -527,7 +530,8 @@ async function testRecordAndTestGate() {
       message: "unit test failed",
       now: () => "2026-07-16T00:02:00.000Z",
     });
-    assert.equal(recorded.state.tests.results.length, 1);
+    assert.equal(recorded.state.tests.results.length, 0);
+    assert.equal(recorded.state.runtime.records.filter((item) => item.type === "test").length, 1);
     const revision = recorded.state.runtime.revision;
     await assert.rejects(runStateCommand({ root, command: "next", now: () => FIXED_NOW }), /failed required tests/i);
     const unchanged = await readJson(root, ".harness/states/e2e-M2-020.json");
@@ -580,6 +584,17 @@ async function testReviewBlockerGate() {
       now: () => FIXED_NOW,
     });
     await assert.rejects(runStateCommand({ root, command: "next", now: () => FIXED_NOW }), /unresolved BLOCKER/i);
+    await runStateCommand({
+      root,
+      command: "record",
+      recordType: "review",
+      status: "resolved",
+      message: "data corruption",
+      now: () => "2026-07-16T00:01:00.000Z",
+    });
+    const advanced = await runStateCommand({ root, command: "next", now: () => FIXED_NOW });
+    assert.equal(advanced.state.phase, "build-publish");
+    assert.deepEqual(advanced.state.review, { findings: [], status: "pending" });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1454,6 +1469,9 @@ quality_gates: []
       [STATE_CONTRACT_MODULE, ".harness/scripts/lib/state-contract.mjs"],
       [STORY_RUNTIME_MODULE, ".harness/scripts/lib/story-runtime.mjs"],
       [DISPATCH_CONTRACT_MODULE, ".harness/scripts/lib/dispatch-contract.mjs"],
+      [PHASE_DATA_CONTRACT_MODULE, ".harness/scripts/lib/phase-data-contract.mjs"],
+      [PHASE_RESULT_PROJECTOR_MODULE, ".harness/scripts/lib/phase-result-projector.mjs"],
+      [TASK_DAG_CONTRACT_MODULE, ".harness/scripts/lib/task-dag-contract.mjs"],
       [BATCH_FINALIZATION_CONTRACT_MODULE, ".harness/scripts/lib/batch-finalization-contract.mjs"],
       [IMPLEMENTATION_OWNER_CONTRACT_MODULE, ".harness/scripts/lib/implementation-owner-contract.mjs"],
     ]) {
@@ -1608,7 +1626,12 @@ async function testStateContractDispatchesVersionsAndReadOnlyCommands() {
     verification: {
       cases: [],
       results: [],
-      environment: { status: "not-checked", summary: "" },
+      environment: {
+        status: "not-checked",
+        summary: "",
+        evidencePath: null,
+        evidenceSha256: null,
+      },
     },
     delivery: {
       status: "pending",
@@ -1641,6 +1664,30 @@ async function testStateContractDispatchesVersionsAndReadOnlyCommands() {
       runtime: { ...v2Template.runtime, blocked: null },
     }),
     /unsupported field.*blocked/i,
+  );
+  assert.throws(
+    () => validateStateDocument({
+      ...v2Template,
+      runtime: {
+        ...v2Template.runtime,
+        records: [{
+          id: "result:not-a-uuid",
+          type: "phase-result",
+          phase: "requirement",
+          status: "applied",
+          path: ".harness/runs/S1/phases/00-requirement/attempts/not-a-uuid/result.json",
+          sha256: `sha256:${"a".repeat(64)}`,
+          bytes: 1,
+          message: "invalid formal result",
+          actor: "story-runtime",
+          dispatchId: "not-a-uuid",
+          preparedRevision: 5,
+          appliedRevision: 2,
+          createdAt: FIXED_NOW,
+        }],
+      },
+    }),
+    /dispatchId|revision|phase-result/i,
   );
 
   const activeV2 = structuredClone(v2Template);
@@ -1706,6 +1753,57 @@ async function testStateContractDispatchesVersionsAndReadOnlyCommands() {
     }),
     /knowledge\.areas.*unsupported field.*unexpected/i,
   );
+  const structuredV2 = structuredClone(activeV2);
+  structuredV2.requirement.openQuestions = [{
+    questionId: "Q1", question: "Choose?", status: "open", resolution: null,
+  }];
+  structuredV2.design = {
+    decisions: [{ decisionId: "D1", summary: "Use v2", rationale: "Strict projection" }],
+    affectedAreas: ["common"],
+    risks: [{ riskId: "R1", description: "Drift", severity: "medium", mitigation: "Shared contract" }],
+  };
+  structuredV2.tests = {
+    cases: [{ caseId: "TC1", type: "unit", required: true, criterionIds: [], expected: "Pass" }],
+    commands: [{
+      commandId: "CMD1", command: "node test.mjs", status: "passed", exitCode: 0,
+      evidencePath: null, evidenceSha256: null, executedAt: FIXED_NOW,
+    }],
+    results: [{
+      caseId: "TC1", status: "passed", actual: "Passed",
+      evidencePath: null, evidenceSha256: null, executedAt: FIXED_NOW,
+    }],
+  };
+  structuredV2.review = {
+    findings: [{
+      findingId: "F1", severity: "INFO", status: "resolved", summary: "OK",
+      file: null, line: null, evidence: null,
+    }],
+    status: "passed",
+  };
+  structuredV2.build = {
+    results: [],
+    artifacts: [],
+    externalActions: [{
+      actionId: "EA1", type: "publish", status: "not-requested", approvalId: null,
+      evidencePath: null, evidenceSha256: null,
+    }],
+  };
+  structuredV2.delivery.remainingRisks = [{
+    riskId: "R2", description: "Gap", severity: "low", mitigation: "Verify later",
+    status: "open", approvalId: null,
+  }];
+  assert.doesNotThrow(() => validateStateDocument(structuredV2));
+  for (const mutate of [
+    (state) => { state.requirement.openQuestions[0].status = "invalid"; },
+    (state) => { state.tests.commands[0].evidenceSha256 = `sha256:${"a".repeat(64)}`; },
+    (state) => { state.review.findings[0].line = 0; },
+    (state) => { state.build.externalActions[0] = { ...state.build.externalActions[0], status: "executed" }; },
+    (state) => { state.delivery.remainingRisks[0].status = "invalid"; },
+  ]) {
+    const invalid = structuredClone(structuredV2);
+    mutate(invalid);
+    assert.throws(() => validateStateDocument(invalid), /invalid|evidence|line|approval|status/i);
+  }
   assert.throws(
     () => validateStateDocument({
       ...structuredClone(activeV2),

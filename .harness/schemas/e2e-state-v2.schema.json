@@ -2,6 +2,235 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://frontierscan.local/harness/e2e-state-v2.schema.json",
   "title": "FrontierScan E2E Harness State v2",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "path": { "type": "string", "minLength": 1, "pattern": "^(?!/|[A-Za-z]:|.*\\\\|.*(?:^|/)\\.\\.?/).+$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "pathArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/path" },
+      "uniqueItems": true
+    },
+    "nullableEvidence": {
+      "oneOf": [
+        {
+          "properties": {
+            "evidencePath": { "type": "null" },
+            "evidenceSha256": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "evidencePath": { "$ref": "#/$defs/path" },
+            "evidenceSha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      ]
+    },
+    "criterion": {
+      "type": "object",
+      "required": ["criterionId", "description", "source", "required"],
+      "properties": {
+        "criterionId": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "question": {
+      "type": "object",
+      "required": ["questionId", "question", "status", "resolution"],
+      "properties": {
+        "questionId": { "$ref": "#/$defs/id" },
+        "question": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "resolved"] },
+        "resolution": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "risk": {
+      "type": "object",
+      "required": ["riskId", "description", "severity", "mitigation"],
+      "properties": {
+        "riskId": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["low", "medium", "high"] },
+        "mitigation": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "remainingRisk": {
+      "type": "object",
+      "required": ["riskId", "description", "severity", "mitigation", "status", "approvalId"],
+      "properties": {
+        "riskId": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["low", "medium", "high"] },
+        "mitigation": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "accepted", "resolved"] },
+        "approvalId": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "knowledgeArea": {
+      "type": "object",
+      "required": ["area", "relevant", "status", "sourceFingerprint", "loadedFiles", "missing", "checkedAt"],
+      "properties": {
+        "area": { "$ref": "#/$defs/id" },
+        "relevant": { "type": "boolean" },
+        "status": { "type": "string", "minLength": 1 },
+        "sourceFingerprint": { "type": ["string", "null"], "minLength": 1 },
+        "loadedFiles": { "$ref": "#/$defs/pathArray" },
+        "missing": { "$ref": "#/$defs/stringArray" },
+        "checkedAt": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "testCase": {
+      "type": "object",
+      "required": ["caseId", "type", "required", "criterionIds", "expected"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["unit", "integration", "contract", "ui"] },
+        "required": { "type": "boolean" },
+        "criterionIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "expected": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "testCommand": {
+      "type": "object",
+      "required": ["commandId", "command", "status", "exitCode", "evidencePath", "evidenceSha256", "executedAt"],
+      "properties": {
+        "commandId": { "$ref": "#/$defs/id" },
+        "command": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["passed", "failed", "skipped", "blocked"] },
+        "exitCode": { "type": ["integer", "null"] },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [{ "$ref": "#/$defs/nullableEvidence" }],
+      "additionalProperties": false
+    },
+    "testResult": {
+      "type": "object",
+      "required": ["caseId", "status", "actual", "evidencePath", "evidenceSha256", "executedAt"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["passed", "failed", "skipped", "blocked"] },
+        "actual": { "type": "string", "minLength": 1 },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [{ "$ref": "#/$defs/nullableEvidence" }],
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "required": ["findingId", "severity", "status", "summary", "file", "line", "evidence"],
+      "properties": {
+        "findingId": { "$ref": "#/$defs/id" },
+        "severity": { "enum": ["BLOCKER", "WARNING", "INFO"] },
+        "status": { "enum": ["open", "resolved"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "file": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "line": { "type": ["integer", "null"], "minimum": 1 },
+        "evidence": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] }
+      },
+      "additionalProperties": false
+    },
+    "buildResult": {
+      "type": "object",
+      "required": ["buildId", "type", "status", "command", "evidencePath", "evidenceSha256", "executedAt"],
+      "properties": {
+        "buildId": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["backend", "frontend", "docker", "no-build"] },
+        "status": { "enum": ["passed", "failed", "skipped", "blocked"] },
+        "command": { "type": "string", "minLength": 1 },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [{ "$ref": "#/$defs/nullableEvidence" }],
+      "additionalProperties": false
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["artifactId", "type", "path", "sha256", "bytes"],
+      "properties": {
+        "artifactId": { "$ref": "#/$defs/id" },
+        "type": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/path" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "bytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "externalAction": {
+      "type": "object",
+      "required": ["actionId", "type", "status", "approvalId", "evidencePath", "evidenceSha256"],
+      "properties": {
+        "actionId": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["publish", "deploy", "docker-build", "docker-up", "docker-down"] },
+        "status": { "enum": ["not-requested", "approved", "executed", "blocked"] },
+        "approvalId": { "type": ["string", "null"], "minLength": 1 },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        { "$ref": "#/$defs/nullableEvidence" },
+        {
+          "if": { "properties": { "status": { "enum": ["approved", "executed"] } }, "required": ["status"] },
+          "then": { "properties": { "approvalId": { "type": "string", "minLength": 1 } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "verificationCase": {
+      "type": "object",
+      "required": ["caseId", "type", "required", "criterionIds", "action", "expected"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["api", "ui-flow", "manual"] },
+        "required": { "type": "boolean" },
+        "criterionIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "action": { "type": "string", "minLength": 1 },
+        "expected": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "verificationResult": {
+      "type": "object",
+      "required": ["caseId", "status", "actual", "evidencePath", "evidenceSha256", "approvalId", "executedAt"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["verified", "failed", "blocked", "accepted-with-known-gaps"] },
+        "actual": { "type": "string", "minLength": 1 },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] },
+        "approvalId": { "type": ["string", "null"], "minLength": 1 },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [{ "$ref": "#/$defs/nullableEvidence" }],
+      "additionalProperties": false
+    }
+  },
   "type": "object",
   "required": [
     "schemaVersion",
@@ -98,15 +327,46 @@
             "required": ["id", "type", "phase", "status", "path", "message", "actor", "createdAt"],
             "properties": {
               "id": { "type": "string", "minLength": 1 },
-              "type": { "enum": ["output", "test", "review", "approval", "note"] },
+              "type": { "enum": ["output", "test", "review", "approval", "note", "phase-result"] },
               "phase": { "type": "string", "minLength": 1 },
               "status": { "type": "string", "minLength": 1 },
               "path": { "type": ["string", "null"] },
               "message": { "type": "string" },
               "actor": { "type": "string", "minLength": 1 },
               "createdAt": { "type": "string", "minLength": 1 },
-              "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+              "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+              "bytes": { "type": "integer", "minimum": 0 },
+              "dispatchId": { "type": "string", "minLength": 1 },
+              "preparedRevision": { "type": "integer", "minimum": 1 },
+              "appliedRevision": { "type": "integer", "minimum": 1 }
             },
+            "allOf": [
+              {
+                "if": { "properties": { "type": { "const": "phase-result" } }, "required": ["type"] },
+                "then": {
+                  "required": [
+                    "id", "type", "phase", "status", "path", "sha256", "bytes", "message", "actor",
+                    "dispatchId", "preparedRevision", "appliedRevision", "createdAt"
+                  ],
+                  "properties": {
+                    "status": { "enum": ["applied", "blocked"] },
+                    "path": { "$ref": "#/$defs/path" },
+                    "sha256": { "$ref": "#/$defs/sha256" },
+                    "dispatchId": { "type": "string", "format": "uuid" }
+                  }
+                },
+                "else": {
+                  "not": {
+                    "anyOf": [
+                      { "required": ["bytes"] },
+                      { "required": ["dispatchId"] },
+                      { "required": ["preparedRevision"] },
+                      { "required": ["appliedRevision"] }
+                    ]
+                  }
+                }
+              }
+            ],
             "additionalProperties": false
           }
         },
@@ -144,23 +404,18 @@
       "required": ["summary", "openQuestions", "acceptanceCriteria", "inScope", "outOfScope"],
       "properties": {
         "summary": { "type": "string" },
-        "openQuestions": { "type": "array" },
+        "openQuestions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/question" }
+        },
         "acceptanceCriteria": {
           "type": "array",
           "items": {
-            "type": "object",
-            "required": ["criterionId", "description", "source", "required"],
-            "properties": {
-              "criterionId": { "type": "string", "minLength": 1 },
-              "description": { "type": "string", "minLength": 1 },
-              "source": { "type": "string", "minLength": 1 },
-              "required": { "type": "boolean" }
-            },
-            "additionalProperties": false
+            "$ref": "#/$defs/criterion"
           }
         },
-        "inScope": { "type": "array" },
-        "outOfScope": { "type": "array" }
+        "inScope": { "$ref": "#/$defs/stringArray" },
+        "outOfScope": { "$ref": "#/$defs/stringArray" }
       },
       "additionalProperties": false
     },
@@ -170,28 +425,7 @@
       "properties": {
         "areas": {
           "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "area",
-              "relevant",
-              "status",
-              "sourceFingerprint",
-              "loadedFiles",
-              "missing",
-              "checkedAt"
-            ],
-            "properties": {
-              "area": { "type": "string", "minLength": 1 },
-              "relevant": { "type": "boolean" },
-              "status": { "type": "string", "minLength": 1 },
-              "sourceFingerprint": { "type": ["string", "null"] },
-              "loadedFiles": { "type": "array" },
-              "missing": { "type": "array" },
-              "checkedAt": { "type": ["string", "null"] }
-            },
-            "additionalProperties": false
-          }
+          "items": { "$ref": "#/$defs/knowledgeArea" }
         }
       },
       "additionalProperties": false
@@ -200,9 +434,21 @@
       "type": "object",
       "required": ["decisions", "affectedAreas", "risks"],
       "properties": {
-        "decisions": { "type": "array" },
-        "affectedAreas": { "type": "array" },
-        "risks": { "type": "array" }
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["decisionId", "summary", "rationale"],
+            "properties": {
+              "decisionId": { "$ref": "#/$defs/id" },
+              "summary": { "type": "string", "minLength": 1 },
+              "rationale": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "affectedAreas": { "$ref": "#/$defs/stringArray" },
+        "risks": { "type": "array", "items": { "$ref": "#/$defs/risk" } }
       },
       "additionalProperties": false
     },
@@ -226,9 +472,13 @@
       "properties": {
         "method": { "enum": [null, "tdd", "exception"] },
         "exceptionReason": { "type": ["string", "null"] },
-        "actualFiles": { "type": "array" },
-        "completedTaskIds": { "type": "array" },
-        "notes": { "type": "array" }
+        "actualFiles": { "$ref": "#/$defs/pathArray" },
+        "completedTaskIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "notes": { "$ref": "#/$defs/stringArray" }
       },
       "additionalProperties": false
     },
@@ -236,9 +486,9 @@
       "type": "object",
       "required": ["cases", "commands", "results"],
       "properties": {
-        "cases": { "type": "array" },
-        "commands": { "type": "array" },
-        "results": { "type": "array" }
+        "cases": { "type": "array", "items": { "$ref": "#/$defs/testCase" } },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/testCommand" } },
+        "results": { "type": "array", "items": { "$ref": "#/$defs/testResult" } }
       },
       "additionalProperties": false
     },
@@ -246,8 +496,8 @@
       "type": "object",
       "required": ["findings", "status"],
       "properties": {
-        "findings": { "type": "array" },
-        "status": { "type": "string" }
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "status": { "enum": ["pending", "passed", "blocked"] }
       },
       "additionalProperties": false
     },
@@ -255,9 +505,9 @@
       "type": "object",
       "required": ["results", "artifacts", "externalActions"],
       "properties": {
-        "results": { "type": "array" },
-        "artifacts": { "type": "array" },
-        "externalActions": { "type": "array" }
+        "results": { "type": "array", "items": { "$ref": "#/$defs/buildResult" } },
+        "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+        "externalActions": { "type": "array", "items": { "$ref": "#/$defs/externalAction" } }
       },
       "additionalProperties": false
     },
@@ -265,14 +515,19 @@
       "type": "object",
       "required": ["cases", "results", "environment"],
       "properties": {
-        "cases": { "type": "array" },
-        "results": { "type": "array" },
+        "cases": { "type": "array", "items": { "$ref": "#/$defs/verificationCase" } },
+        "results": { "type": "array", "items": { "$ref": "#/$defs/verificationResult" } },
         "environment": {
           "type": "object",
-          "required": ["status", "summary"],
+          "required": ["status", "summary", "evidencePath", "evidenceSha256"],
           "properties": {
-            "status": { "type": "string" },
-            "summary": { "type": "string" }
+            "status": { "enum": ["not-checked", "available", "unavailable"] },
+            "summary": { "type": "string" },
+            "evidencePath": { "type": ["string", "null"] },
+            "evidenceSha256": {
+              "type": ["string", "null"],
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            }
           },
           "additionalProperties": false
         }
@@ -293,12 +548,12 @@
       ],
       "properties": {
         "status": { "enum": ["pending", "ready", "blocked"] },
-        "ownedFiles": { "type": "array" },
-        "outOfPredictionFiles": { "type": "array" },
-        "unrelatedDirtyFiles": { "type": "array" },
-        "remainingRisks": { "type": "array" },
-        "summaryFile": { "type": ["string", "null"] },
-        "summarySha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+        "ownedFiles": { "$ref": "#/$defs/pathArray" },
+        "outOfPredictionFiles": { "$ref": "#/$defs/pathArray" },
+        "unrelatedDirtyFiles": { "$ref": "#/$defs/pathArray" },
+        "remainingRisks": { "type": "array", "items": { "$ref": "#/$defs/remainingRisk" } },
+        "summaryFile": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "summarySha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
         "gitStatus": { "enum": ["not-requested", "requested"] }
       },
       "additionalProperties": false
@@ -308,6 +563,30 @@
     "logs": { "type": "array" }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "delivery": {
+            "properties": { "summaryFile": { "type": "null" } },
+            "required": ["summaryFile"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "delivery": {
+            "properties": { "summarySha256": { "type": "null" } }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "delivery": {
+            "properties": { "summarySha256": { "$ref": "#/$defs/sha256" } }
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

@@ -1681,7 +1681,7 @@ quality_gates: []
       /post-advance interruption/i,
     );
     assert.equal((await readJson(fixture.root, fixture.stateFile)).phase, "unit-test");
-    assert.equal((await readJson(fixture.root, prepared.checkpointFile)).status, "result-received");
+    assert.equal((await readJson(fixture.root, prepared.checkpointFile)).status, "prepared");
     await assert.rejects(
       access(path.join(fixture.root, `.harness/runs/${fixture.storyId}/batches`)),
       (error) => error?.code === "ENOENT",
@@ -1974,20 +1974,27 @@ async function testPrepareCreatesStructuredTaskAndCheckpoint() {
   try {
     const result = await runStoryCommand(storyOptions(root, { command: "prepare" }));
     const phaseRoot = `.harness/runs/${storyId}/phases/00-requirement`;
+    const attemptRoot = `${phaseRoot}/attempts/${FIXED_DISPATCH_ID}`;
     assert.equal(result.command, "prepare");
-    assert.equal(result.taskFile, `${phaseRoot}/task.json`);
-    assert.equal(result.checkpointFile, `${phaseRoot}/checkpoint.json`);
+    assert.equal(result.taskFile, `${attemptRoot}/task.json`);
+    assert.equal(result.checkpointFile, `${attemptRoot}/checkpoint.json`);
+    assert.equal(result.activeAttemptFile, `${phaseRoot}/active-attempt.json`);
 
     const task = await readJson(root, result.taskFile);
     assert.deepEqual(task, {
-      schemaVersion: "1.0",
+      schemaVersion: "2.0",
       dispatchId: FIXED_DISPATCH_ID,
       storyId,
+      runId: storyId,
       phase: "requirement",
       ownerAgent: "requirement-analyst",
       purpose: "Clarify the story.",
       preparedRevision: 1,
       preparedAt: FIXED_NOW,
+      resultSchemaVersion: "2.0",
+      attemptRoot,
+      resultFile: `${attemptRoot}/result.json`,
+      checkpointFile: `${attemptRoot}/checkpoint.json`,
       expectedOutputs: [`${phaseRoot}/requirement-breakdown.md`],
       allowedAdapters: [],
       next: "technical-design",
@@ -1997,6 +2004,7 @@ async function testPrepareCreatesStructuredTaskAndCheckpoint() {
     assert.equal(checkpoint.dispatchId, FIXED_DISPATCH_ID);
     assert.equal(checkpoint.preparedAt, FIXED_NOW);
     assert.equal(checkpoint.updatedAt, FIXED_NOW);
+    assert.equal((await readJson(root, result.activeAttemptFile)).taskFile, result.taskFile);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -2148,7 +2156,8 @@ async function testRunAdapterUsesFixedArgvAndRecordsPassedTest() {
   const { root, storyId } = await createFixture("M3-ADAPTER-PASS");
   try {
     await setFixtureState(root, storyId, (state) => { state.phase = "unit-test"; });
-    await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    const stateBefore = await readFile(path.join(root, `.harness/states/e2e-${storyId}.json`), "utf8");
     let invocation = null;
     const result = await runStoryCommand(storyOptions(root, {
       command: "run-adapter",
@@ -2175,9 +2184,13 @@ async function testRunAdapterUsesFixedArgvAndRecordsPassedTest() {
     assert.equal(evidence.startedAt, FIXED_NOW);
     assert.equal(evidence.finishedAt, FIXED_NOW);
 
-    const state = await readJson(root, `.harness/states/e2e-${storyId}.json`);
-    assert.equal(state.tests.results.at(-1).status, "passed");
-    assert.equal(state.tests.results.at(-1).path, result.evidencePath);
+    assert.equal(
+      await readFile(path.join(root, `.harness/states/e2e-${storyId}.json`), "utf8"),
+      stateBefore,
+    );
+    const checkpoint = await readJson(root, prepared.checkpointFile);
+    assert.equal(checkpoint.adapterRuns.at(-1).status, "passed");
+    assert.equal(checkpoint.adapterRuns.at(-1).evidencePath, result.evidencePath);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -2222,7 +2235,8 @@ async function testRunAdapterPersistsAndRecordsFailure() {
   const { root, storyId } = await createFixture("M3-ADAPTER-FAIL");
   try {
     await setFixtureState(root, storyId, (state) => { state.phase = "unit-test"; });
-    await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    const stateBefore = await readFile(path.join(root, `.harness/states/e2e-${storyId}.json`), "utf8");
     await assert.rejects(
       runStoryCommand(storyOptions(root, {
         command: "run-adapter",
@@ -2232,13 +2246,15 @@ async function testRunAdapterPersistsAndRecordsFailure() {
       /exit code 7/i,
     );
 
-    const evidencePath = `.harness/runs/${storyId}/phases/04-unit-test/evidence/harness-state-tests.json`;
+    const checkpoint = await readJson(root, prepared.checkpointFile);
+    const evidencePath = checkpoint.adapterRuns.at(-1).evidencePath;
     const evidence = await readJson(root, evidencePath);
     assert.equal(evidence.status, "failed");
     assert.equal(evidence.exitCode, 7);
-    const state = await readJson(root, `.harness/states/e2e-${storyId}.json`);
-    assert.equal(state.tests.results.at(-1).status, "failed");
-    assert.equal(state.tests.results.at(-1).path, evidencePath);
+    assert.equal(
+      await readFile(path.join(root, `.harness/states/e2e-${storyId}.json`), "utf8"),
+      stateBefore,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -2318,7 +2334,425 @@ function dispatchResult(task, overrides = {}) {
   };
 }
 
+function defaultV2Payload(task, records = []) {
+  if (task.phase === "requirement") {
+    return {
+      acceptanceCriteria: [{
+        criterionId: "AC-001",
+        description: "The phase acceptance criterion is satisfied.",
+        source: "fixture",
+        required: true,
+      }],
+      openQuestions: [],
+      inScope: ["Fixture scope"],
+      outOfScope: [],
+    };
+  }
+  if (task.phase === "technical-design") {
+    return { decisions: [], affectedAreas: [], knowledgeSnapshot: [], risks: [] };
+  }
+  if (task.phase === "task-dag") {
+    return { taskDagFile: task.expectedOutputs[0], taskDagSha256: `sha256:${"0".repeat(64)}` };
+  }
+  if (task.phase === "implementation") {
+    return { taskUpdates: [], actualFiles: [], method: "tdd", exceptionReason: null, notes: [] };
+  }
+  if (task.phase === "unit-test") return { cases: [], commands: [], results: [] };
+  if (task.phase === "code-review") {
+    const blockers = records
+      .filter((item) => item.type === "review" && item.status === "BLOCKER")
+      .map((item, index) => ({
+        findingId: `F-${index + 1}`,
+        severity: "BLOCKER",
+        status: "open",
+        summary: item.message,
+        file: null,
+        line: null,
+        evidence: null,
+      }));
+    return { findings: blockers, status: blockers.length ? "blocked" : "passed" };
+  }
+  if (task.phase === "build-publish") return { results: [], artifacts: [], externalActions: [] };
+  if (task.phase === "interface-verification") {
+    return {
+      cases: [],
+      results: [],
+      environment: {
+        status: "unavailable",
+        summary: "Fixture environment is unavailable.",
+        evidencePath: null,
+        evidenceSha256: null,
+      },
+    };
+  }
+  return {
+    status: "ready",
+    ownedFiles: [],
+    outOfPredictionFiles: [],
+    unrelatedDirtyFiles: [],
+    remainingRisks: [],
+    summaryFile: null,
+    summarySha256: null,
+    gitStatus: "not-requested",
+  };
+}
+
+function dispatchTaskV2(overrides = {}) {
+  const dispatchId = FIXED_DISPATCH_ID;
+  const attemptRoot = `.harness/runs/M7-A2-CONTRACT/phases/00-requirement/attempts/${dispatchId}`;
+  return {
+    schemaVersion: "2.0",
+    dispatchId,
+    storyId: "M7-A2-CONTRACT",
+    runId: "M7-A2-CONTRACT",
+    phase: "requirement",
+    ownerAgent: "requirement-analyst",
+    purpose: "Clarify the story.",
+    preparedRevision: 1,
+    preparedAt: FIXED_NOW,
+    resultSchemaVersion: "2.0",
+    attemptRoot,
+    resultFile: `${attemptRoot}/result.json`,
+    checkpointFile: `${attemptRoot}/checkpoint.json`,
+    expectedOutputs: [
+      ".harness/runs/M7-A2-CONTRACT/phases/00-requirement/requirement-breakdown.md",
+    ],
+    allowedAdapters: [],
+    next: "technical-design",
+    ...overrides,
+  };
+}
+
+function dispatchResultV2(task, overrides = {}) {
+  return {
+    schemaVersion: "2.0",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    runId: task.runId,
+    phase: task.phase,
+    preparedRevision: task.preparedRevision,
+    status: "completed",
+    summary: "Requirement completed.",
+    outputs: [{
+      path: task.expectedOutputs[0],
+      sha256: `sha256:${"a".repeat(64)}`,
+      bytes: 128,
+    }],
+    records: [],
+    payload: {
+      acceptanceCriteria: [{
+        criterionId: "AC-001",
+        description: "The behavior is verifiable.",
+        source: "user",
+        required: true,
+      }],
+      openQuestions: [],
+      inScope: ["Harness result projection"],
+      outOfScope: ["Git automation"],
+    },
+    ...overrides,
+  };
+}
+
+async function testDispatchV2ContractsUseAttemptScopedIdentity() {
+  const task = dispatchTaskV2();
+  const result = dispatchResultV2(task);
+  assert.equal(validateDispatchTaskStructure(task), task);
+  assert.equal(validateDispatchResultStructure(result), result);
+
+  assert.throws(
+    () => validateDispatchTaskStructure({ ...task, preparedRevision: 0 }),
+    /preparedRevision/i,
+  );
+  assert.throws(
+    () => validateDispatchTaskStructure({
+      ...task,
+      resultFile: ".harness/runs/M7-A2-CONTRACT/phases/00-requirement/result.json",
+    }),
+    /resultFile|attempt/i,
+  );
+  const wrongPhaseAttemptRoot = task.attemptRoot.replace("/00-requirement/", "/99-wrong/");
+  assert.throws(
+    () => validateDispatchTaskStructure({
+      ...task,
+      attemptRoot: wrongPhaseAttemptRoot,
+      resultFile: `${wrongPhaseAttemptRoot}/result.json`,
+      checkpointFile: `${wrongPhaseAttemptRoot}/checkpoint.json`,
+    }),
+    /attemptRoot|phase/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure(dispatchResultV2(task, {
+      outputs: [{ path: task.expectedOutputs[0], sha256: "sha256:bad", bytes: 128 }],
+    })),
+    /sha-256|sha256/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure(dispatchResultV2(task, {
+      status: "failed",
+      outputs: [],
+      payload: undefined,
+      diagnostics: { code: "TEST_FAILED", message: "Tests failed.", details: [] },
+    })),
+    /unsupported field 'payload'|payload/i,
+  );
+}
+
+async function testDispatchV2PhasePayloadsAreStrict() {
+  const task = dispatchTaskV2();
+  const evidenceSha256 = `sha256:${"c".repeat(64)}`;
+  const payloads = new Map([
+    ["technical-design", {
+      decisions: [{ decisionId: "D1", summary: "Use v2", rationale: "Explicit protocol" }],
+      affectedAreas: ["common"],
+      knowledgeSnapshot: [{
+        area: "common",
+        relevant: true,
+        status: "fresh",
+        sourceFingerprint: evidenceSha256,
+        loadedFiles: ["llm-knowledge/common/overview.md"],
+        missing: [],
+        checkedAt: FIXED_NOW,
+      }],
+      risks: [{ riskId: "R1", description: "Protocol drift", severity: "medium", mitigation: "Shared validation" }],
+    }],
+    ["task-dag", {
+      taskDagFile: ".harness/runs/M7-A2-CONTRACT/phases/02-task-dag/task-dag.json",
+      taskDagSha256: `sha256:${"b".repeat(64)}`,
+    }],
+    ["implementation", {
+      taskUpdates: [{ taskId: "T1", status: "done" }],
+      actualFiles: ["backend/src/T1.java"],
+      method: "tdd",
+      exceptionReason: null,
+      notes: [],
+    }],
+    ["unit-test", {
+      cases: [{
+        caseId: "TC1",
+        type: "unit",
+        required: true,
+        criterionIds: ["AC-001"],
+        expected: "The contract rejects drift.",
+      }],
+      commands: [{
+        commandId: "CMD1",
+        command: "node tests.mjs",
+        status: "passed",
+        exitCode: 0,
+        evidencePath: "evidence/tests.json",
+        evidenceSha256,
+        executedAt: FIXED_NOW,
+      }],
+      results: [{
+        caseId: "TC1",
+        status: "passed",
+        actual: "The contract rejected drift.",
+        evidencePath: "evidence/tests.json",
+        evidenceSha256,
+        executedAt: FIXED_NOW,
+      }],
+    }],
+    ["code-review", {
+      findings: [{
+        findingId: "F1",
+        severity: "WARNING",
+        status: "resolved",
+        summary: "Tighten the contract.",
+        file: ".harness/scripts/lib/dispatch-contract.mjs",
+        line: 1,
+        evidence: "evidence/review.md",
+      }],
+      status: "passed",
+    }],
+    ["build-publish", {
+      results: [{
+        buildId: "B1",
+        type: "no-build",
+        status: "passed",
+        command: "no build required",
+        evidencePath: "evidence/build.json",
+        evidenceSha256,
+        executedAt: FIXED_NOW,
+      }],
+      artifacts: [{
+        artifactId: "A1",
+        type: "report",
+        path: "evidence/build.json",
+        sha256: evidenceSha256,
+        bytes: 128,
+      }],
+      externalActions: [{
+        actionId: "EA1",
+        type: "publish",
+        status: "not-requested",
+        approvalId: null,
+        evidencePath: null,
+        evidenceSha256: null,
+      }],
+    }],
+    ["interface-verification", {
+      cases: [{
+        caseId: "VC1",
+        type: "api",
+        required: true,
+        criterionIds: ["AC-001"],
+        action: "Call the endpoint.",
+        expected: "The endpoint succeeds.",
+      }],
+      results: [{
+        caseId: "VC1",
+        status: "blocked",
+        actual: "Environment unavailable.",
+        evidencePath: null,
+        evidenceSha256: null,
+        approvalId: null,
+        executedAt: FIXED_NOW,
+      }],
+      environment: {
+        status: "unavailable",
+        summary: "No environment",
+        evidencePath: null,
+        evidenceSha256: null,
+      },
+    }],
+    ["delivery-preparation", {
+      status: "ready",
+      ownedFiles: [],
+      outOfPredictionFiles: [],
+      unrelatedDirtyFiles: [],
+      remainingRisks: [{
+        riskId: "R2",
+        description: "UI not exercised.",
+        severity: "low",
+        mitigation: "Verify in M11.",
+        status: "open",
+        approvalId: null,
+      }],
+      summaryFile: null,
+      summarySha256: null,
+      gitStatus: "not-requested",
+    }],
+  ]);
+  for (const [phase, payload] of payloads) {
+    const phaseTask = {
+      ...task,
+      phase,
+      next: phase === "delivery-preparation" ? "done" : "next-phase",
+    };
+    assert.doesNotThrow(() => validateDispatchResultStructure(
+      dispatchResultV2(phaseTask, { phase, payload }),
+    ));
+    assert.throws(
+      () => validateDispatchResultStructure(
+        dispatchResultV2(phaseTask, { phase, payload: { ...payload, unexpected: true } }),
+      ),
+      /unsupported field.*unexpected/i,
+    );
+  }
+
+  const invalidPayloads = [
+    ["requirement", {
+      ...dispatchResultV2(task).payload,
+      openQuestions: [{ questionId: "Q1", question: "Choose?", status: "invalid", resolution: null }],
+    }],
+    ["technical-design", {
+      ...payloads.get("technical-design"),
+      risks: [{ riskId: "R1", description: "Risk", severity: "critical", mitigation: "None" }],
+    }],
+    ["unit-test", {
+      ...payloads.get("unit-test"),
+      commands: [{ ...payloads.get("unit-test").commands[0], evidenceSha256: null }],
+    }],
+    ["code-review", {
+      ...payloads.get("code-review"),
+      findings: [{ ...payloads.get("code-review").findings[0], line: 0 }],
+    }],
+    ["build-publish", {
+      ...payloads.get("build-publish"),
+      externalActions: [{ ...payloads.get("build-publish").externalActions[0], status: "executed", approvalId: null }],
+    }],
+    ["interface-verification", {
+      ...payloads.get("interface-verification"),
+      results: [{ ...payloads.get("interface-verification").results[0], status: "unknown" }],
+    }],
+    ["delivery-preparation", {
+      ...payloads.get("delivery-preparation"),
+      remainingRisks: [{ ...payloads.get("delivery-preparation").remainingRisks[0], status: "unknown" }],
+    }],
+  ];
+  for (const [phase, payload] of invalidPayloads) {
+    const phaseTask = { ...task, phase, next: "next-phase" };
+    assert.throws(
+      () => validateDispatchResultStructure(dispatchResultV2(phaseTask, { phase, payload })),
+      /invalid|evidence|line|approval|status/i,
+    );
+  }
+}
+
 async function writePreparedResult(root, prepared, result) {
+  if (prepared.task.schemaVersion === "2.0" && result.schemaVersion !== "2.0") {
+    const outputs = [];
+    for (const output of result.outputs ?? []) {
+      const fullPath = path.join(root, output.path);
+      const content = await readFile(fullPath).catch(() => Buffer.alloc(0));
+      outputs.push({
+        path: output.path,
+        sha256: `sha256:${createHash("sha256").update(content).digest("hex")}`,
+        bytes: content.length,
+      });
+    }
+    const records = [];
+    for (const [index, record] of (result.records ?? []).entries()) {
+      let evidencePath = null;
+      let sha256 = null;
+      let bytes = null;
+      if (record.path) {
+        const source = await readFile(path.join(root, record.path));
+        evidencePath = `${prepared.task.attemptRoot}/evidence/record-${index + 1}.md`;
+        await write(root, evidencePath, source);
+        sha256 = `sha256:${createHash("sha256").update(source).digest("hex")}`;
+        bytes = source.length;
+      }
+      records.push({
+        type: record.type,
+        status: record.status,
+        path: evidencePath,
+        sha256,
+        bytes,
+        message: record.message,
+        actor: record.actor ?? "fixture",
+      });
+    }
+    const common = {
+      schemaVersion: "2.0",
+      dispatchId: result.dispatchId,
+      storyId: prepared.task.storyId,
+      runId: prepared.task.runId,
+      phase: prepared.task.phase,
+      preparedRevision: prepared.task.preparedRevision,
+      status: result.status,
+      summary: result.summary,
+      outputs: result.status === "completed" ? outputs : [],
+      records,
+    };
+    if (result.status === "completed") {
+      result = { ...common, payload: result.payload ?? defaultV2Payload(prepared.task, result.records) };
+      if (prepared.task.phase === "task-dag" && outputs[0]) {
+        result.payload.taskDagSha256 = outputs[0].sha256;
+      }
+    } else {
+      result = {
+        ...common,
+        diagnostics: result.diagnostics ?? {
+          code: result.status === "failed" ? "PHASE_FAILED" : "PHASE_BLOCKED",
+          message: result.summary,
+          details: [],
+        },
+        ...(result.status === "blocked" ? { blocker: result.blocker } : {}),
+      };
+    }
+  }
   await write(root, prepared.resultFile, `${JSON.stringify(result, null, 2)}\n`);
 }
 
@@ -2336,7 +2770,18 @@ async function testApplyCompletedResultAdvancesThroughM2() {
     assert.equal(checkpoint.status, "completed");
     assert.equal(checkpoint.completedAt, FIXED_NOW);
     const state = await readJson(root, `.harness/states/e2e-${storyId}.json`);
-    assert.equal(state.runtime.records.at(-1).path, prepared.task.expectedOutputs[0]);
+    assert.equal(
+      state.runtime.records.find((record) => record.type === "output")?.path,
+      prepared.task.expectedOutputs[0],
+    );
+    assert.equal(
+      state.runtime.records.find((record) => record.type === "output")?.status,
+      "produced",
+    );
+    assert.equal(
+      state.runtime.records.find((record) => record.type === "phase-result")?.path,
+      prepared.resultFile,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -2350,7 +2795,7 @@ async function testApplyRejectsMissingOutputAndIdentityMismatchWithoutStateChang
     const before = await readJson(missing.root, `.harness/states/e2e-${missing.storyId}.json`);
     await assert.rejects(
       runStoryCommand(storyOptions(missing.root, { command: "apply" })),
-      /required output.*missing|missing.*required output/i,
+      /required output.*missing|missing.*required output|result output.*regular file/i,
     );
     const after = await readJson(missing.root, `.harness/states/e2e-${missing.storyId}.json`);
     assert.equal(after.phase, before.phase);
@@ -2380,6 +2825,12 @@ async function testApplyFailedAndBlockedResultsKeepDeterministicState() {
   const failed = await createFixture("M3-APPLY-FAILED");
   try {
     const prepared = await runStoryCommand(storyOptions(failed.root, { command: "prepare" }));
+    const stateFile = `.harness/states/e2e-${failed.storyId}.json`;
+    const pointerFile = ".harness/states/active-run.json";
+    const eventsFile = `.harness/states/e2e-${failed.storyId}.events.jsonl`;
+    const stateBefore = await readFile(path.join(failed.root, stateFile), "utf8");
+    const pointerBefore = await readFile(path.join(failed.root, pointerFile), "utf8");
+    const eventsBefore = await readFile(path.join(failed.root, eventsFile), "utf8");
     await writePreparedResult(failed.root, prepared, dispatchResult(prepared.task, {
       status: "failed",
       summary: "worker failed",
@@ -2390,6 +2841,15 @@ async function testApplyFailedAndBlockedResultsKeepDeterministicState() {
     assert.equal(applied.status, "failed");
     assert.equal(applied.state.phase, "requirement");
     assert.equal((await readJson(failed.root, prepared.checkpointFile)).status, "failed");
+    assert.equal((await readJson(failed.root, prepared.activeAttemptFile)).status, "failed");
+    assert.equal(await readFile(path.join(failed.root, stateFile), "utf8"), stateBefore);
+    assert.equal(await readFile(path.join(failed.root, pointerFile), "utf8"), pointerBefore);
+    assert.equal(await readFile(path.join(failed.root, eventsFile), "utf8"), eventsBefore);
+
+    const retried = await runStoryCommand(storyOptions(failed.root, { command: "prepare" }));
+    assert.equal(retried.reused, true);
+    assert.equal(retried.task.dispatchId, prepared.task.dispatchId);
+    assert.equal(retried.task.preparedRevision, prepared.task.preparedRevision);
   } finally {
     await rm(failed.root, { recursive: true, force: true });
   }
@@ -2397,23 +2857,65 @@ async function testApplyFailedAndBlockedResultsKeepDeterministicState() {
   const blocked = await createFixture("M3-APPLY-BLOCKED");
   try {
     const prepared = await runStoryCommand(storyOptions(blocked.root, { command: "prepare" }));
+    const stateFile = `.harness/states/e2e-${blocked.storyId}.json`;
+    const stateBefore = await readJson(blocked.root, stateFile);
     await writePreparedResult(blocked.root, prepared, dispatchResult(prepared.task, {
       status: "blocked",
       summary: "decision required",
       outputs: [],
+      records: [{ type: "note", status: "recorded", message: "waiting for user decision" }],
       blocker: { reason: "decision required", owner: "user", suggestedAction: "choose an option" },
     }));
     const applied = await runStoryCommand(storyOptions(blocked.root, { command: "apply" }));
     assert.equal(applied.status, "blocked");
     assert.equal(applied.state.phase, "blocked");
+    assert.equal(applied.state.runtime.revision, stateBefore.runtime.revision + 1);
     assert.equal(applied.state.runtime.activeBlock.previousPhase, "requirement");
+    assert.deepEqual(applied.state.requirement, stateBefore.requirement);
+    assert.equal(
+      applied.state.runtime.records.filter((record) => record.type === "note").length,
+      1,
+    );
+    const official = applied.state.runtime.records.filter((record) => (
+      record.type === "phase-result" && record.dispatchId === prepared.task.dispatchId
+    ));
+    assert.equal(official.length, 1);
+    assert.equal(official[0].status, "blocked");
+    assert.equal(official[0].preparedRevision, prepared.task.preparedRevision);
+    assert.equal(official[0].appliedRevision, stateBefore.runtime.revision + 1);
     assert.equal((await readJson(blocked.root, prepared.checkpointFile)).status, "blocked");
+    assert.equal((await readJson(blocked.root, prepared.activeAttemptFile)).status, "blocked");
+
+    const oldAttemptBeforeResume = await Promise.all([
+      readFile(path.join(blocked.root, prepared.taskFile), "utf8"),
+      readFile(path.join(blocked.root, prepared.resultFile), "utf8"),
+      readFile(path.join(blocked.root, prepared.checkpointFile), "utf8"),
+    ]);
+    await runStateCommand({
+      root: blocked.root,
+      command: "resume",
+      stateFile,
+      now: () => FIXED_NOW,
+    });
+    const nextDispatchId = "00000000-0000-4000-8000-000000000002";
+    const resumed = await runStoryCommand(storyOptions(blocked.root, {
+      command: "prepare",
+      randomUUID: () => nextDispatchId,
+    }));
+    assert.equal(resumed.reused, false);
+    assert.equal(resumed.task.dispatchId, nextDispatchId);
+    assert.equal(resumed.task.preparedRevision, stateBefore.runtime.revision + 2);
+    assert.deepEqual(await Promise.all([
+      readFile(path.join(blocked.root, prepared.taskFile), "utf8"),
+      readFile(path.join(blocked.root, prepared.resultFile), "utf8"),
+      readFile(path.join(blocked.root, prepared.checkpointFile), "utf8"),
+    ]), oldAttemptBeforeResume);
   } finally {
     await rm(blocked.root, { recursive: true, force: true });
   }
 }
 
-async function testApplyResumesAfterRecordBeforeAdvance() {
+async function testApplyKeepsStateUnchangedBeforeAtomicProjection() {
   const { root, storyId } = await createFixture("M3-APPLY-RESUME");
   try {
     await setFixtureState(root, storyId, (state) => { state.phase = "unit-test"; });
@@ -2428,6 +2930,8 @@ async function testApplyResumesAfterRecordBeforeAdvance() {
     await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
       records: [{ type: "test", status: "passed", path: reportPath, message: "targeted tests passed" }],
     }));
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const stateBefore = await readFile(path.join(root, stateFile), "utf8");
 
     await assert.rejects(
       runStoryCommand(storyOptions(root, {
@@ -2436,14 +2940,20 @@ async function testApplyResumesAfterRecordBeforeAdvance() {
       })),
       /simulated interruption/,
     );
-    const interrupted = await readJson(root, `.harness/states/e2e-${storyId}.json`);
-    assert.equal(interrupted.phase, "unit-test");
-    assert.equal(interrupted.tests.results.length, 2);
+    assert.equal(await readFile(path.join(root, stateFile), "utf8"), stateBefore);
 
     const resumed = await runStoryCommand(storyOptions(root, { command: "apply" }));
     assert.equal(resumed.state.phase, "code-review");
-    const completed = await readJson(root, `.harness/states/e2e-${storyId}.json`);
-    assert.equal(completed.tests.results.length, 2);
+    const completed = await readJson(root, stateFile);
+    assert.deepEqual(completed.tests, { cases: [], commands: [], results: [] });
+    assert.equal(
+      completed.runtime.records.some((record) => record.type === "test" && record.status === "passed"),
+      true,
+    );
+    assert.equal(
+      completed.runtime.records.some((record) => record.type === "phase-result" && record.status === "applied"),
+      true,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -2465,12 +2975,94 @@ async function testApplyReconcilesAfterAdvanceBeforeCheckpointWrite() {
     );
     const interrupted = await readJson(root, `.harness/states/e2e-${storyId}.json`);
     assert.equal(interrupted.phase, "technical-design");
-    assert.equal((await readJson(root, prepared.checkpointFile)).status, "result-received");
+    assert.equal((await readJson(root, prepared.checkpointFile)).status, "prepared");
 
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const pointerFile = ".harness/states/active-run.json";
+    const eventsFile = `.harness/states/e2e-${storyId}.events.jsonl`;
+    const stateBeforeRetry = await readFile(path.join(root, stateFile), "utf8");
+    const pointerBeforeRetry = await readFile(path.join(root, pointerFile), "utf8");
+    const eventsBeforeRetry = await readFile(path.join(root, eventsFile), "utf8");
     const resumed = await runStoryCommand(storyOptions(root, { command: "apply" }));
     assert.equal(resumed.status, "already-applied");
     assert.equal(resumed.state.phase, "technical-design");
     assert.equal((await readJson(root, prepared.checkpointFile)).status, "completed");
+    assert.equal(await readFile(path.join(root, stateFile), "utf8"), stateBeforeRetry);
+    assert.equal(await readFile(path.join(root, pointerFile), "utf8"), pointerBeforeRetry);
+    assert.equal(await readFile(path.join(root, eventsFile), "utf8"), eventsBeforeRetry);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testApplyRebuildsMissingAttemptPointerFromFormalResultIndex() {
+  const { root, storyId } = await createFixture("M3-APPLY-MISSING-ACTIVE");
+  try {
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    await write(root, prepared.task.expectedOutputs[0], "# Requirement\n");
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task));
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "apply",
+        afterAdvance: async () => { throw new Error("simulated active-attempt loss"); },
+      })),
+      /active-attempt loss/i,
+    );
+    await rm(path.join(root, prepared.activeAttemptFile));
+    await rm(path.join(root, prepared.checkpointFile));
+
+    const resumed = await runStoryCommand(storyOptions(root, { command: "apply" }));
+    assert.equal(resumed.status, "already-applied");
+    assert.equal(resumed.state.phase, "technical-design");
+    const active = await readJson(root, prepared.activeAttemptFile);
+    assert.equal(active.dispatchId, prepared.task.dispatchId);
+    assert.equal(active.preparedRevision, prepared.task.preparedRevision);
+    assert.equal(active.status, "completed");
+    assert.equal((await readJson(root, prepared.checkpointFile)).status, "completed");
+
+    const result = await readJson(root, prepared.resultFile);
+    result.summary = "drifted after apply";
+    await write(root, prepared.resultFile, `${JSON.stringify(result, null, 2)}\n`);
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, { command: "apply" })),
+      /formal phase result drifted|result.*drift/i,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testBlockedApplyRecoversProcessFilesFromFormalResultIndex() {
+  const { root, storyId } = await createFixture("M3-APPLY-BLOCKED-RECOVERY");
+  try {
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      status: "blocked",
+      summary: "decision required",
+      outputs: [],
+      blocker: { reason: "decision required", owner: "user", suggestedAction: "choose an option" },
+    }));
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "apply",
+        afterAdvance: async () => { throw new Error("simulated blocked process-file interruption"); },
+      })),
+      /blocked process-file interruption/i,
+    );
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const eventsFile = `.harness/states/e2e-${storyId}.events.jsonl`;
+    const stateBeforeRetry = await readFile(path.join(root, stateFile), "utf8");
+    const eventsBeforeRetry = await readFile(path.join(root, eventsFile), "utf8");
+    await rm(path.join(root, prepared.activeAttemptFile));
+    await rm(path.join(root, prepared.checkpointFile));
+
+    const resumed = await runStoryCommand(storyOptions(root, { command: "apply" }));
+    assert.equal(resumed.status, "already-applied");
+    assert.equal(resumed.state.phase, "blocked");
+    assert.equal((await readJson(root, prepared.checkpointFile)).status, "blocked");
+    assert.equal((await readJson(root, prepared.activeAttemptFile)).status, "blocked");
+    assert.equal(await readFile(path.join(root, stateFile), "utf8"), stateBeforeRetry);
+    assert.equal(await readFile(path.join(root, eventsFile), "utf8"), eventsBeforeRetry);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -2734,9 +3326,28 @@ quality_gates:
       }));
       assert.equal(prepared.task.phase, phase);
       assert.equal(prepared.task.preparedAt, FIXED_NOW);
-      assert.match(prepared.taskFile, new RegExp(`/phases/${String(index).padStart(2, "0")}-${phase}/task\\.json$`));
+      assert.match(
+        prepared.taskFile,
+        new RegExp(`/phases/${String(index).padStart(2, "0")}-${phase}/attempts/.+/task\\.json$`),
+      );
       const outputPath = prepared.task.expectedOutputs[0];
-      await write(root, outputPath, phase === "task-dag" ? "{}\n" : `# ${phase}\n`);
+      await write(root, outputPath, phase === "task-dag" ? `${JSON.stringify({
+        schemaVersion: "1.0",
+        storyId,
+        nodes: [{
+          taskId: "T1",
+          title: "Implement fixture",
+          type: "backend",
+          status: "pending",
+          ownerAgent: "backend-developer",
+          predictedFiles: ["backend/src/T1.java"],
+          acceptanceCriteria: ["AC-001"],
+        }],
+        edges: [],
+        waves: [["T1"]],
+        globalChanges: [],
+        risks: [],
+      }, null, 2)}\n` : `# ${phase}\n`);
 
       if (phase === "unit-test") {
         await runStoryCommand(storyOptions(root, {
@@ -2782,11 +3393,17 @@ async function testM3RuntimeIsRegisteredInHarnessContracts() {
   for (const expected of [
     ".harness/schemas/dispatch-task.schema.json",
     ".harness/schemas/dispatch-result.schema.json",
+    ".harness/schemas/dispatch-task-v2.schema.json",
+    ".harness/schemas/dispatch-result-v2.schema.json",
     ".harness/scripts/run-story.ps1",
     ".harness/scripts/lib/story-runtime.mjs",
+    ".harness/scripts/lib/phase-data-contract.mjs",
+    ".harness/scripts/lib/phase-result-projector.mjs",
     ".harness/scripts/lib/batch-finalization-contract.mjs",
     ".harness/scripts/tests/story-runtime.test.mjs",
+    ".harness/scripts/tests/phase-result-projector.test.mjs",
     "docs/harness-m3-agent-dispatcher",
+    "docs/harness-m7a2-phase-result",
   ]) {
     assert.match(manifest, new RegExp(expected.replaceAll(".", "\\.")));
   }
@@ -2814,6 +3431,60 @@ async function testM3RuntimeIsRegisteredInHarnessContracts() {
   const structureValidator = await readFile(path.join(REPOSITORY_ROOT, ".harness/scripts/validate-structure.ps1"), "utf8");
   assert.match(structureValidator, /\.harness\/schemas\/dispatch-task\.schema\.json/);
   assert.match(structureValidator, /\.harness\/schemas\/dispatch-result\.schema\.json/);
+  assert.match(structureValidator, /\.harness\/schemas\/dispatch-task-v2\.schema\.json/);
+  assert.match(structureValidator, /\.harness\/schemas\/dispatch-result-v2\.schema\.json/);
+}
+
+async function testStructuredFailedTestsCannotAdvance() {
+  const fixture = await createFixture("M3-GATE-STRUCTURED-TEST");
+  try {
+    await setFixtureState(fixture.root, fixture.storyId, (state) => { state.phase = "unit-test"; });
+    const prepared = await runStoryCommand(storyOptions(fixture.root, { command: "prepare" }));
+    await runStoryCommand(storyOptions(fixture.root, {
+      command: "run-adapter",
+      adapter: "harness-state-tests",
+      execute: async () => ({ exitCode: 0, stdout: "adapter passed", stderr: "" }),
+    }));
+    await write(fixture.root, prepared.task.expectedOutputs[0], "# Test report\n");
+    await writePreparedResult(fixture.root, prepared, dispatchResult(prepared.task, {
+      payload: {
+        cases: [{
+          caseId: "TC-FAILED",
+          type: "unit",
+          required: true,
+          criterionIds: [],
+          expected: "The structured test passes.",
+        }],
+        commands: [{
+          commandId: "CMD-FAILED",
+          command: "node failing-test.mjs",
+          status: "failed",
+          exitCode: 1,
+          evidencePath: null,
+          evidenceSha256: null,
+          executedAt: FIXED_NOW,
+        }],
+        results: [{
+          caseId: "TC-FAILED",
+          status: "failed",
+          actual: "The structured test failed.",
+          evidencePath: null,
+          evidenceSha256: null,
+          executedAt: FIXED_NOW,
+        }],
+      },
+    }));
+    const stateFile = `.harness/states/e2e-${fixture.storyId}.json`;
+    const stateBefore = await readFile(path.join(fixture.root, stateFile), "utf8");
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(fixture.root, { command: "apply" })),
+      /failed.*test|test.*failed/i,
+    );
+    assert.equal(await readFile(path.join(fixture.root, stateFile), "utf8"), stateBefore);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
 }
 
 await testDispatchV12RequiresRuntimeDerivedWaveIdentity();
@@ -2866,14 +3537,19 @@ await testRunAdapterRejectsUnknownOrWrongPhaseAdapter();
 await testRunAdapterPersistsAndRecordsFailure();
 await testPlatformCommandAdaptersUseFixedExecutableAndArguments();
 await testRunAdapterSupportsNormalLargeCommandOutput();
+await testDispatchV2ContractsUseAttemptScopedIdentity();
+await testDispatchV2PhasePayloadsAreStrict();
 await testApplyCompletedResultAdvancesThroughM2();
 await testApplyRejectsMissingOutputAndIdentityMismatchWithoutStateChange();
 await testApplyFailedAndBlockedResultsKeepDeterministicState();
-await testApplyResumesAfterRecordBeforeAdvance();
+await testApplyKeepsStateUnchangedBeforeAtomicProjection();
 await testFailedAdapterAndBlockerCannotAdvanceUntilResolved();
+await testStructuredFailedTestsCannotAdvance();
 await testBuildPhaseRequiresACommandAdapterResult();
 await testNoBuildAdapterRejectsBackendOrFrontendChanges();
 await testApplyReconcilesAfterAdvanceBeforeCheckpointWrite();
+await testApplyRebuildsMissingAttemptPointerFromFormalResultIndex();
+await testBlockedApplyRecoversProcessFilesFromFormalResultIndex();
 await testBuildPhaseRejectsChangedAdapterEvidence();
 await testCodeReviewRequiresPassedReviewEvidence();
 await testCompleteSingleStoryVerticalSlice();

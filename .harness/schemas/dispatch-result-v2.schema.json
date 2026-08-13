@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/dispatch-result-v2.schema.json",
+  "title": "FrontierScan Harness Dispatch Result v2",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "output": {
+      "type": "object",
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "bytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "record": {
+      "type": "object",
+      "required": ["type", "status", "path", "sha256", "bytes", "message", "actor"],
+      "properties": {
+        "type": { "enum": ["test", "review", "note"] },
+        "status": { "type": "string", "minLength": 1 },
+        "path": { "type": ["string", "null"] },
+        "sha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+        "bytes": { "type": ["integer", "null"], "minimum": 0 },
+        "message": { "type": "string" },
+        "actor": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": ["code", "message", "details"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "details": { "$ref": "#/$defs/stringArray" }
+      },
+      "additionalProperties": false
+    },
+    "blocker": {
+      "type": "object",
+      "required": ["reason", "owner", "suggestedAction"],
+      "properties": {
+        "reason": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "suggestedAction": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "requirementPayload": {
+      "type": "object",
+      "required": ["acceptanceCriteria", "openQuestions", "inScope", "outOfScope"],
+      "properties": {
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/criterion" }
+        },
+        "openQuestions": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/question" }
+        },
+        "inScope": { "$ref": "e2e-state-v2.schema.json#/$defs/stringArray" },
+        "outOfScope": { "$ref": "e2e-state-v2.schema.json#/$defs/stringArray" }
+      },
+      "additionalProperties": false
+    },
+    "technicalDesignPayload": {
+      "type": "object",
+      "required": ["decisions", "affectedAreas", "knowledgeSnapshot", "risks"],
+      "properties": {
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["decisionId", "summary", "rationale"],
+            "properties": {
+              "decisionId": { "$ref": "#/$defs/id" },
+              "summary": { "type": "string", "minLength": 1 },
+              "rationale": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "affectedAreas": { "$ref": "e2e-state-v2.schema.json#/$defs/stringArray" },
+        "knowledgeSnapshot": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/knowledgeArea" }
+        },
+        "risks": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/risk" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "taskDagPayload": {
+      "type": "object",
+      "required": ["taskDagFile", "taskDagSha256"],
+      "properties": {
+        "taskDagFile": { "type": "string", "minLength": 1 },
+        "taskDagSha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "implementationPayload": {
+      "type": "object",
+      "required": ["taskUpdates", "actualFiles", "method", "exceptionReason", "notes"],
+      "properties": {
+        "taskUpdates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["taskId", "status"],
+            "properties": {
+              "taskId": { "$ref": "#/$defs/id" },
+              "status": { "enum": ["pending", "running", "done", "blocked"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "actualFiles": { "$ref": "e2e-state-v2.schema.json#/$defs/pathArray" },
+        "method": { "enum": ["tdd", "exception"] },
+        "exceptionReason": { "type": ["string", "null"], "minLength": 1 },
+        "notes": { "$ref": "e2e-state-v2.schema.json#/$defs/stringArray" }
+      },
+      "additionalProperties": false
+    },
+    "unitTestPayload": {
+      "type": "object",
+      "required": ["cases", "commands", "results"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/testCase" }
+        },
+        "commands": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/testCommand" }
+        },
+        "results": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/testResult" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "codeReviewPayload": {
+      "type": "object",
+      "required": ["findings", "status"],
+      "properties": {
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/finding" }
+        },
+        "status": { "enum": ["pending", "passed", "blocked"] }
+      },
+      "additionalProperties": false
+    },
+    "buildPayload": {
+      "type": "object",
+      "required": ["results", "artifacts", "externalActions"],
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/buildResult" }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/artifact" }
+        },
+        "externalActions": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/externalAction" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "verificationPayload": {
+      "type": "object",
+      "required": ["cases", "results", "environment"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/verificationCase" }
+        },
+        "results": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/verificationResult" }
+        },
+        "environment": {
+          "type": "object",
+          "required": ["status", "summary", "evidencePath", "evidenceSha256"],
+          "properties": {
+            "status": { "enum": ["not-checked", "available", "unavailable"] },
+            "summary": { "type": "string" },
+            "evidencePath": { "type": ["string", "null"] },
+            "evidenceSha256": { "type": ["string", "null"] }
+          },
+          "allOf": [{ "$ref": "e2e-state-v2.schema.json#/$defs/nullableEvidence" }],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "deliveryPayload": {
+      "type": "object",
+      "required": [
+        "status", "ownedFiles", "outOfPredictionFiles", "unrelatedDirtyFiles", "remainingRisks",
+        "summaryFile", "summarySha256", "gitStatus"
+      ],
+      "properties": {
+        "status": { "enum": ["pending", "ready", "blocked"] },
+        "ownedFiles": { "$ref": "e2e-state-v2.schema.json#/$defs/pathArray" },
+        "outOfPredictionFiles": { "$ref": "e2e-state-v2.schema.json#/$defs/pathArray" },
+        "unrelatedDirtyFiles": { "$ref": "e2e-state-v2.schema.json#/$defs/pathArray" },
+        "remainingRisks": {
+          "type": "array",
+          "items": { "$ref": "e2e-state-v2.schema.json#/$defs/remainingRisk" }
+        },
+        "summaryFile": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "e2e-state-v2.schema.json#/$defs/path" }
+          ]
+        },
+        "summarySha256": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/sha256" }
+          ]
+        },
+        "gitStatus": { "enum": ["not-requested", "requested"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "summaryFile": { "type": "null" } }, "required": ["summaryFile"] },
+          "then": { "properties": { "summarySha256": { "type": "null" } } },
+          "else": { "properties": { "summarySha256": { "$ref": "#/$defs/sha256" } } }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "dispatchId",
+    "storyId",
+    "runId",
+    "phase",
+    "preparedRevision",
+    "status",
+    "summary",
+    "outputs",
+    "records"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "storyId": { "$ref": "#/$defs/id" },
+    "runId": { "$ref": "#/$defs/id" },
+    "phase": {
+      "enum": [
+        "requirement",
+        "technical-design",
+        "task-dag",
+        "implementation",
+        "unit-test",
+        "code-review",
+        "build-publish",
+        "interface-verification",
+        "delivery-preparation"
+      ]
+    },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "status": { "enum": ["completed", "failed", "blocked"] },
+    "summary": { "type": "string", "minLength": 1 },
+    "outputs": { "type": "array", "items": { "$ref": "#/$defs/output" }, "uniqueItems": true },
+    "records": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+    "payload": { "type": "object" },
+    "diagnostics": { "$ref": "#/$defs/diagnostics" },
+    "blocker": { "$ref": "#/$defs/blocker" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
+      "then": {
+        "required": ["payload"],
+        "not": { "anyOf": [{ "required": ["diagnostics"] }, { "required": ["blocker"] }] }
+      },
+      "else": {
+        "required": ["diagnostics"],
+        "properties": { "outputs": { "maxItems": 0 } }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "blocked" } }, "required": ["status"] },
+      "then": { "required": ["blocker"] },
+      "else": { "not": { "required": ["blocker"] } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "requirement" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/requirementPayload" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "technical-design" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/technicalDesignPayload" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "task-dag" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/taskDagPayload" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "implementation" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/implementationPayload" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "unit-test" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/unitTestPayload" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "code-review" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/codeReviewPayload" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "build-publish" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/buildPayload" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "interface-verification" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/verificationPayload" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "delivery-preparation" } }, "required": ["phase"] },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/deliveryPayload" } } }
+    }
+  ],
+  "additionalProperties": false
+}

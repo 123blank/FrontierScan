@@ -22,8 +22,8 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 .\.harness\scripts\run-state.ps1 -Command validate
 ```
 
-3. 完成当前阶段要求的工作，通过 `record` 保存测试、审核、批准或说明证据。
-4. 使用 `next` 推进一个阶段；缺少产物或门禁失败时停留在原阶段。
+3. State v2 阶段通过 `run-story.ps1 prepare` 获取 attempt-scoped task，并写入严格的 `result.json`。
+4. 使用 `run-story.ps1 apply` 原子校验 result、投影 State 并推进；`record` 只保存手工审计证据，不回填阶段结构化字段。
 5. 需要外部决策时使用 `block`，问题解决后使用 `resume`。
 6. 当前阶段在其版本化工作流中唯一转移到 `done` 时，使用 `complete` 完成运行；v2 的终态阶段是 `delivery-preparation`。
 
@@ -63,6 +63,11 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 - 不得越过失败的质量门禁。
 - 纯构建可以离开 `build-publish`；任何真实发布仍必须在执行前通过 `frontier-build-publish` 获取显式用户批准。
 - v2 从 `delivery-preparation` 进入 `done` 不要求 Git 批准；`done/completed` 表示业务开发和交付准备闭环完成，不表示已提交或推送。
+- v2 使用独立 `dispatch-task-v2` 和 `dispatch-result-v2`；只有 `completed` result 投影业务 payload。
+- `failed` result 只更新 attempt 过程状态，不修改 State、活动指针或事件；同 revision 可复用 task。
+- `blocked` result 不投影业务 payload，通过单次 State 事务写入阻塞状态、证据和 `phase-result` 正式索引。
+- `runtime.records[type=phase-result]` 是 apply 幂等与恢复的权威事实；checkpoint 和 `active-attempt.json` 只是可重建过程状态。
+- result 的 output、evidence、SHA-256、bytes、dispatchId 和 preparedRevision 必须在锁内重新对账。
 - Git 暂存、提交、推送、PR 或发布仍必须在执行前获得用户明确批准。
 - 测试跳过、环境不可用和审核阻塞都必须记录。
 - 未经用户明确批准且没有证据，不得将发布、提交、推送或合并标记为完成。
@@ -80,4 +85,4 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 - 更新按 `pointer stage -> state commit -> pointer promote` 提交；临时指针领先状态时回退正式指针，状态达到临时指针 revision 后才恢复它。
 - 跨 Story 指针候选按当前原子写入身份恢复；正式指针 revision 领先状态时失败关闭，状态领先指针可以按写入顺序恢复。
 - 默认指针和已有运行状态必须通过运行时契约校验；显式 `-StateFile` 仍可在无关活动指针损坏时独立使用。
-- M7-A1 不负责阶段结果投影、验收追踪、知识新鲜度闭环、交付回执、Agent 自动派发、Worktree 并行、真实发布或 Git 自动写入。
+- M7-A2 已实现统一阶段结果和 State 投影；验收追踪、知识新鲜度闭环、交付回执、Agent 自动派发、Worktree 并行、真实发布或 Git 自动写入仍未实现。

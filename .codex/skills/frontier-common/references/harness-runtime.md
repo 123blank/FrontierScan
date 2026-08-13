@@ -19,4 +19,5 @@
 - v2 以 `delivery-preparation -> done` 结束；`done` 不表示 Git 已提交或推送。
 - PowerShell `validate-state.ps1` 是 Node `state-contract.mjs` 的薄入口，不维护第二套规则。
 - M5 batch/worktree 正式协议仍只支持其历史 v1 fixture，v2 支持延期到后续里程碑。
-- 阶段结果投影、验收追踪、知识新鲜度门禁和交付回执尚未由 M7-A1 实现。
+- M7-A2 已实现 attempt-scoped task/result v2、九阶段严格 payload、completed-only State 投影、原子 apply、正式 `phase-result` 索引、幂等与过程状态恢复。
+- 验收追踪、知识新鲜度门禁、owned files 推导和交付回执仍分别属于 M7-A3、M7-A4 和 M7-C。

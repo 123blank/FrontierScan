@@ -17,3 +17,7 @@ TBD
 ## Evidence
 
 - TBD
+
+## Result Payload
+
+`cases`、`results`、`environment`
