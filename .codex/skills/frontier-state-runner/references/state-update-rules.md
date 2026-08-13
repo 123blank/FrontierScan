@@ -25,6 +25,8 @@
 - 阶段、revision、指针和事件必须由 Runtime 原子更新。
 - State v2 的结构化阶段事实只能由严格 `result.json` 经 `run-story.ps1 apply` 投影，不能通过 `record` 或手工编辑回填。
 - `runtime.records[type=phase-result]` 是已应用结果的正式索引；过程 checkpoint 或 `active-attempt.json` 丢失时按正式索引恢复。
+- `acceptance` 是 requirement、DAG、测试、验证和 approval 的派生汇总；每阶段 apply 与最终 completion 都重新计算，不接受手工缓存漂移。
+- `accepted-with-known-gaps` 必须先通过 `run-story.ps1 approve-gap` 写入 attempt-scoped receipt；批准不会单独修改 State revision。
 - 外部环境不可用时记录真实阻塞或缺口，不得伪造验证通过。
 
 ## 推进
@@ -34,8 +36,8 @@
 1. 校验 State 与版本化 workflow 绑定。
 2. 确认当前阶段 required outputs 存在。
 3. 确认当前质量门禁通过。
-4. 使用 `next` 进入普通后续阶段。
-5. 当前阶段唯一转移到 `done` 时使用 `complete`。
+4. v2 使用 `run-story.ps1 apply` 推进普通阶段。
+5. v2 的 `delivery-preparation` completed result 通过 completion gate 后直接进入 `done`。
 
 v2 的 `delivery-preparation -> done` 表示交付准备完成，不表示 Git 提交或推送已经发生。
 

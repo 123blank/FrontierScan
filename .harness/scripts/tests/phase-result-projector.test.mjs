@@ -73,6 +73,17 @@ async function testRequirementProjectionReplacesOwnedFieldsOnly() {
 
   assert.equal(projected.requirement.summary, "requirement completed");
   assert.deepEqual(projected.requirement.acceptanceCriteria, phaseResult.payload.acceptanceCriteria);
+  assert.deepEqual(projected.acceptance, {
+    criteria: [{
+      criterionId: "AC-001",
+      required: true,
+      taskIds: [],
+      testCaseIds: [],
+      verificationCaseIds: [],
+      status: "pending",
+      approvalIds: [],
+    }],
+  });
   assert.deepEqual(projected.design, before.design);
   assert.deepEqual(state, before);
   assert.deepEqual(phaseResult, resultBefore);
@@ -129,7 +140,15 @@ async function testAllPhaseOwnershipAndImplementationTaskUpdates() {
   const implementationState = await stateFixture();
   implementationState.phase = "implementation";
   implementationState.dag.nodes = [
-    { taskId: "T1", title: "One", type: "backend", status: "pending", predictedFiles: [], acceptanceCriteria: [] },
+    {
+      taskId: "T1",
+      title: "One",
+      type: "backend",
+      status: "pending",
+      ownerAgent: "backend-developer",
+      predictedFiles: [],
+      criterionIds: ["AC-001"],
+    },
   ];
   const projected = projectCompletedPhaseResult({
     state: implementationState,
@@ -162,15 +181,16 @@ async function testTaskDagProjectionUsesVerifiedDocument() {
   const state = await stateFixture();
   state.phase = "task-dag";
   const taskDag = {
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     storyId: state.storyId,
     nodes: [{
       taskId: "T1",
       title: "Implement",
       type: "backend",
       status: "pending",
+      ownerAgent: "backend-developer",
       predictedFiles: ["backend/src/**"],
-      acceptanceCriteria: ["AC-001"],
+      criterionIds: ["AC-001"],
     }],
     edges: [],
     waves: [["T1"]],

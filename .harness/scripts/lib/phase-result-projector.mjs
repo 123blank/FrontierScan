@@ -1,3 +1,5 @@
+import { buildAcceptanceSummary } from "./acceptance-gate.mjs";
+
 function clone(value) {
   return structuredClone(value);
 }
@@ -41,6 +43,7 @@ function projectTaskDag(candidate, payload, taskDag) {
     throw new Error("Task DAG result requires a verified matching DAG document.");
   }
   candidate.dag = {
+    schemaVersion: taskDag.schemaVersion,
     sourceFile: payload.taskDagFile,
     sourceSha256: payload.taskDagSha256,
     nodes: clone(taskDag.nodes),
@@ -64,6 +67,7 @@ export function projectCompletedPhaseResult({ state, result, taskDag = null }) {
       inScope: clone(payload.inScope),
       outOfScope: clone(payload.outOfScope),
     };
+    candidate.acceptance = buildAcceptanceSummary(candidate);
   } else if (result.phase === "technical-design") {
     candidate.design = {
       decisions: clone(payload.decisions),
@@ -73,18 +77,23 @@ export function projectCompletedPhaseResult({ state, result, taskDag = null }) {
     candidate.knowledge.areas = clone(payload.knowledgeSnapshot);
   } else if (result.phase === "task-dag") {
     projectTaskDag(candidate, payload, taskDag);
+    candidate.acceptance = buildAcceptanceSummary(candidate);
   } else if (result.phase === "implementation") {
     projectImplementation(candidate, payload);
+    candidate.acceptance = buildAcceptanceSummary(candidate);
   } else if (result.phase === "unit-test") {
     candidate.tests = clone(payload);
+    candidate.acceptance = buildAcceptanceSummary(candidate);
   } else if (result.phase === "code-review") {
     candidate.review = clone(payload);
   } else if (result.phase === "build-publish") {
     candidate.build = clone(payload);
   } else if (result.phase === "interface-verification") {
     candidate.verification = clone(payload);
+    candidate.acceptance = buildAcceptanceSummary(candidate);
   } else if (result.phase === "delivery-preparation") {
     candidate.delivery = clone(payload);
+    candidate.acceptance = buildAcceptanceSummary(candidate);
   } else {
     throw new Error(`Unsupported State v2 phase result '${result.phase}'.`);
   }

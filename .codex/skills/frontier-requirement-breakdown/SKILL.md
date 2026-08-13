@@ -25,12 +25,14 @@ Use this Skill at the beginning of non-trivial FrontierScan work.
 ## Outputs
 
 - `.harness/outputs/requirement-breakdown.md`
-- Suggested product/e2e state initialization values
+- State v2 requirement payload：稳定验收项、开放问题、范围和非目标
 
 ## Rules
 
 - Do not implement during breakdown.
 - Ask only blocking clarification questions.
-- Every story must include acceptance criteria or an explicit discovery task.
+- Every story must include at least one required acceptance criterion or an explicit discovery task.
+- Every acceptance criterion must have a stable `criterionId`, a `required` flag, a source, and an observable description.
+- Open questions must use stable IDs and consistent status/resolution combinations; unresolved questions block requirement apply.
 - Surface stale or missing knowledge instead of hiding uncertainty.
 - Call out likely backend, frontend, data, config, and test impact.

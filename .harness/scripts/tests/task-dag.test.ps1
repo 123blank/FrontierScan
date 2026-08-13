@@ -159,6 +159,61 @@ try {
   $invalidOwner.nodes[0] | Add-Member -NotePropertyName ownerAgent -NotePropertyValue 42
   Assert-ValidationFails -Dag $invalidOwner -Pattern "ownerAgent"
 
+  $dagV2 = @{
+    schemaVersion = "2.0"
+    storyId = "M7-A3-DAG"
+    nodes = @(@{
+      taskId = "T1"
+      title = "Implement acceptance gate"
+      type = "backend"
+      status = "pending"
+      ownerAgent = "backend-developer"
+      predictedFiles = @(".harness/scripts/lib/acceptance-gate.mjs")
+      criterionIds = @("AC-001")
+    })
+    edges = @()
+    waves = @(, @("T1"))
+    globalChanges = @()
+    risks = @()
+  }
+  Write-DagFile -Dag $dagV2
+  $v2Output = & $validator -TaskDagFile $dagFile
+  if (($v2Output -join "`n") -notmatch "Harness task DAG validation passed") {
+    throw "Task DAG 2.0 did not pass validation."
+  }
+  $v2Cases = (& $caseDeriver -TaskDagFile $dagFile -Json) | ConvertFrom-Json
+  if ($v2Cases.cases.Count -ne 1 -or
+      $v2Cases.cases[0].caseId -ne "T1-VC1" -or
+      $v2Cases.cases[0].taskId -ne "T1" -or
+      $v2Cases.cases[0].required -ne $true -or
+      $v2Cases.cases[0].status -ne "pending-draft" -or
+      $v2Cases.cases[0].criterionIds[0] -ne "AC-001" -or
+      $null -ne $v2Cases.cases[0].action -or
+      $null -ne $v2Cases.cases[0].expected) {
+    throw "Task DAG 2.0 interface case derivation is invalid."
+  }
+  if ($v2Cases.cases[0].PSObject.Properties.Name -contains "actual" -or
+      $v2Cases.cases[0].PSObject.Properties.Name -contains "result" -or
+      $v2Cases.cases[0].PSObject.Properties.Name -contains "evidence") {
+    throw "Task DAG 2.0 draft must not fabricate actual, result, or evidence fields."
+  }
+  $v2Markdown = (& $caseDeriver -TaskDagFile $dagFile) -join "`n"
+  if ($v2Markdown -notmatch "T1-VC1.*T1.*api.*AC-001.*pending-draft") {
+    throw "Task DAG 2.0 Markdown interface case derivation is invalid."
+  }
+
+  $v2LegacyField = Copy-Dag -Dag $dagV2
+  $v2LegacyField.nodes[0] | Add-Member -NotePropertyName acceptanceCriteria -NotePropertyValue @("legacy")
+  Assert-ValidationFails -Dag $v2LegacyField -Pattern "unsupported.*acceptanceCriteria"
+
+  $v2MissingCriterionIds = Copy-Dag -Dag $dagV2
+  $v2MissingCriterionIds.nodes[0].PSObject.Properties.Remove("criterionIds")
+  Assert-ValidationFails -Dag $v2MissingCriterionIds -Pattern "criterionIds"
+
+  $v2NonPending = Copy-Dag -Dag $dagV2
+  $v2NonPending.nodes[0].status = "done"
+  Assert-ValidationFails -Dag $v2NonPending -Pattern "pending"
+
   Write-Output "Task DAG validator tests passed."
 } finally {
   Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue

@@ -63,6 +63,11 @@ $hasFrontend = Test-AnyPath -Paths $paths -Prefixes @("frontend/")
 $hasHarness = Test-AnyPath -Paths $paths -Prefixes @(".harness/", ".codex/skills/", ".codex/agents/", "llm-knowledge/", "docs/harness")
 $hasState = Test-AnyPath -Paths $paths -Prefixes @(".harness/states/", ".harness/schemas/")
 $hasDag = Test-AnyPath -Paths $paths -Prefixes @(".harness/templates/task-dag", ".harness/schemas/task-dag")
+if (-not $hasDag) {
+  $hasDag = @($paths | Where-Object {
+    (($_ -replace "\\", "/").TrimStart("/")) -match "^\.harness/runs/[^/]+/phases/02-task-dag/task-dag\.json$"
+  }).Count -gt 0
+}
 
 if ($hasBackend) {
   $recommendations += [pscustomobject]@{

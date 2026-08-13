@@ -35,6 +35,7 @@ required_directories:
   - docs/harness-m7-m12-roadmap
   - docs/harness-m7a1-state-v2
   - docs/harness-m7a2-phase-result
+  - docs/harness-m7a3-acceptance-gates
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -42,6 +43,8 @@ required_files:
   - .harness/schemas/e2e-state-v2.schema.json
   - .harness/schemas/active-run.schema.json
   - .harness/schemas/task-dag.schema.json
+  - .harness/schemas/task-dag-v2.schema.json
+  - .harness/schemas/approval-receipt.schema.json
   - .harness/schemas/dispatch-task.schema.json
   - .harness/schemas/dispatch-result.schema.json
   - .harness/schemas/dispatch-task-v2.schema.json
@@ -105,6 +108,9 @@ required_files:
   - .harness/scripts/lib/source-fingerprint.mjs
   - .harness/scripts/lib/state-runtime.mjs
   - .harness/scripts/lib/state-contract.mjs
+  - .harness/scripts/lib/acceptance-contract.mjs
+  - .harness/scripts/lib/acceptance-gate.mjs
+  - .harness/scripts/lib/approval-contract.mjs
   - .harness/scripts/lib/story-runtime.mjs
   - .harness/scripts/lib/dispatch-contract.mjs
   - .harness/scripts/lib/phase-data-contract.mjs
@@ -127,6 +133,9 @@ required_files:
   - .harness/scripts/tests/state-runtime.test.mjs
   - .harness/scripts/tests/story-runtime.test.mjs
   - .harness/scripts/tests/phase-result-projector.test.mjs
+  - .harness/scripts/tests/acceptance-gate.test.mjs
+  - .harness/scripts/tests/approval-contract.test.mjs
+  - .harness/scripts/tests/select-tests.test.ps1
   - .harness/scripts/tests/worker-runtime.test.mjs
   - .harness/scripts/tests/worktree-runtime.test.mjs
   - .harness/scripts/tests/worktree-worker-runtime.test.mjs
@@ -270,6 +279,9 @@ required_files:
   - docs/harness-m7a2-phase-result/DESIGN.md
   - docs/harness-m7a2-phase-result/PLAN.md
   - docs/harness-m7a2-phase-result/REPORT.md
+  - docs/harness-m7a3-acceptance-gates/DESIGN.md
+  - docs/harness-m7a3-acceptance-gates/PLAN.md
+  - docs/harness-m7a3-acceptance-gates/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -280,6 +292,7 @@ status_notes:
   agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1
   deterministic_scripts: mixed-read-only-helpers-state-story-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
   business_code_changes: none-required-for-m0-m5dd
-  roadmap_planning: m7-m12-documentation-approved-m7a1-m7a2-implemented
+  roadmap_planning: m7-m12-documentation-approved-m7a1-m7a2-m7a3-implemented
   m7a1_state_v2: implemented-fixture-verified-independent-review-passed
   m7a2_phase_result: implemented-fixture-verified-independent-review-passed
+  m7a3_acceptance_gates: implemented-fixture-verified-independent-review-passed

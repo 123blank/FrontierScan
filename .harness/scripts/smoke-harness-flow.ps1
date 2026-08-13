@@ -251,6 +251,13 @@ Invoke-Step -Name "Task DAG" -Action {
   & (Join-Path $Root ".harness\scripts\validate-task-dag.ps1") -TaskDagFile $TaskDagFile
 }
 
+Invoke-Step -Name "M7-A3 Acceptance Gates" -Action {
+  & node (Join-Path $Root ".harness\scripts\tests\acceptance-gate.test.mjs")
+  if ($LASTEXITCODE -ne 0) { throw "M7-A3 acceptance gate smoke failed with exit code $LASTEXITCODE" }
+  & node (Join-Path $Root ".harness\scripts\tests\approval-contract.test.mjs")
+  if ($LASTEXITCODE -ne 0) { throw "M7-A3 approval contract smoke failed with exit code $LASTEXITCODE" }
+}
+
 Invoke-Step -Name "Knowledge Query" -Action {
   & (Join-Path $Root ".harness\scripts\kb-query.ps1") -Root $Root -Query "quality gate" -Mode knowledge-qa -Area common -MaxMatches 3
 }

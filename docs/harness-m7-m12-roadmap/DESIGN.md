@@ -2,7 +2,7 @@
 
 > 日期：2026-08-12
 >
-> 状态：已完成路线设计，待按子里程碑逐项设计批准和实施
+> 状态：路线已批准；M7-A1、M7-A2 已完成，M7-A3 已实施并进入独立代码审核收口
 >
 > 当前基线：`53c1f29 docs(harness): establish target and gap baseline`
 >
@@ -58,10 +58,10 @@
 
 ### 3.2 缺口与 stale 接受
 
-- `accepted-with-known-gaps` 和 `accepted-stale` 必须逐项获得用户明确批准。
+- `accepted-with-known-gaps` 和 `accepted-stale` 必须逐项获得用户明确批准。M7-A3 建立通用 approval 契约并启用 `verification-gap`；M7-C 复用该契约并启用 `knowledge-stale` 业务门禁。
 - 批准必须绑定 subject ID、用户身份、理由、证据文件和 SHA-256。
 - 未被接受的 gap 或当前任务相关 stale 继续阻塞阶段推进。
-- 同一 subject 以最新有效决定为准；拒绝会撤销此前接受。
+- M7-A3 首版只记录 approved receipt；reason 或 subject 变化时，在同一 Story、run、attempt 和 case 内生成新批准并替换当前 result 引用。跨 attempt 或跨 case 不允许复用；拒绝、撤销和通用决策覆盖语义不在 A3 首版范围。
 
 ### 3.3 任务事实源
 
@@ -155,6 +155,7 @@ tests
 review
 build
 verification
+acceptance
 delivery
 approvals
 worktrees
@@ -279,9 +280,8 @@ criterionIds
 ```text
 pending
 running
-completed
+done
 blocked
-failed
 ```
 
 ### 5.7 Implementation 与 TDD
@@ -351,24 +351,14 @@ evidenceSha256
 createdAt
 ```
 
-`subjectType` 首版包括：
+`subjectType` 按里程碑启用：
 
 ```text
-verification-gap
-knowledge-stale
-worktree-create
-worktree-retire
-docker-build
-docker-up
-docker-down
-git-stage
-git-commit
-git-push
-publish
-deploy
+M7-A3: verification-gap
+M7-C: knowledge-stale
 ```
 
-State 内只保存完成前需要的业务和风险接受。完成后的 Git 事实进入独立 delivery receipt。
+Worktree、Docker、Git、发布和部署继续使用各自既有批准边界，是否进入通用 approval 契约由对应里程碑专项设计决定。State 内只保存完成前需要的业务和风险接受；完成后的 Git 事实进入独立 delivery receipt。
 
 ### 5.10 Delivery
 
@@ -492,13 +482,13 @@ task-dag 的完整节点从已验证的 DAG 文件投影，不在 result 中重�
 
 ### 8.4 Implementation
 
-- 所有 required task 进入 completed。
-- actual files 与 Git 事实一致。
+- 所有 DAG task 进入 done。
+- actual files 与 Git 事实一致性由 M7-A4 收口。
 - 存在 TDD method 或有效例外理由。
 
 ### 8.5 Unit test
 
-- 每个 required criterion 至少由一个 required test/verification case 覆盖。
+- 每个 required criterion 至少由一个 required test case 覆盖。
 - 当前最终测试结果不存在 failed。
 - evidence 当前哈希与记录一致。
 

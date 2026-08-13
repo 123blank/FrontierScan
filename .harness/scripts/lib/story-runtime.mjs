@@ -21,8 +21,30 @@ import {
   inspectImplementationOwner,
 } from "./implementation-owner-contract.mjs";
 import { projectCompletedPhaseResult } from "./phase-result-projector.mjs";
+import {
+  assertCompletionGate,
+  assertImplementationGate,
+  assertRequirementGate,
+  assertTaskDagGate,
+  assertUnitTestGate,
+  assertVerificationGate,
+  buildAcceptanceSummary,
+} from "./acceptance-gate.mjs";
+import {
+  approvalSemanticKey,
+  canonicalJson,
+  deterministicApprovalId,
+  validateApprovalReceipt,
+  validateFormalApproval,
+  verificationGapSubjectSha256,
+} from "./approval-contract.mjs";
 import { loadTaskDag } from "./task-dag-contract.mjs";
-import { readWorkflowDefinition, runStateCommand, runStateTransaction } from "./state-runtime.mjs";
+import {
+  readWorkflowDefinition,
+  runStateCommand,
+  runStateTransaction,
+  withStateWriteLock,
+} from "./state-runtime.mjs";
 
 const PHASE_ADAPTERS = {
   "unit-test": ["harness-state-tests", "harness-m3-tests", "harness-structure", "backend-tests", "frontend-build"],
@@ -2320,6 +2342,107 @@ async function updateAttemptStatus(root, files, status, timestamp) {
   }
 }
 
+async function assertStructuredEvidence(root, items, label, { requiredIds = new Set() } = {}) {
+  for (const item of items) {
+    const required = requiredIds.has(item.caseId);
+    if ((item.evidencePath === null) !== (item.evidenceSha256 === null)) {
+      throw new Error(`${label} evidence path and hash must both be present or both be null.`);
+    }
+    if (required && item.evidencePath === null) {
+      throw new Error(`${label} '${item.caseId}' requires evidence.`);
+    }
+    if (item.evidencePath === null) continue;
+    const evidencePath = resolveInsideRoot(root, item.evidencePath, `${label} evidence`).fullPath;
+    if (await fileSha256(evidencePath, `${label} evidence`) !== item.evidenceSha256) {
+      throw new Error(`${label} evidence changed or its hash does not match: ${item.caseId}`);
+    }
+  }
+}
+
+async function assertCompletionArtifacts(root, state) {
+  await assertStructuredEvidence(root, state.tests.results, "Test evidence", {
+    requiredIds: new Set(state.tests.cases.filter((item) => item.required).map((item) => item.caseId)),
+  });
+  await assertStructuredEvidence(root, state.verification.results, "Verification evidence", {
+    requiredIds: new Set(state.verification.cases.filter((item) => item.required).map((item) => item.caseId)),
+  });
+
+  const verificationCases = new Map(state.verification.cases.map((item) => [item.caseId, item]));
+  const verificationResults = new Map(state.verification.results.map((item) => [item.approvalId, item]));
+  for (const approval of state.approvals) {
+    const resultValue = verificationResults.get(approval.approvalId);
+    const caseValue = resultValue ? verificationCases.get(resultValue.caseId) : null;
+    if (!resultValue || !caseValue) {
+      throw new Error(`Approval receipt '${approval.approvalId}' is not referenced by verification.`);
+    }
+    const receiptPath = resolveInsideRoot(root, approval.receiptPath, "Approval receipt").fullPath;
+    const receiptContent = await readRegularFile(receiptPath, "Approval receipt");
+    if (sha256Buffer(receiptContent) !== approval.receiptSha256) {
+      throw new Error(`Approval receipt changed before completion: ${approval.approvalId}`);
+    }
+    let receipt;
+    try {
+      receipt = JSON.parse(receiptContent.toString("utf8"));
+    } catch {
+      throw new Error(`Approval receipt is invalid JSON: ${approval.receiptPath}`);
+    }
+    const subjectSha256 = verificationGapSubjectSha256(caseValue, resultValue, {
+      storyId: approval.storyId,
+      runId: approval.runId,
+      phase: approval.phase,
+      dispatchId: approval.dispatchId,
+      preparedRevision: approval.preparedRevision,
+    });
+    validateApprovalReceipt(receipt, {
+      task: approval,
+      caseValue,
+      resultValue,
+      expectedSubjectSha256: subjectSha256,
+    });
+    const expectedApprovalId = deterministicApprovalId(approvalSemanticKey({
+      storyId: receipt.storyId,
+      dispatchId: receipt.dispatchId,
+      caseId: receipt.subjectId,
+      subjectSha256: receipt.subjectSha256,
+      actor: receipt.actor,
+      reason: receipt.reason,
+    }));
+    if (receipt.approvalId !== approval.approvalId
+        || receipt.approvalId !== expectedApprovalId
+        || canonicalJson(receipt) !== canonicalJson(Object.fromEntries(
+          Object.keys(receipt).map((field) => [field, approval[field]]),
+        ))) {
+      throw new Error(`Approval receipt identity changed before completion: ${approval.approvalId}`);
+    }
+  }
+
+  for (const record of state.runtime.records.filter(
+    (item) => item.type === "phase-result" && item.status === "applied",
+  )) {
+    const resultPath = resolveInsideRoot(root, record.path, "Phase result").fullPath;
+    const resultContent = await readRegularFile(resultPath, "Phase result");
+    if (resultContent.length !== record.bytes || sha256Buffer(resultContent) !== record.sha256) {
+      throw new Error(`Phase result changed before completion: ${record.phase}`);
+    }
+    let result;
+    try {
+      result = JSON.parse(resultContent.toString("utf8"));
+    } catch {
+      throw new Error(`Phase result is invalid JSON: ${record.path}`);
+    }
+    validateDispatchResultStructure(result);
+    if (result.schemaVersion !== "2.0"
+        || result.status !== "completed"
+        || result.storyId !== state.storyId
+        || result.runId !== state.runtime.runId
+        || result.phase !== record.phase
+        || result.dispatchId !== record.dispatchId
+        || result.preparedRevision !== record.preparedRevision) {
+      throw new Error(`Phase result identity changed before completion: ${record.phase}`);
+    }
+  }
+}
+
 async function applyCompletedV2(root, options, context) {
   const { located, phase } = context;
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
@@ -2356,16 +2479,48 @@ async function applyCompletedV2(root, options, context) {
       }
     }
     const candidate = projectCompletedPhaseResult({ state: fresh.state, result, taskDag });
+    if (phase.id === "interface-verification") {
+      candidate.approvals = await formalApprovalsForVerification(root, task, result);
+      candidate.acceptance = buildAcceptanceSummary(candidate);
+    }
     const records = [
       ...result.outputs.map((item, index) => outputRecord(result, item, timestamp, index)),
       ...result.records.map((item, index) => evidenceRecord(result, item, timestamp, index)),
     ];
     appendUniqueRecords(candidate, records);
     await assertPhaseGate(root, checkpoint, task, phase.id, files.phaseRoot, candidate);
+    if (phase.id === "requirement") assertRequirementGate(candidate);
+    if (phase.id === "task-dag") assertTaskDagGate(candidate);
+    if (phase.id === "implementation") assertImplementationGate(candidate);
+    if (phase.id === "unit-test") {
+      await assertStructuredEvidence(root, candidate.tests.results, "Test result", {
+        requiredIds: new Set(candidate.tests.cases.filter((item) => item.required).map((item) => item.caseId)),
+      });
+      assertUnitTestGate(candidate, {
+        hasPassedAdapter: (checkpoint.adapterRuns ?? []).some((item) => item.status === "passed"),
+      });
+    }
+    if (phase.id === "interface-verification") {
+      await assertStructuredEvidence(root, candidate.verification.results, "Verification evidence", {
+        requiredIds: new Set(candidate.verification.cases.filter((item) => item.required).map((item) => item.caseId)),
+      });
+      assertVerificationGate(candidate);
+    }
     if (options.beforeAdvance) await options.beforeAdvance();
 
     const resultContent = await readRegularFile(resultPath, "Result file");
     const appliedRevision = fresh.state.runtime.revision + 1;
+    if (phase.id === "delivery-preparation") {
+      await assertCompletionArtifacts(root, candidate);
+      assertCompletionGate(candidate, {
+        currentPhaseResult: {
+          phase: result.phase,
+          dispatchId: result.dispatchId,
+          preparedRevision: result.preparedRevision,
+          appliedRevision,
+        },
+      });
+    }
     candidate.runtime.records.push({
       id: `result:${result.dispatchId}`,
       type: "phase-result",
@@ -2836,6 +2991,196 @@ async function applyResult(root, options) {
   return { command: "apply", status: "completed", stateFile: located.stateFile, state: advanced.state };
 }
 
+async function approveGap(root, options) {
+  if (!options.caseId?.trim() || !options.reason?.trim()) {
+    throw new Error("approve-gap requires caseId and reason.");
+  }
+  return withStateWriteLock({ ...options, root }, async (fresh) => {
+    if (fresh.state.schemaVersion !== "2.0"
+        || fresh.state.runtime.status !== "active"
+        || fresh.state.phase !== "interface-verification") {
+      throw new Error("approve-gap requires an active State v2 interface-verification phase.");
+    }
+    const workflow = await readWorkflowDefinition(root, fresh.state);
+    const phase = workflow.phases.find((item) => item.id === "interface-verification");
+    const files = await phaseDispatchFiles(root, fresh.state, phase);
+    if (!files.taskFile || !files.attempt) {
+      throw new Error("Prepare interface-verification and write result.json before approve-gap.");
+    }
+    const task = await readJsonOptional(
+      resolveInsideRoot(root, files.taskFile, "Task file").fullPath,
+      "Task file",
+    );
+    const checkpoint = await readJsonOptional(
+      resolveInsideRoot(root, files.checkpointFile, "Checkpoint file").fullPath,
+      "Checkpoint file",
+    );
+    const resultPath = resolveInsideRoot(root, files.resultFile, "Result file").fullPath;
+    const result = await readJsonOptional(resultPath, "Result file");
+    if (!task || !checkpoint || !result) {
+      throw new Error("Current interface-verification attempt is incomplete.");
+    }
+    validateTask(root, task, fresh.state, phase, files.phaseRoot);
+    validateCheckpoint(checkpoint, task);
+    await validateResult(root, result, task, fresh.state, files.phaseRoot);
+    if (result.status !== "completed") throw new Error("approve-gap requires a completed result.");
+
+    const caseValue = result.payload.cases.find((item) => item.caseId === options.caseId);
+    const resultValue = result.payload.results.find((item) => item.caseId === options.caseId);
+    if (!caseValue || !resultValue) throw new Error(`Verification case '${options.caseId}' was not found.`);
+    if (resultValue.status !== "accepted-with-known-gaps") {
+      throw new Error(`Verification case '${options.caseId}' is not an accepted gap candidate.`);
+    }
+    const evidencePath = resolveInsideRoot(root, resultValue.evidencePath, "Verification evidence").fullPath;
+    if (await fileSha256(evidencePath, "Verification evidence") !== resultValue.evidenceSha256) {
+      throw new Error("Verification evidence changed before approval.");
+    }
+
+    if (resultValue.approvalId !== null) {
+      const oldReceiptFile = `${task.attemptRoot}/approvals/${resultValue.approvalId}.json`;
+      const oldReceipt = await readJsonOptional(
+        resolveInsideRoot(root, oldReceiptFile, "Existing approval receipt").fullPath,
+        "Existing approval receipt",
+      );
+      if (!oldReceipt) throw new Error("Existing approval receipt is missing.");
+      validateApprovalReceipt(oldReceipt, { task, caseValue });
+      const expectedOldApprovalId = deterministicApprovalId(approvalSemanticKey({
+        storyId: oldReceipt.storyId,
+        dispatchId: oldReceipt.dispatchId,
+        caseId: oldReceipt.subjectId,
+        subjectSha256: oldReceipt.subjectSha256,
+        actor: oldReceipt.actor,
+        reason: oldReceipt.reason,
+      }));
+      if (oldReceipt.approvalId !== resultValue.approvalId
+          || oldReceipt.approvalId !== expectedOldApprovalId
+          || oldReceiptFile !== `${task.attemptRoot}/approvals/${oldReceipt.approvalId}.json`) {
+        throw new Error("Existing approval receipt identity does not match its result reference.");
+      }
+    }
+
+    const subjectSha256 = verificationGapSubjectSha256(caseValue, resultValue, task);
+    const reason = options.reason.trim();
+    const approvalId = deterministicApprovalId(approvalSemanticKey({
+      storyId: task.storyId,
+      dispatchId: task.dispatchId,
+      caseId: caseValue.caseId,
+      subjectSha256,
+      actor: "user",
+      reason,
+    }));
+    const receiptFile = `${task.attemptRoot}/approvals/${approvalId}.json`;
+    const receiptPath = resolveInsideRoot(root, receiptFile, "Approval receipt").fullPath;
+    let receipt = await readJsonOptional(receiptPath, "Approval receipt");
+    let reused = false;
+    if (receipt) {
+      validateApprovalReceipt(receipt, {
+        task,
+        caseValue,
+        resultValue,
+        expectedSubjectSha256: subjectSha256,
+      });
+      const expectedId = deterministicApprovalId(approvalSemanticKey({
+        storyId: receipt.storyId,
+        dispatchId: receipt.dispatchId,
+        caseId: receipt.subjectId,
+        subjectSha256: receipt.subjectSha256,
+        actor: receipt.actor,
+        reason: receipt.reason,
+      }));
+      if (receipt.approvalId !== expectedId) throw new Error("Approval receipt ID does not match its semantic key.");
+      reused = true;
+    } else {
+      receipt = {
+        schemaVersion: "1.0",
+        approvalId,
+        storyId: task.storyId,
+        runId: task.runId,
+        phase: task.phase,
+        dispatchId: task.dispatchId,
+        preparedRevision: task.preparedRevision,
+        subjectType: "verification-gap",
+        subjectId: caseValue.caseId,
+        subjectSha256,
+        status: "approved",
+        actor: "user",
+        reason,
+        evidencePath: resultValue.evidencePath,
+        evidenceSha256: resultValue.evidenceSha256,
+        createdAt: (options.now ?? (() => new Date().toISOString()))(),
+      };
+      validateApprovalReceipt(receipt, {
+        task,
+        caseValue,
+        resultValue,
+        expectedSubjectSha256: subjectSha256,
+      });
+      await writeAtomicJson(receiptPath, receipt, { beforeRename: options.beforeApprovalReceiptRename });
+    }
+
+    if (resultValue.approvalId !== approvalId) {
+      resultValue.approvalId = approvalId;
+      await writeAtomicJson(resultPath, result, { beforeRename: options.beforeApprovalResultRename });
+    }
+    if (options.afterApprovalResultWrite) await options.afterApprovalResultWrite();
+    return {
+      command: "approve-gap",
+      approvalId,
+      receiptFile,
+      resultFile: files.resultFile,
+      reused,
+    };
+  });
+}
+
+async function formalApprovalsForVerification(root, task, result) {
+  const cases = new Map(result.payload.cases.map((item) => [item.caseId, item]));
+  const approvals = [];
+  for (const resultValue of result.payload.results) {
+    if (resultValue.status !== "accepted-with-known-gaps") continue;
+    if (!resultValue.approvalId) {
+      throw new Error(`Verification case '${resultValue.caseId}' requires approval.`);
+    }
+    const caseValue = cases.get(resultValue.caseId);
+    if (!caseValue) throw new Error(`Verification result references unknown case '${resultValue.caseId}'.`);
+    const receiptFile = `${task.attemptRoot}/approvals/${resultValue.approvalId}.json`;
+    const receiptPath = resolveInsideRoot(root, receiptFile, "Approval receipt").fullPath;
+    const receiptContent = await readRegularFile(receiptPath, "Approval receipt");
+    let receipt;
+    try {
+      receipt = JSON.parse(receiptContent.toString("utf8"));
+    } catch {
+      throw new Error(`Approval receipt is invalid JSON: ${receiptFile}`);
+    }
+    const subjectSha256 = verificationGapSubjectSha256(caseValue, resultValue, task);
+    validateApprovalReceipt(receipt, {
+      task,
+      caseValue,
+      resultValue,
+      expectedSubjectSha256: subjectSha256,
+    });
+    const expectedApprovalId = deterministicApprovalId(approvalSemanticKey({
+      storyId: receipt.storyId,
+      dispatchId: receipt.dispatchId,
+      caseId: receipt.subjectId,
+      subjectSha256: receipt.subjectSha256,
+      actor: receipt.actor,
+      reason: receipt.reason,
+    }));
+    if (receipt.approvalId !== expectedApprovalId || receipt.approvalId !== resultValue.approvalId) {
+      throw new Error("Approval receipt ID does not match the current verification result.");
+    }
+    const formal = {
+      ...receipt,
+      receiptPath: receiptFile,
+      receiptSha256: sha256Buffer(receiptContent),
+    };
+    validateFormalApproval(formal);
+    approvals.push(formal);
+  }
+  return approvals;
+}
+
 export async function runStoryCommand(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   if (options.command === "prepare") return prepare(root, options);
@@ -2844,6 +3189,7 @@ export async function runStoryCommand(options = {}) {
   if (options.command === "finalize-batch") return finalizeBatch(root, options);
   if (options.command === "finalize-wave") return finalizeWave(root, options);
   if (options.command === "run-adapter") return runAdapter(root, options);
+  if (options.command === "approve-gap") return approveGap(root, options);
   if (options.command === "apply") return applyResult(root, options);
   if (options.command === "status") {
     const { located, phase } = await currentContext(root, options.stateFile);
@@ -2865,6 +3211,8 @@ function parseCliArguments(argv) {
     "--wave-index": "waveIndex",
     "--expected-integration-manifest-sha256": "expectedIntegrationManifestSha256",
     "--expected-integration-lock-sha256": "expectedIntegrationLockSha256",
+    "--case-id": "caseId",
+    "--reason": "reason",
   };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
   "storyId": "S1",
   "nodes": [
     {
@@ -10,8 +10,8 @@
       "predictedFiles": [
         "backend/src/main/java/com/frontierscan/**"
       ],
-      "acceptanceCriteria": [
-        "Backend behavior satisfies the story acceptance criteria."
+      "criterionIds": [
+        "AC-BACKEND"
       ],
       "ownerAgent": "backend-developer"
     },
@@ -24,8 +24,8 @@
         "frontend/src/views/**",
         "frontend/src/api/**"
       ],
-      "acceptanceCriteria": [
-        "Frontend behavior satisfies the story acceptance criteria."
+      "criterionIds": [
+        "AC-FRONTEND"
       ],
       "ownerAgent": "frontend-developer"
     }

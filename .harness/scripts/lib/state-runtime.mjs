@@ -228,6 +228,9 @@ function processExists(pid) {
 
 async function acquireRunLock(lockPath, options) {
   const staleMs = options.lockStaleMs ?? 300_000;
+  const waitMs = options.lockWaitMs ?? 0;
+  const retryMs = options.lockRetryMs ?? 25;
+  const deadline = Date.now() + waitMs;
   const attempt = async () => {
     const handle = await open(lockPath, "wx");
     await handle.writeFile(`${JSON.stringify({
@@ -239,23 +242,32 @@ async function acquireRunLock(lockPath, options) {
     return handle;
   };
   await mkdir(path.dirname(lockPath), { recursive: true });
-  try {
-    return await attempt();
-  } catch (error) {
-    if (error?.code !== "EEXIST") throw error;
+  while (true) {
+    try {
+      return await attempt();
+    } catch (error) {
+    if (!["EEXIST", "EPERM", "EACCES"].includes(error?.code)) throw error;
     let lock = null;
     try {
       lock = JSON.parse(await readFile(lockPath, "utf8"));
     } catch {
+      if (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, retryMs));
+        continue;
+      }
       throw new Error(`Run is locked by an unreadable lock file: ${lockPath}`);
     }
     const age = Date.now() - Date.parse(lock.createdAt);
     const sameLiveProcess = lock.hostname === os.hostname() && processExists(lock.pid);
     if (!(Number.isFinite(age) && age > staleMs && !sameLiveProcess)) {
+      if (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, retryMs));
+        continue;
+      }
       throw new Error(`Run is locked by process ${lock.pid ?? "unknown"}.`);
     }
     await unlink(lockPath);
-    return attempt();
+    }
   }
 }
 
@@ -1035,16 +1047,23 @@ export async function runStateCommand(options = {}) {
   });
 }
 
-export async function runStateTransaction(options, mutate) {
+export async function withStateWriteLock(options, action) {
   const root = path.resolve(options.root ?? process.cwd());
   const located = await locateState(root, options.stateFile);
   validateRuntimeState(located.state);
   const lockPath = resolveInsideRoot(root, lockRelativePath(located.stateFile), "Run lock").fullPath;
-  return withRunLock(lockPath, options, async () => {
+  return withRunLock(lockPath, { lockWaitMs: 30_000, ...options }, async () => {
     const fresh = await locateState(root, located.stateFile);
     await reconcileEventLog(root, fresh.state);
     validateRuntimeState(fresh.state);
     assertStateCommandAllowed(fresh.state, "next");
+    return action(fresh);
+  });
+}
+
+export async function runStateTransaction(options, mutate) {
+  const root = path.resolve(options.root ?? process.cwd());
+  return withStateWriteLock(options, async (fresh) => {
     const mutation = await mutate(fresh);
     if (!mutation?.state || !Object.hasOwn(mutation, "pointer")) {
       throw new Error("State transaction must return a candidate state and pointer field.");

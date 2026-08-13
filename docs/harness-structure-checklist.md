@@ -18,6 +18,7 @@
 | State runtime entry | `.harness/scripts/run-state.ps1` | M7-A1 已实现新 Story 默认 v2、v1 拒写、Git baseline、版本化 workflow、`activeBlock` 和 `delivery-preparation -> done` |
 | Story Dispatcher entry | `.harness/scripts/run-story.ps1` | v1.0 单任务与 v1.1 serial batch 保持兼容；M5-D `prepare-wave/finalize-wave` 完成 v1.2 Wave 准备、正式 phase 产物和 M3 apply 绑定 |
 | M7-A2 阶段结果契约与投影 | `dispatch-task-v2.schema.json`、`dispatch-result-v2.schema.json`、`phase-data-contract.mjs`、`phase-result-projector.mjs` | 九阶段 payload 严格校验、completed-only 原子投影、failed/blocked 语义、正式结果索引、幂等和过程状态恢复已通过 fixture |
+| M7-A3 验收追踪与语义门禁 | `acceptance-contract.mjs`、`acceptance-gate.mjs`、`approval-contract.mjs`、DAG 2.0、`approve-gap` | criterion 到 DAG/test/verification 的引用门禁、验收重算、verification-gap 逐项批准、共享 Story 写锁和 blocked/resume completion fixture 已实现 |
 | Mock Worker runtime | `.harness/scripts/lib/worker-runtime.mjs` | M4-B 显式 context、角色权限、2/8 MiB 限额、30 秒超时、result-last 和重试恢复已实现 |
 | Worker policy registry | `.codex/agents/worker-policies.json` | 12 角色与 `agents.yaml` 名称、类别一一对应；无 shell、网络、状态、发布或 Git 能力 |
 | Task DAG validation script | `.harness/scripts/validate-task-dag.ps1` | 共享 Node 契约覆盖 UTF-8、唯一 wave、依赖顺序、路径冲突和 globalChanges 串行 |
@@ -83,6 +84,7 @@
 | M7-M12 总体路线设计与计划 | `docs/harness-m7-m12-roadmap/DESIGN.md`、`docs/harness-m7-m12-roadmap/PLAN.md` | 路线文档已完成；未实现任何 M7-M12 Runtime、Schema、Provider、Worktree、Docker 或 Git 自动化能力 |
 | M7-A1 State v2 专项设计、计划与报告 | `docs/harness-m7a1-state-v2/` | 已实施并通过 fixture 验证；真实 Story 验收统一延期到 M7-D |
 | M7-A2 统一阶段结果与 State 投影设计、计划与报告 | `docs/harness-m7a2-phase-result/` | 已实施并通过 fixture 回归；修复 4 个 BLOCKER 后通过第二轮独立只读代码审核 |
+| M7-A3 验收追踪与语义门禁设计、计划与报告 | `docs/harness-m7a3-acceptance-gates/` | 已实施并通过专项及纵向 fixture；首轮 3 个 BLOCKER 和 1 个 WARNING 修复后通过第二轮独立只读代码审核 |
 
 ## 延期功能工作
 
@@ -90,7 +92,7 @@
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
 - M5-D-D 已实现并交付单个完整 wave 的审批门控 Worktree 回收闭环；`M5-D-D-001` 为 `done/completed` revision `18`，提交 `2b7269d` 已推送到 `origin/dev`。
 - M6-A 已完成真实单业务闭环验收，并暴露结构化 State、验收追踪、知识新鲜度、交付归属和串行编排差距。
-- 下一步是设计 `M7-A3：验收追踪与语义门禁`，并在实施前获得用户批准。
+- 下一步是进入 `M7-A4：运行时一致性与交付语义` 专项设计。
 - M7 按 A1、A2、A3、A4、B、C、D 顺序推进；M7-D 真实 Story 验收通过后才允许启动 M8。
 - 真实 Agent、正式并行、Fork-Join 和本地 Docker Compose 闭环分别延期到 M8、M9、M10 和 M11。
 - 多 wave 批量回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。

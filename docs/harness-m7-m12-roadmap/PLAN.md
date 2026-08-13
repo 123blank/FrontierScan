@@ -123,23 +123,23 @@ docs/harness-m7a3-acceptance-gates/REPORT.md（实施后）
 
 ### 4.2 实施任务
 
-- [ ] 为验收项唯一 ID、DAG criterion 引用和悬空引用写 RED。
-- [ ] 扩展 requirement result 和 task DAG v2 契约。
-- [ ] 更新 requirement 与 DAG 生成 Skill，要求稳定 criterion IDs。
-- [ ] 扩展测试/验证 case，使其引用 criterion IDs。
-- [ ] 实现 requirement、DAG、implementation、test、review、verification 和 completion 语义门禁。
-- [ ] 实现 TDD method/exception 结构和非空例外理由门禁。
-- [ ] 新增专用 approval 结构，绑定 subject ID 和证据哈希。
-- [ ] 实现逐项 `accepted-with-known-gaps` 与 `accepted-stale` 门禁。
-- [ ] 验证 denial、证据变化和新批准的覆盖顺序。
-- [ ] 增加“无关 passed test 不能满足验收项”的回归测试。
-- [ ] 更新 case derivation，删除自由文本占位输出，改为结构化 pending draft 或要求上游补齐。
+- [x] 为验收项唯一 ID、DAG criterion 引用和悬空引用写 RED。
+- [x] 扩展 requirement result 和 task DAG v2 契约。
+- [x] 更新 requirement 与 DAG 生成 Skill，要求稳定 criterion IDs。
+- [x] 扩展测试/验证 case，使其引用 criterion IDs。
+- [x] 实现 requirement、DAG、implementation、test、review、verification 和 completion 语义门禁。
+- [x] 实现 TDD method/exception 结构和非空例外理由门禁。
+- [x] 新增专用 approval 结构，绑定 subject ID 和证据哈希。
+- [x] 实现逐项 `accepted-with-known-gaps` 门禁，并建立可由 M7-C 复用的通用 approval 契约；本阶段不启用 `accepted-stale` 业务门禁。
+- [x] 验证重复批准、证据或结果变化后直接重新批准、理由变化、新批准替换当前 result 引用以及 approve/apply 并发串行化；拒绝和撤销语义不在 A3 首版范围。
+- [x] 增加“无关 passed test 不能满足验收项”的回归测试。
+- [x] 更新 case derivation，删除自由文本占位输出，改为结构化 pending draft 或要求上游补齐。
 
 ### 4.3 验收标准
 
 - 每个 required criterion 被 DAG、测试和最终验证覆盖。
 - 悬空或重复 ID 阻止推进。
-- 未接受 gap/stale 阻止完成。
+- 未批准的 verification gap 阻止完成；knowledge stale 与 `accepted-stale` 完成门禁由 M7-C 启用。
 - blocked 不能作为 verified。
 - 仅文字声明 TDD 而没有覆盖映射不能满足测试门禁。
 

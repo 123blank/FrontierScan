@@ -11,6 +11,8 @@ import {
   validateTestData,
   validateVerificationData,
 } from "./phase-data-contract.mjs";
+import { validateAcceptance } from "./acceptance-contract.mjs";
+import { validateFormalApproval } from "./approval-contract.mjs";
 
 export const E2E_STATE_V1 = "1.0";
 export const E2E_STATE_V2 = "2.0";
@@ -280,7 +282,7 @@ function validateV2Baseline(state) {
 export function validateE2EStateV2(state) {
   const fields = [
     "schemaVersion", "storyId", "phase", "runtime", "baseline", "requirement", "knowledge",
-    "design", "dag", "implementation", "tests", "review", "build", "verification",
+    "acceptance", "design", "dag", "implementation", "tests", "review", "build", "verification",
     "delivery", "approvals", "worktrees", "logs",
   ];
   assertKeys(state, new Set(fields), fields, "E2E v2 state");
@@ -310,6 +312,7 @@ export function validateE2EStateV2(state) {
     if (typeof criterion.required !== "boolean") throw new Error(`${label}.required must be boolean.`);
   }
   validateRequirementData(state.requirement, "E2E v2 requirement");
+  validateAcceptance(state.acceptance, state.requirement, "E2E v2 acceptance");
   assertKeys(state.knowledge, new Set(["areas"]), ["areas"], "E2E v2 knowledge");
   assertArray(state.knowledge.areas, "E2E v2 knowledge.areas");
   for (const [index, area] of state.knowledge.areas.entries()) {
@@ -332,8 +335,11 @@ export function validateE2EStateV2(state) {
     "E2E v2 technical design",
   );
 
-  const dagFields = ["sourceFile", "sourceSha256", "nodes", "edges", "waves", "globalChanges", "risks"];
+  const dagFields = ["schemaVersion", "sourceFile", "sourceSha256", "nodes", "edges", "waves", "globalChanges", "risks"];
   assertKeys(state.dag, new Set(dagFields), dagFields, "E2E v2 dag");
+  if (state.dag.schemaVersion !== null) {
+    assertEnum(state.dag.schemaVersion, new Set(["2.0"]), "E2E v2 dag.schemaVersion");
+  }
   if (state.dag.sourceFile !== null) assertString(state.dag.sourceFile, "E2E v2 dag.sourceFile");
   if (state.dag.sourceSha256 !== null && !SHA256_PATTERN.test(state.dag.sourceSha256)) {
     throw new Error("E2E v2 dag.sourceSha256 must be a SHA-256 hash.");
@@ -411,6 +417,14 @@ export function validateE2EStateV2(state) {
   assertEnum(state.delivery.gitStatus, new Set(["not-requested", "requested"]), "E2E v2 delivery.gitStatus");
   validateDeliveryData(state.delivery, "E2E v2 delivery");
   assertArray(state.approvals, "E2E v2 approvals");
+  const approvalIds = new Set();
+  for (const approval of state.approvals) {
+    validateFormalApproval(approval);
+    if (approvalIds.has(approval.approvalId)) {
+      throw new Error("E2E v2 approvals approvalId values must be unique.");
+    }
+    approvalIds.add(approval.approvalId);
+  }
   assertArray(state.worktrees, "E2E v2 worktrees");
   assertArray(state.logs, "E2E v2 logs");
   return state;

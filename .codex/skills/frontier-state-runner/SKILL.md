@@ -24,8 +24,9 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 
 3. State v2 阶段通过 `run-story.ps1 prepare` 获取 attempt-scoped task，并写入严格的 `result.json`。
 4. 使用 `run-story.ps1 apply` 原子校验 result、投影 State 并推进；`record` 只保存手工审计证据，不回填阶段结构化字段。
-5. 需要外部决策时使用 `block`，问题解决后使用 `resume`。
-6. 当前阶段在其版本化工作流中唯一转移到 `done` 时，使用 `complete` 完成运行；v2 的终态阶段是 `delivery-preparation`。
+5. `interface-verification` 中的 `accepted-with-known-gaps` 先使用 `run-story.ps1 approve-gap` 生成绑定当前 case、result 和 evidence 的批准回执。
+6. 需要外部决策时使用 `block`，问题解决后使用 `resume`。
+7. v2 由 `delivery-preparation` 的 completed result 经 completion gate 直接进入 `done`，不手工调用 `complete`。
 
 ## 常用命令
 
@@ -35,7 +36,7 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 .\.harness\scripts\run-state.ps1 -Command next
 .\.harness\scripts\run-state.ps1 -Command block -Reason "需要确认" -Owner user -SuggestedAction "确认范围"
 .\.harness\scripts\run-state.ps1 -Command resume
-.\.harness\scripts\run-state.ps1 -Command complete
+.\.harness\scripts\run-story.ps1 -Command approve-gap -CaseId VC-001 -Reason "接受当前已知验证缺口"
 ```
 
 通用参数：`-StateFile` 显式选择状态，`-Root` 指定仓库根目录，`-Json` 输出机器可读结果。
@@ -68,6 +69,10 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 - `blocked` result 不投影业务 payload，通过单次 State 事务写入阻塞状态、证据和 `phase-result` 正式索引。
 - `runtime.records[type=phase-result]` 是 apply 幂等与恢复的权威事实；checkpoint 和 `active-attempt.json` 只是可重建过程状态。
 - result 的 output、evidence、SHA-256、bytes、dispatchId 和 preparedRevision 必须在锁内重新对账。
+- requirement 至少包含一个 required criterion，且没有未解决开放问题；DAG、测试和验证必须通过稳定 `criterionId` 建立完整引用。
+- required criterion 只有在相关任务完成、required 测试通过，并由 verification 得到 `verified` 或正式批准的 `accepted-with-known-gaps` 后才能完成。
+- completion 只消费九阶段唯一的 applied `phase-result`；blocked 历史可保留，但不能替代 applied 结果。
+- `approve-gap` 生成 attempt-scoped `approval-receipt.json`，subject hash 覆盖 case、result 和证据事实并排除 `approvalId`；跨 attempt 或跨 case 复用失败关闭。
 - Git 暂存、提交、推送、PR 或发布仍必须在执行前获得用户明确批准。
 - 测试跳过、环境不可用和审核阻塞都必须记录。
 - 未经用户明确批准且没有证据，不得将发布、提交、推送或合并标记为完成。
@@ -85,4 +90,4 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 - 更新按 `pointer stage -> state commit -> pointer promote` 提交；临时指针领先状态时回退正式指针，状态达到临时指针 revision 后才恢复它。
 - 跨 Story 指针候选按当前原子写入身份恢复；正式指针 revision 领先状态时失败关闭，状态领先指针可以按写入顺序恢复。
 - 默认指针和已有运行状态必须通过运行时契约校验；显式 `-StateFile` 仍可在无关活动指针损坏时独立使用。
-- M7-A2 已实现统一阶段结果和 State 投影；验收追踪、知识新鲜度闭环、交付回执、Agent 自动派发、Worktree 并行、真实发布或 Git 自动写入仍未实现。
+- M7-A3 已实现验收追踪与 `verification-gap` 语义门禁；知识新鲜度闭环、owned files、交付回执、确定性串行驱动器、Agent 自动派发、正式并行、真实发布或 Git 自动写入仍未实现。

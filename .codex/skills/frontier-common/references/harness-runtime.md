@@ -20,4 +20,7 @@
 - PowerShell `validate-state.ps1` 是 Node `state-contract.mjs` 的薄入口，不维护第二套规则。
 - M5 batch/worktree 正式协议仍只支持其历史 v1 fixture，v2 支持延期到后续里程碑。
 - M7-A2 已实现 attempt-scoped task/result v2、九阶段严格 payload、completed-only State 投影、原子 apply、正式 `phase-result` 索引、幂等与过程状态恢复。
-- 验收追踪、知识新鲜度门禁、owned files 推导和交付回执仍分别属于 M7-A3、M7-A4 和 M7-C。
+- M7-A3 已实现稳定 `criterionId`、DAG 2.0 `criterionIds`、测试与验证覆盖门禁、验收汇总重算，以及 `verification-gap` 的逐项用户批准回执。
+- `accepted-with-known-gaps` 只能引用当前 attempt、当前 case 和当前证据对应的正式 approval；optional-only 的失败或阻塞如实保留但不阻止完成。
+- `approve-gap` 与 `apply` 使用同一 Story 写锁；批准命令只更新 attempt 内 result 和 receipt，不单独推进 State。
+- 知识新鲜度门禁、owned files 推导和交付回执仍分别属于 M7-C 和 M7-A4；确定性串行驱动器属于 M7-B。

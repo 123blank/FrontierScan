@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("prepare", "status", "run-adapter", "apply", "prepare-batch", "finalize-batch", "prepare-wave", "finalize-wave")]
+  [ValidateSet("prepare", "status", "run-adapter", "apply", "approve-gap", "prepare-batch", "finalize-batch", "prepare-wave", "finalize-wave")]
   [string]$Command,
 
   [string]$StateFile,
@@ -11,6 +11,8 @@ param(
   [int]$WaveIndex = 0,
   [string]$ExpectedIntegrationManifestSha256,
   [string]$ExpectedIntegrationLockSha256,
+  [string]$CaseId,
+  [string]$Reason,
   [string]$Root,
   [switch]$Json
 )
@@ -44,6 +46,21 @@ if ($Command -in @("prepare-wave", "finalize-wave")) {
   throw "WaveIndex is only supported by prepare-wave and finalize-wave."
 }
 
+if ($Command -eq "approve-gap") {
+  if ([string]::IsNullOrWhiteSpace($CaseId) -or [string]::IsNullOrWhiteSpace($Reason)) {
+    throw "approve-gap requires CaseId and Reason."
+  }
+  if (-not [string]::IsNullOrWhiteSpace($Adapter) -or
+      -not [string]::IsNullOrWhiteSpace($ResultFile) -or
+      -not [string]::IsNullOrWhiteSpace($TaskDagFile) -or
+      -not [string]::IsNullOrWhiteSpace($BatchFile) -or
+      $WaveIndex -ne 0) {
+    throw "approve-gap does not accept Adapter, ResultFile, TaskDagFile, BatchFile, or WaveIndex."
+  }
+} elseif (-not [string]::IsNullOrWhiteSpace($CaseId) -or -not [string]::IsNullOrWhiteSpace($Reason)) {
+  throw "CaseId and Reason are only supported by approve-gap."
+}
+
 $nodeScript = Join-Path $PSScriptRoot "lib\story-runtime.mjs"
 if (-not (Test-Path -LiteralPath $nodeScript)) {
   throw "Story runtime not found: ${nodeScript}"
@@ -73,6 +90,12 @@ if (-not [string]::IsNullOrWhiteSpace($ExpectedIntegrationManifestSha256)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($ExpectedIntegrationLockSha256)) {
   $arguments += @("--expected-integration-lock-sha256", $ExpectedIntegrationLockSha256)
+}
+if (-not [string]::IsNullOrWhiteSpace($CaseId)) {
+  $arguments += @("--case-id", $CaseId)
+}
+if (-not [string]::IsNullOrWhiteSpace($Reason)) {
+  $arguments += @("--reason", $Reason)
 }
 if ($Json) {
   $arguments += "--json"

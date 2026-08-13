@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/approval-receipt.schema.json",
+  "title": "FrontierScan Verification Gap Approval Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "approvalId",
+    "storyId",
+    "runId",
+    "phase",
+    "dispatchId",
+    "preparedRevision",
+    "subjectType",
+    "subjectId",
+    "subjectSha256",
+    "status",
+    "actor",
+    "reason",
+    "evidencePath",
+    "evidenceSha256",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "approvalId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "storyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "phase": { "const": "interface-verification" },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "subjectType": { "const": "verification-gap" },
+    "subjectId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "subjectSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "status": { "const": "approved" },
+    "actor": { "const": "user" },
+    "reason": { "type": "string", "minLength": 1 },
+    "evidencePath": { "type": "string", "minLength": 1 },
+    "evidenceSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

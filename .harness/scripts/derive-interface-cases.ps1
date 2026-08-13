@@ -13,6 +13,26 @@ $dag = Get-Content -LiteralPath $TaskDagFile -Raw -Encoding UTF8 | ConvertFrom-J
 $cases = @()
 
 foreach ($node in $dag.nodes) {
+  if ($dag.schemaVersion -eq "2.0") {
+    $caseType = switch ($node.type) {
+      "backend" { "api" }
+      "frontend" { "ui-flow" }
+      "integration" { "api" }
+      default { "manual" }
+    }
+    $cases += [pscustomobject]@{
+      caseId = "$($node.taskId)-VC1"
+      taskId = $node.taskId
+      type = $caseType
+      required = $true
+      criterionIds = @($node.criterionIds)
+      status = "pending-draft"
+      action = $null
+      expected = $null
+    }
+    continue
+  }
+
   $criteria = @($node.acceptanceCriteria)
   for ($i = 0; $i -lt $criteria.Count; $i++) {
     $caseType = switch ($node.type) {
@@ -56,10 +76,25 @@ Write-Output ""
 Write-Output "Story: $($dag.storyId)"
 Write-Output "Source DAG: ${TaskDagFile}"
 Write-Output ""
-Write-Output "| Case | Task | Type | Request/Action | Expected | Result |"
-Write-Output "| --- | --- | --- | --- | --- | --- |"
-foreach ($case in $cases) {
-  Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} |" -f $case.case_id, $case.task_id, $case.type, $case.request_or_action, $case.expected, $case.result)
+if ($dag.schemaVersion -eq "2.0") {
+  Write-Output "| Case | Task | Type | Criteria | Status | Action | Expected |"
+  Write-Output "| --- | --- | --- | --- | --- | --- | --- |"
+  foreach ($case in $cases) {
+    Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f `
+      $case.caseId, `
+      $case.taskId, `
+      $case.type, `
+      (@($case.criterionIds) -join ", "), `
+      $case.status, `
+      $case.action, `
+      $case.expected)
+  }
+} else {
+  Write-Output "| Case | Task | Type | Request/Action | Expected | Result |"
+  Write-Output "| --- | --- | --- | --- | --- | --- |"
+  foreach ($case in $cases) {
+    Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} |" -f $case.case_id, $case.task_id, $case.type, $case.request_or_action, $case.expected, $case.result)
+  }
 }
 
 Write-Output ""

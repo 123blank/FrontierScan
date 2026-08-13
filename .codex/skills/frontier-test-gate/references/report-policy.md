@@ -5,6 +5,7 @@ Use `.harness/templates/test-report.md` when writing a test report.
 ## Required Sections
 
 - Scope: changed areas and why each gate was selected.
+- Acceptance mapping: each `caseId`, its `required` flag, and referenced `criterionIds`.
 - Commands: exact command, result, and important output.
 - Failures: failing test, build error, or validation error with next action.
 - Skipped tests: skipped gate, reason, and risk.
@@ -18,4 +19,4 @@ Use `.harness/templates/test-report.md` when writing a test report.
 
 ## Completion Rule
 
-The gate passes only when all required commands are PASS, or when the user explicitly accepts the risk for every SKIPPED or BLOCKED required command.
+The gate passes only when all required commands and required cases are PASS, every required criterion has relevant required-case coverage, and referenced evidence still matches its recorded SHA-256. M7-A3 does not support accepting skipped or blocked required tests as a completion substitute.

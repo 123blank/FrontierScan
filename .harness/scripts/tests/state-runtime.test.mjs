@@ -9,6 +9,7 @@ import {
   parsePorcelainV1Z,
   readWorkflowDefinition,
   runStateCommand,
+  withStateWriteLock,
 } from "../lib/state-runtime.mjs";
 import {
   assertStateCommandAllowed,
@@ -21,6 +22,9 @@ const RUN_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 const RUN_STORY_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "run-story.ps1");
 const STATE_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "state-runtime.mjs");
 const STATE_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "state-contract.mjs");
+const ACCEPTANCE_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "acceptance-contract.mjs");
+const ACCEPTANCE_GATE_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "acceptance-gate.mjs");
+const APPROVAL_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "approval-contract.mjs");
 const STORY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "story-runtime.mjs");
 const DISPATCH_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "dispatch-contract.mjs");
 const PHASE_DATA_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "phase-data-contract.mjs");
@@ -1467,6 +1471,9 @@ quality_gates: []
       [RUN_STORY_SCRIPT, ".harness/scripts/run-story.ps1"],
       [STATE_RUNTIME_MODULE, ".harness/scripts/lib/state-runtime.mjs"],
       [STATE_CONTRACT_MODULE, ".harness/scripts/lib/state-contract.mjs"],
+      [ACCEPTANCE_CONTRACT_MODULE, ".harness/scripts/lib/acceptance-contract.mjs"],
+      [ACCEPTANCE_GATE_MODULE, ".harness/scripts/lib/acceptance-gate.mjs"],
+      [APPROVAL_CONTRACT_MODULE, ".harness/scripts/lib/approval-contract.mjs"],
       [STORY_RUNTIME_MODULE, ".harness/scripts/lib/story-runtime.mjs"],
       [DISPATCH_CONTRACT_MODULE, ".harness/scripts/lib/dispatch-contract.mjs"],
       [PHASE_DATA_CONTRACT_MODULE, ".harness/scripts/lib/phase-data-contract.mjs"],
@@ -1616,9 +1623,10 @@ async function testStateContractDispatchesVersionsAndReadOnlyCommands() {
     },
     baseline: { head: null, branch: null, initialDirtyPaths: [], capturedAt: null },
     requirement: { summary: "", openQuestions: [], acceptanceCriteria: [], inScope: [], outOfScope: [] },
+    acceptance: { criteria: [] },
     knowledge: { areas: [] },
     design: { decisions: [], affectedAreas: [], risks: [] },
-    dag: { sourceFile: null, sourceSha256: null, nodes: [], edges: [], waves: [], globalChanges: [], risks: [] },
+    dag: { schemaVersion: null, sourceFile: null, sourceSha256: null, nodes: [], edges: [], waves: [], globalChanges: [], risks: [] },
     implementation: { method: null, exceptionReason: null, actualFiles: [], completedTaskIds: [], notes: [] },
     tests: { cases: [], commands: [], results: [] },
     review: { findings: [], status: "pending" },
@@ -2110,6 +2118,122 @@ async function testWorkflowMetadataIsReturnedAndBoundToStateVersion() {
   }
 }
 
+async function testStateWriteLockDoesNotPersistState() {
+  const { root } = await createFixture();
+  try {
+    const initialized = await runStateCommand({
+      root,
+      command: "init",
+      storyId: "M7-A3-LOCK",
+      summary: "Verify non-persisting write lock",
+      now: () => FIXED_NOW,
+    });
+    const stateFile = initialized.pointer.stateFile;
+    const statePath = path.join(root, stateFile);
+    const pointerPath = path.join(root, ".harness/states/active-run.json");
+    const eventsPath = path.join(root, ".harness/states/e2e-M7-A3-LOCK.events.jsonl");
+    const before = await Promise.all([
+      readFile(statePath, "utf8"),
+      readFile(pointerPath, "utf8"),
+      readFile(eventsPath, "utf8"),
+    ]);
+    const result = await withStateWriteLock({ root, stateFile }, async (fresh) => ({
+      storyId: fresh.state.storyId,
+      revision: fresh.state.runtime.revision,
+      pointerRevision: fresh.pointer.revision,
+    }));
+    assert.deepEqual(result, {
+      storyId: "M7-A3-LOCK",
+      revision: 1,
+      pointerRevision: 1,
+    });
+    const after = await Promise.all([
+      readFile(statePath, "utf8"),
+      readFile(pointerPath, "utf8"),
+      readFile(eventsPath, "utf8"),
+    ]);
+    assert.deepEqual(after, before);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testStateWriteLockSerializesConcurrentCallbacks() {
+  const { root } = await createFixture();
+  let releaseFirst;
+  try {
+    const initialized = await runStateCommand({
+      root,
+      command: "init",
+      storyId: "M7-A3-LOCK-WAIT",
+      summary: "Verify write lock serialization",
+      now: () => FIXED_NOW,
+    });
+    let enteredFirst;
+    const firstEntered = new Promise((resolve) => { enteredFirst = resolve; });
+    const firstRelease = new Promise((resolve) => { releaseFirst = resolve; });
+    const order = [];
+    const first = withStateWriteLock({
+      root,
+      stateFile: initialized.pointer.stateFile,
+    }, async () => {
+      order.push("first-enter");
+      enteredFirst();
+      await firstRelease;
+      order.push("first-exit");
+    });
+    await firstEntered;
+    const second = withStateWriteLock({
+      root,
+      stateFile: initialized.pointer.stateFile,
+      lockWaitMs: 2_000,
+    }, async () => {
+      order.push("second-enter");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    assert.deepEqual(order, ["first-enter"]);
+    releaseFirst();
+    await Promise.all([first, second]);
+    assert.deepEqual(order, ["first-enter", "first-exit", "second-enter"]);
+  } finally {
+    releaseFirst?.();
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testStateWriteLockWaitsForTemporarilyUnreadableLock() {
+  const { root } = await createFixture();
+  let releaseTimer;
+  try {
+    const initialized = await runStateCommand({
+      root,
+      command: "init",
+      storyId: "M7-A3-LOCK-UNREADABLE",
+      summary: "Verify temporary lock creation window",
+      now: () => FIXED_NOW,
+    });
+    const lockPath = path.join(
+      root,
+      initialized.pointer.stateFile.replace(/\.json$/, ".lock"),
+    );
+    await writeFile(lockPath, "", "utf8");
+    releaseTimer = setTimeout(() => {
+      removePath(lockPath, { force: true }).catch(() => {});
+    }, 75);
+
+    const result = await withStateWriteLock({
+      root,
+      stateFile: initialized.pointer.stateFile,
+      lockWaitMs: 2_000,
+      lockRetryMs: 10,
+    }, async () => "acquired");
+    assert.equal(result, "acquired");
+  } finally {
+    clearTimeout(releaseTimer);
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 await testInitCreatesRunAndPointerWithoutEditingTemplate();
 await testStatusLocatesRunThroughPointer();
 await testExplicitStateFileIsIndependentFromActivePointer();
@@ -2155,6 +2279,9 @@ await testRuntimeIsRegisteredInHarnessContracts();
 await testStateContractDispatchesVersionsAndReadOnlyCommands();
 await testV2TemplateAndWorkflowAssetsMatchContract();
 await testWorkflowMetadataIsReturnedAndBoundToStateVersion();
+await testStateWriteLockDoesNotPersistState();
+await testStateWriteLockSerializesConcurrentCallbacks();
+await testStateWriteLockWaitsForTemporarilyUnreadableLock();
 await testResumeRejectsInvalidPreviousPhaseWithoutPersistence();
 await testGitBaselineCapturesDirtyPathsAndRenameOrdering();
 await testGitBaselineRejectsInvalidRepositoryStatesWithoutPersistence();

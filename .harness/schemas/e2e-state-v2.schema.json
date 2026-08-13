@@ -227,7 +227,68 @@
         "approvalId": { "type": ["string", "null"], "minLength": 1 },
         "executedAt": { "type": "string", "format": "date-time" }
       },
-      "allOf": [{ "$ref": "#/$defs/nullableEvidence" }],
+      "allOf": [
+        { "$ref": "#/$defs/nullableEvidence" },
+        {
+          "if": {
+            "properties": { "status": { "const": "accepted-with-known-gaps" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "evidencePath": { "$ref": "#/$defs/path" },
+              "evidenceSha256": { "$ref": "#/$defs/sha256" }
+            }
+          },
+          "else": {
+            "properties": { "approvalId": { "type": "null" } }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "formalApproval": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "approvalId",
+        "storyId",
+        "runId",
+        "phase",
+        "dispatchId",
+        "preparedRevision",
+        "subjectType",
+        "subjectId",
+        "subjectSha256",
+        "status",
+        "actor",
+        "reason",
+        "evidencePath",
+        "evidenceSha256",
+        "createdAt",
+        "receiptPath",
+        "receiptSha256"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "approvalId": { "$ref": "#/$defs/id" },
+        "storyId": { "$ref": "#/$defs/id" },
+        "runId": { "$ref": "#/$defs/id" },
+        "phase": { "const": "interface-verification" },
+        "dispatchId": { "type": "string", "format": "uuid" },
+        "preparedRevision": { "type": "integer", "minimum": 1 },
+        "subjectType": { "const": "verification-gap" },
+        "subjectId": { "$ref": "#/$defs/id" },
+        "subjectSha256": { "$ref": "#/$defs/sha256" },
+        "status": { "const": "approved" },
+        "actor": { "const": "user" },
+        "reason": { "type": "string", "minLength": 1 },
+        "evidencePath": { "$ref": "#/$defs/path" },
+        "evidenceSha256": { "$ref": "#/$defs/sha256" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "receiptPath": { "$ref": "#/$defs/path" },
+        "receiptSha256": { "$ref": "#/$defs/sha256" }
+      },
       "additionalProperties": false
     }
   },
@@ -239,6 +300,7 @@
     "runtime",
     "baseline",
     "requirement",
+    "acceptance",
     "knowledge",
     "design",
     "dag",
@@ -419,6 +481,62 @@
       },
       "additionalProperties": false
     },
+    "acceptance": {
+      "type": "object",
+      "required": ["criteria"],
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "criterionId",
+              "required",
+              "taskIds",
+              "testCaseIds",
+              "verificationCaseIds",
+              "status",
+              "approvalIds"
+            ],
+            "properties": {
+              "criterionId": { "$ref": "#/$defs/id" },
+              "required": { "type": "boolean" },
+              "taskIds": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/id" },
+                "uniqueItems": true
+              },
+              "testCaseIds": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/id" },
+                "uniqueItems": true
+              },
+              "verificationCaseIds": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/id" },
+                "uniqueItems": true
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "verified",
+                  "accepted-with-known-gaps",
+                  "failed",
+                  "blocked"
+                ]
+              },
+              "approvalIds": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/id" },
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "knowledge": {
       "type": "object",
       "required": ["areas"],
@@ -454,8 +572,9 @@
     },
     "dag": {
       "type": "object",
-      "required": ["sourceFile", "sourceSha256", "nodes", "edges", "waves", "globalChanges", "risks"],
+      "required": ["schemaVersion", "sourceFile", "sourceSha256", "nodes", "edges", "waves", "globalChanges", "risks"],
       "properties": {
+        "schemaVersion": { "enum": [null, "2.0"] },
         "sourceFile": { "type": ["string", "null"] },
         "sourceSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
         "nodes": { "type": "array" },
@@ -558,7 +677,10 @@
       },
       "additionalProperties": false
     },
-    "approvals": { "type": "array" },
+    "approvals": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/formalApproval" }
+    },
     "worktrees": { "type": "array" },
     "logs": { "type": "array" }
   },

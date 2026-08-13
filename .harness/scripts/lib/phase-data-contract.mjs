@@ -77,6 +77,12 @@ function question(item, label) {
   string(item.question, `${label}.question`);
   enumValue(item.status, ["open", "resolved"], `${label}.status`);
   string(item.resolution, `${label}.resolution`, { nullable: true });
+  if (item.status === "open" && item.resolution !== null) {
+    throw new Error(`${label}.resolution must be null for an open question.`);
+  }
+  if (item.status === "resolved" && item.resolution === null) {
+    throw new Error(`${label}.resolution is required for a resolved question.`);
+  }
 }
 
 function risk(item, label, remaining = false) {
@@ -125,6 +131,13 @@ export function validateTechnicalDesignData(value, label = "Technical design") {
 export function validateImplementationData(value, label = "Implementation") {
   uniqueStrings(value.actualFiles, `${label}.actualFiles`, { paths: true });
   uniqueStrings(value.notes, `${label}.notes`);
+  if (value.method === "tdd" && value.exceptionReason !== null) {
+    throw new Error(`${label}.exceptionReason must be null for tdd.`);
+  }
+  if (value.method === "exception") string(value.exceptionReason, `${label}.exceptionReason`);
+  if (value.method !== null && !value.actualFiles.length && !value.notes.length) {
+    throw new Error(`${label}.notes are required when actualFiles is empty.`);
+  }
 }
 
 function testCase(item, label) {
@@ -233,6 +246,12 @@ function verificationResult(item, label) {
   string(item.actual, `${label}.actual`);
   evidence(item, label);
   string(item.approvalId, `${label}.approvalId`, { nullable: true });
+  if (item.status === "accepted-with-known-gaps" && item.evidencePath === null) {
+    throw new Error(`${label} accepted gap requires evidence.`);
+  }
+  if (item.status !== "accepted-with-known-gaps" && item.approvalId !== null) {
+    throw new Error(`${label} approvalId is only allowed for accepted gaps.`);
+  }
   date(item.executedAt, `${label}.executedAt`);
 }
 

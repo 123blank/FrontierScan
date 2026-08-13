@@ -890,6 +890,10 @@ docs/harness-m5d-multi-worktree-wave/
 docs/harness-m5d-wave-create/
 docs/harness-m5d-wave-execution/
 docs/harness-m5d-wave-retire/
+docs/harness-m7-m12-roadmap/
+docs/harness-m7a1-state-v2/
+docs/harness-m7a2-phase-result/
+docs/harness-m7a3-acceptance-gates/
 ```
 
 每个已实施 Story 通常包含：
@@ -1031,14 +1035,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 ## 21. 当前会话结束时的最终摘要
 
-截至 2026-08-10：
+截至 2026-08-13：
 
-- `dev` 与 `origin/dev` 同步到 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558`。
-- M5-D-D `WaveRetire` 已完成并推送。
-- 当前 Harness Story `M5-D-D-001` 为 `done/completed`，revision `18`。
-- backend、frontend、common 知识 baseline/index 为 fresh，semantic 为 pending。
-- 项目已具备单 Story 状态、Dispatcher、受约束 Mock Worker、单 Worktree/串行批次生命周期，以及单个 implementation wave 的计划、创建、并行执行、串行集成、M3 apply 和审批门控回收闭环。
-- 正式仓库未执行真实 WaveCreate/Worker/集成/回收；真实 Git 破坏性路径仍只在临时 fixture 中验证。
-- 项目还不具备真实 Agent 自动派发、多 Story Fork-Join、生产发布部署和自动 Git 交付。
-- 下一步推荐 M6-A 单业务开发闭环验收，不先实现通用 M6 Engine。
-- 用户已明确要求本次更新该文件；它仍保持未跟踪，除非用户另行批准，不自动暂存、提交或推送。
+- 当前分支为 `dev`，本轮实施基线为 `fe65b0b feat(harness): implement M7-A2 phase result projection`。
+- M6-A 已完成真实单业务闭环；M7-A1 State v2 和 M7-A2 阶段结果投影已提交并推送。
+- M7-A3 验收追踪与语义门禁已完成实现和 fixture 回归；首轮 3 个 BLOCKER 和 1 个 WARNING 修复后通过第二轮独立只读代码审核。当前工作区仍未提交。
+- M7-A3 已实现稳定 `criterionId`、DAG 2.0、required DAG/test/verification 覆盖门禁、验收汇总重算、optional 非阻塞语义和 `verification-gap` 逐项用户批准回执。
+- `approve-gap` 与 `apply` 使用同一 Story 写锁；完成门禁只消费九阶段唯一 applied 结果，并允许由 blocked/resume 日志解释的合法 revision 间隔。
+- 全量兼容回归已通过：Batch 32/32、串行批次 1/1、Worktree 28/28、集成 44/44、生命周期 39/39、Wave 35/35、执行 ledger 9/9、Worktree Worker/Wave 集成与回收 97/97。
+- Harness smoke、结构校验、State v2 模板、DAG 2.0 示例和 `git diff --check` 已通过；知识 backend/frontend/common 仍为 `stale-or-incomplete`，闭环属于 M7-C。
+- 当前正式仓库没有执行 `git add`、`git commit`、`git push`、Worktree、Docker、发布或部署。
+- M7-A3 审核通过后，下一子里程碑为 `M7-A4：运行时一致性与交付语义`；M7 整体真实 Story 验收仍由 M7-D 完成。
+- 项目仍不具备确定性串行驱动器、knowledge stale 闭环、owned files 与 delivery receipt、真实 Agent Provider、多 Story Fork-Join、本地 Compose 验收和自动 Git 交付。

@@ -1,6 +1,6 @@
 # Task DAG Schema Guidance
 
-Use `.harness/schemas/task-dag.schema.json` as the authoritative structural schema.
+State v2 uses `.harness/schemas/task-dag-v2.schema.json` as the authoritative schema. Historical State v1 fixtures continue to use `.harness/schemas/task-dag.schema.json`.
 
 ## Task Node Fields
 
@@ -9,16 +9,12 @@ Use `.harness/schemas/task-dag.schema.json` as the authoritative structural sche
 | `taskId` | yes | Use `T1`, `T2`, etc. |
 | `title` | yes | Short implementation-oriented title. |
 | `type` | yes | One of `backend`, `frontend`, `database`, `docs`, `test`, `integration`, `unknown`. |
-| `status` | yes | Usually `pending` during planning. |
+| `status` | yes | Must be `pending` in the applied planning document. |
 | `predictedFiles` | yes | Files or directories likely to be touched. |
-| `acceptanceCriteria` | yes | Criteria this task contributes to satisfying. |
+| `criterionIds` | yes | Stable requirement criterion IDs this task contributes to. |
+| `ownerAgent` | yes | Registered owner role. |
 
-Optional but recommended:
-
-- `ownerAgent`
-- `knowledgeUsed`
-- `notes`
-- `risk`
+DAG 2.0 nodes reject undeclared fields. Do not include the v1 `acceptanceCriteria`, `knowledgeUsed`, `notes`, or `risk` fields.
 
 ## Edge Fields
 

@@ -29,12 +29,14 @@ Use this Skill after requirement breakdown and technical design, before implemen
 ## Outputs
 
 - `.harness/outputs/task-dag.json`
-- E2E state updates for `tasks` and `dag`
+- State v2 `task-dag` result payload；Runtime 校验 DAG 文件和 SHA-256 后投影 `dag`
 
 ## Rules
 
 - Do not implement while planning the DAG.
 - DAG must be acyclic.
-- Every task must include predicted touched files and acceptance criteria.
+- DAG 2.0 is the default for State v2; `dag.nodes` is the only task fact source.
+- Every task must include predicted touched files and one or more valid `criterionIds`.
+- Every required criterion must be referenced by at least one DAG node.
 - Tasks predicted to touch the same file should not run in the same wave.
 - Database, config, auth, publish, and shared-entry changes must be surfaced as global changes.

@@ -292,7 +292,7 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 
 ## 7. 当前实现对比
 
-以下进度以 2026-08-12、提交 `09e80f2`、M6-A 单业务闭环以及 M7-A1/A2 fixture 为基线。M7-A1 已建立 State v2，M7-A2 已实现统一阶段结果和原子投影；M7 整体真实 Story 验收仍统一保留到 M7-D。
+以下进度以 2026-08-13、提交 `fe65b0b`、M6-A 单业务闭环以及 M7-A1/A2/A3 fixture 为基线。M7-A1 已建立 State v2，M7-A2 已实现统一阶段结果和原子投影，M7-A3 已建立验收追踪与 verification-gap 批准门禁；M7 整体真实 Story 验收仍统一保留到 M7-D。
 
 | 文章能力 | FrontierScan 当前证据 | 状态 | 估算完成度 |
 | --- | --- | --- | ---: |
@@ -301,13 +301,13 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 | 渐进式知识查询 | `kb-query.ps1` 和多种查询模式 | 已可用于实际开发 | 75% |
 | 知识新鲜度 | `check-kb-freshness.ps1` | 能检测，不能自动刷新和进入完成门禁 | 55% |
 | 单 Story 工作流 | `e2e-development.yaml` | 阶段覆盖完整 | 85% |
-| 状态运行时 | `run-state.ps1`、`state-runtime.mjs`、`story-runtime.mjs` | v2 初始化、原子阶段投影、阻塞、恢复、审计和哈希已实现 | 80% |
-| 结构化 State 语义 | State v2 Schema、九阶段 result/projector fixture | 阶段核心事实可投影；验收追踪和知识/交付门禁仍待完成 | 65% |
+| 状态运行时 | `run-state.ps1`、`state-runtime.mjs`、`story-runtime.mjs` | v2 初始化、原子阶段投影、阻塞恢复、验收门禁、逐项 gap 批准、审计和哈希已实现 | 85% |
+| 结构化 State 语义 | State v2 Schema、九阶段 result/projector、M7-A3 纵向 fixture | 阶段核心事实和验收追踪可判定；知识与交付门禁仍待完成 | 78% |
 | 专家角色和 Skill | 12 个 Agent 注册角色、13 个项目 Skill | 角色和指导存在，真实派发未接入 | 30% |
-| 任务 DAG | DAG Schema、验证器和 M6-A 产物 | 文档和校验可用，执行状态未回填主 State | 60% |
+| 任务 DAG | DAG 1.0/2.0 Schema、验证器和 State 投影 | v2 节点成为唯一任务事实源，并绑定 criterion；执行仍由当前会话串行驱动 | 72% |
 | Worktree Wave | M5-A 至 M5-D Runtime 和测试 | Runtime 较完整，正式业务仍使用 Mock/fixture | 50% |
 | 单测和代码审核 | 测试门禁、审核 Skill、M6-A 审核记录 | 已发现并关闭真实问题 | 80% |
-| 构建和接口验证 | 构建规划、接口用例推导、M6-A 验证报告 | 能记录结果，环境状态语义不足 | 55% |
+| 构建和接口验证 | 构建规划、DAG 2.0 用例派生、验证结果和 gap approval | required/optional 与已知缺口语义可判定；真实环境闭环仍不足 | 68% |
 | Git 交付边界 | 交付 Skill、批准记录、交付报告 | 安全边界有效，归属和回执不完整 | 60% |
 | 外部 DevOps 集成 | 本地构建和 Docker 辅助能力 | 未接入完整测试环境和外部平台 | 20% |
 | 评估和自进化 | 暂无稳定指标和自动复盘机制 | 未开始 | 10% |
@@ -317,15 +317,15 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 与文章已经实践的整体 Harness 工程相比：
 
 ```text
-当前完成度约 65%～70%
-剩余差距约 30%～35%
+当前完成度约 70%～75%
+剩余差距约 25%～30%
 ```
 
 与 FrontierScan 当前限定的“单仓库、串行、单业务闭环、不自动 Git 交付”目标相比：
 
 ```text
-当前完成度约 80%～85%
-剩余差距约 15%～20%
+当前完成度约 85%～88%
+剩余差距约 12%～15%
 ```
 
 这些比例是架构成熟度判断，不是精确项目管理工时。后续更新时必须同时提供实现证据，不能只修改百分比。
@@ -363,7 +363,7 @@ delivery.ownedFiles
 delivery.commit
 ```
 
-M7-A2 已使新 v2 Story 能通过九阶段 `result.json` 原子回填需求、设计、DAG、实现、测试、审核、构建、验证和交付准备字段，并以正式 `phase-result` 索引支持幂等恢复。尚未关闭的差距是：验收项跨 DAG、测试和验证的引用完整性未成为门禁，accepted gap/stale 批准有效性、owned files 推导和交付回执仍未实现。M7 已确认不把完成后的 Git 提交事实回写不可变 State，而是由独立 `delivery-receipt.json` 记录。
+M7-A2 已使新 v2 Story 能通过九阶段 `result.json` 原子回填需求、设计、DAG、实现、测试、审核、构建、验证和交付准备字段，并以正式 `phase-result` 索引支持幂等恢复。M7-A3 进一步建立稳定 `criterionId`、DAG 2.0、required test/verification 覆盖、验收汇总重算、optional 非阻塞语义和 `verification-gap` 逐项批准回执。尚未关闭的差距是：knowledge stale 批准与刷新、owned files 推导、证据去重和完成后交付回执仍未实现。M7 已确认不把完成后的 Git 提交事实回写不可变 State，而是由独立 `delivery-receipt.json` 记录。
 
 ### 9.2 工作流仍由对话中的 Codex 手动串联
 
@@ -399,7 +399,7 @@ blocked
 failed
 ```
 
-但知识 stale、环境 blocked 和用户接受风险尚未形成逐项批准与完成门禁；这分别由 M7-A3 和 M7-C 收口。
+M7-A3 已使环境 blocked 不能伪装为 verified，并允许 required verification gap 在绑定当前 case、result、evidence 和用户理由的正式批准后进入 `accepted-with-known-gaps`。知识 stale 与 `accepted-stale` 仍由 M7-C 收口；delivery remaining risk 的批准语义不在 A3 范围。
 
 ### 9.4 Agent 仍是注册表和 Mock Runtime
 
@@ -413,9 +413,8 @@ failed
 
 - `summarize-delivery.ps1` 未优先使用任务 DAG 和实际 Git 变更判断 owned files。
 - 当前缺少绑定 completed State、交付摘要和真实 Git 事实的独立版本化交付回执。
-- 手动 record 与阶段推进自动记录产生重复证据。
-- resume 后 `runtime.blocked` 仍保留为类似活动阻塞的结构。
-- `select-tests.ps1` 的模块测试和运行态 DAG 识别不足。
+- 证据 semantic identity 尚未在所有阶段和记录类型中统一去重。
+- `select-tests.ps1` 已识别运行态 DAG，但模块级定向测试推导仍较粗。
 - `plan-build.ps1` 主要按路径判断，缺少迁移和 API 风险感知。
 
 ## 10. 已批准的 M7-M12 演进路线
@@ -425,13 +424,13 @@ failed
 - `docs/harness-m7-m12-roadmap/DESIGN.md`
 - `docs/harness-m7-m12-roadmap/PLAN.md`
 
-M7-A1 与 M7-A2 已分别获得实施批准、完成 fixture 验证并通过独立只读代码审核；其他子里程碑仍须逐项设计、审核和批准。技术子里程碑必须按依赖顺序通过 fixture 和审核；前一主里程碑未通过计划指定的真实任务验收时，不启动下一主里程碑。
+M7-A1、M7-A2 和 M7-A3 已分别获得实施批准、完成 fixture 验证并通过独立只读代码审核。其他子里程碑仍须逐项设计、审核和批准。技术子里程碑必须按依赖顺序通过 fixture 和审核；前一主里程碑未通过计划指定的真实任务验收时，不启动下一主里程碑。
 
 ### 10.1 M7：单 Story 确定性闭环硬化
 
 1. `M7-A1`：建立 State v2 契约和 v1 只读兼容。已实现并通过 fixture。
 2. `M7-A2`：统一各阶段 `result.json`，由 Runtime 原子投影 State。已实现、通过 fixture，并在修复 4 个 BLOCKER 后通过第二轮独立只读代码审核。
-3. `M7-A3`：建立验收项、DAG、测试和验证之间的可判定追踪门禁。
+3. `M7-A3`：建立验收项、DAG、测试和验证之间的可判定追踪门禁。已实现并通过 fixture；首轮审核问题修复后通过第二轮独立只读代码审核。
 4. `M7-A4`：修复证据幂等、阻塞恢复、owned files 和交付语义。
 5. `M7-B`：增加最小确定性串行驱动器，不调用真实 Agent。
 6. `M7-C`：将任务相关知识新鲜度纳入 State、刷新和逐项接受门禁。
@@ -555,7 +554,7 @@ git diff --check
 
 ## 13. 当前架构决策摘要
 
-截至 2026-08-12，FrontierScan Harness 的正式方向为：
+截至 2026-08-13，FrontierScan Harness 的正式方向为：
 
 1. 继续以“知识库工程 + 端到端开发工程”为总体结构。
 2. 以 `AGENTS.md` 作为用户自然语言任务的默认入口。
@@ -572,4 +571,4 @@ git diff --check
 13. 每个 v2 阶段使用统一结构化 `result.json`，Markdown 不作为 Runtime 的核心事实解析源。
 14. `accepted-with-known-gaps` 和 `accepted-stale` 必须逐项获得用户批准并绑定理由与证据。
 15. M8 首个真实 Provider 为只读 `code-reviewer`；并行、Fork-Join 和本地 Docker Compose 闭环按 M9-M11 依次推进。
-16. 下一优先子里程碑为 `M7-A3：验收追踪与语义门禁`；启动前先完成专项设计和用户批准。
+16. M7-A3 已实现稳定 criterion、DAG/test/verification 覆盖和 `verification-gap` 逐项批准；下一优先子里程碑为 `M7-A4：运行时一致性与交付语义`。

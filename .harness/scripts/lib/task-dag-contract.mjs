@@ -22,6 +22,12 @@ function assertProperties(value, names, label) {
   }
 }
 
+function assertExactProperties(value, names, label) {
+  assertProperties(value, names, label);
+  const extra = Object.keys(value).find((name) => !names.includes(name));
+  if (extra) throw new Error(`${label} has unsupported property '${extra}'.`);
+}
+
 function predictedPath(value, label) {
   assertString(value, label);
   if (value !== value.trim() || value.includes("\0") || path.posix.isAbsolute(value) || path.win32.parse(value).root) {
@@ -57,8 +63,12 @@ export function matchesPredictedFile(predictedFile, candidateFile) {
 
 export function validateTaskDag(dag) {
   assertObject(dag, "Task DAG");
-  assertProperties(dag, ["schemaVersion", "storyId", "nodes", "edges", "waves", "globalChanges", "risks"], "Task DAG");
-  if (dag.schemaVersion !== "1.0") throw new Error("Task DAG schemaVersion must be '1.0'.");
+  const topFields = ["schemaVersion", "storyId", "nodes", "edges", "waves", "globalChanges", "risks"];
+  if (dag.schemaVersion === "2.0") assertExactProperties(dag, topFields, "Task DAG");
+  else assertProperties(dag, topFields, "Task DAG");
+  if (!["1.0", "2.0"].includes(dag.schemaVersion)) {
+    throw new Error("Task DAG schemaVersion must be '1.0' or '2.0'.");
+  }
   assertString(dag.storyId, "Task DAG storyId");
   for (const field of ["nodes", "edges", "waves", "globalChanges", "risks"]) assertArray(dag[field], `Task DAG ${field}`);
   if (!dag.nodes.length) throw new Error("Task DAG must contain at least one task.");
@@ -74,12 +84,24 @@ export function validateTaskDag(dag) {
 
   for (const node of dag.nodes) {
     assertObject(node, "Task node");
-    assertProperties(node, ["taskId", "title", "type", "status", "predictedFiles", "acceptanceCriteria"], "Task node");
+    const nodeFields = dag.schemaVersion === "2.0"
+      ? ["taskId", "title", "type", "status", "ownerAgent", "predictedFiles", "criterionIds"]
+      : ["taskId", "title", "type", "status", "predictedFiles", "acceptanceCriteria"];
+    if (dag.schemaVersion === "2.0") assertExactProperties(node, nodeFields, "Task node");
+    else assertProperties(node, nodeFields, "Task node");
     for (const field of ["taskId", "title", "type", "status"]) assertString(node[field], `Task node ${field}`);
     if (Object.hasOwn(node, "ownerAgent")) assertString(node.ownerAgent, "Task node ownerAgent");
     assertArray(node.predictedFiles, "Task node predictedFiles");
-    assertArray(node.acceptanceCriteria, "Task node acceptanceCriteria");
-    node.acceptanceCriteria.forEach((item, index) => assertString(item, `Task '${node.taskId}' acceptanceCriteria[${index}]`));
+    const criterionField = dag.schemaVersion === "2.0" ? "criterionIds" : "acceptanceCriteria";
+    assertArray(node[criterionField], `Task node ${criterionField}`);
+    node[criterionField].forEach((item, index) => assertString(item, `Task '${node.taskId}' ${criterionField}[${index}]`));
+    if (dag.schemaVersion === "2.0") {
+      if (!node.criterionIds.length) throw new Error(`Task '${node.taskId}' criterionIds must not be empty.`);
+      if (new Set(node.criterionIds).size !== node.criterionIds.length) {
+        throw new Error(`Task '${node.taskId}' criterionIds must be unique.`);
+      }
+      if (node.status !== "pending") throw new Error(`Task DAG 2.0 task '${node.taskId}' status must be pending.`);
+    }
     if (nodes.has(node.taskId)) throw new Error(`Duplicate taskId: ${node.taskId}`);
     const taskIdKey = node.taskId.toLowerCase();
     const equivalentTaskId = windowsTaskIds.get(taskIdKey);

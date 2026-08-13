@@ -1648,7 +1648,7 @@ quality_gates: []
       fixture.root,
       `.harness/runs/${fixture.storyId}/phases/02-task-dag/task-dag.json`,
       `${JSON.stringify({
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         storyId: fixture.storyId,
         nodes: [{
           taskId: "T1",
@@ -2355,7 +2355,13 @@ function defaultV2Payload(task, records = []) {
     return { taskDagFile: task.expectedOutputs[0], taskDagSha256: `sha256:${"0".repeat(64)}` };
   }
   if (task.phase === "implementation") {
-    return { taskUpdates: [], actualFiles: [], method: "tdd", exceptionReason: null, notes: [] };
+    return {
+      taskUpdates: [],
+      actualFiles: [],
+      method: "tdd",
+      exceptionReason: null,
+      notes: ["Fixture performs no business file changes."],
+    };
   }
   if (task.phase === "unit-test") return { cases: [], commands: [], results: [] };
   if (task.phase === "code-review") {
@@ -2918,7 +2924,24 @@ async function testApplyFailedAndBlockedResultsKeepDeterministicState() {
 async function testApplyKeepsStateUnchangedBeforeAtomicProjection() {
   const { root, storyId } = await createFixture("M3-APPLY-RESUME");
   try {
-    await setFixtureState(root, storyId, (state) => { state.phase = "unit-test"; });
+    await setFixtureState(root, storyId, (state) => {
+      state.phase = "unit-test";
+      state.requirement.acceptanceCriteria = [{
+        criterionId: "AC-001",
+        description: "The targeted tests pass.",
+        source: "fixture",
+        required: true,
+      }];
+      state.acceptance.criteria = [{
+        criterionId: "AC-001",
+        required: true,
+        taskIds: [],
+        testCaseIds: [],
+        verificationCaseIds: [],
+        status: "pending",
+        approvalIds: [],
+      }];
+    });
     const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
     await runStoryCommand(storyOptions(root, {
       command: "run-adapter",
@@ -2927,8 +2950,36 @@ async function testApplyKeepsStateUnchangedBeforeAtomicProjection() {
     }));
     const reportPath = prepared.task.expectedOutputs[0];
     await write(root, reportPath, "# Tests passed\n");
+    const reportContent = await readFile(path.join(root, reportPath));
+    const reportSha256 = `sha256:${createHash("sha256").update(reportContent).digest("hex")}`;
     await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
       records: [{ type: "test", status: "passed", path: reportPath, message: "targeted tests passed" }],
+      payload: {
+        cases: [{
+          caseId: "TC-001",
+          type: "unit",
+          required: true,
+          criterionIds: ["AC-001"],
+          expected: "The targeted tests pass.",
+        }],
+        commands: [{
+          commandId: "CMD-001",
+          command: "node targeted-test.mjs",
+          status: "passed",
+          exitCode: 0,
+          evidencePath: reportPath,
+          evidenceSha256: reportSha256,
+          executedAt: FIXED_NOW,
+        }],
+        results: [{
+          caseId: "TC-001",
+          status: "passed",
+          actual: "The targeted tests passed.",
+          evidencePath: reportPath,
+          evidenceSha256: reportSha256,
+          executedAt: FIXED_NOW,
+        }],
+      },
     }));
     const stateFile = `.harness/states/e2e-${storyId}.json`;
     const stateBefore = await readFile(path.join(root, stateFile), "utf8");
@@ -2945,7 +2996,7 @@ async function testApplyKeepsStateUnchangedBeforeAtomicProjection() {
     const resumed = await runStoryCommand(storyOptions(root, { command: "apply" }));
     assert.equal(resumed.state.phase, "code-review");
     const completed = await readJson(root, stateFile);
-    assert.deepEqual(completed.tests, { cases: [], commands: [], results: [] });
+    assert.equal(completed.tests.results[0].status, "passed");
     assert.equal(
       completed.runtime.records.some((record) => record.type === "test" && record.status === "passed"),
       true,
@@ -3228,6 +3279,10 @@ async function testCodeReviewRequiresPassedReviewEvidence() {
 async function testCompleteSingleStoryVerticalSlice() {
   const { root, storyId } = await createFixture("M3-VERTICAL");
   try {
+    let testEvidencePath;
+    let verificationEvidencePath;
+    let approvalReceiptPath;
+    let historicalResultPath;
     await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
 name: frontier-e2e-development-v2
 state_file: .harness/states/e2e-state-v2.template.json
@@ -3332,24 +3387,36 @@ quality_gates:
       );
       const outputPath = prepared.task.expectedOutputs[0];
       await write(root, outputPath, phase === "task-dag" ? `${JSON.stringify({
-        schemaVersion: "1.0",
+        schemaVersion: "2.0",
         storyId,
-        nodes: [{
-          taskId: "T1",
-          title: "Implement fixture",
-          type: "backend",
-          status: "pending",
-          ownerAgent: "backend-developer",
-          predictedFiles: ["backend/src/T1.java"],
-          acceptanceCriteria: ["AC-001"],
-        }],
-        edges: [],
-        waves: [["T1"]],
+        nodes: [
+          {
+            taskId: "T1",
+            title: "Implement required behavior",
+            type: "backend",
+            status: "pending",
+            ownerAgent: "backend-developer",
+            predictedFiles: ["backend/src/T1.java"],
+            criterionIds: ["AC-001"],
+          },
+          {
+            taskId: "T2",
+            title: "Implement gap and optional behavior",
+            type: "frontend",
+            status: "pending",
+            ownerAgent: "frontend-developer",
+            predictedFiles: ["frontend/src/T2.ts"],
+            criterionIds: ["AC-002", "AC-OPT"],
+          },
+        ],
+        edges: [{ from: "T1", to: "T2", reason: "The shared contract is implemented first." }],
+        waves: [["T1"], ["T2"]],
         globalChanges: [],
         risks: [],
       }, null, 2)}\n` : `# ${phase}\n`);
 
       if (phase === "unit-test") {
+        testEvidencePath = outputPath;
         await runStoryCommand(storyOptions(root, {
           command: "run-adapter",
           adapter: "harness-structure",
@@ -3366,7 +3433,208 @@ quality_gates:
       const records = phase === "code-review"
         ? [{ type: "review", status: "passed", path: outputPath, message: "review passed" }]
         : [];
-      await writePreparedResult(root, prepared, dispatchResult(prepared.task, { records }));
+      let payload;
+      if (phase === "requirement") {
+        payload = {
+          acceptanceCriteria: [
+            {
+              criterionId: "AC-001",
+              description: "The primary behavior is verified.",
+              source: "fixture",
+              required: true,
+            },
+            {
+              criterionId: "AC-002",
+              description: "The known verification gap is explicitly accepted.",
+              source: "fixture",
+              required: true,
+            },
+            {
+              criterionId: "AC-OPT",
+              description: "The optional behavior is recorded without blocking completion.",
+              source: "fixture",
+              required: false,
+            },
+          ],
+          openQuestions: [],
+          inScope: ["Acceptance gate vertical fixture"],
+          outOfScope: [],
+        };
+      } else if (phase === "implementation") {
+        payload = {
+          taskUpdates: [
+            { taskId: "T1", status: "done" },
+            { taskId: "T2", status: "done" },
+          ],
+          actualFiles: ["backend/src/T1.java", "frontend/src/T2.ts"],
+          method: "tdd",
+          exceptionReason: null,
+          notes: [],
+        };
+      } else if (phase === "unit-test") {
+        const testContent = await readFile(path.join(root, outputPath));
+        const testSha256 = `sha256:${createHash("sha256").update(testContent).digest("hex")}`;
+        payload = {
+          cases: [{
+            caseId: "TC-001",
+            type: "unit",
+            required: true,
+            criterionIds: ["AC-001", "AC-002"],
+            expected: "Both required behaviors pass.",
+          }],
+          commands: [],
+          results: [{
+            caseId: "TC-001",
+            status: "passed",
+            actual: "Both required behaviors passed.",
+            evidencePath: outputPath,
+            evidenceSha256: testSha256,
+            executedAt: FIXED_NOW,
+          }],
+        };
+      } else if (phase === "interface-verification") {
+        const blockedResult = dispatchResult(prepared.task, {
+          status: "blocked",
+          summary: "Verification environment requires recovery.",
+          outputs: [],
+          records: [{
+            type: "note",
+            status: "recorded",
+            message: "Waiting for the verification environment.",
+          }],
+          blocker: {
+            reason: "Verification environment unavailable.",
+            owner: "user",
+            suggestedAction: "Restore the fixture environment and resume.",
+          },
+        });
+        await writePreparedResult(root, prepared, blockedResult);
+        const blocked = await runStoryCommand(storyOptions(root, { command: "apply" }));
+        assert.equal(blocked.state.phase, "blocked");
+        await runStateCommand({
+          root,
+          command: "resume",
+          stateFile: `.harness/states/e2e-${storyId}.json`,
+          now: () => FIXED_NOW,
+        });
+        const resumed = await runStoryCommand(storyOptions(root, {
+          command: "prepare",
+          randomUUID: () => "00000000-0000-4000-8000-000000000010",
+        }));
+        assert.equal(resumed.task.phase, phase);
+        assert.notEqual(resumed.task.dispatchId, prepared.task.dispatchId);
+        assert.ok(resumed.task.preparedRevision > prepared.task.preparedRevision);
+        await write(root, resumed.task.expectedOutputs[0], "# interface-verification resumed\n");
+        const verificationContent = await readFile(path.join(root, outputPath));
+        const verificationSha256 = `sha256:${createHash("sha256").update(verificationContent).digest("hex")}`;
+        const gapEvidencePath = `${resumed.task.attemptRoot}/evidence/known-gap.md`;
+        verificationEvidencePath = gapEvidencePath;
+        await write(root, gapEvidencePath, "Known UI verification gap.\n");
+        const gapEvidence = await readFile(path.join(root, gapEvidencePath));
+        const gapEvidenceSha256 = `sha256:${createHash("sha256").update(gapEvidence).digest("hex")}`;
+        payload = {
+          cases: [
+            {
+              caseId: "VC-001",
+              type: "api",
+              required: true,
+              criterionIds: ["AC-001"],
+              action: "Verify the primary behavior",
+              expected: "The primary behavior is verified.",
+            },
+            {
+              caseId: "VC-002",
+              type: "ui-flow",
+              required: true,
+              criterionIds: ["AC-002"],
+              action: "Verify the UI behavior",
+              expected: "The UI behavior is visible.",
+            },
+            {
+              caseId: "VC-OPT",
+              type: "ui-flow",
+              required: false,
+              criterionIds: ["AC-OPT"],
+              action: "Verify the optional behavior",
+              expected: "The optional behavior is visible.",
+            },
+          ],
+          results: [
+            {
+              caseId: "VC-001",
+              status: "verified",
+              actual: "The primary behavior is verified.",
+              evidencePath: outputPath,
+              evidenceSha256: verificationSha256,
+              approvalId: null,
+              executedAt: FIXED_NOW,
+            },
+            {
+              caseId: "VC-002",
+              status: "accepted-with-known-gaps",
+              actual: "The UI environment remains unavailable.",
+              evidencePath: gapEvidencePath,
+              evidenceSha256: gapEvidenceSha256,
+              approvalId: null,
+              executedAt: FIXED_NOW,
+            },
+            {
+              caseId: "VC-OPT",
+              status: "blocked",
+              actual: "The optional check was not run.",
+              evidencePath: null,
+              evidenceSha256: null,
+              approvalId: null,
+              executedAt: FIXED_NOW,
+            },
+          ],
+          environment: {
+            status: "unavailable",
+            summary: "API evidence is available; UI checks have known gaps.",
+            evidencePath: null,
+            evidenceSha256: null,
+          },
+        };
+        await writePreparedResult(root, resumed, dispatchResult(resumed.task, { records, payload }));
+        const approval = await runStoryCommand(storyOptions(root, {
+          command: "approve-gap",
+          caseId: "VC-002",
+          reason: "接受纵向 fixture 中明确记录的验证缺口",
+        }));
+        approvalReceiptPath = approval.receiptFile;
+        assert.match(approval.approvalId, /^APR-[a-f0-9]{32}$/);
+        const applied = await runStoryCommand(storyOptions(root, { command: "apply" }));
+        assert.equal(applied.state.phase, "delivery-preparation");
+        assert.equal((await readJson(root, resumed.checkpointFile)).status, "completed");
+        const blockedRecords = applied.state.runtime.records.filter((record) => (
+          record.type === "phase-result"
+          && record.phase === "interface-verification"
+          && record.status === "blocked"
+        ));
+        assert.equal(blockedRecords.length, 1);
+        continue;
+      }
+      await writePreparedResult(root, prepared, dispatchResult(prepared.task, { records, payload }));
+      if (phase === "requirement") historicalResultPath = prepared.resultFile;
+      if (phase === "delivery-preparation") {
+        const stateFile = `.harness/states/e2e-${storyId}.json`;
+        const before = await readFile(path.join(root, stateFile), "utf8");
+        for (const [driftPath, label] of [
+          [testEvidencePath, "test evidence"],
+          [verificationEvidencePath, "verification evidence"],
+          [approvalReceiptPath, "approval receipt"],
+          [historicalResultPath, "phase result"],
+        ]) {
+          const original = await readFile(path.join(root, driftPath));
+          await write(root, driftPath, `${original.toString("utf8")}drift\n`);
+          await assert.rejects(
+            runStoryCommand(storyOptions(root, { command: "apply" })),
+            new RegExp(label, "i"),
+          );
+          assert.equal(await readFile(path.join(root, stateFile), "utf8"), before);
+          await writeFile(path.join(root, driftPath), original);
+        }
+      }
       const applied = await runStoryCommand(storyOptions(root, { command: "apply" }));
       const expected = phases[index + 1] ?? "done";
       assert.equal(applied.state.phase, expected);
@@ -3379,6 +3647,25 @@ quality_gates:
     assert.equal(finalState.runtime.status, "completed");
     assert.equal(finalState.phase, "done");
     assert.equal(finalState.runtime.records.filter((record) => record.type === "output").length, phases.length);
+    assert.equal(
+      finalState.runtime.records.filter((record) => (
+        record.type === "phase-result"
+        && record.phase === "interface-verification"
+        && record.status === "blocked"
+      )).length,
+      1,
+    );
+    assert.deepEqual(
+      finalState.acceptance.criteria.map((criterion) => ({
+        criterionId: criterion.criterionId,
+        status: criterion.status,
+      })),
+      [
+        { criterionId: "AC-001", status: "verified" },
+        { criterionId: "AC-002", status: "accepted-with-known-gaps" },
+        { criterionId: "AC-OPT", status: "blocked" },
+      ],
+    );
     await assert.rejects(
       runStoryCommand(storyOptions(root, { command: "prepare" })),
       /completed|done/i,
@@ -3433,6 +3720,431 @@ async function testM3RuntimeIsRegisteredInHarnessContracts() {
   assert.match(structureValidator, /\.harness\/schemas\/dispatch-result\.schema\.json/);
   assert.match(structureValidator, /\.harness\/schemas\/dispatch-task-v2\.schema\.json/);
   assert.match(structureValidator, /\.harness\/schemas\/dispatch-result-v2\.schema\.json/);
+}
+
+async function testRequirementAcceptanceGateRejectsBeforePersistence() {
+  const { root, storyId } = await createFixture("M7-A3-REQ-GATE");
+  try {
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    await write(root, prepared.task.expectedOutputs[0], "# Requirement\n");
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      payload: {
+        acceptanceCriteria: [{
+          criterionId: "AC-OPT",
+          description: "Optional only",
+          source: "fixture",
+          required: false,
+        }],
+        openQuestions: [],
+        inScope: ["Harness"],
+        outOfScope: [],
+      },
+    }));
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const pointerFile = ".harness/states/active-run.json";
+    const eventsFile = `.harness/states/e2e-${storyId}.events.jsonl`;
+    const before = await Promise.all([
+      readFile(path.join(root, stateFile), "utf8"),
+      readFile(path.join(root, pointerFile), "utf8"),
+      readFile(path.join(root, eventsFile), "utf8"),
+    ]);
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, { command: "apply" })),
+      /required criterion/i,
+    );
+    const after = await Promise.all([
+      readFile(path.join(root, stateFile), "utf8"),
+      readFile(path.join(root, pointerFile), "utf8"),
+      readFile(path.join(root, eventsFile), "utf8"),
+    ]);
+    assert.deepEqual(after, before);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testApproveGapWritesAttemptReceiptWithoutChangingState() {
+  const { root, storyId } = await createFixture("M7-A3-APPROVE-GAP");
+  try {
+    await setFixtureState(root, storyId, (state) => {
+      state.phase = "interface-verification";
+      state.requirement.acceptanceCriteria = [{
+        criterionId: "AC-001",
+        description: "The UI result is verified.",
+        source: "fixture",
+        required: true,
+      }];
+      state.acceptance.criteria = [{
+        criterionId: "AC-001",
+        required: true,
+        taskIds: [],
+        testCaseIds: [],
+        verificationCaseIds: [],
+        status: "pending",
+        approvalIds: [],
+      }];
+    });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    const reportPath = prepared.task.expectedOutputs[0];
+    await write(root, reportPath, "# UI environment unavailable\n");
+    const evidencePath = `${prepared.task.attemptRoot}/evidence/ui-gap.md`;
+    await write(root, evidencePath, "UI environment unavailable.\n");
+    const evidence = await readFile(path.join(root, evidencePath));
+    const evidenceSha256 = `sha256:${createHash("sha256").update(evidence).digest("hex")}`;
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      payload: {
+        cases: [{
+          caseId: "VC-001",
+          type: "ui-flow",
+          required: true,
+          criterionIds: ["AC-001"],
+          action: "Open the page",
+          expected: "The state is visible",
+        }],
+        results: [{
+          caseId: "VC-001",
+          status: "accepted-with-known-gaps",
+          actual: "UI environment unavailable",
+          evidencePath,
+          evidenceSha256,
+          approvalId: null,
+          executedAt: FIXED_NOW,
+        }],
+        environment: {
+          status: "unavailable",
+          summary: "UI environment unavailable",
+          evidencePath: null,
+          evidenceSha256: null,
+        },
+      },
+    }));
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const pointerFile = ".harness/states/active-run.json";
+    const eventsFile = `.harness/states/e2e-${storyId}.events.jsonl`;
+    const before = await Promise.all([
+      readFile(path.join(root, stateFile), "utf8"),
+      readFile(path.join(root, pointerFile), "utf8"),
+      readFile(path.join(root, eventsFile), "utf8"),
+    ]);
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, { command: "apply" })),
+      /approval/i,
+    );
+    assert.deepEqual(await Promise.all([
+      readFile(path.join(root, stateFile), "utf8"),
+      readFile(path.join(root, pointerFile), "utf8"),
+      readFile(path.join(root, eventsFile), "utf8"),
+    ]), before);
+
+    const approved = await runStoryCommand(storyOptions(root, {
+      command: "approve-gap",
+      caseId: "VC-001",
+      reason: "接受当前已知验证缺口",
+    }));
+    assert.equal(approved.command, "approve-gap");
+    assert.match(approved.approvalId, /^APR-[a-f0-9]{32}$/);
+    assert.equal(approved.reused, false);
+    const result = await readJson(root, prepared.resultFile);
+    assert.equal(result.payload.results[0].approvalId, approved.approvalId);
+    const receipt = await readJson(root, approved.receiptFile);
+    assert.equal(receipt.approvalId, approved.approvalId);
+    assert.equal(receipt.actor, "user");
+    const after = await Promise.all([
+      readFile(path.join(root, stateFile), "utf8"),
+      readFile(path.join(root, pointerFile), "utf8"),
+      readFile(path.join(root, eventsFile), "utf8"),
+    ]);
+    assert.deepEqual(after, before);
+
+    const reused = await runStoryCommand(storyOptions(root, {
+      command: "approve-gap",
+      caseId: "VC-001",
+      reason: "接受当前已知验证缺口",
+    }));
+    assert.equal(reused.approvalId, approved.approvalId);
+    assert.equal(reused.reused, true);
+
+    await write(root, approved.receiptFile, `${JSON.stringify({
+      ...receipt,
+      approvalId: `APR-${"f".repeat(32)}`,
+    }, null, 2)}\n`);
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "approve-gap",
+        caseId: "VC-001",
+        reason: "接受更新后的已知验证缺口",
+      })),
+      /approval receipt.*identity|identity.*approval receipt/i,
+    );
+    await write(root, approved.receiptFile, `${JSON.stringify(receipt, null, 2)}\n`);
+
+    const reasonChanged = await runStoryCommand(storyOptions(root, {
+      command: "approve-gap",
+      caseId: "VC-001",
+      reason: "接受更新后的已知验证缺口",
+    }));
+    assert.notEqual(reasonChanged.approvalId, approved.approvalId);
+    assert.equal((await readJson(root, prepared.resultFile)).payload.results[0].approvalId, reasonChanged.approvalId);
+
+    await write(root, evidencePath, "UI environment remains unavailable.\n");
+    const changedEvidence = await readFile(path.join(root, evidencePath));
+    const changedEvidenceSha256 = `sha256:${createHash("sha256").update(changedEvidence).digest("hex")}`;
+    const changedResult = await readJson(root, prepared.resultFile);
+    changedResult.payload.results[0].actual = "UI environment remains unavailable";
+    changedResult.payload.results[0].evidenceSha256 = changedEvidenceSha256;
+    await write(root, prepared.resultFile, `${JSON.stringify(changedResult, null, 2)}\n`);
+
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "approve-gap",
+        caseId: "VC-001",
+        reason: "接受证据更新后的验证缺口",
+        beforeApprovalResultRename: async () => { throw new Error("simulated result write interruption"); },
+      })),
+      /result write interruption/i,
+    );
+    assert.equal(
+      (await readJson(root, prepared.resultFile)).payload.results[0].approvalId,
+      reasonChanged.approvalId,
+    );
+    const recoveredReceipt = await runStoryCommand(storyOptions(root, {
+      command: "approve-gap",
+      caseId: "VC-001",
+      reason: "接受证据更新后的验证缺口",
+    }));
+    assert.equal(recoveredReceipt.reused, true);
+    assert.notEqual(recoveredReceipt.approvalId, reasonChanged.approvalId);
+
+    let interruptedApprovalId = null;
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "approve-gap",
+        caseId: "VC-001",
+        reason: "接受命令返回前中断的验证缺口",
+        afterApprovalResultWrite: async () => {
+          interruptedApprovalId = (await readJson(root, prepared.resultFile)).payload.results[0].approvalId;
+          throw new Error("simulated post-result interruption");
+        },
+      })),
+      /post-result interruption/i,
+    );
+    const recoveredResult = await runStoryCommand(storyOptions(root, {
+      command: "approve-gap",
+      caseId: "VC-001",
+      reason: "接受命令返回前中断的验证缺口",
+    }));
+    assert.equal(recoveredResult.reused, true);
+    assert.equal(recoveredResult.approvalId, interruptedApprovalId);
+
+    const applied = await runStoryCommand(storyOptions(root, { command: "apply" }));
+    assert.equal(applied.state.phase, "done");
+    assert.equal(applied.state.approvals.length, 1);
+    assert.equal(applied.state.approvals[0].approvalId, recoveredResult.approvalId);
+    assert.equal(applied.state.approvals[0].receiptPath, recoveredResult.receiptFile);
+    assert.match(applied.state.approvals[0].receiptSha256, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(applied.state.acceptance.criteria[0].status, "accepted-with-known-gaps");
+    assert.deepEqual(applied.state.acceptance.criteria[0].approvalIds, [recoveredResult.approvalId]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function prepareGapApprovalFixture(storyId) {
+  const fixture = await createFixture(storyId);
+  await setFixtureState(fixture.root, fixture.storyId, (state) => {
+    state.phase = "interface-verification";
+    state.requirement.acceptanceCriteria = [{
+      criterionId: "AC-001",
+      description: "The UI result is verified.",
+      source: "fixture",
+      required: true,
+    }];
+    state.acceptance.criteria = [{
+      criterionId: "AC-001",
+      required: true,
+      taskIds: [],
+      testCaseIds: [],
+      verificationCaseIds: [],
+      status: "pending",
+      approvalIds: [],
+    }];
+  });
+  const prepared = await runStoryCommand(storyOptions(fixture.root, { command: "prepare" }));
+  await write(fixture.root, prepared.task.expectedOutputs[0], "# UI environment unavailable\n");
+  const evidencePath = `${prepared.task.attemptRoot}/evidence/ui-gap.md`;
+  await write(fixture.root, evidencePath, "UI environment unavailable.\n");
+  const evidence = await readFile(path.join(fixture.root, evidencePath));
+  await writePreparedResult(fixture.root, prepared, dispatchResult(prepared.task, {
+    payload: {
+      cases: [{
+        caseId: "VC-001",
+        type: "ui-flow",
+        required: true,
+        criterionIds: ["AC-001"],
+        action: "Open the page",
+        expected: "The state is visible",
+      }],
+      results: [{
+        caseId: "VC-001",
+        status: "accepted-with-known-gaps",
+        actual: "UI environment unavailable",
+        evidencePath,
+        evidenceSha256: `sha256:${createHash("sha256").update(evidence).digest("hex")}`,
+        approvalId: null,
+        executedAt: FIXED_NOW,
+      }],
+      environment: {
+        status: "unavailable",
+        summary: "UI environment unavailable",
+        evidencePath: null,
+        evidenceSha256: null,
+      },
+    },
+  }));
+  return { ...fixture, prepared };
+}
+
+async function testApproveGapAndApplyShareStoryWriteLock() {
+  const approvalFirst = await prepareGapApprovalFixture("M7-A3-APPROVAL-FIRST");
+  let releaseApproval;
+  try {
+    const approvalEntered = deferred();
+    const approvalRelease = new Promise((resolve) => { releaseApproval = resolve; });
+    const approving = runStoryCommand(storyOptions(approvalFirst.root, {
+      command: "approve-gap",
+      caseId: "VC-001",
+      reason: "接受并发测试中的验证缺口",
+      beforeApprovalResultRename: async () => {
+        approvalEntered.resolve();
+        await approvalRelease;
+      },
+    }));
+    await waitForSignal(approvalEntered.promise, "approve-gap lock");
+    let applySettled = false;
+    const applying = runStoryCommand(storyOptions(approvalFirst.root, { command: "apply" }))
+      .finally(() => { applySettled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    assert.equal(applySettled, false);
+    releaseApproval();
+    const [approval, applied] = await Promise.all([approving, applying]);
+    assert.equal(applied.state.phase, "done");
+    assert.equal(applied.state.approvals[0].approvalId, approval.approvalId);
+  } finally {
+    releaseApproval?.();
+    await rm(approvalFirst.root, { recursive: true, force: true });
+  }
+
+  const applyFirst = await prepareGapApprovalFixture("M7-A3-APPLY-FIRST");
+  let releaseApply;
+  try {
+    await runStoryCommand(storyOptions(applyFirst.root, {
+      command: "approve-gap",
+      caseId: "VC-001",
+      reason: "接受并发测试中的初始验证缺口",
+    }));
+    const resultBefore = await readFile(path.join(applyFirst.root, applyFirst.prepared.resultFile), "utf8");
+    const applyEntered = deferred();
+    const applyRelease = new Promise((resolve) => { releaseApply = resolve; });
+    const applying = runStoryCommand(storyOptions(applyFirst.root, {
+      command: "apply",
+      beforeAdvance: async () => {
+        applyEntered.resolve();
+        await applyRelease;
+      },
+    }));
+    await waitForSignal(applyEntered.promise, "apply lock");
+    let approvalSettled = false;
+    const lateApproval = runStoryCommand(storyOptions(applyFirst.root, {
+      command: "approve-gap",
+      caseId: "VC-001",
+      reason: "不得覆盖完成后的批准",
+    })).then(
+      () => new Error("approve-gap unexpectedly succeeded"),
+      (error) => error,
+    ).finally(() => { approvalSettled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    assert.equal(approvalSettled, false);
+    releaseApply();
+    const applied = await applying;
+    const approvalError = await lateApproval;
+    assert.equal(applied.state.phase, "done");
+    assert.match(approvalError.message, /completed run is immutable|active State v2 interface-verification/i);
+    assert.equal(
+      await readFile(path.join(applyFirst.root, applyFirst.prepared.resultFile), "utf8"),
+      resultBefore,
+    );
+  } finally {
+    releaseApply?.();
+    await rm(applyFirst.root, { recursive: true, force: true });
+  }
+}
+
+async function testVerifiedEvidenceDriftBlocksApplyWithoutStateChange() {
+  const { root, storyId } = await createFixture("M7-A3-VERIFY-DRIFT");
+  try {
+    await setFixtureState(root, storyId, (state) => {
+      state.phase = "interface-verification";
+      state.requirement.acceptanceCriteria = [{
+        criterionId: "AC-001",
+        description: "The API is verified.",
+        source: "fixture",
+        required: true,
+      }];
+      state.acceptance.criteria = [{
+        criterionId: "AC-001",
+        required: true,
+        taskIds: [],
+        testCaseIds: [],
+        verificationCaseIds: [],
+        status: "pending",
+        approvalIds: [],
+      }];
+    });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    await write(root, prepared.task.expectedOutputs[0], "# Verification\n");
+    const evidencePath = `${prepared.task.attemptRoot}/evidence/api.md`;
+    await write(root, evidencePath, "verified\n");
+    const evidence = await readFile(path.join(root, evidencePath));
+    const evidenceSha256 = `sha256:${createHash("sha256").update(evidence).digest("hex")}`;
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      payload: {
+        cases: [{
+          caseId: "VC-001",
+          type: "api",
+          required: true,
+          criterionIds: ["AC-001"],
+          action: "Call API",
+          expected: "Success",
+        }],
+        results: [{
+          caseId: "VC-001",
+          status: "verified",
+          actual: "Success",
+          evidencePath,
+          evidenceSha256,
+          approvalId: null,
+          executedAt: FIXED_NOW,
+        }],
+        environment: {
+          status: "available",
+          summary: "Available",
+          evidencePath: null,
+          evidenceSha256: null,
+        },
+      },
+    }));
+    await write(root, evidencePath, "drifted\n");
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const before = await readFile(path.join(root, stateFile), "utf8");
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, { command: "apply" })),
+      /verification evidence.*changed|evidence.*hash/i,
+    );
+    assert.equal(await readFile(path.join(root, stateFile), "utf8"), before);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 }
 
 async function testStructuredFailedTestsCannotAdvance() {
@@ -3553,5 +4265,9 @@ await testBlockedApplyRecoversProcessFilesFromFormalResultIndex();
 await testBuildPhaseRejectsChangedAdapterEvidence();
 await testCodeReviewRequiresPassedReviewEvidence();
 await testCompleteSingleStoryVerticalSlice();
+await testRequirementAcceptanceGateRejectsBeforePersistence();
+await testApproveGapWritesAttemptReceiptWithoutChangingState();
+await testApproveGapAndApplyShareStoryWriteLock();
+await testVerifiedEvidenceDriftBlocksApplyWithoutStateChange();
 await testM3RuntimeIsRegisteredInHarnessContracts();
 console.log("story-runtime tests passed");
