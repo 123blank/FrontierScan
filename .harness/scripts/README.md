@@ -30,6 +30,7 @@ smoke-harness-flow.ps1
 - `validate-state.ps1`、`validate-task-dag.ps1`、`validate-structure.ps1`、`kb-query.ps1`、`select-tests.ps1`、`collect-diff-context.ps1`、`scan-knowledge-inputs.ps1`、`check-kb-freshness.ps1`、`plan-worktrees.ps1`、`derive-interface-cases.ps1`、`plan-build.ps1`、`summarize-delivery.ps1` 和 `smoke-harness-flow.ps1` 已实现为只读辅助脚本；状态校验覆盖 E2E、Product 和 `active-run` 指针。
 - `run-state.ps1` 是单 Story 确定性状态运行时入口，支持 `init/status/validate/record/next/block/resume/complete`。更新命令使用独占锁、原子 JSON 写入和 JSONL 事务事件；`status/validate` 保持只读。
 - `run-e2e.ps1` 是 M7-B 最小确定性串行驱动入口，支持 `Status/Step/Apply`。它通过 Story Runtime 的只读 `inspect` 获取唯一下一动作；`Step` 一次最多执行一个 `prepare` 或 `apply`，认知任务、Adapter 选择和批准需求都会明确暂停。
+- M7-C 在 `technical-design` attempt 内增加 `check-knowledge`、`refresh-knowledge` 和 `approve-stale`。已有 completed result 时重复 `check-knowledge -Area <area>` 会受控重查并原子替换该 area；刷新产物使用 attempt 内不可变 content-addressed evidence，common 显式保护三域。`run-e2e` 对 relevant stale 返回 `knowledge-refresh-required`，不会自动刷新或伪造用户批准。
 - `lib/e2e-runtime.mjs` 不读取 Markdown，不解析私有 attempt 文件，不运行任意 shell，不启动 Agent，也不执行 Git、Worktree、发布或并行操作。
 - `run-delivery.ps1` 是 M7-A4 交付事实入口，支持 `PrepareManifest/Summarize/Record`。它只读取 Git 或写入 Harness 控制证据，不执行 `git add/commit/push`；`PrepareManifest` 在 Story 写锁内生成 owned manifest，`Record` 在 completed State 外追加版本化交付回执。
 - `lib/delivery-runtime.mjs` 从 baseline、`implementation.actualFiles`、DAG prediction 和当前 Git 净变化推导 owned、预测外与 unrelated；State 模式不再按固定路径前缀认领业务文件。`summarize-delivery.ps1` 无 `StateFile` 时保留旧兼容模式，有 `StateFile` 时使用该 Runtime。
@@ -50,6 +51,8 @@ smoke-harness-flow.ps1
 - `generate-kb.ps1 -Area backend -Module article -Mode baseline` 可以刷新单个模块，同时保留无关文档、元数据、日志和索引分块。
 - `check-kb-freshness.ps1 -WriteRefreshTask` 会为过期区域或模块显式写入 `.harness/outputs/kb-refresh-task.json`，但不会执行该任务。
 - 只有当区域内每个变更源文件都属于同一受支持模块时，才会生成模块级刷新任务；共享源文件或区域根目录文件发生变化时，会回退为区域级刷新。
+- `check-kb-freshness.ps1 -Json` 同时输出结构化 `module` 和 `source_paths`；M7-C Runtime 只消费白名单 `area/module/mode`，不会执行 JSON 中的展示命令字符串。
+- `lib/knowledge-runtime.mjs` 复用 freshness 和 generator，校验 `custom/` 哈希、index、log 与 source fingerprint，并以 `KRR-*` receipt 作为刷新提交事实。
 - `.harness/scripts/lib/source-fingerprint.mjs` 是生成、查询和新鲜度检查共用的 SHA-256 新鲜度引擎。源指纹是权威依据，`git_hash` 仅用于审计。
 - 生成器采用失败关闭策略处理摄取失败：读取源文件或共享资源失败时保留覆盖率诊断，并将受影响文档和索引指纹标记为 `partial`。
 - 缺少旧版指纹时需要执行一次基线刷新。公共源文件变化通过 `generate-kb.ps1 -Area all -Mode baseline` 修复。

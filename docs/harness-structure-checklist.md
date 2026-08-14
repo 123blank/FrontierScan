@@ -87,6 +87,7 @@
 | M7-A3 验收追踪与语义门禁设计、计划与报告 | `docs/harness-m7a3-acceptance-gates/` | 已实施并通过专项及纵向 fixture；首轮 3 个 BLOCKER 和 1 个 WARNING 修复后通过第二轮独立只读代码审核 |
 | M7-A4 运行时一致性与交付语义 | `docs/harness-m7a4-runtime-delivery/`、`run-delivery.ps1`、`delivery-runtime.mjs` | record 幂等、Git 净变化、actual-only owned、manifest、delivery apply 对账和独立 receipt 已实现；三轮独立审核关闭全部 BLOCKER/WARNING |
 | M7-B 最小确定性串行驱动器 | `docs/harness-m7b-serial-driver/`、`run-e2e.ps1`、`e2e-runtime.mjs` | `Status/Step/Apply`、只读 inspection、完整 preflight、Adapter/approval/recovery 判定和九阶段纵向 fixture 已实现；最终独立审核无 BLOCKER/WARNING |
+| M7-C 知识新鲜度闭环 | `docs/harness-m7c-kb-freshness-loop/`、`knowledge-runtime.mjs` | relevant area State 投影、受控 recheck、可组合不可变 check/task/refresh evidence、最小 module/area 刷新、common 三域保护和逐区域 `accepted-stale` 已实现；最终独立审核无 BLOCKER/WARNING |
 
 ## 延期功能工作
 
@@ -94,7 +95,7 @@
 - 接入真实 Agent provider 前，使用 Codex custom agent 和 sandbox 复验操作系统级权限边界；当前同进程 mock provider 不是安全沙箱。
 - M5-D-D 已实现并交付单个完整 wave 的审批门控 Worktree 回收闭环；`M5-D-D-001` 为 `done/completed` revision `18`，提交 `2b7269d` 已推送到 `origin/dev`。
 - M6-A 已完成真实单业务闭环验收，并暴露结构化 State、验收追踪、知识新鲜度、交付归属和串行编排差距。
-- M7-B 实现、九阶段 fixture 和最终独立审核已完成；下一阶段为 `M7-C：知识新鲜度闭环`。
+- M7-C 实现、双批准类型九阶段 fixture、路径安全和多区域刷新组合验证均已完成，最终独立审核通过；下一阶段为 `M7-D：双重闭环验收`。
 - M7 按 A1、A2、A3、A4、B、C、D 顺序推进；M7-D 真实 Story 验收通过后才允许启动 M8。
 - 真实 Agent、正式并行、Fork-Join 和本地 Docker Compose 闭环分别延期到 M8、M9、M10 和 M11。
 - 多 wave 批量回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。
@@ -116,7 +117,7 @@
 
 该脚本只读检查必需 Harness 文件、JSON 可解析性和 Skill frontmatter。
 
-当前已验证结构：32 个目录、219 个必需文件和 13 个 Skill 文件。
+当前已验证结构：38 个目录、272 个必需文件和 13 个 Skill 文件。
 
 ## 知识查询
 

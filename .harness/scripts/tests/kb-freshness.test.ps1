@@ -100,6 +100,12 @@ try {
   if (@($backendTask.modules) -notcontains "article") {
     throw "Backend refresh target did not identify article module."
   }
+  if ($backendTask.module -ne "article") {
+    throw "Backend refresh target did not expose the structured article module."
+  }
+  if (@($backendTask.source_paths).Count -ne 1 -or $backendTask.source_paths[0] -notmatch 'Article\.java$') {
+    throw "Backend refresh target did not expose scoped source_paths."
+  }
   if ($backendTask.command -notmatch '-Area backend -Module article -Mode baseline') {
     throw "Backend refresh command is not module scoped: $($backendTask.command)"
   }

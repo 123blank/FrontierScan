@@ -328,16 +328,25 @@ export function validateE2EStateV2(state) {
   for (const [index, area] of state.knowledge.areas.entries()) {
     const label = `E2E v2 knowledge.areas[${index}]`;
     const fields = [
-      "area", "relevant", "status", "sourceFingerprint", "loadedFiles", "missing", "checkedAt",
+      "area", "relevant", "observedStatus", "status", "sourceFingerprint", "loadedFiles", "missing", "checkedAt",
+      "freshnessEvidencePath", "freshnessEvidenceSha256", "refreshTaskPath", "refreshTaskSha256",
+      "refreshReceiptPath", "refreshReceiptSha256", "approvalId",
     ];
     assertKeys(area, new Set(fields), fields, label);
     assertString(area.area, `${label}.area`);
     if (typeof area.relevant !== "boolean") throw new Error(`${label}.relevant must be boolean.`);
+    assertString(area.observedStatus, `${label}.observedStatus`);
     assertString(area.status, `${label}.status`);
     if (area.sourceFingerprint !== null) assertString(area.sourceFingerprint, `${label}.sourceFingerprint`);
     assertArray(area.loadedFiles, `${label}.loadedFiles`);
     assertArray(area.missing, `${label}.missing`);
     assertNullableDate(area.checkedAt, `${label}.checkedAt`, true);
+    for (const field of [
+      "freshnessEvidencePath", "freshnessEvidenceSha256", "refreshTaskPath", "refreshTaskSha256",
+      "refreshReceiptPath", "refreshReceiptSha256", "approvalId",
+    ]) {
+      if (area[field] !== null) assertString(area[field], `${label}.${field}`);
+    }
   }
   validateSimpleArrayObject(state.design, ["decisions", "affectedAreas", "risks"], "E2E v2 design");
   validateTechnicalDesignData(

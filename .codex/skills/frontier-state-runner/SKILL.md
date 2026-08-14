@@ -38,6 +38,18 @@ M7-B 之后，普通单 Story 串行流程优先使用统一入口：
 
 `Step` 一次只执行一个确定性动作。返回 `cognitive-action-required` 时由当前 Codex 会话完成认知产物；返回 `adapter-selection-required` 时按测试或构建策略明确选择固定 Adapter；返回 `approval-required` 时停止并取得对应用户批准。
 
+M7-C technical-design 知识闭环使用：
+
+```powershell
+.\.harness\scripts\run-story.ps1 -Command check-knowledge -Area backend -Json
+.\.harness\scripts\run-story.ps1 -Command refresh-knowledge -Area backend -Json
+.\.harness\scripts\run-story.ps1 -Command approve-stale -Area backend -Reason "已通过源码核验，接受当前 stale 知识" -Json
+```
+
+`knowledge-refresh-required` 表示 relevant area 必须刷新或由用户逐区域批准 `accepted-stale`。Runtime 不得自动选择接受 stale。
+
+若 `inspect/apply` 因当前 source fingerprint 漂移拒绝已有 `technical-design` result，重新执行同一 `check-knowledge -Area <area>`；Runtime 会在 Story 写锁内原子替换该 area，不需要手工删除 result。
+
 ## 常用命令
 
 ```powershell

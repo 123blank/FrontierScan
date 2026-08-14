@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3 文件式 Dispatcher、M4-B 受约束 Mock Worker、M5-A 单 Worktree、M5-B1 Worker、M5-B2 受控集成、M5-C 生命周期回收、M5-B3-B 单 Worktree 严格串行多任务批次运行时，以及 M5-D 单 wave 多 Worktree 的计划、审批门控创建、并行 Mock Worker 执行、主树串行集成、M3 apply 和审批门控回收均已实现。真实 Agent 自动派发、多 Story Fork-Join、分支删除、自动 Git 交付和生产发布部署仍未实现。
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时已实现；M3-M4 的 Dispatcher 与受约束 Mock Worker 已实现，M5-A 单 Worktree 及后续 Worktree Wave 能力也已实现。M7-A1 至 M7-C 已进一步实现 State v2、统一阶段结果、验收追踪、交付语义、最小确定性串行驱动和任务相关知识新鲜度闭环。真实 Agent 自动派发、多 Story Fork-Join、分支删除、自动 Git 交付和生产发布部署仍未实现。
 
 ## Added Structure
 
@@ -402,3 +402,17 @@ M6-A 的目标不是继续扩展 Worktree 或设计通用验收引擎，而是�
 
 通过标准是一个真实业务 Story 从 requirement 推进到 `done/completed`，真实测试、审核、构建和接口验证均有可复核证据，
 且过程不需要手工编辑 State。通过 M6-A 后，再依据暴露出的真实缺口决定 M7 加固或真实 Agent 接入范围。
+
+## M7-C 知识新鲜度闭环
+
+M7-C 不新增工作流阶段，而是把知识闭环嵌入 `technical-design` attempt。`check-knowledge` 为 relevant area 生成
+content-addressed freshness evidence 和 refresh task；已有 completed result 时可以在 Story 写锁内原子重查并替换单个
+area，用于 source fingerprint 漂移后的正式恢复。
+
+`refresh-knowledge` 只消费白名单 `area/module/mode`，生成器执行前验证全部可写知识根目录，不允许 symlink、junction、
+reparse point、仓库外 realpath 或 `..` 目录前缀绕过。backend/frontend 只保护自身；common 因实际执行 `Area all`，
+显式保护 backend、frontend、common 三域。生成文件、index 和 log 被复制为 attempt 内不可变 evidence，因此多个 relevant
+area 顺序刷新后历史 receipt 仍可组合审计；`custom/` 始终保持当前内容不变。
+
+`knowledge-stale` 与 `verification-gap` 使用互斥 approval 契约。Runtime 不自动选择刷新或接受 stale，M7-C 完成也不表示
+已经执行 Git 提交或推送。当前剩余验收是 M7-D：异常 fixture 与一个真实业务 Story 的双重闭环。

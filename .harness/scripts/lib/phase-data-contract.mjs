@@ -99,14 +99,73 @@ function risk(item, label, remaining = false) {
 }
 
 function knowledgeArea(item, label) {
-  object(item, ["area", "relevant", "status", "sourceFingerprint", "loadedFiles", "missing", "checkedAt"], label);
+  object(item, [
+    "area", "relevant", "observedStatus", "status", "sourceFingerprint", "loadedFiles", "missing", "checkedAt",
+    "freshnessEvidencePath", "freshnessEvidenceSha256", "refreshTaskPath", "refreshTaskSha256",
+    "refreshReceiptPath", "refreshReceiptSha256", "approvalId",
+  ], label);
   id(item.area, `${label}.area`);
   if (typeof item.relevant !== "boolean") throw new Error(`${label}.relevant must be boolean.`);
-  string(item.status, `${label}.status`);
+  enumValue(item.observedStatus, ["fresh", "stale", "missing", "not-relevant"], `${label}.observedStatus`);
+  enumValue(item.status, ["fresh", "stale", "missing", "accepted-stale", "not-relevant"], `${label}.status`);
   string(item.sourceFingerprint, `${label}.sourceFingerprint`, { nullable: true });
   uniqueStrings(item.loadedFiles, `${label}.loadedFiles`, { paths: true });
   uniqueStrings(item.missing, `${label}.missing`);
   date(item.checkedAt, `${label}.checkedAt`, { nullable: true });
+  for (const field of [
+    "freshnessEvidencePath", "freshnessEvidenceSha256", "refreshTaskPath", "refreshTaskSha256",
+    "refreshReceiptPath", "refreshReceiptSha256", "approvalId",
+  ]) {
+    string(item[field], `${label}.${field}`, { nullable: true });
+  }
+  const pair = (pathField, hashField, required) => {
+    const hasPath = item[pathField] !== null;
+    const hasHash = item[hashField] !== null;
+    if (hasPath !== hasHash || (required && !hasPath)) {
+      throw new Error(`${label}.${pathField} and ${hashField} must be provided together.`);
+    }
+  };
+  pair("freshnessEvidencePath", "freshnessEvidenceSha256", item.relevant);
+  pair("refreshTaskPath", "refreshTaskSha256", ["stale", "missing", "accepted-stale"].includes(item.status));
+  pair("refreshReceiptPath", "refreshReceiptSha256", false);
+
+  if (!item.relevant) {
+    if (item.observedStatus !== "not-relevant" || item.status !== "not-relevant") {
+      throw new Error(`${label} non-relevant area must use not-relevant status.`);
+    }
+    if (item.sourceFingerprint !== null || item.checkedAt !== null || item.approvalId !== null
+        || item.freshnessEvidencePath !== null || item.refreshTaskPath !== null || item.refreshReceiptPath !== null) {
+      throw new Error(`${label} non-relevant area must not reference knowledge evidence.`);
+    }
+    return;
+  }
+  if (item.observedStatus === "not-relevant" || item.status === "not-relevant") {
+    throw new Error(`${label} relevant area cannot use not-relevant status.`);
+  }
+  if (item.status === "fresh") {
+    if (item.observedStatus !== "fresh") throw new Error(`${label} fresh status requires observedStatus=fresh.`);
+    if (item.sourceFingerprint === null) throw new Error(`${label} fresh status requires sourceFingerprint.`);
+    if (item.approvalId !== null) throw new Error(`${label} fresh status must not reference approval.`);
+    if (item.refreshTaskPath !== null && item.refreshReceiptPath === null) {
+      throw new Error(`${label} refreshed fresh status requires a refresh receipt.`);
+    }
+    if (item.refreshReceiptPath !== null && item.refreshTaskPath === null) {
+      throw new Error(`${label} refresh receipt requires a refresh task.`);
+    }
+  } else if (item.status === "accepted-stale") {
+    if (!["stale", "missing"].includes(item.observedStatus)) {
+      throw new Error(`${label} accepted-stale requires stale or missing observedStatus.`);
+    }
+    if (item.approvalId === null) throw new Error(`${label} accepted-stale requires approvalId.`);
+    if (item.refreshReceiptPath !== null) throw new Error(`${label} accepted-stale must not reference a refresh receipt.`);
+  } else {
+    if (item.status !== item.observedStatus) {
+      throw new Error(`${label} unresolved status must match observedStatus.`);
+    }
+    if (item.approvalId !== null || item.refreshReceiptPath !== null) {
+      throw new Error(`${label} unresolved knowledge must not reference approval or refresh receipt.`);
+    }
+  }
 }
 
 export function validateRequirementData(value, label = "Requirement") {

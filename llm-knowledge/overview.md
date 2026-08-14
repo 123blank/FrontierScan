@@ -25,9 +25,9 @@ Current knowledge status:
 
 | Layer | Status | Evidence |
 | --- | --- | --- |
-| L1 deterministic baseline | `fresh` | 7 backend modules, 7 frontend modules, and Common knowledge with Markdown + `facts.json` |
+| L1 deterministic baseline | `stale` | 当前工作区修改已使 backend、frontend、common source fingerprint 与已生成基线不一致；规划与实现时必须检查 freshness 并核验源码 |
 | L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call has completed controlled acceptance |
-| L3 local index | `fresh` | 328 generated and curated keyword/metadata chunks in `index/chunks.json` |
+| L3 local index | `stale` | 当前索引仍可用于渐进查询，但 source fingerprint 已变化，命中结果必须回到源码核验 |
 | Optional embeddings | `on-demand` | `-WithEmbeddings` writes source-fingerprinted JSONL vectors after successful OpenAI API calls; keyword/metadata retrieval remains the active consumer |
 
 Current limitations:
@@ -49,6 +49,7 @@ Current limitations:
 - M5-D-C1/C2 已实现单个完整 implementation wave 的执行与集成闭环：`prepare-wave` 生成 v1.2 dispatch、checkpoint、统一 owner 和 execution ledger；并行 Mock Worker 通过不可变 attempt 与 fencing 收敛到 ready。C2 原子冻结 integration manifest，按稳定任务顺序串行集成主树，保留 partial 前缀并显式恢复；`finalize-wave` 生成正式 phase 产物、wave receipt 和 checkpoint 绑定，既有 M3 `apply` 只推进一次并支持中断恢复。正式仓库未执行 Worker、Worktree 或候选写入；回收、真实 Agent、自动提交、推送和发布仍未实现。
 - M5-D-D 已实现审批门控 `WaveRetire`：仅对 `done/completed`、ledger `finalized`、M3 apply 与正式产物完整的单个 wave 生效。它在首次删除前全局重验所有任务、主树、Worktree、保留分支和冲突锁，使用普通/recovery 双锁与 `lockId` fencing，按 WavePlan 顺序删除 Worktree，并在 Git 注册、目录和分支后验通过后写 task receipt。稳定 receipt 前缀支持中断恢复，最终回执绑定完成态、M3、Wave 与全部任务证据。首版保留分支，不执行 `prune`、自动提交、推送、发布或部署；真实删除仅在临时 fixture。
 - M5-D-D 已以提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 推送到 `origin/dev`，`M5-D-D-001` 为 `done/completed` revision `18`。下一步推荐 M6-A：选择一个范围较小的真实业务任务，按现有单 Story 工作流完成业务实现、真实测试/构建、独立审核和 API/UI 验证，以验收单业务开发闭环。M6-A 不包含自动 Git 提交/推送、通用 M6 Engine、真实 Agent 自动派发、Fork-Join 或生产部署。
+- M7-C 已实现 `technical-design` attempt 内的 relevant area freshness 检查、最小刷新、当前 source fingerprint 门禁、已有 result 的单 area recheck、可组合不可变 refresh receipt 和逐区域 `accepted-stale`。common 刷新显式保护 backend、frontend、common 三域；知识路径和生成器写入根目录拒绝 junction、symlink、仓库外 realpath 与 `..` 前缀绕过。下一步为 M7-D 异常 fixture 与真实 Story 双重闭环验收。
 
 Trust rule:
 

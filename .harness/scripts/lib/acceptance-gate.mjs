@@ -14,7 +14,9 @@ function uniqueReferencedIds(items, criterionId, idField) {
 
 export function buildAcceptanceSummary(state) {
   const approvalsByCase = new Map(
-    (state.approvals ?? []).map((approval) => [approval.subjectId, approval.approvalId]),
+    (state.approvals ?? [])
+      .filter((approval) => approval.subjectType === "verification-gap")
+      .map((approval) => [approval.subjectId, approval.approvalId]),
   );
   const approvalsByCriterion = new Map();
   for (const verificationCase of state.verification.cases) {
@@ -69,6 +71,32 @@ export function assertRequirementGate(state) {
     }
     if (question.status === "resolved" && (typeof question.resolution !== "string" || !question.resolution.trim())) {
       throw new Error(`Resolved question '${question.questionId}' requires a resolution.`);
+    }
+  }
+  return state;
+}
+
+export function assertKnowledgeGate(state) {
+  const supportedAreas = new Set(["backend", "frontend", "common"]);
+  const relevantByArea = new Map(
+    state.knowledge.areas
+      .filter((item) => item.relevant)
+      .map((item) => [item.area, item]),
+  );
+  for (const affectedArea of state.design.affectedAreas.filter((item) => supportedAreas.has(item))) {
+    if (!relevantByArea.has(affectedArea)) {
+      throw new Error(`Affected knowledge area '${affectedArea}' must be marked relevant.`);
+    }
+  }
+  for (const area of relevantByArea.values()) {
+    if (!["fresh", "accepted-stale"].includes(area.status)) {
+      throw new Error(`Relevant knowledge area '${area.area}' is ${area.status}.`);
+    }
+    if (area.status === "accepted-stale") {
+      const approval = state.approvals.find((item) => item.approvalId === area.approvalId);
+      if (!approval || approval.subjectType !== "knowledge-stale" || approval.subjectId !== area.area) {
+        throw new Error(`Knowledge area '${area.area}' requires a valid stale approval.`);
+      }
     }
   }
   return state;
@@ -209,6 +237,7 @@ const COMPLETION_PHASES = [
 
 export function assertCompletionGate(state, { currentPhaseResult } = {}) {
   if (state.delivery.status !== "ready") throw new Error("Delivery must be ready before completion.");
+  assertKnowledgeGate(state);
   assertTaskDagGate(state);
   assertImplementationGate(state);
   assertUnitTestGate(state, { hasPassedAdapter: true });

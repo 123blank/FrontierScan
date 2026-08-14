@@ -327,18 +327,34 @@ $refreshTargets = @(
       $modules = @(Get-ChangedModules -Paths $changedPaths -Area $finding.area)
     }
     $mode = Get-RefreshMode -Finding $finding
+    $moduleScoped = $finding.area -ne "common" -and
+      $mode -ne "semantic" -and
+      $modules.Count -eq 1 -and
+      -not (Test-AreaHasRename -StatusLines $changedStatusLines -Area $finding.area) -and
+      (Test-ModuleSourceExists -RepoRoot $Root -Area $finding.area -Module $modules[0]) -and
+      (Test-ModuleOwnsAllChangedSources -Paths $changedPaths -Area $finding.area -Module $modules[0])
+    $module = if ($moduleScoped) { $modules[0] } else { $null }
+    $sourcePaths = @(
+      $changedPaths | Where-Object {
+        if ($finding.area -eq "backend") { $_.StartsWith("backend/") }
+        elseif ($finding.area -eq "frontend") { $_.StartsWith("frontend/") }
+        else { -not $_.StartsWith("backend/") -and -not $_.StartsWith("frontend/") }
+      }
+    )
     $command = if ($finding.area -eq "common") {
       ".\.harness\scripts\generate-kb.ps1 -Area all -Mode baseline"
-    } elseif ($mode -ne "semantic" -and $modules.Count -eq 1 -and -not (Test-AreaHasRename -StatusLines $changedStatusLines -Area $finding.area) -and (Test-ModuleSourceExists -RepoRoot $Root -Area $finding.area -Module $modules[0]) -and (Test-ModuleOwnsAllChangedSources -Paths $changedPaths -Area $finding.area -Module $modules[0])) {
-      ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Module $($modules[0]) -Mode $mode"
+    } elseif ($moduleScoped) {
+      ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Module $module -Mode $mode"
     } else {
       ".\.harness\scripts\generate-kb.ps1 -Area $($finding.area) -Mode $mode"
     }
     [pscustomobject]@{
       area = $finding.area
+      module = $module
       modules = $modules
       mode = $mode
       reason = $finding.reason
+      source_paths = $sourcePaths
       command = $command
     }
   }

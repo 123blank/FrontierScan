@@ -229,19 +229,20 @@ docs/harness-m7b-serial-driver/REPORT.md（实施后）
 ```text
 docs/harness-m7c-kb-freshness-loop/DESIGN.md
 docs/harness-m7c-kb-freshness-loop/PLAN.md
-docs/harness-m7c-kb-freshness-loop/REPORT.md（实施后）
+docs/harness-m7c-kb-freshness-loop/REPORT.md
 ```
 
 ### 7.2 实施任务
 
-- [ ] 为 relevant area 推导和 freshness State 投影写 RED。
-- [ ] 将 freshness 脚本增加稳定 JSON 输出，不改变默认只读行为。
-- [ ] 生成 module/area 级最小 refresh task。
-- [ ] 调用现有 generate-kb 能力并重验 fingerprint、index 和 log。
-- [ ] 对刷新前后 `custom/` 做内容哈希保护。
-- [ ] 实现 accepted-stale 的逐 area 批准门禁。
-- [ ] 覆盖未涉及区域 stale、不完整刷新、custom 漂移和重验失败。
-- [ ] 使用一个包含真实 stale 的 Story 完成闭环验收。
+- [x] 为 relevant area 推导和 freshness State 投影写 RED。
+- [x] 将 freshness 脚本增加稳定 JSON 输出，不改变默认只读行为。
+- [x] 生成 module/area 级最小 refresh task。
+- [x] 调用现有 generate-kb 能力并重验 fingerprint、index 和 log。
+- [x] 对刷新前后 `custom/` 做内容哈希保护。
+- [x] 实现 accepted-stale 的逐 area 批准门禁。
+- [x] 覆盖未涉及区域 stale、不完整刷新、custom 漂移和重验失败。
+- [x] 使用包含真实 freshness 产物和 stale/accepted-stale 的九阶段纵向 fixture 完成闭环验收；M7-D 继续负责独立真实业务 Story。
+- [x] 关闭多区域刷新组合、result 重查恢复、junction 写入和规范路径隔离问题，并通过最终独立只读审核。
 
 ### 7.3 验收标准
 

@@ -57,6 +57,28 @@ export function verificationGapSubjectSha256(caseValue, resultValue, task) {
   return sha256(canonicalJson(verificationGapSubject(caseValue, resultValue, task)));
 }
 
+export function knowledgeStaleSubject(area, task) {
+  return {
+    storyId: task.storyId,
+    runId: task.runId,
+    phase: task.phase,
+    dispatchId: task.dispatchId,
+    preparedRevision: task.preparedRevision,
+    area: area.area,
+    observedStatus: area.observedStatus,
+    sourceFingerprint: area.sourceFingerprint,
+    missing: structuredClone(area.missing),
+    freshnessEvidencePath: area.freshnessEvidencePath,
+    freshnessEvidenceSha256: area.freshnessEvidenceSha256,
+    refreshTaskPath: area.refreshTaskPath,
+    refreshTaskSha256: area.refreshTaskSha256,
+  };
+}
+
+export function knowledgeStaleSubjectSha256(area, task) {
+  return sha256(canonicalJson(knowledgeStaleSubject(area, task)));
+}
+
 export function approvalSemanticKey(value) {
   return {
     storyId: value.storyId,
@@ -101,8 +123,16 @@ function assertReceiptShape(receipt, label) {
   if (!Number.isInteger(receipt.preparedRevision) || receipt.preparedRevision < 1) {
     throw new Error(`${label}.preparedRevision is invalid.`);
   }
-  if (receipt.phase !== "interface-verification") throw new Error(`${label}.phase is invalid.`);
-  if (receipt.subjectType !== "verification-gap") throw new Error(`${label}.subjectType is invalid.`);
+  if (!["interface-verification", "technical-design"].includes(receipt.phase)) {
+    throw new Error(`${label}.phase is invalid.`);
+  }
+  if (!["verification-gap", "knowledge-stale"].includes(receipt.subjectType)) {
+    throw new Error(`${label}.subjectType is invalid.`);
+  }
+  if ((receipt.subjectType === "verification-gap" && receipt.phase !== "interface-verification")
+      || (receipt.subjectType === "knowledge-stale" && receipt.phase !== "technical-design")) {
+    throw new Error(`${label}.phase does not match subjectType.`);
+  }
   if (!SHA256_PATTERN.test(receipt.subjectSha256)) throw new Error(`${label}.subjectSha256 is invalid.`);
   if (receipt.status !== "approved") throw new Error(`${label}.status is invalid.`);
   if (receipt.actor !== "user") throw new Error(`${label}.actor is invalid.`);
@@ -116,7 +146,7 @@ function assertReceiptShape(receipt, label) {
 
 export function validateApprovalReceipt(receipt, context = {}) {
   assertReceiptShape(receipt, "Approval receipt");
-  const { task, caseValue, resultValue, expectedSubjectSha256 } = context;
+  const { task, caseValue, resultValue, knowledgeArea, expectedSubjectSha256 } = context;
   if (task) {
     for (const field of ["storyId", "runId", "phase", "dispatchId", "preparedRevision"]) {
       if (receipt[field] !== task[field]) throw new Error(`Approval receipt.${field} must match task.`);
@@ -125,10 +155,10 @@ export function validateApprovalReceipt(receipt, context = {}) {
       throw new Error("Approval receipt.createdAt must not precede task preparation.");
     }
   }
-  if (caseValue && receipt.subjectId !== caseValue.caseId) {
+  if (receipt.subjectType === "verification-gap" && caseValue && receipt.subjectId !== caseValue.caseId) {
     throw new Error("Approval receipt.subjectId must match verification case.");
   }
-  if (resultValue) {
+  if (receipt.subjectType === "verification-gap" && resultValue) {
     if (receipt.evidencePath !== resultValue.evidencePath
         || receipt.evidenceSha256 !== resultValue.evidenceSha256) {
       throw new Error("Approval receipt evidence must match verification result.");
@@ -137,8 +167,24 @@ export function validateApprovalReceipt(receipt, context = {}) {
       throw new Error("Approval receipt.createdAt must not precede verification result.");
     }
   }
+  if (receipt.subjectType === "knowledge-stale" && knowledgeArea) {
+    if (receipt.subjectId !== knowledgeArea.area) {
+      throw new Error("Approval receipt.subjectId must match knowledge area.");
+    }
+    if (!["stale", "missing"].includes(knowledgeArea.observedStatus)
+        || !["stale", "missing", "accepted-stale"].includes(knowledgeArea.status)) {
+      throw new Error("Knowledge stale approval requires a stale or missing area.");
+    }
+    if (receipt.evidencePath !== knowledgeArea.freshnessEvidencePath
+        || receipt.evidenceSha256 !== knowledgeArea.freshnessEvidenceSha256) {
+      throw new Error("Approval receipt evidence must match knowledge freshness evidence.");
+    }
+    if (Date.parse(receipt.createdAt) < Date.parse(knowledgeArea.checkedAt)) {
+      throw new Error("Approval receipt.createdAt must not precede knowledge freshness check.");
+    }
+  }
   if (expectedSubjectSha256 && receipt.subjectSha256 !== expectedSubjectSha256) {
-    throw new Error("Approval receipt.subjectSha256 must match current verification subject.");
+    throw new Error("Approval receipt.subjectSha256 must match current approval subject.");
   }
   return receipt;
 }

@@ -1035,15 +1035,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 ## 21. 当前会话结束时的最终摘要
 
-截至 2026-08-13：
+截至 2026-08-14：
 
-- 当前分支为 `dev`，HEAD 为 `fe210dc feat(harness): implement M7-A4 delivery semantics`。
-- M6-A 已完成真实单业务闭环；M7-A1、M7-A2、M7-A3、M7-A4 已提交，M7-B 当前工作区尚未提交。
-- M7-B 已实现 Story Runtime 只读 `inspect` 和 `run-e2e.ps1 Status/Step/Apply`；统一入口一次只执行一个 prepare/apply，并对认知任务、Adapter 选择、批准、失败、阻塞和完成返回明确动作。
-- 九阶段纵向 fixture 已通过统一入口推进到 `done`，同时覆盖 block/resume、Adapter、verification-gap approval、delivery manifest 和历史证据漂移。
+- 当前分支为 `dev`，HEAD 为 `80a4d6f feat(harness): implement M7-B serial driver`。
+- M6-A 已完成真实单业务闭环；M7-A1、M7-A2、M7-A3、M7-A4、M7-B 已提交，M7-C 当前工作区已完成但尚未提交。
+- M7-C 已把 relevant knowledge area freshness、最小刷新、当前 source fingerprint 门禁、已有 result 的单 area recheck、逐区域 `accepted-stale` 和 `knowledge-refresh-required` 动作纳入 State v2 串行闭环。
+- refresh task 显式记录 protected areas；common 因实际执行 `Area all` 保护 backend、frontend、common 三域。
+- generated files、index 和 log 使用 attempt 内 content-addressed evidence，backend、frontend、common 连续刷新后历史 receipt 仍可组合验证。
+- 知识路径与生成器写入根目录拒绝 junction、symlink、reparse point、仓库外 realpath 和 `..` 前缀绕过。
+- `verification-gap` 与 `knowledge-stale` approval 保持判别隔离；completion 复核历史知识证据但不重算 implementation 后的设计时 freshness。
+- M7-C 专项、九阶段 Story、CLI、结构和冒烟测试已通过，最终独立只读审核无 BLOCKER/WARNING。
 - `done/completed` 仍不表示 Git 已提交或推送；completed State 外可生成 append-only delivery receipt，只读核对 commit tree 和 remote ref，不执行 Git 写操作。
-- M7-B 设计和代码审核发现的问题均已关闭，最终独立只读审核结论为无 BLOCKER/WARNING。
-- 知识 backend/frontend/common 的 stale 闭环仍属于 M7-C。
 - 当前正式仓库没有执行 `git add`、`git commit`、`git push`、Worktree、Docker、发布或部署。
-- M7-B 审核和验证已完成，下一子里程碑为 `M7-C：知识新鲜度闭环`；M7 整体真实 Story 验收仍由 M7-D 完成。
-- 项目仍不具备 knowledge stale 闭环、真实 Agent Provider、多 Story Fork-Join、本地 Compose 验收和自动 Git 交付。
+- 下一子里程碑为 `M7-D：双重闭环验收`，包括异常 fixture 和一个真实业务 Story；M7-D 通过前不启动 M8。
+- 项目仍不具备真实 Agent Provider、多 Story Fork-Join、本地 Compose 验收和自动 Git 交付。

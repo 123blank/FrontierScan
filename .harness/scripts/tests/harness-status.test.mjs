@@ -26,7 +26,7 @@ function manifestItems(source, section) {
 
 const overview = await read("llm-knowledge/overview.md");
 assert.doesNotMatch(overview, /only scaffolded|not implemented yet/i);
-assert.match(overview, /L1.*fresh/i);
+assert.match(overview, /L1.*(?:fresh|stale)/i);
 assert.match(overview, /L2.*pending/i);
 assert.match(overview, /M2 deterministic phase advancement/i);
 assert.match(overview, /M3 provides a file-based single-Story Dispatcher/i);
@@ -76,6 +76,7 @@ assert.match(manifest, /docs\/harness-m3-agent-dispatcher\/REPORT\.md/);
 assert.match(manifest, /docs\/harness-m4-runtime-compatibility\/REPORT\.md/);
 assert.match(manifest, /docs\/harness-m4-worker-runtime\/REPORT\.md/);
 assert.match(manifest, /docs\/harness-m5-worktree-orchestration\/REPORT\.md/);
+assert.match(manifest, /docs\/harness-m7c-kb-freshness-loop\/REPORT\.md/);
 
 const businessPlan = await read("docs/harness-m0-m1/PLAN.md");
 assert.match(businessPlan, /M0: Baseline Consolidation/);

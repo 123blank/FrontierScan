@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("prepare", "status", "inspect", "run-adapter", "apply", "approve-gap", "prepare-batch", "finalize-batch", "prepare-wave", "finalize-wave")]
+  [ValidateSet("prepare", "status", "inspect", "run-adapter", "apply", "check-knowledge", "refresh-knowledge", "approve-gap", "approve-stale", "prepare-batch", "finalize-batch", "prepare-wave", "finalize-wave")]
   [string]$Command,
 
   [string]$StateFile,
@@ -12,6 +12,7 @@ param(
   [string]$ExpectedIntegrationManifestSha256,
   [string]$ExpectedIntegrationLockSha256,
   [string]$CaseId,
+  [string]$Area,
   [string]$Reason,
   [string]$Root,
   [switch]$Json
@@ -57,8 +58,24 @@ if ($Command -eq "approve-gap") {
       $WaveIndex -ne 0) {
     throw "approve-gap does not accept Adapter, ResultFile, TaskDagFile, BatchFile, or WaveIndex."
   }
-} elseif (-not [string]::IsNullOrWhiteSpace($CaseId) -or -not [string]::IsNullOrWhiteSpace($Reason)) {
-  throw "CaseId and Reason are only supported by approve-gap."
+} elseif ($Command -eq "approve-stale") {
+  if ([string]::IsNullOrWhiteSpace($Area) -or [string]::IsNullOrWhiteSpace($Reason)) {
+    throw "approve-stale requires Area and Reason."
+  }
+  if (-not [string]::IsNullOrWhiteSpace($CaseId)) {
+    throw "approve-stale does not accept CaseId."
+  }
+} elseif ($Command -in @("check-knowledge", "refresh-knowledge")) {
+  if ([string]::IsNullOrWhiteSpace($Area)) {
+    throw "${Command} requires Area."
+  }
+  if (-not [string]::IsNullOrWhiteSpace($CaseId) -or -not [string]::IsNullOrWhiteSpace($Reason)) {
+    throw "${Command} does not accept CaseId or Reason."
+  }
+} elseif (-not [string]::IsNullOrWhiteSpace($CaseId) -or
+          -not [string]::IsNullOrWhiteSpace($Area) -or
+          -not [string]::IsNullOrWhiteSpace($Reason)) {
+  throw "CaseId, Area, and Reason are only supported by knowledge or approval commands."
 }
 
 $nodeScript = Join-Path $PSScriptRoot "lib\story-runtime.mjs"
@@ -93,6 +110,9 @@ if (-not [string]::IsNullOrWhiteSpace($ExpectedIntegrationLockSha256)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($CaseId)) {
   $arguments += @("--case-id", $CaseId)
+}
+if (-not [string]::IsNullOrWhiteSpace($Area)) {
+  $arguments += @("--area", $Area)
 }
 if (-not [string]::IsNullOrWhiteSpace($Reason)) {
   $arguments += @("--reason", $Reason)

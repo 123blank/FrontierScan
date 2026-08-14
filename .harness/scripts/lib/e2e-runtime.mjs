@@ -8,6 +8,7 @@ const ACTIONS = {
   "adapter-required": "adapter-selection-required",
   "result-ready": "apply-result",
   "recovery-required": "apply-result",
+  "knowledge-refresh-required": "knowledge-refresh-required",
   "approval-required": "approval-required",
   "failed-result": "failed-result",
   "result-invalid": "cognitive-action-required",

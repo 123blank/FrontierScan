@@ -80,15 +80,27 @@
     },
     "knowledgeArea": {
       "type": "object",
-      "required": ["area", "relevant", "status", "sourceFingerprint", "loadedFiles", "missing", "checkedAt"],
+      "required": [
+        "area", "relevant", "observedStatus", "status", "sourceFingerprint", "loadedFiles", "missing", "checkedAt",
+        "freshnessEvidencePath", "freshnessEvidenceSha256", "refreshTaskPath", "refreshTaskSha256",
+        "refreshReceiptPath", "refreshReceiptSha256", "approvalId"
+      ],
       "properties": {
         "area": { "$ref": "#/$defs/id" },
         "relevant": { "type": "boolean" },
-        "status": { "type": "string", "minLength": 1 },
+        "observedStatus": { "enum": ["fresh", "stale", "missing", "not-relevant"] },
+        "status": { "enum": ["fresh", "stale", "missing", "accepted-stale", "not-relevant"] },
         "sourceFingerprint": { "type": ["string", "null"], "minLength": 1 },
         "loadedFiles": { "$ref": "#/$defs/pathArray" },
         "missing": { "$ref": "#/$defs/stringArray" },
-        "checkedAt": { "type": ["string", "null"], "format": "date-time" }
+        "checkedAt": { "type": ["string", "null"], "format": "date-time" },
+        "freshnessEvidencePath": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "freshnessEvidenceSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "refreshTaskPath": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "refreshTaskSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "refreshReceiptPath": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "refreshReceiptSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "approvalId": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] }
       },
       "additionalProperties": false
     },
@@ -274,10 +286,10 @@
         "approvalId": { "$ref": "#/$defs/id" },
         "storyId": { "$ref": "#/$defs/id" },
         "runId": { "$ref": "#/$defs/id" },
-        "phase": { "const": "interface-verification" },
+        "phase": { "enum": ["interface-verification", "technical-design"] },
         "dispatchId": { "type": "string", "format": "uuid" },
         "preparedRevision": { "type": "integer", "minimum": 1 },
-        "subjectType": { "const": "verification-gap" },
+        "subjectType": { "enum": ["verification-gap", "knowledge-stale"] },
         "subjectId": { "$ref": "#/$defs/id" },
         "subjectSha256": { "$ref": "#/$defs/sha256" },
         "status": { "const": "approved" },
@@ -289,6 +301,16 @@
         "receiptPath": { "$ref": "#/$defs/path" },
         "receiptSha256": { "$ref": "#/$defs/sha256" }
       },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "subjectType": { "const": "verification-gap" } },
+            "required": ["subjectType"]
+          },
+          "then": { "properties": { "phase": { "const": "interface-verification" } } },
+          "else": { "properties": { "phase": { "const": "technical-design" } } }
+        }
+      ],
       "additionalProperties": false
     }
   },

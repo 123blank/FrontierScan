@@ -361,6 +361,41 @@ async function testVerificationGateAggregatesRequiredAndOptionalCases() {
   );
 }
 
+async function testKnowledgeApprovalCannotPopulateVerificationAcceptance() {
+  const state = await stateFixture();
+  state.verification = {
+    cases: [{
+      caseId: "backend",
+      type: "api",
+      required: true,
+      criterionIds: ["AC-REQ"],
+      action: "Call API",
+      expected: "Success",
+    }],
+    results: [{
+      caseId: "backend",
+      status: "verified",
+      actual: "Success",
+      evidencePath: ".harness/reports/verification.md",
+      evidenceSha256: `sha256:${"d".repeat(64)}`,
+      approvalId: null,
+      executedAt: NOW,
+    }],
+    environment: {
+      status: "available",
+      summary: "Available",
+      evidencePath: null,
+      evidenceSha256: null,
+    },
+  };
+  state.approvals = [{
+    approvalId: `APR-${"a".repeat(32)}`,
+    subjectType: "knowledge-stale",
+    subjectId: "backend",
+  }];
+  assert.deepEqual(buildAcceptanceSummary(state).criteria[0].approvalIds, []);
+}
+
 async function testCompletionGateRecomputesSummaryAndAppliedPhaseChain() {
   const state = await stateFixture();
   doneDag(state);
@@ -564,5 +599,6 @@ await testRequirementGateAndInitialSummary();
 await testDagAndImplementationGates();
 await testUnitTestGateRequiresRelevantPassedCoverage();
 await testVerificationGateAggregatesRequiredAndOptionalCases();
+await testKnowledgeApprovalCannotPopulateVerificationAcceptance();
 await testCompletionGateRecomputesSummaryAndAppliedPhaseChain();
 console.log("acceptance gate tests passed");

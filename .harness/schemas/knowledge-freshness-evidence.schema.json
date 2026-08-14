@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/knowledge-freshness-evidence.schema.json",
+  "title": "FrontierScan Knowledge Freshness Evidence",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "checkId",
+    "storyId",
+    "runId",
+    "dispatchId",
+    "preparedRevision",
+    "area",
+    "status",
+    "recordedSourceFingerprint",
+    "currentSourceFingerprint",
+    "baselineStatus",
+    "semanticStatus",
+    "indexStatus",
+    "reason",
+    "checkedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "checkId": { "type": "string", "pattern": "^CHK-[a-f0-9]{32}$" },
+    "storyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "area": { "enum": ["backend", "frontend", "common"] },
+    "status": { "enum": ["fresh", "stale", "missing"] },
+    "recordedSourceFingerprint": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      ]
+    },
+    "currentSourceFingerprint": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      ]
+    },
+    "baselineStatus": { "type": ["string", "null"] },
+    "semanticStatus": { "type": ["string", "null"] },
+    "indexStatus": { "type": ["string", "null"] },
+    "reason": { "type": "string" },
+    "checkedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

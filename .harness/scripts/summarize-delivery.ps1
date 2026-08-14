@@ -1,7 +1,7 @@
 param(
   [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [string]$StateFile,
-  [string[]]$OwnedPathPrefix = @(".harness/", ".codex/", "llm-knowledge/", "docs/harness", "docs/AI-handover.md", "AGENTS.md", ".gitignore"),
+  [string[]]$OwnedPathPrefix = @(".harness/", ".codex/", "llm-knowledge/", "docs/harness", "docs/AI-handover.md", "CODEX-CROSS-SESSION-HANDOFF.md", "AGENTS.md", ".gitignore"),
   [switch]$Json
 )
 

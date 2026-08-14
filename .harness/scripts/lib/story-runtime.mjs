@@ -24,6 +24,7 @@ import { projectCompletedPhaseResult } from "./phase-result-projector.mjs";
 import {
   assertCompletionGate,
   assertImplementationGate,
+  assertKnowledgeGate,
   assertRequirementGate,
   assertTaskDagGate,
   assertUnitTestGate,
@@ -34,6 +35,7 @@ import {
   approvalSemanticKey,
   canonicalJson,
   deterministicApprovalId,
+  knowledgeStaleSubjectSha256,
   validateApprovalReceipt,
   validateFormalApproval,
   verificationGapSubjectSha256,
@@ -50,6 +52,11 @@ import {
   deriveDeliveryFacts,
   verifyOwnedManifest,
 } from "./delivery-runtime.mjs";
+import {
+  checkKnowledgeArea as materializeKnowledgeArea,
+  refreshKnowledgeArea as executeKnowledgeRefresh,
+  verifyKnowledgeAreaArtifacts,
+} from "./knowledge-runtime.mjs";
 
 const PHASE_ADAPTERS = {
   "unit-test": ["harness-state-tests", "harness-m3-tests", "harness-structure", "backend-tests", "frontend-build"],
@@ -1439,6 +1446,48 @@ async function inspectDispatch(root, options) {
     }
     await formalApprovalsForVerification(root, task, result);
   }
+  if (phase.id === "technical-design" && result.status === "completed") {
+    try {
+      for (const area of result.payload.knowledgeSnapshot.filter((item) => item.relevant)) {
+        await verifyKnowledgeAreaArtifacts({ root, task, area, verifyCurrentFingerprint: true });
+      }
+      await formalApprovalsForKnowledge(root, task, result);
+    } catch (error) {
+      return {
+        command: "inspect",
+        stateFile: located.stateFile,
+        state,
+        inspection: {
+          ...common,
+          status: "result-invalid",
+          resultStatus: result.status,
+          diagnostics: {
+            code: "KNOWLEDGE_EVIDENCE_INVALID",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        },
+      };
+    }
+    const unresolvedAreas = result.payload.knowledgeSnapshot
+      .filter((item) => item.relevant && ["stale", "missing"].includes(item.status))
+      .map((item) => item.area);
+    if (unresolvedAreas.length) {
+      return {
+        command: "inspect",
+        stateFile: located.stateFile,
+        state,
+        inspection: {
+          ...common,
+          status: "knowledge-refresh-required",
+          resultStatus: result.status,
+          knowledge: {
+            subjectIds: unresolvedAreas,
+            approvalAvailable: true,
+          },
+        },
+      };
+    }
+  }
   if (result.status === "completed") {
     try {
       await preflightCompletedV2(root, {
@@ -2626,15 +2675,11 @@ async function assertCompletionArtifacts(root, state) {
   const verificationCases = new Map(state.verification.cases.map((item) => [item.caseId, item]));
   const verificationResults = new Map(state.verification.results.map((item) => [item.approvalId, item]));
   for (const approval of state.approvals) {
-    const resultValue = verificationResults.get(approval.approvalId);
-    const caseValue = resultValue ? verificationCases.get(resultValue.caseId) : null;
-    if (!resultValue || !caseValue) {
-      throw new Error(`Approval receipt '${approval.approvalId}' is not referenced by verification.`);
-    }
     const receiptPath = resolveInsideRoot(root, approval.receiptPath, "Approval receipt").fullPath;
     const receiptContent = await readRegularFile(receiptPath, "Approval receipt");
     if (sha256Buffer(receiptContent) !== approval.receiptSha256) {
-      throw new Error(`Approval receipt changed before completion: ${approval.approvalId}`);
+      const label = approval.subjectType === "knowledge-stale" ? "Knowledge approval receipt" : "Approval receipt";
+      throw new Error(`${label} changed before completion: ${approval.approvalId}`);
     }
     let receipt;
     try {
@@ -2642,19 +2687,45 @@ async function assertCompletionArtifacts(root, state) {
     } catch {
       throw new Error(`Approval receipt is invalid JSON: ${approval.receiptPath}`);
     }
-    const subjectSha256 = verificationGapSubjectSha256(caseValue, resultValue, {
-      storyId: approval.storyId,
-      runId: approval.runId,
-      phase: approval.phase,
-      dispatchId: approval.dispatchId,
-      preparedRevision: approval.preparedRevision,
-    });
-    validateApprovalReceipt(receipt, {
-      task: approval,
-      caseValue,
-      resultValue,
-      expectedSubjectSha256: subjectSha256,
-    });
+    if (approval.subjectType === "verification-gap") {
+      const resultValue = verificationResults.get(approval.approvalId);
+      const caseValue = resultValue ? verificationCases.get(resultValue.caseId) : null;
+      if (!resultValue || !caseValue) {
+        throw new Error(`Approval receipt '${approval.approvalId}' is not referenced by verification.`);
+      }
+      const subjectSha256 = verificationGapSubjectSha256(caseValue, resultValue, approval);
+      validateApprovalReceipt(receipt, {
+        task: approval,
+        caseValue,
+        resultValue,
+        expectedSubjectSha256: subjectSha256,
+      });
+    } else {
+      const area = state.knowledge.areas.find((item) => item.approvalId === approval.approvalId);
+      if (!area) throw new Error(`Knowledge approval receipt '${approval.approvalId}' is not referenced by knowledge.`);
+      const attemptRoot = path.posix.dirname(path.posix.dirname(approval.receiptPath));
+      const knowledgeTask = {
+        schemaVersion: "2.0",
+        storyId: approval.storyId,
+        runId: approval.runId,
+        phase: approval.phase,
+        dispatchId: approval.dispatchId,
+        preparedRevision: approval.preparedRevision,
+        attemptRoot,
+      };
+      await verifyKnowledgeAreaArtifacts({
+        root,
+        task: knowledgeTask,
+        area,
+        verifyCurrentFingerprint: false,
+      });
+      const subjectSha256 = knowledgeStaleSubjectSha256(area, knowledgeTask);
+      validateApprovalReceipt(receipt, {
+        task: knowledgeTask,
+        knowledgeArea: area,
+        expectedSubjectSha256: subjectSha256,
+      });
+    }
     const expectedApprovalId = deterministicApprovalId(approvalSemanticKey({
       storyId: receipt.storyId,
       dispatchId: receipt.dispatchId,
@@ -2720,9 +2791,29 @@ async function preflightCompletedV2(root, context) {
   if (phase.id === "delivery-preparation") {
     await assertDeliveryPreparation(root, state, result);
   }
+  if (phase.id === "technical-design") {
+    for (const area of result.payload.knowledgeSnapshot.filter((item) => item.relevant)) {
+      await verifyKnowledgeAreaArtifacts({ root, task, area, verifyCurrentFingerprint: true });
+    }
+  }
   const candidate = projectCompletedPhaseResult({ state, result, taskDag });
+  if (phase.id === "technical-design") {
+    const knowledgeApprovals = await formalApprovalsForKnowledge(root, task, result);
+    candidate.approvals = [
+      ...new Map(
+        [...candidate.approvals, ...knowledgeApprovals]
+          .map((approval) => [approval.approvalId, approval]),
+      ).values(),
+    ];
+  }
   if (phase.id === "interface-verification") {
-    candidate.approvals = await formalApprovalsForVerification(root, task, result);
+    const verificationApprovals = await formalApprovalsForVerification(root, task, result);
+    candidate.approvals = [
+      ...new Map(
+        [...candidate.approvals, ...verificationApprovals]
+          .map((approval) => [approval.approvalId, approval]),
+      ).values(),
+    ];
     candidate.acceptance = buildAcceptanceSummary(candidate);
   }
   const records = [
@@ -2732,6 +2823,7 @@ async function preflightCompletedV2(root, context) {
   appendUniqueRecords(candidate, records);
   await assertPhaseGate(root, checkpoint, task, phase.id, files.phaseRoot, candidate);
   if (phase.id === "requirement") assertRequirementGate(candidate);
+  if (phase.id === "technical-design") assertKnowledgeGate(candidate);
   if (phase.id === "task-dag") assertTaskDagGate(candidate);
   if (phase.id === "implementation") assertImplementationGate(candidate);
   if (phase.id === "unit-test") {
@@ -3311,6 +3403,78 @@ async function applyResult(root, options) {
   return { command: "apply", status: "completed", stateFile: located.stateFile, state: advanced.state };
 }
 
+async function checkKnowledge(root, options) {
+  if (!options.area?.trim()) throw new Error("check-knowledge requires area.");
+  const checkArea = options.checkKnowledgeArea ?? materializeKnowledgeArea;
+  return withStateWriteLock({ ...options, root }, async (fresh) => {
+    if (fresh.state.schemaVersion !== "2.0"
+        || fresh.state.runtime.status !== "active"
+        || fresh.state.phase !== "technical-design") {
+      throw new Error("check-knowledge requires an active State v2 technical-design phase.");
+    }
+    const workflow = await readWorkflowDefinition(root, fresh.state);
+    const phase = workflow.phases.find((item) => item.id === "technical-design");
+    const files = await phaseDispatchFiles(root, fresh.state, phase);
+    if (!files.taskFile || !files.attempt) {
+      throw new Error("Prepare technical-design before check-knowledge.");
+    }
+    const task = await readJsonOptional(
+      resolveInsideRoot(root, files.taskFile, "Task file").fullPath,
+      "Task file",
+    );
+    const checkpoint = await readJsonOptional(
+      resolveInsideRoot(root, files.checkpointFile, "Checkpoint file").fullPath,
+      "Checkpoint file",
+    );
+    if (!task || !checkpoint) throw new Error("Current technical-design attempt is incomplete.");
+    validateTask(root, task, fresh.state, phase, files.phaseRoot);
+    validateCheckpoint(checkpoint, task);
+    const resultPath = resolveInsideRoot(root, files.resultFile, "Result file").fullPath;
+    const existingResult = await readJsonOptional(
+      resultPath,
+      "Result file",
+    );
+    let loadedFiles = [];
+    let existingAreaIndex = -1;
+    if (existingResult) {
+      await validateResult(root, existingResult, task, fresh.state, files.phaseRoot);
+      if (existingResult.status !== "completed") {
+        throw new Error("check-knowledge can only update a completed technical-design result.");
+      }
+      existingAreaIndex = existingResult.payload.knowledgeSnapshot.findIndex(
+        (item) => item.area === options.area.trim(),
+      );
+      if (existingAreaIndex < 0) {
+        throw new Error(`Knowledge area '${options.area.trim()}' was not found in technical-design result.`);
+      }
+      loadedFiles = existingResult.payload.knowledgeSnapshot[existingAreaIndex].loadedFiles;
+    }
+    const checked = await checkArea({
+      root,
+      task,
+      area: options.area.trim(),
+      loadedFiles,
+      now: options.now,
+    });
+    if (checked.area?.area !== options.area.trim()) {
+      throw new Error("Knowledge check returned a different area.");
+    }
+    if (existingResult) {
+      const updatedResult = structuredClone(existingResult);
+      updatedResult.payload.knowledgeSnapshot[existingAreaIndex] = checked.area;
+      await writeAtomicJson(resultPath, updatedResult);
+    }
+    return {
+      command: "check-knowledge",
+      stateFile: fresh.stateFile,
+      taskFile: files.taskFile,
+      resultFile: existingResult ? files.resultFile : null,
+      area: checked.area,
+      rechecked: Boolean(existingResult),
+    };
+  });
+}
+
 async function approveGap(root, options) {
   if (!options.caseId?.trim() || !options.reason?.trim()) {
     throw new Error("approve-gap requires caseId and reason.");
@@ -3453,6 +3617,173 @@ async function approveGap(root, options) {
   });
 }
 
+async function approveStale(root, options) {
+  if (!options.area?.trim() || !options.reason?.trim()) {
+    throw new Error("approve-stale requires area and reason.");
+  }
+  return withStateWriteLock({ ...options, root }, async (fresh) => {
+    if (fresh.state.schemaVersion !== "2.0"
+        || fresh.state.runtime.status !== "active"
+        || fresh.state.phase !== "technical-design") {
+      throw new Error("approve-stale requires an active State v2 technical-design phase.");
+    }
+    const workflow = await readWorkflowDefinition(root, fresh.state);
+    const phase = workflow.phases.find((item) => item.id === "technical-design");
+    const files = await phaseDispatchFiles(root, fresh.state, phase);
+    if (!files.taskFile || !files.attempt) {
+      throw new Error("Prepare technical-design and write result.json before approve-stale.");
+    }
+    const task = await readJsonOptional(
+      resolveInsideRoot(root, files.taskFile, "Task file").fullPath,
+      "Task file",
+    );
+    const checkpoint = await readJsonOptional(
+      resolveInsideRoot(root, files.checkpointFile, "Checkpoint file").fullPath,
+      "Checkpoint file",
+    );
+    const resultPath = resolveInsideRoot(root, files.resultFile, "Result file").fullPath;
+    const result = await readJsonOptional(resultPath, "Result file");
+    if (!task || !checkpoint || !result) throw new Error("Current technical-design attempt is incomplete.");
+    validateTask(root, task, fresh.state, phase, files.phaseRoot);
+    validateCheckpoint(checkpoint, task);
+    await validateResult(root, result, task, fresh.state, files.phaseRoot);
+    if (result.status !== "completed") throw new Error("approve-stale requires a completed result.");
+
+    const area = result.payload.knowledgeSnapshot.find((item) => item.area === options.area.trim());
+    if (!area || !area.relevant) throw new Error(`Relevant knowledge area '${options.area.trim()}' was not found.`);
+    if (!["stale", "missing"].includes(area.observedStatus)
+        || !["stale", "missing", "accepted-stale"].includes(area.status)) {
+      throw new Error(`Knowledge area '${area.area}' is not a stale approval candidate.`);
+    }
+    await verifyKnowledgeAreaArtifacts({ root, task, area, verifyCurrentFingerprint: true });
+
+    const subjectSha256 = knowledgeStaleSubjectSha256(area, task);
+    const reason = options.reason.trim();
+    const approvalId = deterministicApprovalId(approvalSemanticKey({
+      storyId: task.storyId,
+      dispatchId: task.dispatchId,
+      caseId: area.area,
+      subjectSha256,
+      actor: "user",
+      reason,
+    }));
+    const receiptFile = `${task.attemptRoot}/approvals/${approvalId}.json`;
+    const receiptPath = resolveInsideRoot(root, receiptFile, "Approval receipt").fullPath;
+    let receipt = await readJsonOptional(receiptPath, "Approval receipt");
+    let reused = false;
+    if (receipt) {
+      validateApprovalReceipt(receipt, {
+        task,
+        knowledgeArea: area,
+        expectedSubjectSha256: subjectSha256,
+      });
+      const expectedId = deterministicApprovalId(approvalSemanticKey({
+        storyId: receipt.storyId,
+        dispatchId: receipt.dispatchId,
+        caseId: receipt.subjectId,
+        subjectSha256: receipt.subjectSha256,
+        actor: receipt.actor,
+        reason: receipt.reason,
+      }));
+      if (receipt.approvalId !== expectedId) throw new Error("Approval receipt ID does not match its semantic key.");
+      reused = true;
+    } else {
+      receipt = {
+        schemaVersion: "1.0",
+        approvalId,
+        storyId: task.storyId,
+        runId: task.runId,
+        phase: task.phase,
+        dispatchId: task.dispatchId,
+        preparedRevision: task.preparedRevision,
+        subjectType: "knowledge-stale",
+        subjectId: area.area,
+        subjectSha256,
+        status: "approved",
+        actor: "user",
+        reason,
+        evidencePath: area.freshnessEvidencePath,
+        evidenceSha256: area.freshnessEvidenceSha256,
+        createdAt: (options.now ?? (() => new Date().toISOString()))(),
+      };
+      validateApprovalReceipt(receipt, {
+        task,
+        knowledgeArea: area,
+        expectedSubjectSha256: subjectSha256,
+      });
+      await writeAtomicJson(receiptPath, receipt, { beforeRename: options.beforeApprovalReceiptRename });
+    }
+
+    if (area.approvalId !== approvalId || area.status !== "accepted-stale") {
+      area.status = "accepted-stale";
+      area.approvalId = approvalId;
+      await writeAtomicJson(resultPath, result, { beforeRename: options.beforeApprovalResultRename });
+    }
+    if (options.afterApprovalResultWrite) await options.afterApprovalResultWrite();
+    return {
+      command: "approve-stale",
+      approvalId,
+      receiptFile,
+      resultFile: files.resultFile,
+      reused,
+    };
+  });
+}
+
+async function refreshKnowledge(root, options) {
+  if (!options.area?.trim()) throw new Error("refresh-knowledge requires area.");
+  const refreshArea = options.refreshKnowledgeArea ?? executeKnowledgeRefresh;
+  return withStateWriteLock({ ...options, root }, async (fresh) => {
+    if (fresh.state.schemaVersion !== "2.0"
+        || fresh.state.runtime.status !== "active"
+        || fresh.state.phase !== "technical-design") {
+      throw new Error("refresh-knowledge requires an active State v2 technical-design phase.");
+    }
+    const workflow = await readWorkflowDefinition(root, fresh.state);
+    const phase = workflow.phases.find((item) => item.id === "technical-design");
+    const files = await phaseDispatchFiles(root, fresh.state, phase);
+    if (!files.taskFile || !files.attempt) {
+      throw new Error("Prepare technical-design and write result.json before refresh-knowledge.");
+    }
+    const task = await readJsonOptional(
+      resolveInsideRoot(root, files.taskFile, "Task file").fullPath,
+      "Task file",
+    );
+    const checkpoint = await readJsonOptional(
+      resolveInsideRoot(root, files.checkpointFile, "Checkpoint file").fullPath,
+      "Checkpoint file",
+    );
+    const resultPath = resolveInsideRoot(root, files.resultFile, "Result file").fullPath;
+    const result = await readJsonOptional(resultPath, "Result file");
+    if (!task || !checkpoint || !result) throw new Error("Current technical-design attempt is incomplete.");
+    validateTask(root, task, fresh.state, phase, files.phaseRoot);
+    validateCheckpoint(checkpoint, task);
+    await validateResult(root, result, task, fresh.state, files.phaseRoot);
+    if (result.status !== "completed") throw new Error("refresh-knowledge requires a completed result.");
+    const index = result.payload.knowledgeSnapshot.findIndex((item) => item.area === options.area.trim());
+    if (index < 0) throw new Error(`Knowledge area '${options.area.trim()}' was not found.`);
+    const area = result.payload.knowledgeSnapshot[index];
+    if (!area.relevant || !["stale", "missing"].includes(area.status)) {
+      throw new Error(`Knowledge area '${area.area}' is not refreshable.`);
+    }
+    const refreshed = await refreshArea({
+      root,
+      task,
+      area,
+      now: options.now,
+    });
+    result.payload.knowledgeSnapshot[index] = refreshed.area;
+    await writeAtomicJson(resultPath, result, { beforeRename: options.beforeRefreshResultRename });
+    if (options.afterRefreshResultWrite) await options.afterRefreshResultWrite();
+    return {
+      command: "refresh-knowledge",
+      resultFile: files.resultFile,
+      area: refreshed.area,
+      reused: refreshed.reused,
+    };
+  });
+}
+
 async function formalApprovalsForVerification(root, task, result) {
   const cases = new Map(result.payload.cases.map((item) => [item.caseId, item]));
   const approvals = [];
@@ -3501,16 +3832,60 @@ async function formalApprovalsForVerification(root, task, result) {
   return approvals;
 }
 
+async function formalApprovalsForKnowledge(root, task, result) {
+  const approvals = [];
+  for (const area of result.payload.knowledgeSnapshot.filter((item) => item.status === "accepted-stale")) {
+    if (!area.approvalId) throw new Error(`Knowledge area '${area.area}' requires approval.`);
+    const receiptFile = `${task.attemptRoot}/approvals/${area.approvalId}.json`;
+    const receiptPath = resolveInsideRoot(root, receiptFile, "Approval receipt").fullPath;
+    const receiptContent = await readRegularFile(receiptPath, "Approval receipt");
+    let receipt;
+    try {
+      receipt = JSON.parse(receiptContent.toString("utf8"));
+    } catch {
+      throw new Error(`Approval receipt is invalid JSON: ${receiptFile}`);
+    }
+    const subjectSha256 = knowledgeStaleSubjectSha256(area, task);
+    validateApprovalReceipt(receipt, {
+      task,
+      knowledgeArea: area,
+      expectedSubjectSha256: subjectSha256,
+    });
+    const expectedApprovalId = deterministicApprovalId(approvalSemanticKey({
+      storyId: receipt.storyId,
+      dispatchId: receipt.dispatchId,
+      caseId: receipt.subjectId,
+      subjectSha256: receipt.subjectSha256,
+      actor: receipt.actor,
+      reason: receipt.reason,
+    }));
+    if (receipt.approvalId !== expectedApprovalId || receipt.approvalId !== area.approvalId) {
+      throw new Error("Approval receipt ID does not match the current knowledge area.");
+    }
+    const formal = {
+      ...receipt,
+      receiptPath: receiptFile,
+      receiptSha256: sha256Buffer(receiptContent),
+    };
+    validateFormalApproval(formal);
+    approvals.push(formal);
+  }
+  return approvals;
+}
+
 export async function runStoryCommand(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   if (options.command === "inspect") return inspectDispatch(root, options);
   if (options.command === "prepare") return prepare(root, options);
+  if (options.command === "check-knowledge") return checkKnowledge(root, options);
   if (options.command === "prepare-batch") return prepareBatch(root, options);
   if (options.command === "prepare-wave") return prepareWave(root, options);
   if (options.command === "finalize-batch") return finalizeBatch(root, options);
   if (options.command === "finalize-wave") return finalizeWave(root, options);
   if (options.command === "run-adapter") return runAdapter(root, options);
   if (options.command === "approve-gap") return approveGap(root, options);
+  if (options.command === "approve-stale") return approveStale(root, options);
+  if (options.command === "refresh-knowledge") return refreshKnowledge(root, options);
   if (options.command === "apply") return applyResult(root, options);
   if (options.command === "status") {
     const { located, phase } = await currentContext(root, options.stateFile);
@@ -3533,6 +3908,7 @@ function parseCliArguments(argv) {
     "--expected-integration-manifest-sha256": "expectedIntegrationManifestSha256",
     "--expected-integration-lock-sha256": "expectedIntegrationLockSha256",
     "--case-id": "caseId",
+    "--area": "area",
     "--reason": "reason",
   };
   for (let index = 0; index < tokens.length; index += 1) {

@@ -21,6 +21,8 @@ import { runStoryCommand } from "../lib/story-runtime.mjs";
 import { runE2ECommand } from "../lib/e2e-runtime.mjs";
 import { runWorktreeCommand } from "../lib/worktree-runtime.mjs";
 import { prepareOwnedManifest } from "../lib/delivery-runtime.mjs";
+import { computeAreaSourceFingerprint } from "../lib/source-fingerprint.mjs";
+import { checkKnowledgeArea as materializeKnowledgeArea } from "../lib/knowledge-runtime.mjs";
 
 const FIXED_NOW = "2026-07-16T00:00:00.000Z";
 const FIXED_DISPATCH_ID = "00000000-0000-4000-8000-000000000001";
@@ -49,6 +51,37 @@ async function write(root, relativePath, content) {
 
 async function readJson(root, relativePath) {
   return JSON.parse(await readFile(path.join(root, relativePath), "utf8"));
+}
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonical(value[key])]),
+  );
+}
+
+function testContentId(prefix, value) {
+  return `${prefix}-${createHash("sha256")
+    .update(JSON.stringify(canonical(value)))
+    .digest("hex")
+    .slice(0, 32)}`;
+}
+
+async function writeKnowledgeArtifact(root, directory, prefix, idField, body) {
+  const id = testContentId(prefix, body);
+  const value = { ...body, [idField]: id };
+  const relativePath = `${directory}/${id}.json`;
+  await write(root, relativePath, `${JSON.stringify(value, null, 2)}\n`);
+  return {
+    value,
+    relativePath,
+    sha256: `sha256:${createHash("sha256")
+      .update(await readFile(path.join(root, relativePath)))
+      .digest("hex")}`,
+  };
 }
 
 async function createFixture(storyId = "M3-PREP", fixtureParent = os.tmpdir()) {
@@ -2039,6 +2072,386 @@ async function testStatusIsReadOnly() {
   }
 }
 
+async function testCheckKnowledgeUsesPreparedTechnicalDesignWithoutStateMutation() {
+  const { root, storyId } = await createFixture("M7-C-CHECK");
+  try {
+    await setFixtureState(root, storyId, (state) => { state.phase = "technical-design"; });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const pointerFile = ".harness/states/active-run.json";
+    const eventsFile = `.harness/states/e2e-${storyId}.events.jsonl`;
+    const before = await Promise.all([
+      readFile(path.join(root, stateFile), "utf8"),
+      readFile(path.join(root, pointerFile), "utf8"),
+      readFile(path.join(root, eventsFile), "utf8"),
+    ]);
+    let received;
+    const area = {
+      area: "backend",
+      relevant: true,
+      observedStatus: "stale",
+      status: "stale",
+      sourceFingerprint: `sha256:${"a".repeat(64)}`,
+      loadedFiles: [],
+      missing: [],
+      checkedAt: FIXED_NOW,
+      freshnessEvidencePath: `${prepared.task.attemptRoot}/knowledge/checks/CHK-001.json`,
+      freshnessEvidenceSha256: `sha256:${"b".repeat(64)}`,
+      refreshTaskPath: `${prepared.task.attemptRoot}/knowledge/tasks/KRT-001.json`,
+      refreshTaskSha256: `sha256:${"c".repeat(64)}`,
+      refreshReceiptPath: null,
+      refreshReceiptSha256: null,
+      approvalId: null,
+    };
+    const checked = await runStoryCommand(storyOptions(root, {
+      command: "check-knowledge",
+      area: "backend",
+      checkKnowledgeArea: async (options) => {
+        received = options;
+        return { area };
+      },
+    }));
+    assert.equal(checked.command, "check-knowledge");
+    assert.deepEqual(checked.area, area);
+    assert.equal(received.task.dispatchId, prepared.task.dispatchId);
+    assert.equal(received.area, "backend");
+    assert.deepEqual(await Promise.all([
+      readFile(path.join(root, stateFile), "utf8"),
+      readFile(path.join(root, pointerFile), "utf8"),
+      readFile(path.join(root, eventsFile), "utf8"),
+    ]), before);
+    await assert.rejects(access(path.join(root, prepared.resultFile)), (error) => error?.code === "ENOENT");
+
+    await setFixtureState(root, storyId, (state) => { state.phase = "requirement"; });
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "check-knowledge",
+        area: "backend",
+        checkKnowledgeArea: async () => ({ area }),
+      })),
+      /technical-design/i,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectReportsKnowledgeRefreshAndEvidenceDrift() {
+  const { root, storyId } = await createFixture("M7-C-INSPECT");
+  try {
+    await setFixtureState(root, storyId, (state) => { state.phase = "technical-design"; });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    await write(root, prepared.task.expectedOutputs[0], "# Technical design\n");
+    const currentFingerprint = await computeAreaSourceFingerprint(root, "backend");
+    const evidenceArtifact = await writeKnowledgeArtifact(
+      root,
+      `${prepared.task.attemptRoot}/knowledge/checks`,
+      "CHK",
+      "checkId",
+      {
+      schemaVersion: "1.0",
+      storyId,
+      runId: storyId,
+      dispatchId: prepared.task.dispatchId,
+      preparedRevision: prepared.task.preparedRevision,
+      area: "backend",
+      status: "stale",
+      recordedSourceFingerprint: `sha256:${"1".repeat(64)}`,
+      currentSourceFingerprint: currentFingerprint.fingerprint,
+      baselineStatus: "fresh",
+      semanticStatus: "pending",
+      indexStatus: "fresh",
+      reason: "source fingerprint mismatch",
+      checkedAt: FIXED_NOW,
+      },
+    );
+    const evidence = evidenceArtifact.value;
+    const evidencePath = evidenceArtifact.relativePath;
+    const evidenceSha256 = evidenceArtifact.sha256;
+    const refreshTaskArtifact = await writeKnowledgeArtifact(
+      root,
+      `${prepared.task.attemptRoot}/knowledge/tasks`,
+      "KRT",
+      "refreshTaskId",
+      {
+      schemaVersion: "1.0",
+      storyId,
+      runId: storyId,
+      dispatchId: prepared.task.dispatchId,
+      preparedRevision: prepared.task.preparedRevision,
+      area: "backend",
+      parameters: { area: "backend", module: null, mode: "baseline" },
+      protectedAreas: ["backend"],
+      reason: "source fingerprint mismatch",
+      sourcePaths: ["backend/src/main/java/com/frontierscan/article/Article.java"],
+      customSnapshots: [{ area: "backend", files: [] }],
+      createdAt: FIXED_NOW,
+      },
+    );
+    const refreshTaskPath = refreshTaskArtifact.relativePath;
+    const refreshTaskSha256 = refreshTaskArtifact.sha256;
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      payload: {
+        decisions: [],
+        affectedAreas: ["backend"],
+        knowledgeSnapshot: [{
+          area: "backend",
+          relevant: true,
+          observedStatus: "stale",
+          status: "stale",
+          sourceFingerprint: evidence.currentSourceFingerprint,
+          loadedFiles: ["llm-knowledge/backend/meta.yaml"],
+          missing: [],
+          checkedAt: FIXED_NOW,
+          freshnessEvidencePath: evidencePath,
+          freshnessEvidenceSha256: evidenceSha256,
+          refreshTaskPath,
+          refreshTaskSha256,
+          refreshReceiptPath: null,
+          refreshReceiptSha256: null,
+          approvalId: null,
+        }],
+        risks: [],
+      },
+    }));
+
+    const inspection = await runStoryCommand(storyOptions(root, { command: "inspect" }));
+    assert.equal(inspection.inspection.status, "knowledge-refresh-required");
+    assert.deepEqual(inspection.inspection.knowledge.subjectIds, ["backend"]);
+
+    const statePath = path.join(root, `.harness/states/e2e-${storyId}.json`);
+    const stateBeforeDrift = await readFile(statePath, "utf8");
+    await write(root, "backend/src/ChangedAfterKnowledgeCheck.java", "class ChangedAfterKnowledgeCheck {}\n");
+    const sourceDrifted = await runStoryCommand(storyOptions(root, { command: "inspect" }));
+    assert.equal(sourceDrifted.inspection.status, "result-invalid");
+    assert.match(sourceDrifted.inspection.diagnostics.message, /source fingerprint changed/i);
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, { command: "apply" })),
+      /source fingerprint changed/i,
+    );
+    assert.equal(await readFile(statePath, "utf8"), stateBeforeDrift);
+    await rm(path.join(root, "backend"), { recursive: true, force: true });
+
+    await write(root, evidencePath, "{}\n");
+    const drifted = await runStoryCommand(storyOptions(root, { command: "inspect" }));
+    assert.equal(drifted.inspection.status, "result-invalid");
+    assert.match(drifted.inspection.diagnostics.message, /freshness evidence.*changed|hash/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function prepareStaleKnowledgeFixture(storyId) {
+  const fixture = await createFixture(storyId);
+  await setFixtureState(fixture.root, storyId, (state) => { state.phase = "technical-design"; });
+  const prepared = await runStoryCommand(storyOptions(fixture.root, { command: "prepare" }));
+  await write(fixture.root, prepared.task.expectedOutputs[0], "# Technical design\n");
+  const currentFingerprint = await computeAreaSourceFingerprint(fixture.root, "backend");
+  const evidenceArtifact = await writeKnowledgeArtifact(
+    fixture.root,
+    `${prepared.task.attemptRoot}/knowledge/checks`,
+    "CHK",
+    "checkId",
+    {
+    schemaVersion: "1.0",
+    storyId,
+    runId: storyId,
+    dispatchId: prepared.task.dispatchId,
+    preparedRevision: prepared.task.preparedRevision,
+    area: "backend",
+    status: "stale",
+    recordedSourceFingerprint: `sha256:${"1".repeat(64)}`,
+    currentSourceFingerprint: currentFingerprint.fingerprint,
+    baselineStatus: "fresh",
+    semanticStatus: "pending",
+    indexStatus: "fresh",
+    reason: "source fingerprint mismatch",
+    checkedAt: FIXED_NOW,
+    },
+  );
+  const evidence = evidenceArtifact.value;
+  const evidencePath = evidenceArtifact.relativePath;
+  const evidenceSha256 = evidenceArtifact.sha256;
+  const refreshTaskArtifact = await writeKnowledgeArtifact(
+    fixture.root,
+    `${prepared.task.attemptRoot}/knowledge/tasks`,
+    "KRT",
+    "refreshTaskId",
+    {
+    schemaVersion: "1.0",
+    storyId,
+    runId: storyId,
+    dispatchId: prepared.task.dispatchId,
+    preparedRevision: prepared.task.preparedRevision,
+    area: "backend",
+    parameters: { area: "backend", module: null, mode: "baseline" },
+    protectedAreas: ["backend"],
+    reason: "source fingerprint mismatch",
+    sourcePaths: ["backend/src/main/java/com/frontierscan/article/Article.java"],
+    customSnapshots: [{ area: "backend", files: [] }],
+    createdAt: FIXED_NOW,
+    },
+  );
+  const refreshTaskPath = refreshTaskArtifact.relativePath;
+  const refreshTaskSha256 = refreshTaskArtifact.sha256;
+  const area = {
+    area: "backend",
+    relevant: true,
+    observedStatus: "stale",
+    status: "stale",
+    sourceFingerprint: evidence.currentSourceFingerprint,
+    loadedFiles: ["llm-knowledge/backend/meta.yaml"],
+    missing: [],
+    checkedAt: FIXED_NOW,
+    freshnessEvidencePath: evidencePath,
+    freshnessEvidenceSha256: evidenceSha256,
+    refreshTaskPath,
+    refreshTaskSha256,
+    refreshReceiptPath: null,
+    refreshReceiptSha256: null,
+    approvalId: null,
+  };
+  await writePreparedResult(fixture.root, prepared, dispatchResult(prepared.task, {
+    payload: {
+      decisions: [],
+      affectedAreas: ["backend"],
+      knowledgeSnapshot: [area],
+      risks: [],
+    },
+  }));
+  return { ...fixture, prepared, area };
+}
+
+async function testRecheckKnowledgeReplacesDriftedResultArea() {
+  const fixture = await prepareStaleKnowledgeFixture("M7-C-RECHECK");
+  try {
+    const statePath = path.join(fixture.root, `.harness/states/e2e-${fixture.storyId}.json`);
+    const stateBeforeDrift = await readFile(statePath, "utf8");
+    await write(fixture.root, "backend/src/ChangedAfterKnowledgeCheck.java", "class ChangedAfterKnowledgeCheck {}\n");
+    const drifted = await runStoryCommand(storyOptions(fixture.root, { command: "inspect" }));
+    assert.equal(drifted.inspection.status, "result-invalid");
+    assert.match(drifted.inspection.diagnostics.message, /source fingerprint changed/i);
+
+    const rechecked = await runStoryCommand(storyOptions(fixture.root, {
+      command: "check-knowledge",
+      area: "backend",
+      checkKnowledgeArea: async (options) => {
+        const current = await computeAreaSourceFingerprint(options.root, "backend");
+        return materializeKnowledgeArea({
+          ...options,
+          runFreshness: async () => ({
+            findings: [{
+              area: "backend",
+              status: "fresh",
+              reason: "Freshness metadata matches current repository state.",
+              recorded_source_fingerprint: current.fingerprint,
+              current_source_fingerprint: current.fingerprint,
+              baseline_status: "fresh",
+              semantic_status: "fresh",
+              index_status: "fresh",
+            }],
+            refresh_task: { changed_paths: [], targets: [] },
+          }),
+        });
+      },
+    }));
+    assert.equal(rechecked.rechecked, true);
+    assert.equal(rechecked.area.status, "fresh");
+    assert.equal(await readFile(statePath, "utf8"), stateBeforeDrift);
+
+    const inspection = await runStoryCommand(storyOptions(fixture.root, { command: "inspect" }));
+    assert.equal(inspection.inspection.status, "result-ready");
+    const applied = await runStoryCommand(storyOptions(fixture.root, { command: "apply" }));
+    assert.equal(applied.state.knowledge.areas[0].status, "fresh");
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testApproveStaleProjectsFormalKnowledgeApproval() {
+  const fixture = await prepareStaleKnowledgeFixture("M7-C-APPROVE");
+  try {
+    const approved = await runStoryCommand(storyOptions(fixture.root, {
+      command: "approve-stale",
+      area: "backend",
+      reason: "已通过源码核验，接受当前 stale 知识",
+    }));
+    assert.equal(approved.command, "approve-stale");
+    assert.match(approved.approvalId, /^APR-[a-f0-9]{32}$/);
+    const result = await readJson(fixture.root, fixture.prepared.resultFile);
+    assert.equal(result.payload.knowledgeSnapshot[0].status, "accepted-stale");
+    assert.equal(result.payload.knowledgeSnapshot[0].observedStatus, "stale");
+    assert.equal(result.payload.knowledgeSnapshot[0].approvalId, approved.approvalId);
+    const receipt = await readJson(fixture.root, approved.receiptFile);
+    assert.equal(receipt.subjectType, "knowledge-stale");
+    assert.equal(receipt.subjectId, "backend");
+    assert.equal(receipt.actor, "user");
+
+    const reused = await runStoryCommand(storyOptions(fixture.root, {
+      command: "approve-stale",
+      area: "backend",
+      reason: "已通过源码核验，接受当前 stale 知识",
+    }));
+    assert.equal(reused.approvalId, approved.approvalId);
+    assert.equal(reused.reused, true);
+
+    const inspection = await runStoryCommand(storyOptions(fixture.root, { command: "inspect" }));
+    assert.equal(inspection.inspection.status, "result-ready");
+    const applied = await runStoryCommand(storyOptions(fixture.root, { command: "apply" }));
+    assert.equal(applied.state.phase, "unit-test");
+    assert.equal(applied.state.knowledge.areas[0].status, "accepted-stale");
+    assert.equal(applied.state.approvals.length, 1);
+    assert.equal(applied.state.approvals[0].approvalId, approved.approvalId);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testRefreshKnowledgeUpdatesOnlyCurrentResult() {
+  const fixture = await prepareStaleKnowledgeFixture("M7-C-REFRESH-COMMAND");
+  try {
+    const stateFile = `.harness/states/e2e-${fixture.storyId}.json`;
+    const pointerFile = ".harness/states/active-run.json";
+    const eventsFile = `.harness/states/e2e-${fixture.storyId}.events.jsonl`;
+    const before = await Promise.all([
+      readFile(path.join(fixture.root, stateFile), "utf8"),
+      readFile(path.join(fixture.root, pointerFile), "utf8"),
+      readFile(path.join(fixture.root, eventsFile), "utf8"),
+    ]);
+    const refreshedArea = {
+      ...fixture.area,
+      observedStatus: "fresh",
+      status: "fresh",
+      checkedAt: "2026-08-14T01:00:00.000Z",
+      freshnessEvidencePath: `${fixture.prepared.task.attemptRoot}/knowledge/checks/CHK-fresh.json`,
+      freshnessEvidenceSha256: `sha256:${"d".repeat(64)}`,
+      refreshReceiptPath: `${fixture.prepared.task.attemptRoot}/knowledge/refreshes/KRR-fresh.json`,
+      refreshReceiptSha256: `sha256:${"e".repeat(64)}`,
+    };
+    let received;
+    const refreshed = await runStoryCommand(storyOptions(fixture.root, {
+      command: "refresh-knowledge",
+      area: "backend",
+      refreshKnowledgeArea: async (options) => {
+        received = options;
+        return { area: refreshedArea, reused: false };
+      },
+    }));
+    assert.equal(refreshed.command, "refresh-knowledge");
+    assert.deepEqual(refreshed.area, refreshedArea);
+    assert.equal(received.area.status, "stale");
+    const result = await readJson(fixture.root, fixture.prepared.resultFile);
+    assert.deepEqual(result.payload.knowledgeSnapshot[0], refreshedArea);
+    assert.deepEqual(await Promise.all([
+      readFile(path.join(fixture.root, stateFile), "utf8"),
+      readFile(path.join(fixture.root, pointerFile), "utf8"),
+      readFile(path.join(fixture.root, eventsFile), "utf8"),
+    ]), before);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
 async function testInspectReportsValidatedCurrentDispatchState() {
   const { root, storyId } = await createFixture("M7-B-INSPECT");
   try {
@@ -2790,11 +3203,19 @@ async function testDispatchV2PhasePayloadsAreStrict() {
       knowledgeSnapshot: [{
         area: "common",
         relevant: true,
+        observedStatus: "fresh",
         status: "fresh",
         sourceFingerprint: evidenceSha256,
         loadedFiles: ["llm-knowledge/common/overview.md"],
         missing: [],
         checkedAt: FIXED_NOW,
+        freshnessEvidencePath: ".harness/runs/M7-A2-CONTRACT/phases/01-technical-design/attempts/00000000-0000-4000-8000-000000000001/knowledge/checks/CHK-001.json",
+        freshnessEvidenceSha256: evidenceSha256,
+        refreshTaskPath: null,
+        refreshTaskSha256: null,
+        refreshReceiptPath: null,
+        refreshReceiptSha256: null,
+        approvalId: null,
       }],
       risks: [{ riskId: "R1", description: "Protocol drift", severity: "medium", mitigation: "Shared validation" }],
     }],
@@ -3624,6 +4045,7 @@ async function testCompleteSingleStoryVerticalSlice() {
     let testEvidencePath;
     let verificationEvidencePath;
     let approvalReceiptPath;
+    let knowledgeApprovalReceiptPath;
     let historicalResultPath;
     await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
 name: frontier-e2e-development-v2
@@ -3813,6 +4235,81 @@ quality_gates:
           openQuestions: [],
           inScope: ["Acceptance gate vertical fixture"],
           outOfScope: [],
+        };
+      } else if (phase === "technical-design") {
+        const currentFingerprint = await computeAreaSourceFingerprint(root, "common");
+        const evidenceArtifact = await writeKnowledgeArtifact(
+          root,
+          `${prepared.task.attemptRoot}/knowledge/checks`,
+          "CHK",
+          "checkId",
+          {
+          schemaVersion: "1.0",
+          storyId,
+          runId: storyId,
+          dispatchId: prepared.task.dispatchId,
+          preparedRevision: prepared.task.preparedRevision,
+          area: "common",
+          status: "stale",
+          recordedSourceFingerprint: `sha256:${"1".repeat(64)}`,
+          currentSourceFingerprint: currentFingerprint.fingerprint,
+          baselineStatus: "stale",
+          semanticStatus: "pending",
+          indexStatus: "partial",
+          reason: "common knowledge requires refresh",
+          checkedAt: FIXED_NOW,
+          },
+        );
+        const evidence = evidenceArtifact.value;
+        const evidencePath = evidenceArtifact.relativePath;
+        const evidenceSha256 = evidenceArtifact.sha256;
+        const refreshTaskArtifact = await writeKnowledgeArtifact(
+          root,
+          `${prepared.task.attemptRoot}/knowledge/tasks`,
+          "KRT",
+          "refreshTaskId",
+          {
+          schemaVersion: "1.0",
+          storyId,
+          runId: storyId,
+          dispatchId: prepared.task.dispatchId,
+          preparedRevision: prepared.task.preparedRevision,
+          area: "common",
+          parameters: { area: "common", module: null, mode: "baseline" },
+          protectedAreas: ["backend", "frontend", "common"],
+          reason: "common knowledge requires refresh",
+          sourcePaths: [".harness/scripts/lib/story-runtime.mjs"],
+          customSnapshots: [
+            { area: "backend", files: [] },
+            { area: "frontend", files: [] },
+            { area: "common", files: [] },
+          ],
+          createdAt: FIXED_NOW,
+          },
+        );
+        const refreshTaskPath = refreshTaskArtifact.relativePath;
+        const refreshTaskSha256 = refreshTaskArtifact.sha256;
+        payload = {
+          decisions: [],
+          affectedAreas: ["common"],
+          knowledgeSnapshot: [{
+            area: "common",
+            relevant: true,
+            observedStatus: "stale",
+            status: "stale",
+            sourceFingerprint: evidence.currentSourceFingerprint,
+            loadedFiles: ["llm-knowledge/common/overview.md"],
+            missing: [],
+            checkedAt: FIXED_NOW,
+            freshnessEvidencePath: evidencePath,
+            freshnessEvidenceSha256: evidenceSha256,
+            refreshTaskPath,
+            refreshTaskSha256,
+            refreshReceiptPath: null,
+            refreshReceiptSha256: null,
+            approvalId: null,
+          }],
+          risks: [],
         };
       } else if (phase === "implementation") {
         await write(root, "backend/src/T1.java", "backend implementation\n");
@@ -4006,6 +4503,14 @@ quality_gates:
         };
       }
       await writePreparedResult(root, prepared, dispatchResult(prepared.task, { records, payload }));
+      if (phase === "technical-design") {
+        const approval = await runStoryCommand(storyOptions(root, {
+          command: "approve-stale",
+          area: "common",
+          reason: "接受纵向 fixture 中已通过源码核验的 stale 知识",
+        }));
+        knowledgeApprovalReceiptPath = approval.receiptFile;
+      }
       if (phase === "requirement") historicalResultPath = prepared.resultFile;
       if (phase === "delivery-preparation") {
         const stateFile = `.harness/states/e2e-${storyId}.json`;
@@ -4014,6 +4519,7 @@ quality_gates:
           [testEvidencePath, "test evidence"],
           [verificationEvidencePath, "verification evidence"],
           [approvalReceiptPath, "approval receipt"],
+          [knowledgeApprovalReceiptPath, "knowledge approval receipt"],
           [historicalResultPath, "phase result"],
         ]) {
           const original = await readFile(path.join(root, driftPath));
@@ -4038,6 +4544,10 @@ quality_gates:
     const finalState = await readJson(root, `.harness/states/e2e-${storyId}.json`);
     assert.equal(finalState.runtime.status, "completed");
     assert.equal(finalState.phase, "done");
+    assert.deepEqual(
+      finalState.approvals.map((approval) => approval.subjectType).sort(),
+      ["knowledge-stale", "verification-gap"],
+    );
     assert.equal(
       finalState.runtime.records.filter((record) => record.type === "output").length,
       phases.length + 1,
@@ -4633,6 +5143,11 @@ await testFinalizeBatchRejectsLedgerRevisionDriftBeforePhaseArtifacts();
 await testFinalizeBatchRejectsNonImplementationPhaseWithoutStateChange();
 await testFinalizeBatchReusesFinalizedLedgerBeforeApply();
 await testPrepareCreatesStructuredTaskAndCheckpoint();
+await testCheckKnowledgeUsesPreparedTechnicalDesignWithoutStateMutation();
+await testInspectReportsKnowledgeRefreshAndEvidenceDrift();
+await testRecheckKnowledgeReplacesDriftedResultArea();
+await testApproveStaleProjectsFormalKnowledgeApproval();
+await testRefreshKnowledgeUpdatesOnlyCurrentResult();
 await testPrepareReusesCurrentPhaseTask();
 await testStatusIsReadOnly();
 await testInspectReportsValidatedCurrentDispatchState();

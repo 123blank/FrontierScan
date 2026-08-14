@@ -35,6 +35,8 @@ const IMPLEMENTATION_OWNER_CONTRACT_MODULE = path.resolve(path.dirname(fileURLTo
 const RECORD_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "record-contract.mjs");
 const DELIVERY_CONTRACT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "delivery-contract.mjs");
 const DELIVERY_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "delivery-runtime.mjs");
+const KNOWLEDGE_RUNTIME_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "knowledge-runtime.mjs");
+const SOURCE_FINGERPRINT_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "source-fingerprint.mjs");
 const VALIDATE_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "validate-state.ps1");
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const execFileAsync = promisify(execFile);
@@ -1554,6 +1556,8 @@ quality_gates: []
       [RECORD_CONTRACT_MODULE, ".harness/scripts/lib/record-contract.mjs"],
       [DELIVERY_CONTRACT_MODULE, ".harness/scripts/lib/delivery-contract.mjs"],
       [DELIVERY_RUNTIME_MODULE, ".harness/scripts/lib/delivery-runtime.mjs"],
+      [KNOWLEDGE_RUNTIME_MODULE, ".harness/scripts/lib/knowledge-runtime.mjs"],
+      [SOURCE_FINGERPRINT_MODULE, ".harness/scripts/lib/source-fingerprint.mjs"],
     ]) {
       await write(root, target, await readFile(source, "utf8"));
     }
@@ -1824,12 +1828,20 @@ async function testStateContractDispatchesVersionsAndReadOnlyCommands() {
       knowledge: {
         areas: [{
           area: "common",
-          relevant: true,
-          status: "fresh",
+          relevant: false,
+          observedStatus: "not-relevant",
+          status: "not-relevant",
           sourceFingerprint: null,
           loadedFiles: [],
           missing: [],
-          checkedAt: FIXED_NOW,
+          checkedAt: null,
+          freshnessEvidencePath: null,
+          freshnessEvidenceSha256: null,
+          refreshTaskPath: null,
+          refreshTaskSha256: null,
+          refreshReceiptPath: null,
+          refreshReceiptSha256: null,
+          approvalId: null,
           unexpected: true,
         }],
       },
@@ -2161,6 +2173,94 @@ async function testV2TemplateAndWorkflowAssetsMatchContract() {
   assert.doesNotMatch(workflow, /^  - id: git-delivery$/m);
 }
 
+async function testM7CKnowledgeAreaContract() {
+  const template = JSON.parse(await readFile(
+    path.join(REPOSITORY_ROOT, ".harness/states/e2e-state-v2.template.json"),
+    "utf8",
+  ));
+  const active = structuredClone(template);
+  active.storyId = "M7-C-CONTRACT";
+  active.phase = "technical-design";
+  active.runtime = {
+    ...active.runtime,
+    runId: active.storyId,
+    status: "active",
+    revision: 2,
+    createdAt: FIXED_NOW,
+    updatedAt: FIXED_NOW,
+  };
+  active.baseline = {
+    head: "a".repeat(40),
+    branch: "dev",
+    initialDirtyPaths: [],
+    capturedAt: FIXED_NOW,
+  };
+  const evidencePath = ".harness/runs/M7-C-CONTRACT/phases/01-technical-design/attempts/00000000-0000-4000-8000-000000000001/knowledge/checks/CHK-001.json";
+  const taskPath = ".harness/runs/M7-C-CONTRACT/phases/01-technical-design/attempts/00000000-0000-4000-8000-000000000001/knowledge/tasks/KRT-001.json";
+  const receiptPath = ".harness/runs/M7-C-CONTRACT/phases/01-technical-design/attempts/00000000-0000-4000-8000-000000000001/knowledge/refreshes/KRR-001.json";
+  const sha256 = `sha256:${"a".repeat(64)}`;
+  const fresh = {
+    area: "backend",
+    relevant: true,
+    observedStatus: "fresh",
+    status: "fresh",
+    sourceFingerprint: sha256,
+    loadedFiles: ["llm-knowledge/backend/meta.yaml"],
+    missing: [],
+    checkedAt: FIXED_NOW,
+    freshnessEvidencePath: evidencePath,
+    freshnessEvidenceSha256: sha256,
+    refreshTaskPath: taskPath,
+    refreshTaskSha256: sha256,
+    refreshReceiptPath: receiptPath,
+    refreshReceiptSha256: sha256,
+    approvalId: null,
+  };
+
+  assert.doesNotThrow(() => validateStateDocument({
+    ...structuredClone(active),
+    knowledge: { areas: [fresh] },
+  }));
+
+  const missingObserved = structuredClone(fresh);
+  delete missingObserved.observedStatus;
+  assert.throws(
+    () => validateStateDocument({ ...structuredClone(active), knowledge: { areas: [missingObserved] } }),
+    /observedStatus/i,
+  );
+
+  assert.throws(
+    () => validateStateDocument({
+      ...structuredClone(active),
+      knowledge: {
+        areas: [{
+          ...fresh,
+          observedStatus: "stale",
+          status: "accepted-stale",
+          refreshReceiptPath: null,
+          refreshReceiptSha256: null,
+          approvalId: null,
+        }],
+      },
+    }),
+    /approval/i,
+  );
+
+  assert.throws(
+    () => validateStateDocument({
+      ...structuredClone(active),
+      knowledge: {
+        areas: [{
+          ...fresh,
+          refreshReceiptPath: null,
+          refreshReceiptSha256: null,
+        }],
+      },
+    }),
+    /refresh.*receipt/i,
+  );
+}
+
 async function testWorkflowMetadataIsReturnedAndBoundToStateVersion() {
   const { root } = await createFixture();
   try {
@@ -2361,6 +2461,7 @@ await testStateValidatorAcceptsAndRejectsActivePointer();
 await testRuntimeIsRegisteredInHarnessContracts();
 await testStateContractDispatchesVersionsAndReadOnlyCommands();
 await testV2TemplateAndWorkflowAssetsMatchContract();
+await testM7CKnowledgeAreaContract();
 await testWorkflowMetadataIsReturnedAndBoundToStateVersion();
 await testStateWriteLockDoesNotPersistState();
 await testStateWriteLockSerializesConcurrentCallbacks();

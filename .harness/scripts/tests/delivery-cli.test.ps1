@@ -23,6 +23,9 @@ if ($summarySource -notmatch '\[string\]\$StateFile') {
 if ($summarySource -notmatch 'delivery-runtime\.mjs') {
   throw "summarize-delivery.ps1 State mode must use delivery Runtime."
 }
+if ($summarySource -notmatch 'CODEX-CROSS-SESSION-HANDOFF\.md') {
+  throw "summarize-delivery.ps1 must classify the required cross-session handoff as Harness-owned."
+}
 
 foreach ($expected in @(
   'Summarize does not accept Commit, Remote, or Ref',
