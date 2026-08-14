@@ -1277,6 +1277,208 @@ async function dispatchStatus(root, located, phase) {
   };
 }
 
+function requiredAdapterState(phaseId, checkpoint) {
+  const runs = checkpoint.adapterRuns ?? [];
+  if (runs.some((item) => item.status === "failed")) return "adapter-required";
+  const passed = runs.filter((item) => item.status === "passed");
+  if (phaseId === "unit-test" && !passed.length) return "adapter-required";
+  if (phaseId === "build-publish") {
+    const buildAdapters = new Set(["backend-package", "frontend-build", "no-build-required"]);
+    if (!passed.some((item) => buildAdapters.has(item.adapter))) return "adapter-required";
+  }
+  return "awaiting-result";
+}
+
+async function inspectDispatch(root, options) {
+  const { located, phase, workflow } = await currentContext(root, options.stateFile);
+  const state = located.state;
+  if (state.schemaVersion !== "2.0") {
+    throw new Error("E2E dispatch inspection only supports State v2.");
+  }
+  if (state.runtime.status === "blocked" || state.phase === "blocked") {
+    return {
+      command: "inspect",
+      stateFile: located.stateFile,
+      state,
+      inspection: { status: "blocked", activeBlock: state.runtime.activeBlock },
+    };
+  }
+  const currentFiles = phase ? await phaseDispatchFiles(root, state, phase) : null;
+  const recovery = currentFiles?.attempt ? null : await inspectAdvancedResult(root, located, workflow);
+  if (recovery?.needsRecovery) {
+    return {
+      command: "inspect",
+      stateFile: located.stateFile,
+      state,
+      inspection: {
+        status: "recovery-required",
+        phase: recovery.previousPhase.id,
+        dispatchId: recovery.task.dispatchId,
+        preparedRevision: recovery.task.preparedRevision,
+        taskFile: recovery.files.taskFile,
+        resultFile: recovery.files.resultFile,
+        checkpointFile: recovery.files.checkpointFile,
+      },
+    };
+  }
+  if (state.runtime.status === "completed" || state.phase === "done") {
+    return {
+      command: "inspect",
+      stateFile: located.stateFile,
+      state,
+      inspection: { status: "completed" },
+    };
+  }
+  if (!phase) throw new Error(`Workflow does not define current phase '${state.phase}'.`);
+
+  const files = currentFiles;
+  if (!files.taskFile || files.attempt?.preparedRevision !== state.runtime.revision) {
+    return {
+      command: "inspect",
+      stateFile: located.stateFile,
+      state,
+      inspection: {
+        status: "not-prepared",
+        phase: phase.id,
+        allowedAdapters: PHASE_ADAPTERS[phase.id] ?? [],
+      },
+    };
+  }
+
+  const task = await readJsonOptional(
+    resolveInsideRoot(root, files.taskFile, "Task file").fullPath,
+    "Task file",
+  );
+  const checkpoint = await readJsonOptional(
+    resolveInsideRoot(root, files.checkpointFile, "Checkpoint file").fullPath,
+    "Checkpoint file",
+  );
+  if (!task || !checkpoint) throw new Error("Current dispatch attempt is incomplete.");
+  validateTask(root, task, state, phase, files.phaseRoot);
+  validateCheckpoint(checkpoint, task);
+
+  const common = {
+    phase: phase.id,
+    dispatchId: task.dispatchId,
+    preparedRevision: task.preparedRevision,
+    taskFile: files.taskFile,
+    resultFile: files.resultFile,
+    checkpointFile: files.checkpointFile,
+    allowedAdapters: [...task.allowedAdapters],
+    adapterRuns: structuredClone(checkpoint.adapterRuns ?? []),
+  };
+  const result = await readJsonOptional(
+    resolveInsideRoot(root, files.resultFile, "Result file").fullPath,
+    "Result file",
+  );
+  if (!result) {
+    return {
+      command: "inspect",
+      stateFile: located.stateFile,
+      state,
+      inspection: { ...common, status: requiredAdapterState(phase.id, checkpoint) },
+    };
+  }
+  await validateResult(root, result, task, state, files.phaseRoot);
+  if (result.status === "failed") {
+    return {
+      command: "inspect",
+      stateFile: located.stateFile,
+      state,
+      inspection: {
+        ...common,
+        status: "failed-result",
+        resultStatus: result.status,
+      },
+    };
+  }
+  if (result.status === "blocked") {
+    return {
+      command: "inspect",
+      stateFile: located.stateFile,
+      state,
+      inspection: {
+        ...common,
+        status: "result-ready",
+        resultStatus: result.status,
+      },
+    };
+  }
+  await assertAdapterEvidence(root, checkpoint, task, phase.id, files.phaseRoot, state);
+  if (requiredAdapterState(phase.id, checkpoint) === "adapter-required") {
+    return {
+      command: "inspect",
+      stateFile: located.stateFile,
+      state,
+      inspection: {
+        ...common,
+        status: "adapter-required",
+        resultStatus: result.status,
+      },
+    };
+  }
+  if (phase.id === "interface-verification" && result.status === "completed") {
+    const missingApprovalIds = result.payload.results
+      .filter((item) => item.status === "accepted-with-known-gaps" && !item.approvalId)
+      .map((item) => item.caseId);
+    if (missingApprovalIds.length) {
+      return {
+        command: "inspect",
+        stateFile: located.stateFile,
+        state,
+        inspection: {
+          ...common,
+          status: "approval-required",
+          resultStatus: result.status,
+          approval: {
+            type: "verification-gap",
+            subjectIds: missingApprovalIds,
+          },
+        },
+      };
+    }
+    await formalApprovalsForVerification(root, task, result);
+  }
+  if (result.status === "completed") {
+    try {
+      await preflightCompletedV2(root, {
+        state,
+        phase,
+        files,
+        task,
+        result,
+        checkpoint,
+        timestamp: state.runtime.updatedAt,
+      });
+    } catch (error) {
+      return {
+        command: "inspect",
+        stateFile: located.stateFile,
+        state,
+        inspection: {
+          ...common,
+          status: "result-invalid",
+          resultStatus: result.status,
+          diagnostics: {
+            code: "PHASE_GATE_FAILED",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        },
+      };
+    }
+  }
+  return {
+    command: "inspect",
+    stateFile: located.stateFile,
+    state,
+    inspection: {
+      ...common,
+      status: result.status === "failed" ? "failed-result" : "result-ready",
+      resultStatus: result.status,
+    },
+  };
+}
+
 async function prepareFromContext(root, options, verifiedBatch, context, preparationLockHeld = false, allowReadyBatchStaging = false) {
   const { located, phase } = context;
   if (located.state.runtime.status !== "active" || ["blocked", "done"].includes(located.state.phase)) {
@@ -2238,7 +2440,7 @@ async function recordResultEvidence(root, stateFile, result, options) {
   }
 }
 
-async function assertPhaseGate(root, checkpoint, task, phaseId, phaseRoot, state) {
+async function assertAdapterEvidence(root, checkpoint, task, phaseId, phaseRoot, state) {
   const failed = (checkpoint.adapterRuns ?? []).find((item) => item.status === "failed");
   if (failed) throw new Error(`Cannot complete phase with failed adapter '${failed.adapter}'.`);
   for (const adapterRun of checkpoint.adapterRuns ?? []) {
@@ -2264,6 +2466,10 @@ async function assertPhaseGate(root, checkpoint, task, phaseId, phaseRoot, state
       throw new Error(`Adapter evidence does not match its checkpoint: ${adapterRun.evidencePath}`);
     }
   }
+}
+
+async function assertPhaseGate(root, checkpoint, task, phaseId, phaseRoot, state) {
+  await assertAdapterEvidence(root, checkpoint, task, phaseId, phaseRoot, state);
   if (phaseId === "unit-test" && !(checkpoint.adapterRuns ?? []).length) {
     throw new Error("Cannot complete unit-test without at least one test adapter result.");
   }
@@ -2493,6 +2699,70 @@ async function assertCompletionArtifacts(root, state) {
   }
 }
 
+async function preflightCompletedV2(root, context) {
+  const {
+    state,
+    phase,
+    files,
+    task,
+    result,
+    checkpoint,
+    timestamp,
+  } = context;
+  let taskDag = null;
+  if (phase.id === "task-dag") {
+    const dagPath = resolveInsideRoot(root, result.payload.taskDagFile, "Task DAG").fullPath;
+    taskDag = (await loadTaskDag(dagPath)).dag;
+    if (await fileSha256(dagPath, "Task DAG") !== result.payload.taskDagSha256) {
+      throw new Error("Task DAG hash changed before State projection.");
+    }
+  }
+  if (phase.id === "delivery-preparation") {
+    await assertDeliveryPreparation(root, state, result);
+  }
+  const candidate = projectCompletedPhaseResult({ state, result, taskDag });
+  if (phase.id === "interface-verification") {
+    candidate.approvals = await formalApprovalsForVerification(root, task, result);
+    candidate.acceptance = buildAcceptanceSummary(candidate);
+  }
+  const records = [
+    ...result.outputs.map((item, index) => outputRecord(result, item, timestamp, index)),
+    ...result.records.map((item, index) => evidenceRecord(result, item, timestamp, index)),
+  ];
+  appendUniqueRecords(candidate, records);
+  await assertPhaseGate(root, checkpoint, task, phase.id, files.phaseRoot, candidate);
+  if (phase.id === "requirement") assertRequirementGate(candidate);
+  if (phase.id === "task-dag") assertTaskDagGate(candidate);
+  if (phase.id === "implementation") assertImplementationGate(candidate);
+  if (phase.id === "unit-test") {
+    await assertStructuredEvidence(root, candidate.tests.results, "Test result", {
+      requiredIds: new Set(candidate.tests.cases.filter((item) => item.required).map((item) => item.caseId)),
+    });
+    assertUnitTestGate(candidate, {
+      hasPassedAdapter: (checkpoint.adapterRuns ?? []).some((item) => item.status === "passed"),
+    });
+  }
+  if (phase.id === "interface-verification") {
+    await assertStructuredEvidence(root, candidate.verification.results, "Verification evidence", {
+      requiredIds: new Set(candidate.verification.cases.filter((item) => item.required).map((item) => item.caseId)),
+    });
+    assertVerificationGate(candidate);
+  }
+  const appliedRevision = state.runtime.revision + 1;
+  if (phase.id === "delivery-preparation") {
+    await assertCompletionArtifacts(root, candidate);
+    assertCompletionGate(candidate, {
+      currentPhaseResult: {
+        phase: result.phase,
+        dispatchId: result.dispatchId,
+        preparedRevision: result.preparedRevision,
+        appliedRevision,
+      },
+    });
+  }
+  return { candidate, appliedRevision };
+}
+
 async function applyCompletedV2(root, options, context) {
   const { located, phase } = context;
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
@@ -2520,60 +2790,18 @@ async function applyCompletedV2(root, options, context) {
     await validateResult(root, result, task, fresh.state, files.phaseRoot);
     if (result.status !== "completed") throw new Error("Completed State transaction requires a completed result.");
 
-    let taskDag = null;
-    if (phase.id === "task-dag") {
-      const dagPath = resolveInsideRoot(root, result.payload.taskDagFile, "Task DAG").fullPath;
-      taskDag = (await loadTaskDag(dagPath)).dag;
-      if (await fileSha256(dagPath, "Task DAG") !== result.payload.taskDagSha256) {
-        throw new Error("Task DAG hash changed before State projection.");
-      }
-    }
-    if (phase.id === "delivery-preparation") {
-      await assertDeliveryPreparation(root, fresh.state, result);
-    }
-    const candidate = projectCompletedPhaseResult({ state: fresh.state, result, taskDag });
-    if (phase.id === "interface-verification") {
-      candidate.approvals = await formalApprovalsForVerification(root, task, result);
-      candidate.acceptance = buildAcceptanceSummary(candidate);
-    }
-    const records = [
-      ...result.outputs.map((item, index) => outputRecord(result, item, timestamp, index)),
-      ...result.records.map((item, index) => evidenceRecord(result, item, timestamp, index)),
-    ];
-    appendUniqueRecords(candidate, records);
-    await assertPhaseGate(root, checkpoint, task, phase.id, files.phaseRoot, candidate);
-    if (phase.id === "requirement") assertRequirementGate(candidate);
-    if (phase.id === "task-dag") assertTaskDagGate(candidate);
-    if (phase.id === "implementation") assertImplementationGate(candidate);
-    if (phase.id === "unit-test") {
-      await assertStructuredEvidence(root, candidate.tests.results, "Test result", {
-        requiredIds: new Set(candidate.tests.cases.filter((item) => item.required).map((item) => item.caseId)),
-      });
-      assertUnitTestGate(candidate, {
-        hasPassedAdapter: (checkpoint.adapterRuns ?? []).some((item) => item.status === "passed"),
-      });
-    }
-    if (phase.id === "interface-verification") {
-      await assertStructuredEvidence(root, candidate.verification.results, "Verification evidence", {
-        requiredIds: new Set(candidate.verification.cases.filter((item) => item.required).map((item) => item.caseId)),
-      });
-      assertVerificationGate(candidate);
-    }
+    const { candidate, appliedRevision } = await preflightCompletedV2(root, {
+      state: fresh.state,
+      phase,
+      files,
+      task,
+      result,
+      checkpoint,
+      timestamp,
+    });
     if (options.beforeAdvance) await options.beforeAdvance();
 
     const resultContent = await readRegularFile(resultPath, "Result file");
-    const appliedRevision = fresh.state.runtime.revision + 1;
-    if (phase.id === "delivery-preparation") {
-      await assertCompletionArtifacts(root, candidate);
-      assertCompletionGate(candidate, {
-        currentPhaseResult: {
-          phase: result.phase,
-          dispatchId: result.dispatchId,
-          preparedRevision: result.preparedRevision,
-          appliedRevision,
-        },
-      });
-    }
     candidate.runtime.records.push({
       id: `result:${result.dispatchId}`,
       type: "phase-result",
@@ -2794,6 +3022,65 @@ async function reconcileBlockedResult(root, located, workflow, options) {
 }
 
 async function reconcileAdvancedResult(root, located, workflow, options) {
+  const inspected = await inspectAdvancedResult(root, located, workflow);
+  if (!inspected) return null;
+  const {
+    previousPhase,
+    files,
+    task,
+    result,
+    checkpointPath,
+    completedWave,
+  } = inspected;
+  let { checkpoint } = inspected;
+
+  if (result.schemaVersion === "2.0") {
+    const timestamp = (options.now ?? (() => new Date().toISOString()))();
+    checkpoint ??= {
+      schemaVersion: "1.0",
+      dispatchId: task.dispatchId,
+      storyId: task.storyId,
+      phase: task.phase,
+      status: "prepared",
+      preparedAt: task.preparedAt,
+      updatedAt: timestamp,
+    };
+    checkpoint.status = "completed";
+    checkpoint.completedAt ??= timestamp;
+    checkpoint.updatedAt = timestamp;
+    await writeAtomicJson(checkpointPath, checkpoint);
+    if (files.activeAttemptFile) {
+      const activePath = resolveInsideRoot(root, files.activeAttemptFile, "Active attempt pointer").fullPath;
+      const active = await readJsonOptional(activePath, "Active attempt pointer") ?? {
+        schemaVersion: "1.0",
+        dispatchId: task.dispatchId,
+        attemptRoot: task.attemptRoot,
+        taskFile: files.taskFile,
+        resultFile: files.resultFile,
+        checkpointFile: files.checkpointFile,
+        preparedRevision: task.preparedRevision,
+        status: "completed",
+        updatedAt: timestamp,
+      };
+      active.status = "completed";
+      active.updatedAt = timestamp;
+      await writeAtomicJson(activePath, active);
+    }
+    return { command: "apply", status: "already-applied", stateFile: located.stateFile, state: located.state };
+  }
+  if (completedWave) {
+    return { command: "apply", status: "already-applied", stateFile: located.stateFile, state: located.state };
+  }
+
+  const timestamp = (options.now ?? (() => new Date().toISOString()))();
+  checkpoint.status = "completed";
+  checkpoint.completedAt ??= timestamp;
+  checkpoint.updatedAt = timestamp;
+  await writeAtomicJson(checkpointPath, checkpoint);
+  return { command: "apply", status: "already-applied", stateFile: located.stateFile, state: located.state };
+}
+
+async function inspectAdvancedResult(root, located, workflow) {
   const previousPhase = workflow.phases.find((item) => item.id === located.state.runtime.previousPhase);
   if (!previousPhase || previousPhase.next.length !== 1) return null;
   const expectedCurrent = previousPhase.next[0];
@@ -2828,7 +3115,7 @@ async function reconcileAdvancedResult(root, located, workflow, options) {
     "Previous result file",
   );
   const checkpointPath = resolveInsideRoot(root, checkpointFile, "Previous checkpoint file").fullPath;
-  let checkpoint = await readJsonOptional(checkpointPath, "Previous checkpoint file");
+  const checkpoint = await readJsonOptional(checkpointPath, "Previous checkpoint file");
   const completedWave = checkpoint?.status === "completed" && checkpoint.waveFinalization;
   if (!task || !result) return null;
 
@@ -2862,38 +3149,17 @@ async function reconcileAdvancedResult(root, located, workflow, options) {
     if (official.sha256 !== sha256Buffer(resultContent) || official.bytes !== resultContent.length) {
       throw new Error("Formal phase result drifted after State apply.");
     }
-    const timestamp = (options.now ?? (() => new Date().toISOString()))();
-    checkpoint ??= {
-      schemaVersion: "1.0",
-      dispatchId: task.dispatchId,
-      storyId: task.storyId,
-      phase: task.phase,
-      status: "prepared",
-      preparedAt: task.preparedAt,
-      updatedAt: timestamp,
+    return {
+      previousPhase,
+      files,
+      task,
+      result,
+      checkpoint,
+      checkpointPath,
+      completedWave,
+      previousState,
+      needsRecovery: checkpoint?.status !== "completed",
     };
-    checkpoint.status = "completed";
-    checkpoint.completedAt ??= timestamp;
-    checkpoint.updatedAt = timestamp;
-    await writeAtomicJson(checkpointPath, checkpoint);
-    if (files.activeAttemptFile) {
-      const activePath = resolveInsideRoot(root, files.activeAttemptFile, "Active attempt pointer").fullPath;
-      const active = await readJsonOptional(activePath, "Active attempt pointer") ?? {
-        schemaVersion: "1.0",
-        dispatchId: task.dispatchId,
-        attemptRoot: task.attemptRoot,
-        taskFile,
-        resultFile,
-        checkpointFile,
-        preparedRevision: task.preparedRevision,
-        status: "completed",
-        updatedAt: timestamp,
-      };
-      active.status = "completed";
-      active.updatedAt = timestamp;
-      await writeAtomicJson(activePath, active);
-    }
-    return { command: "apply", status: "already-applied", stateFile: located.stateFile, state: located.state };
   }
   if (checkpoint.status !== "result-received" && !completedWave) return null;
   if (previousPhase.id === "implementation") {
@@ -2921,16 +3187,17 @@ async function reconcileAdvancedResult(root, located, workflow, options) {
   await assertWaveFinalizationEvidence(root, located, previousPhase, task, checkpoint);
   await assertBatchFinalizationBeforeRecovery(root, located, previousPhase, task, checkpoint);
   if (result.status !== "completed") return null;
-  if (completedWave) {
-    return { command: "apply", status: "already-applied", stateFile: located.stateFile, state: located.state };
-  }
-
-  const timestamp = (options.now ?? (() => new Date().toISOString()))();
-  checkpoint.status = "completed";
-  checkpoint.completedAt ??= timestamp;
-  checkpoint.updatedAt = timestamp;
-  await writeAtomicJson(checkpointPath, checkpoint);
-  return { command: "apply", status: "already-applied", stateFile: located.stateFile, state: located.state };
+  return {
+    previousPhase,
+    files,
+    task,
+    result,
+    checkpoint,
+    checkpointPath,
+    completedWave,
+    previousState,
+    needsRecovery: checkpoint?.status !== "completed",
+  };
 }
 
 async function applyResult(root, options) {
@@ -3236,6 +3503,7 @@ async function formalApprovalsForVerification(root, task, result) {
 
 export async function runStoryCommand(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
+  if (options.command === "inspect") return inspectDispatch(root, options);
   if (options.command === "prepare") return prepare(root, options);
   if (options.command === "prepare-batch") return prepareBatch(root, options);
   if (options.command === "prepare-wave") return prepareWave(root, options);

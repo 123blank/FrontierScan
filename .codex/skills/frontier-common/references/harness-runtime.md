@@ -24,5 +24,6 @@
 - `accepted-with-known-gaps` 只能引用当前 attempt、当前 case 和当前证据对应的正式 approval；optional-only 的失败或阻塞如实保留但不阻止完成。
 - `approve-gap` 与 `apply` 使用同一 Story 写锁；批准命令只更新 attempt 内 result 和 receipt，不单独推进 State。
 - M7-A4 已实现 State v2 record 语义幂等、baseline 到工作树净变化、actual-only owned 推导、受控 owned manifest、delivery apply 对账和 completed State 外的版本化 delivery receipt。
+- M7-B 已实现 `run-e2e.ps1 Status/Step/Apply` 和 Story Runtime 只读 `inspect`。驱动器只返回唯一下一动作或执行一次 prepare/apply，不自动生成认知结果、不自动选择 Adapter、不启动 Agent。
 - `run-delivery.ps1` 不执行 Git 写操作。`PrepareManifest` 只在 active `delivery-preparation` 阶段运行；`Record` 只接受 completed State v2，并可只读核对 commit tree 和 remote ref。
-- 知识新鲜度门禁仍属于 M7-C；确定性串行驱动器属于 M7-B。
+- 知识新鲜度门禁仍属于 M7-C。

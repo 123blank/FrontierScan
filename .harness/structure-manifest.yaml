@@ -36,6 +36,8 @@ required_directories:
   - docs/harness-m7a1-state-v2
   - docs/harness-m7a2-phase-result
   - docs/harness-m7a3-acceptance-gates
+  - docs/harness-m7a4-runtime-delivery
+  - docs/harness-m7b-serial-driver
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -129,6 +131,7 @@ required_files:
   - .harness/scripts/lib/record-contract.mjs
   - .harness/scripts/lib/delivery-contract.mjs
   - .harness/scripts/lib/delivery-runtime.mjs
+  - .harness/scripts/lib/e2e-runtime.mjs
   - .harness/scripts/lib/worktree-wave-execution-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
@@ -153,6 +156,8 @@ required_files:
   - .harness/scripts/tests/record-contract.test.mjs
   - .harness/scripts/tests/delivery-runtime.test.mjs
   - .harness/scripts/tests/delivery-cli.test.ps1
+  - .harness/scripts/tests/e2e-runtime.test.mjs
+  - .harness/scripts/tests/e2e-cli.test.ps1
   - .harness/scripts/tests/task-dag.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
@@ -168,6 +173,7 @@ required_files:
   - .harness/scripts/run-story.ps1
   - .harness/scripts/run-worktree.ps1
   - .harness/scripts/run-delivery.ps1
+  - .harness/scripts/run-e2e.ps1
   - .codex/agents/agents.yaml
   - .codex/agents/worker-policies.json
   - .codex/skills/README.md
@@ -291,6 +297,12 @@ required_files:
   - docs/harness-m7a3-acceptance-gates/DESIGN.md
   - docs/harness-m7a3-acceptance-gates/PLAN.md
   - docs/harness-m7a3-acceptance-gates/REPORT.md
+  - docs/harness-m7a4-runtime-delivery/DESIGN.md
+  - docs/harness-m7a4-runtime-delivery/PLAN.md
+  - docs/harness-m7a4-runtime-delivery/REPORT.md
+  - docs/harness-m7b-serial-driver/DESIGN.md
+  - docs/harness-m7b-serial-driver/PLAN.md
+  - docs/harness-m7b-serial-driver/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -301,7 +313,9 @@ status_notes:
   agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1
   deterministic_scripts: mixed-read-only-helpers-state-story-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
   business_code_changes: none-required-for-m0-m5dd
-  roadmap_planning: m7-m12-documentation-approved-m7a1-m7a2-m7a3-implemented
+  roadmap_planning: m7-m12-documentation-approved-m7a1-m7a2-m7a3-m7a4-m7b-implemented
   m7a1_state_v2: implemented-fixture-verified-independent-review-passed
   m7a2_phase_result: implemented-fixture-verified-independent-review-passed
   m7a3_acceptance_gates: implemented-fixture-verified-independent-review-passed
+  m7a4_runtime_delivery: implemented-fixture-verified-independent-review-passed
+  m7b_serial_driver: implemented-nine-phase-fixture-verified-independent-review-passed

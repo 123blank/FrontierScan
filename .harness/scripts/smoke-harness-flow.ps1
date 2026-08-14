@@ -258,6 +258,15 @@ Invoke-Step -Name "M7-A3 Acceptance Gates" -Action {
   if ($LASTEXITCODE -ne 0) { throw "M7-A3 approval contract smoke failed with exit code $LASTEXITCODE" }
 }
 
+Invoke-Step -Name "M7-B Serial Driver" -Action {
+  & node (Join-Path $Root ".harness\scripts\tests\e2e-runtime.test.mjs")
+  if ($LASTEXITCODE -ne 0) { throw "M7-B E2E runtime smoke failed with exit code $LASTEXITCODE" }
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+    -File (Join-Path $Root ".harness\scripts\tests\e2e-cli.test.ps1") `
+    -Root $Root
+  if ($LASTEXITCODE -ne 0) { throw "M7-B E2E CLI smoke failed with exit code $LASTEXITCODE" }
+}
+
 Invoke-Step -Name "Knowledge Query" -Action {
   & (Join-Path $Root ".harness\scripts\kb-query.ps1") -Root $Root -Query "quality gate" -Mode knowledge-qa -Area common -MaxMatches 3
 }

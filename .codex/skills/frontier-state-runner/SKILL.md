@@ -28,6 +28,16 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 6. 需要外部决策时使用 `block`，问题解决后使用 `resume`。
 7. v2 由 `delivery-preparation` 的 completed result 经 completion gate 直接进入 `done`，不手工调用 `complete`。
 
+M7-B 之后，普通单 Story 串行流程优先使用统一入口：
+
+```powershell
+.\.harness\scripts\run-e2e.ps1 -Command Status -Json
+.\.harness\scripts\run-e2e.ps1 -Command Step -Json
+.\.harness\scripts\run-e2e.ps1 -Command Apply -Json
+```
+
+`Step` 一次只执行一个确定性动作。返回 `cognitive-action-required` 时由当前 Codex 会话完成认知产物；返回 `adapter-selection-required` 时按测试或构建策略明确选择固定 Adapter；返回 `approval-required` 时停止并取得对应用户批准。
+
 ## 常用命令
 
 ```powershell
@@ -90,4 +100,4 @@ description: 管理、校验、恢复和推进 FrontierScan Harness 状态。单
 - 更新按 `pointer stage -> state commit -> pointer promote` 提交；临时指针领先状态时回退正式指针，状态达到临时指针 revision 后才恢复它。
 - 跨 Story 指针候选按当前原子写入身份恢复；正式指针 revision 领先状态时失败关闭，状态领先指针可以按写入顺序恢复。
 - 默认指针和已有运行状态必须通过运行时契约校验；显式 `-StateFile` 仍可在无关活动指针损坏时独立使用。
-- M7-A3 已实现验收追踪与 `verification-gap` 语义门禁；知识新鲜度闭环、owned files、交付回执、确定性串行驱动器、Agent 自动派发、正式并行、真实发布或 Git 自动写入仍未实现。
+- M7-A3 已实现验收追踪与 `verification-gap` 语义门禁，M7-A4 已实现 owned files、交付准备对账和独立交付回执，M7-B 已实现最小确定性串行驱动器。知识新鲜度闭环、Agent 自动派发、正式并行、真实发布或 Git 自动写入仍未实现。

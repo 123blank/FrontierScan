@@ -292,7 +292,7 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 
 ## 7. 当前实现对比
 
-以下进度以 2026-08-13、提交 `fe65b0b`、M6-A 单业务闭环以及 M7-A1/A2/A3 fixture 为基线。M7-A1 已建立 State v2，M7-A2 已实现统一阶段结果和原子投影，M7-A3 已建立验收追踪与 verification-gap 批准门禁；M7 整体真实 Story 验收仍统一保留到 M7-D。
+以下进度以 2026-08-13、提交 `fe210dc`、M6-A 单业务闭环以及 M7-A1/A2/A3/A4 与 M7-B fixture 为基线。M7-B 已实现只读 inspection 和 `Status/Step/Apply` 最小确定性串行驱动；M7 整体真实 Story 验收仍统一保留到 M7-D。
 
 | 文章能力 | FrontierScan 当前证据 | 状态 | 估算完成度 |
 | --- | --- | --- | ---: |
@@ -432,7 +432,7 @@ M7-A1、M7-A2 和 M7-A3 已分别获得实施批准、完成 fixture 验证并�
 2. `M7-A2`：统一各阶段 `result.json`，由 Runtime 原子投影 State。已实现、通过 fixture，并在修复 4 个 BLOCKER 后通过第二轮独立只读代码审核。
 3. `M7-A3`：建立验收项、DAG、测试和验证之间的可判定追踪门禁。已实现并通过 fixture；首轮审核问题修复后通过第二轮独立只读代码审核。
 4. `M7-A4`：修复证据幂等、阻塞恢复、owned files 和交付语义。
-5. `M7-B`：增加最小确定性串行驱动器，不调用真实 Agent。
+5. `M7-B`：增加最小确定性串行驱动器，不调用真实 Agent。已实现并通过九阶段纵向 fixture与最终独立只读审核。
 6. `M7-C`：将任务相关知识新鲜度纳入 State、刷新和逐项接受门禁。
 7. `M7-D`：通过异常 fixture 和一个真实 Story 完成双重闭环验收。
 
@@ -572,4 +572,5 @@ git diff --check
 14. `accepted-with-known-gaps` 和 `accepted-stale` 必须逐项获得用户批准并绑定理由与证据。
 15. M8 首个真实 Provider 为只读 `code-reviewer`；并行、Fork-Join 和本地 Docker Compose 闭环按 M9-M11 依次推进。
 16. M7-A3 已实现稳定 criterion、DAG/test/verification 覆盖和 `verification-gap` 逐项批准。
-17. M7-A4 已通过 fixture、兼容回归和独立审核，实现 record 语义幂等、actual-only owned 推导、受控 manifest、delivery apply 对账和独立 delivery receipt；下一优先子里程碑为 `M7-B：最小确定性串行驱动器`。
+17. M7-A4 已通过 fixture、兼容回归和独立审核，实现 record 语义幂等、actual-only owned 推导、受控 manifest、delivery apply 对账和独立 delivery receipt。
+18. M7-B 已实现 Story Runtime 只读 inspection、完整阶段 preflight 与 `run-e2e.ps1 Status/Step/Apply`，九阶段纵向 fixture 使用统一入口完成到 `done`，最终独立审核无 BLOCKER/WARNING；下一优先子里程碑为 `M7-C：知识新鲜度闭环`。

@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("prepare", "status", "run-adapter", "apply", "approve-gap", "prepare-batch", "finalize-batch", "prepare-wave", "finalize-wave")]
+  [ValidateSet("prepare", "status", "inspect", "run-adapter", "apply", "approve-gap", "prepare-batch", "finalize-batch", "prepare-wave", "finalize-wave")]
   [string]$Command,
 
   [string]$StateFile,

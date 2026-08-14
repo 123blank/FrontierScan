@@ -18,6 +18,7 @@ import {
 } from "../lib/dispatch-contract.mjs";
 import { runStateCommand } from "../lib/state-runtime.mjs";
 import { runStoryCommand } from "../lib/story-runtime.mjs";
+import { runE2ECommand } from "../lib/e2e-runtime.mjs";
 import { runWorktreeCommand } from "../lib/worktree-runtime.mjs";
 import { prepareOwnedManifest } from "../lib/delivery-runtime.mjs";
 
@@ -2038,6 +2039,278 @@ async function testStatusIsReadOnly() {
   }
 }
 
+async function testInspectReportsValidatedCurrentDispatchState() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const before = await readFile(path.join(root, stateFile), "utf8");
+    const initial = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(initial.inspection.status, "not-prepared");
+    assert.equal(await readFile(path.join(root, stateFile), "utf8"), before);
+
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+    const awaiting = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(awaiting.inspection.status, "awaiting-result");
+    assert.equal(awaiting.inspection.taskFile, prepared.taskFile);
+    assert.equal(awaiting.inspection.dispatchId, prepared.task.dispatchId);
+
+    await write(root, prepared.task.expectedOutputs[0], "# Requirement\n");
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task));
+    const ready = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(ready.inspection.status, "result-ready");
+    assert.equal(ready.inspection.resultStatus, "completed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectTracksRequiredAdapterRuns() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT-ADAPTER");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    await setFixtureState(root, storyId, (state) => { state.phase = "unit-test"; });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+
+    const required = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(required.inspection.status, "adapter-required");
+    assert.deepEqual(required.inspection.allowedAdapters, prepared.task.allowedAdapters);
+
+    await write(root, prepared.task.expectedOutputs[0], "# Test report\n");
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task));
+    const resultStillRequiresAdapter = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(resultStillRequiresAdapter.inspection.status, "adapter-required");
+
+    await runStoryCommand(storyOptions(root, {
+      command: "run-adapter",
+      stateFile,
+      adapter: "harness-state-tests",
+      execute: async () => ({ exitCode: 0, stdout: "passed", stderr: "" }),
+    }));
+    const ready = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(ready.inspection.status, "result-ready");
+
+    const checkpoint = await readJson(root, prepared.checkpointFile);
+    const adapterEvidence = await readJson(root, checkpoint.adapterRuns[0].evidencePath);
+    adapterEvidence.stdout = "tampered";
+    await write(root, checkpoint.adapterRuns[0].evidencePath, `${JSON.stringify(adapterEvidence, null, 2)}\n`);
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, { command: "inspect", stateFile })),
+      /adapter evidence.*changed|changed.*adapter evidence/i,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectKeepsAdapterActionWhenAnyRunFailed() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT-MIXED-ADAPTER");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    await setFixtureState(root, storyId, (state) => { state.phase = "unit-test"; });
+    await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "run-adapter",
+        stateFile,
+        adapter: "harness-state-tests",
+        execute: async () => ({ exitCode: 1, stdout: "", stderr: "failed" }),
+      })),
+      /failed with exit code 1/i,
+    );
+    await runStoryCommand(storyOptions(root, {
+      command: "run-adapter",
+      stateFile,
+      adapter: "harness-structure",
+      execute: async () => ({ exitCode: 0, stdout: "passed", stderr: "" }),
+    }));
+
+    const inspected = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(inspected.inspection.status, "adapter-required");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectPrioritizesFailedResultOverAdapterRequirement() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT-FAILED");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    await setFixtureState(root, storyId, (state) => { state.phase = "unit-test"; });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      status: "failed",
+      outputs: [],
+      summary: "Tests failed.",
+    }));
+    const inspected = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(inspected.inspection.status, "failed-result");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectPrioritizesBlockedResultOverAdapterRequirement() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT-BLOCKED");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    await setFixtureState(root, storyId, (state) => { state.phase = "unit-test"; });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      status: "blocked",
+      outputs: [],
+      summary: "Test environment is unavailable.",
+      blocker: {
+        reason: "Test environment is unavailable.",
+        owner: "user",
+        suggestedAction: "Restore the test environment.",
+      },
+    }));
+    const inspected = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(inspected.inspection.status, "result-ready");
+    assert.equal(inspected.inspection.resultStatus, "blocked");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectReportsAdvancedResultRecovery() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT-RECOVERY");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+    await write(root, prepared.task.expectedOutputs[0], "# Requirement\n");
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task));
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "apply",
+        stateFile,
+        afterAdvance: async () => { throw new Error("simulated inspection recovery window"); },
+      })),
+      /inspection recovery window/i,
+    );
+
+    const inspected = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(inspected.inspection.status, "recovery-required");
+    assert.equal(inspected.inspection.phase, "requirement");
+    assert.equal(inspected.inspection.dispatchId, prepared.task.dispatchId);
+    assert.equal((await readJson(root, prepared.checkpointFile)).status, "prepared");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectPrefersCurrentAttemptOverHistoricalRecovery() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT-CURRENT-ATTEMPT");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+    await write(root, prepared.task.expectedOutputs[0], "# Requirement\n");
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task));
+    await assert.rejects(
+      runStoryCommand(storyOptions(root, {
+        command: "apply",
+        stateFile,
+        afterAdvance: async () => { throw new Error("simulated historical recovery"); },
+      })),
+      /historical recovery/i,
+    );
+    const current = await runStoryCommand(storyOptions(root, {
+      command: "prepare",
+      stateFile,
+      randomUUID: () => "00000000-0000-4000-8000-000000000099",
+    }));
+    assert.equal(current.task.phase, "technical-design");
+
+    const inspected = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(inspected.inspection.status, "awaiting-result");
+    assert.equal(inspected.inspection.dispatchId, current.task.dispatchId);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectRequiresApprovalForAnyAcceptedGap() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT-APPROVAL");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    await setFixtureState(root, storyId, (state) => {
+      state.phase = "interface-verification";
+      state.requirement.acceptanceCriteria = [{
+        criterionId: "AC-001",
+        description: "The required behavior is verified.",
+        source: "fixture",
+        required: true,
+      }];
+      state.acceptance.criteria = [{
+        criterionId: "AC-001",
+        required: true,
+        taskIds: [],
+        testCaseIds: [],
+        verificationCaseIds: [],
+        status: "pending",
+        approvalIds: [],
+      }];
+    });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+    await write(root, prepared.task.expectedOutputs[0], "# Verification\n");
+    const evidencePath = `${prepared.task.attemptRoot}/evidence/optional-gap.md`;
+    await write(root, evidencePath, "known gap\n");
+    const evidence = await readFile(path.join(root, evidencePath));
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      payload: {
+        cases: [{
+          caseId: "VC-OPTIONAL",
+          type: "ui-flow",
+          required: false,
+          criterionIds: ["AC-001"],
+          action: "Inspect optional UI behavior",
+          expected: "The optional behavior is available.",
+        }],
+        results: [{
+          caseId: "VC-OPTIONAL",
+          status: "accepted-with-known-gaps",
+          actual: "The optional environment is unavailable.",
+          evidencePath,
+          evidenceSha256: `sha256:${createHash("sha256").update(evidence).digest("hex")}`,
+          approvalId: null,
+          executedAt: FIXED_NOW,
+        }],
+        environment: {
+          status: "unavailable",
+          summary: "Optional UI environment is unavailable.",
+          evidencePath: null,
+          evidenceSha256: null,
+        },
+      },
+    }));
+
+    const inspected = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(inspected.inspection.status, "approval-required");
+    assert.deepEqual(inspected.inspection.approval.subjectIds, ["VC-OPTIONAL"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testInspectRejectsResultThatCannotPassPhaseGate() {
+  const { root, storyId } = await createFixture("M7-B-INSPECT-PREFLIGHT");
+  try {
+    const stateFile = `.harness/states/e2e-${storyId}.json`;
+    await setFixtureState(root, storyId, (state) => { state.phase = "code-review"; });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare", stateFile }));
+    await write(root, prepared.task.expectedOutputs[0], "# Review report\n");
+    await writePreparedResult(root, prepared, dispatchResult(prepared.task, {
+      payload: { findings: [], status: "passed" },
+    }));
+
+    const inspected = await runStoryCommand(storyOptions(root, { command: "inspect", stateFile }));
+    assert.equal(inspected.inspection.status, "result-invalid");
+    assert.match(inspected.inspection.diagnostics.message, /code-review.*passed|passed.*review/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 async function testPrepareRejectsBlockedAndCompletedRuns() {
   const blocked = await createFixture("M3-BLOCKED");
   try {
@@ -3343,6 +3616,11 @@ async function testCodeReviewRequiresPassedReviewEvidence() {
 async function testCompleteSingleStoryVerticalSlice() {
   const { root, storyId } = await createFixture("M3-VERTICAL");
   try {
+    const runE2E = (command, overrides = {}) => runE2ECommand({
+      root,
+      command,
+      runStory: (options) => runStoryCommand(storyOptions(root, { ...options, ...overrides })),
+    });
     let testEvidencePath;
     let verificationEvidencePath;
     let approvalReceiptPath;
@@ -3439,10 +3717,22 @@ quality_gates:
 
     for (let index = 0; index < phases.length; index += 1) {
       const phase = phases[index];
-      const prepared = await runStoryCommand(storyOptions(root, {
-        command: "prepare",
+      const stepped = await runE2E("step", {
         randomUUID: () => `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
-      }));
+      });
+      assert.equal(
+        stepped.action,
+        ["unit-test", "build-publish"].includes(phase)
+          ? "adapter-selection-required"
+          : "cognitive-action-required",
+      );
+      const inspected = await runStoryCommand(storyOptions(root, { command: "inspect" }));
+      const prepared = {
+        task: await readJson(root, inspected.inspection.taskFile),
+        taskFile: inspected.inspection.taskFile,
+        resultFile: inspected.inspection.resultFile,
+        checkpointFile: inspected.inspection.checkpointFile,
+      };
       assert.equal(prepared.task.phase, phase);
       assert.equal(prepared.task.preparedAt, FIXED_NOW);
       assert.match(
@@ -3575,18 +3865,26 @@ quality_gates:
           },
         });
         await writePreparedResult(root, prepared, blockedResult);
-        const blocked = await runStoryCommand(storyOptions(root, { command: "apply" }));
-        assert.equal(blocked.state.phase, "blocked");
+        const blocked = await runE2E("step");
+        assert.equal(blocked.action, "blocked");
+        assert.equal((await readJson(root, `.harness/states/e2e-${storyId}.json`)).phase, "blocked");
         await runStateCommand({
           root,
           command: "resume",
           stateFile: `.harness/states/e2e-${storyId}.json`,
           now: () => FIXED_NOW,
         });
-        const resumed = await runStoryCommand(storyOptions(root, {
-          command: "prepare",
+        const resumedStep = await runE2E("step", {
           randomUUID: () => "00000000-0000-4000-8000-000000000010",
-        }));
+        });
+        assert.equal(resumedStep.action, "cognitive-action-required");
+        const resumedInspection = await runStoryCommand(storyOptions(root, { command: "inspect" }));
+        const resumed = {
+          task: await readJson(root, resumedInspection.inspection.taskFile),
+          taskFile: resumedInspection.inspection.taskFile,
+          resultFile: resumedInspection.inspection.resultFile,
+          checkpointFile: resumedInspection.inspection.checkpointFile,
+        };
         assert.equal(resumed.task.phase, phase);
         assert.notEqual(resumed.task.dispatchId, prepared.task.dispatchId);
         assert.ok(resumed.task.preparedRevision > prepared.task.preparedRevision);
@@ -3669,10 +3967,12 @@ quality_gates:
         }));
         approvalReceiptPath = approval.receiptFile;
         assert.match(approval.approvalId, /^APR-[a-f0-9]{32}$/);
-        const applied = await runStoryCommand(storyOptions(root, { command: "apply" }));
-        assert.equal(applied.state.phase, "delivery-preparation");
+        const applied = await runE2E("step");
+        assert.equal(applied.action, "prepare");
+        const appliedState = await readJson(root, `.harness/states/e2e-${storyId}.json`);
+        assert.equal(appliedState.phase, "delivery-preparation");
         assert.equal((await readJson(root, resumed.checkpointFile)).status, "completed");
-        const blockedRecords = applied.state.runtime.records.filter((record) => (
+        const blockedRecords = appliedState.runtime.records.filter((record) => (
           record.type === "phase-result"
           && record.phase === "interface-verification"
           && record.status === "blocked"
@@ -3726,9 +4026,10 @@ quality_gates:
           await writeFile(path.join(root, driftPath), original);
         }
       }
-      const applied = await runStoryCommand(storyOptions(root, { command: "apply" }));
+      const applied = await runE2E("step");
       const expected = phases[index + 1] ?? "done";
-      assert.equal(applied.state.phase, expected);
+      assert.equal((await readJson(root, `.harness/states/e2e-${storyId}.json`)).phase, expected);
+      assert.equal(applied.action, expected === "done" ? "completed" : "prepare");
       assert.equal((await readJson(root, prepared.checkpointFile)).status, "completed");
       const restarted = await runStoryCommand(storyOptions(root, { command: "status" }));
       assert.equal(restarted.state.phase, expected);
@@ -4334,6 +4635,15 @@ await testFinalizeBatchReusesFinalizedLedgerBeforeApply();
 await testPrepareCreatesStructuredTaskAndCheckpoint();
 await testPrepareReusesCurrentPhaseTask();
 await testStatusIsReadOnly();
+await testInspectReportsValidatedCurrentDispatchState();
+await testInspectTracksRequiredAdapterRuns();
+await testInspectKeepsAdapterActionWhenAnyRunFailed();
+await testInspectPrioritizesFailedResultOverAdapterRequirement();
+await testInspectPrioritizesBlockedResultOverAdapterRequirement();
+await testInspectReportsAdvancedResultRecovery();
+await testInspectPrefersCurrentAttemptOverHistoricalRecovery();
+await testInspectRequiresApprovalForAnyAcceptedGap();
+await testInspectRejectsResultThatCannotPassPhaseGate();
 await testPrepareRejectsBlockedAndCompletedRuns();
 await testPrepareFailsClosedOnDamagedExistingTask();
 await testPrepareRejectsTaskOrCheckpointContractMismatch();

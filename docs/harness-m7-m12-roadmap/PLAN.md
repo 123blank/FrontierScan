@@ -205,13 +205,13 @@ docs/harness-m7b-serial-driver/REPORT.md（实施后）
 
 ### 6.2 实施任务
 
-- [ ] 定义 action package 与返回动作类别 Schema。
-- [ ] 实现 `Status`：只读返回当前阶段、缺失输入、可执行动作和批准需求。
-- [ ] 实现 `Step`：执行允许的确定性动作，认知任务返回 `cognitive-action-required`。
-- [ ] 实现 `Apply`：消费 v2 result，调用现有 Story/State Runtime 完成投影和推进。
-- [ ] 固定 Adapter 白名单，不接受模型生成 shell。
-- [ ] 覆盖重复 Step、断电恢复、结果缺失、批准缺失和阶段已变化。
-- [ ] 在 smoke 中加入完整 v2 串行 fixture。
+- [x] 定义确定性 inspection 状态与返回动作类别。
+- [x] 实现 `Status`：只读返回当前阶段、缺失输入、可执行动作和批准需求。
+- [x] 实现 `Step`：一次执行一个允许的确定性动作，认知任务返回 `cognitive-action-required`。
+- [x] 实现 `Apply`：消费 v2 result，调用现有 Story/State Runtime 完成投影和推进。
+- [x] 固定 Adapter 白名单，不接受模型生成 shell；Adapter 由当前会话按策略明确选择。
+- [x] 覆盖重复 Step、跨阶段恢复、结果缺失、批准缺失、证据漂移和阶段已变化。
+- [x] 九阶段 v2 纵向 fixture 已通过统一入口；smoke 登记并运行 M7-B 专项入口测试。
 - [ ] 使用新的 Harness 结构 Story 完成真实串行验收。
 
 ### 6.3 验收标准
