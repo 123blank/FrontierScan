@@ -2,9 +2,11 @@ package com.frontierscan.article;
 
 import com.frontierscan.common.api.ApiResponse;
 import com.frontierscan.common.security.JwtPrincipal;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +29,7 @@ import java.util.Map;
  * 所有操作基于当前认证用户进行数据隔离。
  * </p>
  */
+@Validated
 @RestController
 @RequestMapping("/api/articles")
 public class ArticleController {
@@ -50,12 +53,16 @@ public class ArticleController {
             @RequestParam(required = false) Long tagId,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
+            @RequestParam(defaultValue = "all")
+            @Pattern(regexp = "all|read|unread",
+                    message = "readStatus must be one of all, read, unread")
+            String readStatus,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         return ApiResponse.ok(articleService.listByUser(
                 principal.userId(), categoryId, siteId, keyword, tagId, startDate, endDate,
-                PageRequest.of(page, size)
+                readStatus, PageRequest.of(page, size)
         ));
     }
 

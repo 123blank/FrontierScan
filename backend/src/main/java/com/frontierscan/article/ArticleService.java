@@ -49,8 +49,23 @@ public class ArticleService {
                                     String keyword, Long tagId,
                                     String startDateStr, String endDateStr,
                                     Pageable pageable) {
+        return listByUser(userId, categoryId, siteId, keyword, tagId,
+                startDateStr, endDateStr, "all", pageable);
+    }
+
+    public Page<Article> listByUser(Long userId, Long categoryId, Long siteId,
+                                    String keyword, Long tagId,
+                                    String startDateStr, String endDateStr,
+                                    String readStatus, Pageable pageable) {
+        String normalizedReadStatus =
+                readStatus == null || readStatus.isBlank() ? "all" : readStatus;
+        if (!List.of("all", "read", "unread").contains(normalizedReadStatus)) {
+            throw new IllegalArgumentException("Unsupported readStatus: " + normalizedReadStatus);
+        }
+
         // No search filters: use proven JPA derived query methods
-        if (keyword == null && tagId == null && startDateStr == null && endDateStr == null) {
+        if (keyword == null && tagId == null && startDateStr == null && endDateStr == null
+                && "all".equals(normalizedReadStatus)) {
             if (categoryId != null) {
                 return articleRepository.findByUserIdAndCategoryIdOrderByCollectedAtDesc(userId, categoryId, pageable);
             }
@@ -62,7 +77,8 @@ public class ArticleService {
        // Filters present: use native query with explicit type casting
        String keywordPattern = keyword != null ? "%" + keyword.toLowerCase() + "%" : null;
        return articleRepository.findWithFilters(
-               userId, categoryId, siteId, keywordPattern, tagId, startDateStr, endDateStr, pageable);
+               userId, categoryId, siteId, keywordPattern, tagId, startDateStr, endDateStr,
+               normalizedReadStatus, pageable);
     }
 
     /** 获取文章详情，同时校验用户权限。 */

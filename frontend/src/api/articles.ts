@@ -18,6 +18,7 @@ export const articleApi = {
     tagId?: number;
     startDate?: string;
     endDate?: string;
+    readStatus?: 'all' | 'read' | 'unread';
     page?: number;
     size?: number;
   }) {

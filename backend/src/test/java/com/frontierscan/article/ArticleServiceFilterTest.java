@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -87,34 +88,46 @@ class ArticleServiceFilterTest {
         @Test
         @DisplayName("有关键词时委托原生 SQL findWithFilters")
         void shouldDelegateToNativeQueryWhenKeywordPresent() {
-            when(articleRepository.findWithFilters(anyLong(), any(), any(), anyString(), any(), any(), any(), any()))
+            when(articleRepository.findWithFilters(anyLong(), any(), any(), anyString(), any(), any(), any(), anyString(), any()))
                     .thenReturn(Page.empty());
 
             articleService.listByUser(USER_ID, null, null, KEYWORD, null, null, null, PageRequest.of(0, 10));
 
-            verify(articleRepository).findWithFilters(anyLong(), any(), any(), anyString(), any(), any(), any(), any());
+            verify(articleRepository).findWithFilters(anyLong(), any(), any(), anyString(), any(), any(), any(), eq("all"), any());
         }
 
         @Test
         @DisplayName("有 tagId 时委托原生 SQL findWithFilters")
         void shouldDelegateToNativeQueryWhenTagIdPresent() {
-            when(articleRepository.findWithFilters(anyLong(), any(), any(), any(), anyLong(), any(), any(), any()))
+            when(articleRepository.findWithFilters(anyLong(), any(), any(), any(), anyLong(), any(), any(), anyString(), any()))
                     .thenReturn(Page.empty());
 
             articleService.listByUser(USER_ID, null, null, null, TAG_ID, null, null, PageRequest.of(0, 10));
 
-            verify(articleRepository).findWithFilters(anyLong(), any(), any(), any(), anyLong(), any(), any(), any());
+            verify(articleRepository).findWithFilters(anyLong(), any(), any(), any(), anyLong(), any(), any(), eq("all"), any());
         }
 
         @Test
         @DisplayName("有日期参数时委托原生 SQL findWithFilters")
         void shouldDelegateToNativeQueryWhenDatePresent() {
-            when(articleRepository.findWithFilters(anyLong(), any(), any(), any(), any(), anyString(), any(), any()))
+            when(articleRepository.findWithFilters(anyLong(), any(), any(), any(), any(), anyString(), any(), anyString(), any()))
                     .thenReturn(Page.empty());
 
             articleService.listByUser(USER_ID, null, null, null, null, DATE_STR, null, PageRequest.of(0, 10));
 
-            verify(articleRepository).findWithFilters(anyLong(), any(), any(), any(), any(), anyString(), any(), any());
+            verify(articleRepository).findWithFilters(anyLong(), any(), any(), any(), any(), anyString(), any(), eq("all"), any());
+        }
+
+        @Test
+        @DisplayName("非法阅读状态在查询前被拒绝")
+        void shouldRejectInvalidReadStatusBeforeRepositoryQuery() {
+            assertThatThrownBy(() -> articleService.listByUser(
+                    USER_ID, null, null, null, null, null, null,
+                    "unknown", PageRequest.of(0, 10)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("unknown");
+
+            verifyNoInteractions(articleRepository);
         }
     }
 
