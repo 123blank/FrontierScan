@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdir, open, readFile, readdir, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 
 export const IMPLEMENTATION_OWNER_MODES = new Set([
@@ -75,6 +75,12 @@ export function implementationOwnerPath(state) {
   return `.harness/runs/${state.runtime.runId}/phases/03-implementation/implementation-owner.json`;
 }
 
+function ownerSupersession(state, owner) {
+  return (state.runtime.reworks ?? []).find(
+    (rework) => rework.supersededDispatchIds.includes(owner.ownerId),
+  ) ?? null;
+}
+
 export async function inspectImplementationOwner({ root, state }) {
   const file = implementationOwnerPath(state);
   const owner = await readJsonOptional(
@@ -83,9 +89,11 @@ export async function inspectImplementationOwner({ root, state }) {
   );
   if (!owner) return null;
   validateImplementationOwnerStructure(owner);
-  if (owner.storyId !== state.storyId
-      || owner.runId !== state.runtime.runId
-      || owner.preparedRevision !== state.runtime.revision) {
+  if (owner.storyId !== state.storyId || owner.runId !== state.runtime.runId) {
+    throw new Error("Implementation owner identity does not match the active state.");
+  }
+  const supersededBy = ownerSupersession(state, owner);
+  if (owner.preparedRevision !== state.runtime.revision && !supersededBy) {
     throw new Error("Implementation owner identity does not match the active state.");
   }
   const expectedTaskDagFile = `.harness/runs/${state.runtime.runId}/phases/02-task-dag/task-dag.json`;
@@ -97,7 +105,7 @@ export async function inspectImplementationOwner({ root, state }) {
   if (taskDagSha256 !== owner.taskDagSha256) {
     throw new Error("Implementation owner Task DAG hash drifted.");
   }
-  return { file, owner };
+  return { file, owner, supersededBy };
 }
 
 async function legacyWaveLedgerExists(root, state) {
@@ -133,6 +141,7 @@ export async function assertImplementationModeAvailable({ root, state, requested
     throw new Error(`Unsupported implementation owner mode: ${requestedMode}`);
   }
   const current = await inspectImplementationOwner({ root, state });
+  if (current?.supersededBy) return null;
   if (!current && await legacyWaveLedgerExists(root, state)) {
     if (requestedMode !== "worktree-wave") {
       throw new Error(
@@ -216,6 +225,19 @@ export async function acquireImplementationOwner({
   };
   validateImplementationOwnerStructure(desired);
   await mkdir(path.dirname(ownerPath), { recursive: true });
+  const existing = await inspectImplementationOwner({ root, state });
+  if (existing?.supersededBy) {
+    if (existing.owner.mode !== "ordinary") {
+      throw new Error("Only a superseded ordinary implementation owner can be replaced by rework.");
+    }
+    const archivePath = path.join(
+      path.dirname(ownerPath),
+      "superseded-owners",
+      `${existing.supersededBy.reworkId}.json`,
+    );
+    await mkdir(path.dirname(archivePath), { recursive: true });
+    await rename(ownerPath, archivePath);
+  }
 
   let handle;
   try {

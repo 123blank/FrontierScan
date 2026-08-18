@@ -5,11 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  REWORK_PHASES,
   assertStateCommandAllowed,
   validateActivePointer as validatePointerContract,
   validateStateDocument,
 } from "./state-contract.mjs";
 import { recordSemanticIdentity } from "./record-contract.mjs";
+import { buildAcceptanceSummary } from "./acceptance-gate.mjs";
 
 const STORY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ACTIVE_POINTER = ".harness/states/active-run.json";
@@ -890,6 +892,98 @@ async function resumeRun(root, located, options) {
   return persistLocated(root, located, state, pointer, "resume", options);
 }
 
+async function reworkRun(root, located, options) {
+  if (located.state.schemaVersion !== "2.0"
+      || located.state.phase !== "blocked"
+      || located.state.runtime.status !== "blocked"
+      || located.state.runtime.activeBlock?.previousPhase !== "delivery-preparation") {
+    throw new Error("Rework is only allowed from blocked delivery-preparation State v2.");
+  }
+  if (!options.reason?.trim()) throw new Error("reason is required when reworking a run.");
+  if (!options.actor?.trim()) throw new Error("actor is required when reworking a run.");
+
+  const alreadySuperseded = new Set(
+    (located.state.runtime.reworks ?? []).flatMap((rework) => rework.supersededDispatchIds),
+  );
+  const supersededRecords = located.state.runtime.records.filter(
+    (record) => record.type === "phase-result"
+      && record.status === "applied"
+      && REWORK_PHASES.includes(record.phase)
+      && !alreadySuperseded.has(record.dispatchId),
+  );
+  for (const phase of REWORK_PHASES) {
+    if (supersededRecords.filter((record) => record.phase === phase).length !== 1) {
+      throw new Error(`Rework requires exactly one active applied phase-result for '${phase}'.`);
+    }
+  }
+
+  const timestamp = nowValue(options);
+  const state = structuredClone(located.state);
+  const reworkId = randomUUID();
+  const triggeredRevision = state.runtime.revision;
+  state.phase = "implementation";
+  state.runtime.status = "active";
+  state.runtime.previousPhase = "blocked";
+  state.runtime.activeBlock = null;
+  state.runtime.reworks ??= [];
+  state.runtime.reworks.push({
+    reworkId,
+    reason: options.reason.trim(),
+    actor: options.actor.trim(),
+    discoveredPhase: "delivery-preparation",
+    targetPhase: "implementation",
+    triggeredRevision,
+    supersededDispatchIds: supersededRecords.map((record) => record.dispatchId),
+    createdAt: timestamp,
+  });
+  state.dag.nodes = state.dag.nodes.map((node) => ({ ...node, status: "planned" }));
+  state.implementation = {
+    method: null,
+    exceptionReason: null,
+    actualFiles: [],
+    completedTaskIds: [],
+    notes: [],
+  };
+  state.tests = { cases: [], commands: [], results: [] };
+  state.review = { findings: [], status: "pending" };
+  state.build = { results: [], artifacts: [], externalActions: [] };
+  state.verification = {
+    cases: [],
+    results: [],
+    environment: {
+      status: "not-checked",
+      summary: "",
+      evidencePath: null,
+      evidenceSha256: null,
+    },
+  };
+  state.delivery = {
+    status: "pending",
+    ownedFiles: [],
+    outOfPredictionFiles: [],
+    unrelatedDirtyFiles: [],
+    remainingRisks: [],
+    summaryFile: null,
+    summarySha256: null,
+    ownedManifestFile: null,
+    ownedManifestSha256: null,
+    gitStatus: "not-requested",
+  };
+  state.acceptance = buildAcceptanceSummary(state);
+  state.runtime.revision += 1;
+  state.runtime.updatedAt = timestamp;
+  state.logs.push({
+    type: "rework",
+    reworkId,
+    from: "delivery-preparation",
+    to: "implementation",
+    revision: state.runtime.revision,
+    createdAt: timestamp,
+  });
+  const pointer = { ...located.pointer, status: "active", updatedAt: timestamp };
+  return persistLocated(root, located, state, pointer, "rework", options);
+}
+
 async function initializeRun(root, options) {
   if (!STORY_ID_PATTERN.test(options.storyId ?? "")) {
     throw new Error("storyId must match [A-Za-z0-9][A-Za-z0-9._-]{0,63}.");
@@ -1046,7 +1140,7 @@ export async function runStateCommand(options = {}) {
     return { command: "status", ...located };
   }
   if (options.command === "validate") return validateLocated(root, located);
-  const mutatingCommands = new Set(["next", "record", "block", "resume", "complete"]);
+  const mutatingCommands = new Set(["next", "record", "block", "resume", "rework", "complete"]);
   if (!mutatingCommands.has(options.command)) {
     throw new Error(`Unsupported state command: ${options.command ?? "(missing)"}`);
   }
@@ -1063,6 +1157,7 @@ export async function runStateCommand(options = {}) {
     if (options.command === "record") return recordEvidence(root, fresh, options);
     if (options.command === "block") return blockRun(root, fresh, options);
     if (options.command === "resume") return resumeRun(root, fresh, options);
+    if (options.command === "rework") return reworkRun(root, fresh, options);
     return completeRun(root, fresh, options);
   });
 }

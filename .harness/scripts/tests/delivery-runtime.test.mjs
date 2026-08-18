@@ -237,6 +237,51 @@ async function testUnstagedFilesystemRenameAndCopyAreDetected() {
   }
 }
 
+async function testCopyIntoRunControlAssetsIsIgnored() {
+  const { root, state } = await fixture();
+  try {
+    state.implementation.actualFiles = [];
+    await write(
+      root,
+      `.harness/runs/${state.runtime.runId}/phases/evidence/owned-copy.txt`,
+      "baseline\n",
+    );
+
+    const facts = await deriveDeliveryFacts({ root, state });
+    assert.deepEqual(facts.relations, []);
+    assert.deepEqual(facts.ownedFiles, []);
+    assert.deepEqual(facts.unrelatedDirtyFiles, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testControlOnlyAdditionsSkipIdentityFoldingWithoutDeletions() {
+  const { root, state } = await fixture();
+  try {
+    state.implementation.actualFiles = [];
+    await write(
+      root,
+      `.harness/runs/${state.runtime.runId}/phases/evidence/control-only.txt`,
+      "control\n",
+    );
+    let hashObjectCalls = 0;
+    const facts = await deriveDeliveryFacts({
+      root,
+      state,
+      executeGit: async (args) => {
+        if (args[0] === "hash-object") hashObjectCalls += 1;
+        return git(root, ...args);
+      },
+    });
+
+    assert.deepEqual(facts.relations, []);
+    assert.equal(hashObjectCalls, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 async function testCrossControlAssetRenameFailsClosed() {
   for (const [source, target] of [
     ["backend/owned.txt", ".harness/runs/M7-A4-DELIVERY/phases/owned.txt"],
@@ -508,6 +553,45 @@ async function testCommitReceiptVerifiesManifestTree() {
   }
 }
 
+async function testCommitReceiptRejectsWrongParentAndMissingOwnedFile() {
+  const wrongParent = await completedDeliveryFixture();
+  try {
+    await git(wrongParent.root, "add", "backend/owned.txt");
+    const tree = (await git(wrongParent.root, "write-tree")).stdout.trim();
+    const orphanCommit = (await git(wrongParent.root, "commit-tree", tree, "-m", "orphan delivery")).stdout.trim();
+    await assert.rejects(
+      recordDeliveryReceipt({
+        root: wrongParent.root,
+        stateFile: wrongParent.stateFile,
+        commit: orphanCommit,
+        now: () => NOW,
+      }),
+      /baseline head is not an ancestor/i,
+    );
+  } finally {
+    await rm(wrongParent.root, { recursive: true, force: true });
+  }
+
+  const missingOwned = await completedDeliveryFixture();
+  try {
+    await write(missingOwned.root, "docs/other.txt", "unrelated delivery\n");
+    await git(missingOwned.root, "add", "docs/other.txt");
+    await git(missingOwned.root, "commit", "-m", "commit without owned file");
+    const commit = (await git(missingOwned.root, "rev-parse", "HEAD")).stdout.trim();
+    await assert.rejects(
+      recordDeliveryReceipt({
+        root: missingOwned.root,
+        stateFile: missingOwned.stateFile,
+        commit,
+        now: () => NOW,
+      }),
+      /manifest.*blob|blob.*manifest|tree.*manifest/i,
+    );
+  } finally {
+    await rm(missingOwned.root, { recursive: true, force: true });
+  }
+}
+
 async function testPushReceiptUsesReadOnlyRemoteFacts() {
   const fixtureValue = await completedDeliveryFixture();
   try {
@@ -559,6 +643,8 @@ await testManifestIsStableAndExcludesItself();
 await testRenameExpandsFactsButUsesOneManifestRelation();
 await testDeletedPathRecreatedIsFoldedToNetChange();
 await testUnstagedFilesystemRenameAndCopyAreDetected();
+await testCopyIntoRunControlAssetsIsIgnored();
+await testControlOnlyAdditionsSkipIdentityFoldingWithoutDeletions();
 await testCrossControlAssetRenameFailsClosed();
 await testCopySourceParticipatesInSafetyChecks();
 await testNotRequestedReceiptIsAppendOnlyAndIdempotent();
@@ -566,5 +652,7 @@ await testReceiptRejectsIdentityAndTimestampDrift();
 await testReceiptRecoversDeadOwnerLockButNotLiveOwner();
 await testReceiptRejectsMalformedCompletedState();
 await testCommitReceiptVerifiesManifestTree();
+await testCommitReceiptRejectsWrongParentAndMissingOwnedFile();
 await testPushReceiptUsesReadOnlyRemoteFacts();
+console.log("M7D-SCENARIO:delivery-receipt:passed");
 console.log("delivery-runtime tests passed");

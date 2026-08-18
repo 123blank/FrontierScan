@@ -17,7 +17,7 @@ import {
   validateDispatchTaskStructure,
 } from "../lib/dispatch-contract.mjs";
 import { runStateCommand } from "../lib/state-runtime.mjs";
-import { runStoryCommand } from "../lib/story-runtime.mjs";
+import { phaseOutputs, runStoryCommand } from "../lib/story-runtime.mjs";
 import { runE2ECommand } from "../lib/e2e-runtime.mjs";
 import { runWorktreeCommand } from "../lib/worktree-runtime.mjs";
 import { prepareOwnedManifest } from "../lib/delivery-runtime.mjs";
@@ -68,6 +68,32 @@ function testContentId(prefix, value) {
     .update(JSON.stringify(canonical(value)))
     .digest("hex")
     .slice(0, 32)}`;
+}
+
+function testReworkUsesVersionedPhaseOutputs() {
+  const reworkId = "00000000-0000-4000-8000-200000000000";
+  const state = {
+    runtime: {
+      reworks: [{
+        reworkId,
+        supersededDispatchIds: ["00000000-0000-4000-8000-000000000004"],
+      }],
+      records: [{
+        type: "phase-result",
+        phase: "implementation",
+        status: "applied",
+        dispatchId: "00000000-0000-4000-8000-000000000004",
+      }],
+    },
+  };
+  const phaseRoot = ".harness/runs/M7-D-REWORK/phases/03-implementation";
+  assert.deepEqual(
+    phaseOutputs(process.cwd(), {
+      id: "implementation",
+      required_outputs: [`${phaseRoot}/implementation-notes.md`],
+    }, phaseRoot, state),
+    [`${phaseRoot}/implementation-notes.rework-${reworkId}.md`],
+  );
 }
 
 async function writeKnowledgeArtifact(root, directory, prefix, idField, body) {
@@ -5143,10 +5169,12 @@ await testFinalizeBatchRejectsLedgerRevisionDriftBeforePhaseArtifacts();
 await testFinalizeBatchRejectsNonImplementationPhaseWithoutStateChange();
 await testFinalizeBatchReusesFinalizedLedgerBeforeApply();
 await testPrepareCreatesStructuredTaskAndCheckpoint();
+testReworkUsesVersionedPhaseOutputs();
 await testCheckKnowledgeUsesPreparedTechnicalDesignWithoutStateMutation();
 await testInspectReportsKnowledgeRefreshAndEvidenceDrift();
 await testRecheckKnowledgeReplacesDriftedResultArea();
 await testApproveStaleProjectsFormalKnowledgeApproval();
+console.log("M7D-SCENARIO:accepted-stale:passed");
 await testRefreshKnowledgeUpdatesOnlyCurrentResult();
 await testPrepareReusesCurrentPhaseTask();
 await testStatusIsReadOnly();
@@ -5172,6 +5200,7 @@ await testDispatchV2ContractsUseAttemptScopedIdentity();
 await testDispatchV2PhasePayloadsAreStrict();
 await testApplyCompletedResultAdvancesThroughM2();
 await testApplyDeduplicatesManualAndAutomaticOutputRecords();
+console.log("M7D-SCENARIO:duplicate-apply:passed");
 await testApplyRejectsMissingOutputAndIdentityMismatchWithoutStateChange();
 await testApplyFailedAndBlockedResultsKeepDeterministicState();
 await testApplyKeepsStateUnchangedBeforeAtomicProjection();
@@ -5180,13 +5209,17 @@ await testStructuredFailedTestsCannotAdvance();
 await testBuildPhaseRequiresACommandAdapterResult();
 await testNoBuildAdapterRejectsBackendOrFrontendChanges();
 await testApplyReconcilesAfterAdvanceBeforeCheckpointWrite();
+console.log("M7D-SCENARIO:interruption-recovery:passed");
 await testApplyRebuildsMissingAttemptPointerFromFormalResultIndex();
+console.log("M7D-SCENARIO:result-drift:passed");
 await testBlockedApplyRecoversProcessFilesFromFormalResultIndex();
 await testBuildPhaseRejectsChangedAdapterEvidence();
 await testCodeReviewRequiresPassedReviewEvidence();
 await testCompleteSingleStoryVerticalSlice();
+console.log("M7D-SCENARIO:no-git-completion:passed");
 await testRequirementAcceptanceGateRejectsBeforePersistence();
 await testApproveGapWritesAttemptReceiptWithoutChangingState();
+console.log("M7D-SCENARIO:accepted-gap:passed");
 await testApproveGapAndApplyShareStoryWriteLock();
 await testVerifiedEvidenceDriftBlocksApplyWithoutStateChange();
 await testM3RuntimeIsRegisteredInHarnessContracts();

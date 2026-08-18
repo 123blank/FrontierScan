@@ -1172,13 +1172,34 @@ async function prepareWave(root, options) {
   };
 }
 
-function phaseOutputs(root, phase, expectedPhaseRoot) {
+function phaseRework(state, phaseId) {
+  if (!state?.runtime?.reworks?.length) return null;
+  const records = new Map(
+    state.runtime.records
+      .filter((record) => record.type === "phase-result")
+      .map((record) => [record.dispatchId, record]),
+  );
+  return [...state.runtime.reworks].reverse().find(
+    (rework) => rework.supersededDispatchIds.some(
+      (dispatchId) => records.get(dispatchId)?.phase === phaseId,
+    ),
+  ) ?? null;
+}
+
+function versionReworkOutput(output, reworkId) {
+  const extension = path.posix.extname(output);
+  const stem = extension ? output.slice(0, -extension.length) : output;
+  return `${stem}.rework-${reworkId}${extension}`;
+}
+
+export function phaseOutputs(root, phase, expectedPhaseRoot, state = null) {
+  const rework = phaseRework(state, phase.id);
   const outputs = phase.required_outputs.map((output) => {
     const resolved = resolveInsideRoot(root, output, "Required output");
     if (!resolved.relative.startsWith(`${expectedPhaseRoot}/`)) {
       throw new Error(`Required output must stay inside the current phase directory: ${output}`);
     }
-    return resolved.relative;
+    return rework ? versionReworkOutput(resolved.relative, rework.reworkId) : resolved.relative;
   });
   if (phase.id === "delivery-preparation") {
     const runRoot = expectedPhaseRoot.slice(0, expectedPhaseRoot.indexOf("/phases/"));
@@ -1210,7 +1231,7 @@ function validateTask(root, task, state, phase, expectedPhaseRoot) {
     }
   }
   const allowedAdapters = PHASE_ADAPTERS[phase.id] ?? [];
-  const expectedOutputs = phaseOutputs(root, phase, expectedPhaseRoot);
+  const expectedOutputs = phaseOutputs(root, phase, expectedPhaseRoot, state);
   if (task.ownerAgent !== phase.owner_agent
       || task.purpose !== phase.purpose
       || task.next !== phase.next[0]
@@ -1545,7 +1566,7 @@ async function prepareFromContext(root, options, verifiedBatch, context, prepara
   await assertBatchDoesNotBlockPrepare(root, located, phase, verifiedBatch, preparationLockHeld, allowReadyBatchStaging);
 
   const phaseRoot = phaseDirectory(located.state, phase);
-  const expectedOutputs = phaseOutputs(root, phase, phaseRoot);
+  const expectedOutputs = phaseOutputs(root, phase, phaseRoot, located.state);
   const timestamp = (options.now ?? (() => new Date().toISOString()))();
   const currentFiles = await phaseDispatchFiles(root, located.state, phase);
   const canReuseV2 = located.state.schemaVersion === "2.0"
@@ -1558,9 +1579,26 @@ async function prepareFromContext(root, options, verifiedBatch, context, prepara
   const { taskFile, resultFile, checkpointFile } = files;
   const taskPath = resolveInsideRoot(root, taskFile, "Task file").fullPath;
   const checkpointPath = resolveInsideRoot(root, checkpointFile, "Checkpoint file").fullPath;
-  const existing = canReuseV2 || located.state.schemaVersion !== "2.0"
+  let existing = canReuseV2 || located.state.schemaVersion !== "2.0"
     ? await readJsonOptional(taskPath, "Task file")
     : null;
+  if (existing && phaseRework(located.state, phase.id)) {
+    const legacyOutputs = phaseOutputs(root, phase, phaseRoot);
+    const needsOutputUpgrade = JSON.stringify(existing.expectedOutputs) === JSON.stringify(legacyOutputs)
+      && JSON.stringify(existing.expectedOutputs) !== JSON.stringify(expectedOutputs);
+    if (needsOutputUpgrade) {
+      const existingResult = await readJsonOptional(
+        resolveInsideRoot(root, resultFile, "Result file").fullPath,
+        "Result file",
+      );
+      const existingCheckpoint = await readJsonOptional(checkpointPath, "Checkpoint file");
+      if (existingResult || (existingCheckpoint && existingCheckpoint.status !== "prepared")) {
+        throw new Error("Prepared rework task cannot change outputs after execution has started.");
+      }
+      existing = { ...existing, expectedOutputs };
+      await writeAtomicJson(taskPath, existing);
+    }
+  }
   const task = existing ?? (located.state.schemaVersion === "2.0" ? {
     schemaVersion: "2.0",
     dispatchId: path.posix.basename(files.attemptRoot),
@@ -2051,7 +2089,7 @@ async function ensureExactText(filePath, value, label) {
 async function materializeWaveFinalizationPhaseArtifacts(root, options, context, ledger, manifest, artifacts) {
   const { located, phase } = context;
   const phaseRoot = phaseDirectory(located.state, phase);
-  const expectedOutputs = phaseOutputs(root, phase, phaseRoot);
+  const expectedOutputs = phaseOutputs(root, phase, phaseRoot, located.state);
   const taskFile = `${phaseRoot}/task.json`;
   const resultFile = `${phaseRoot}/result.json`;
   const checkpointFile = `${phaseRoot}/checkpoint.json`;

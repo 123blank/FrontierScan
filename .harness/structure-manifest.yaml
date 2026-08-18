@@ -137,6 +137,7 @@ required_files:
   - .harness/scripts/lib/delivery-runtime.mjs
   - .harness/scripts/lib/e2e-runtime.mjs
   - .harness/scripts/lib/knowledge-runtime.mjs
+  - .harness/scripts/lib/story-closure-verifier.mjs
   - .harness/scripts/lib/worktree-wave-execution-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
@@ -164,11 +165,15 @@ required_files:
   - .harness/scripts/tests/e2e-runtime.test.mjs
   - .harness/scripts/tests/knowledge-runtime.test.mjs
   - .harness/scripts/tests/e2e-cli.test.ps1
+  - .harness/scripts/tests/story-closure-verifier.test.mjs
+  - .harness/scripts/tests/story-closure-verifier-cli.test.ps1
+  - .harness/scripts/tests/m7d-closure-acceptance.test.mjs
   - .harness/scripts/tests/task-dag.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
   - .harness/scripts/run-worktree-integration.ps1
   - .harness/scripts/scan-knowledge-inputs.ps1
+  - .harness/scripts/verify-story-closure.ps1
   - .harness/scripts/check-kb-freshness.ps1
   - .harness/scripts/plan-worktrees.ps1
   - .harness/scripts/derive-interface-cases.ps1

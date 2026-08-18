@@ -236,6 +236,7 @@ const COMPLETION_PHASES = [
 ];
 
 export function assertCompletionGate(state, { currentPhaseResult } = {}) {
+  assertReworkSupersessions(state);
   if (state.delivery.status !== "ready") throw new Error("Delivery must be ready before completion.");
   assertKnowledgeGate(state);
   assertTaskDagGate(state);
@@ -260,8 +261,13 @@ export function assertCompletionGate(state, { currentPhaseResult } = {}) {
     }
   }
 
+  const supersededDispatchIds = new Set(
+    (state.runtime.reworks ?? []).flatMap((item) => item.supersededDispatchIds),
+  );
   const applied = state.runtime.records.filter(
-    (item) => item.type === "phase-result" && item.status === "applied",
+    (item) => item.type === "phase-result"
+      && item.status === "applied"
+      && !supersededDispatchIds.has(item.dispatchId),
   );
   if (currentPhaseResult) applied.push({ ...currentPhaseResult, status: "applied" });
   let previousAppliedRevision = null;
@@ -301,3 +307,4 @@ export function assertCompletionGate(state, { currentPhaseResult } = {}) {
   }
   return state;
 }
+import { assertReworkSupersessions } from "./state-contract.mjs";

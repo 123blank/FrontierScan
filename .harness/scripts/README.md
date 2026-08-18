@@ -10,6 +10,7 @@ run-state.ps1
 run-story.ps1
 run-e2e.ps1
 run-delivery.ps1
+verify-story-closure.ps1
 run-worktree.ps1
 run-worktree-integration.ps1
 validate-task-dag.ps1
@@ -33,7 +34,8 @@ smoke-harness-flow.ps1
 - M7-C 在 `technical-design` attempt 内增加 `check-knowledge`、`refresh-knowledge` 和 `approve-stale`。已有 completed result 时重复 `check-knowledge -Area <area>` 会受控重查并原子替换该 area；刷新产物使用 attempt 内不可变 content-addressed evidence，common 显式保护三域。`run-e2e` 对 relevant stale 返回 `knowledge-refresh-required`，不会自动刷新或伪造用户批准。
 - `lib/e2e-runtime.mjs` 不读取 Markdown，不解析私有 attempt 文件，不运行任意 shell，不启动 Agent，也不执行 Git、Worktree、发布或并行操作。
 - `run-delivery.ps1` 是 M7-A4 交付事实入口，支持 `PrepareManifest/Summarize/Record`。它只读取 Git 或写入 Harness 控制证据，不执行 `git add/commit/push`；`PrepareManifest` 在 Story 写锁内生成 owned manifest，`Record` 在 completed State 外追加版本化交付回执。
-- `lib/delivery-runtime.mjs` 从 baseline、`implementation.actualFiles`、DAG prediction 和当前 Git 净变化推导 owned、预测外与 unrelated；State 模式不再按固定路径前缀认领业务文件。`summarize-delivery.ps1` 无 `StateFile` 时保留旧兼容模式，有 `StateFile` 时使用该 Runtime。
+- `verify-story-closure.ps1` 是 M7-D completed State 只读核验入口。它复用 State v2、workflow、严格 task/result contract、phase projector 和 completion gate：phase-result 必须位于对应 phase/dispatch attempt，active task 必须匹配 workflow，completed outputs 必须精确匹配 required set，records 必须位于本 attempt evidence；全部内嵌产物继续校验字节数和 SHA-256。核验器再由 supersession 后唯一有效的九阶段 completed result 重算投影、核对最终 State。它同时验证 DAG、测试、构建、验证、批准和交付证据，并拒绝未解决的 BLOCKER/WARNING；固定证据仍受目录白名单约束，构建产物则按仓库内非 `.git` 普通文件校验。它不读取聊天、不修改 State，也不记录 Git receipt。
+- `lib/delivery-runtime.mjs` 从 baseline、`implementation.actualFiles`、DAG prediction 和当前 Git 净变化推导 owned、预测外与 unrelated；State 模式不再按固定路径前缀认领业务文件。没有删除关系时，纯 `.harness/runs/<runId>/` 控制区新增文件会在复制身份折叠前排除，避免大量无效 Git 子进程；存在删除关系时仍保留完整跨边界检测。`summarize-delivery.ps1` 无 `StateFile` 时保留旧兼容模式，有 `StateFile` 时使用该 Runtime。
 - `lib/record-contract.mjs` 为 State v2 手工 evidence 与 Story 自动 evidence 提供共享语义身份；相同事实重放不增加 revision、events 或 records。
 - 状态运行时核心与回归测试分别位于 `lib/state-runtime.mjs` 和 `tests/state-runtime.test.mjs`。
 - `run-story.ps1` 是 M3 单 Story 文件式 Dispatcher 入口，支持 `prepare/status/inspect/run-adapter/apply`、M5-B3-B 的 `prepare-batch/finalize-batch`，以及 M5-D 的 `prepare-wave/finalize-wave`。`inspect` 只读校验当前或恢复 attempt、Adapter evidence 和 verification-gap approval；`apply` 仍是唯一状态推进入口。
@@ -57,7 +59,8 @@ smoke-harness-flow.ps1
 - 生成器采用失败关闭策略处理摄取失败：读取源文件或共享资源失败时保留覆盖率诊断，并将受影响文档和索引指纹标记为 `partial`。
 - 缺少旧版指纹时需要执行一次基线刷新。公共源文件变化通过 `generate-kb.ps1 -Area all -Mode baseline` 修复。
 - `generate-kb.ps1 -WithEmbeddings` 为显式启用项，使用 `EMBEDDING_API_KEY`（未配置时回退到 `DASHSCOPE_API_KEY`），并支持通过 `EMBEDDING_BASE_URL` 和 `EMBEDDING_MODEL` 覆盖默认的阿里百炼端点与 `text-embedding-v4` 模型；`OPENAI_EMBEDDING_MODEL` 仅作为旧配置兼容项。缺少密钥或 API 调用失败时会报告 `pending` 或 `failed`，但不会阻塞基线文档和本地索引生成。
-- 回归测试位于 `tests/source-fingerprint.test.mjs`、`tests/harness-status.test.mjs`、`tests/generate-kb.test.mjs`、`tests/kb-query.test.ps1`、`tests/kb-freshness.test.ps1`、`tests/task-dag.test.ps1`、`tests/worktree-runtime.test.mjs`、`tests/worktree-wave-runtime.test.mjs`、`tests/worktree-wave-execution-runtime.test.mjs`、`tests/worktree-worker-runtime.test.mjs`、`tests/worktree-integration-runtime.test.mjs`、`tests/worktree-lifecycle-runtime.test.mjs`、`tests/batch-runtime.test.mjs` 和 `tests/serial-batch-runtime.test.mjs`。DAG 测试覆盖 UTF-8、wave/依赖/冲突；Worktree 与批次测试仅在临时 Git 仓库覆盖计划、审批门禁、真实创建、逐任务 Worker/集成、单次状态推进、回收、幂等、锁 fencing 和中断恢复。M5-D-C1 用 barrier 验证多 Worker 真实并发，并覆盖 partial、retry、完整/blocked/孤儿恢复和五个写点 owner fencing；正式仓库未执行 Worker 或 Worktree 写操作。
+- M7-D 回归入口为 `tests/story-closure-verifier.test.mjs`、`tests/story-closure-verifier-cli.test.ps1` 和 `tests/m7d-closure-acceptance.test.mjs`。前两项覆盖 completed State 摘要、State/result 投影分歧、result 内嵌产物漂移、跨阶段 output 替换、result 白名单内搬移、直接及含 `..` 规范化的跨 attempt record 替换、普通证据漂移和路径逃逸；后者确定性重跑 State、Approval、Knowledge、Story 和 Delivery 相关测试，验证 block/resume、两类批准、result 漂移、重复 apply、中断恢复、无 Git 完成和独立交付回执。
+- 其他回归测试位于 `tests/source-fingerprint.test.mjs`、`tests/harness-status.test.mjs`、`tests/generate-kb.test.mjs`、`tests/kb-query.test.ps1`、`tests/kb-freshness.test.ps1`、`tests/task-dag.test.ps1`、`tests/worktree-runtime.test.mjs`、`tests/worktree-wave-runtime.test.mjs`、`tests/worktree-wave-execution-runtime.test.mjs`、`tests/worktree-worker-runtime.test.mjs`、`tests/worktree-integration-runtime.test.mjs`、`tests/worktree-lifecycle-runtime.test.mjs`、`tests/batch-runtime.test.mjs` 和 `tests/serial-batch-runtime.test.mjs`。DAG 测试覆盖 UTF-8、wave/依赖/冲突；Worktree 与批次测试仅在临时 Git 仓库覆盖计划、审批门禁、真实创建、逐任务 Worker/集成、单次状态推进、回收、幂等、锁 fencing 和中断恢复。M5-D-C1 用 barrier 验证多 Worker 真实并发，并覆盖 partial、retry、完整/blocked/孤儿恢复和五个写点 owner fencing；正式仓库未执行 Worker 或 Worktree 写操作。
 - 禁止在此处放置业务逻辑。
 - 脚本应从仓库读取数据，并且只有在文档明确说明时才能写入 `.harness/` 产物。
 

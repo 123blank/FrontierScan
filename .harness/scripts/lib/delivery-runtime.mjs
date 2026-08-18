@@ -283,9 +283,18 @@ async function currentRelations(root, state, options) {
     ...parseNameStatusZ(stdoutBuffer(trackedResult)),
     ...parseUntrackedZ(stdoutBuffer(statusResult)),
   ];
-  const relations = await foldWorkingTreeRelations(root, state.baseline.head, parsedRelations, options);
+  const hasDeletedRelation = parsedRelations.some((item) => item.changeKind === "deleted");
+  const foldCandidates = hasDeletedRelation
+    ? parsedRelations
+    : parsedRelations.filter(
+      (item) => item.changeKind !== "added" || !isControlPath(state, item.path),
+    );
+  const relations = await foldWorkingTreeRelations(root, state.baseline.head, foldCandidates, options);
   const unique = new Map();
   for (const relation of relations) {
+    if (relation.changeKind === "copied" && isControlPath(state, relation.path)) {
+      continue;
+    }
     const endpoints = relationSafetyPaths(relation);
     const controlEndpoints = endpoints.filter((item) => isControlPath(state, item));
     if (controlEndpoints.length === endpoints.length) continue;

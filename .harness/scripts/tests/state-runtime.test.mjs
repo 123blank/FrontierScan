@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm as removePath, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -16,6 +17,7 @@ import {
   detectE2EStateVersion,
   validateStateDocument,
 } from "../lib/state-contract.mjs";
+import { acquireImplementationOwner } from "../lib/implementation-owner-contract.mjs";
 
 const FIXED_NOW = "2026-07-16T00:00:00.000Z";
 const RUN_STATE_SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "run-state.ps1");
@@ -2416,6 +2418,282 @@ async function testStateWriteLockWaitsForTemporarilyUnreadableLock() {
   }
 }
 
+async function testBoundedImplementationReworkSupersedesDownstreamResults() {
+  const { root } = await createFixture();
+  try {
+    const initialized = await runStateCommand({
+      root,
+      command: "init",
+      storyId: "M7-D-REWORK",
+      summary: "Verify bounded late-stage rework",
+      now: () => FIXED_NOW,
+    });
+    const stateFile = initialized.pointer.stateFile;
+    const state = await readJson(root, stateFile);
+    const phases = [
+      "requirement",
+      "technical-design",
+      "task-dag",
+      "implementation",
+      "unit-test",
+      "code-review",
+      "build-publish",
+      "interface-verification",
+    ];
+    state.runtime.records = phases.map((phase, index) => ({
+      id: `result:00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      type: "phase-result",
+      phase,
+      status: "applied",
+      path: `.harness/runs/M7-D-REWORK/${phase}/result.json`,
+      sha256: `sha256:${String(index + 1).repeat(64).slice(0, 64)}`,
+      bytes: 1,
+      message: "",
+      actor: "story-runtime",
+      dispatchId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      preparedRevision: index + 1,
+      appliedRevision: index + 2,
+      createdAt: FIXED_NOW,
+    }));
+    state.phase = "blocked";
+    state.runtime.status = "blocked";
+    state.runtime.revision = 12;
+    state.runtime.previousPhase = "delivery-preparation";
+    state.runtime.activeBlock = {
+      previousPhase: "delivery-preparation",
+      reason: "Late UI fix changed the implementation.",
+      owner: "harness-runtime",
+      suggestedAction: "Rework implementation and rerun downstream gates.",
+      blockedAt: FIXED_NOW,
+    };
+    state.runtime.updatedAt = FIXED_NOW;
+    state.dag.nodes = [{
+      taskId: "T1",
+      title: "Implement the Story",
+      type: "frontend",
+      status: "done",
+      ownerAgent: "frontend-developer",
+      predictedFiles: ["frontend/src/views/DashboardView.vue"],
+      criterionIds: [],
+    }];
+    state.implementation = {
+      method: "tdd",
+      exceptionReason: null,
+      actualFiles: ["frontend/src/views/DashboardView.vue"],
+      completedTaskIds: ["T1"],
+      notes: ["Old implementation projection."],
+    };
+    state.review.status = "passed";
+    state.verification.environment = {
+      status: "available",
+      summary: "Old verification.",
+      evidencePath: null,
+      evidenceSha256: null,
+    };
+    state.delivery = {
+      ...state.delivery,
+      status: "ready",
+      ownedFiles: ["frontend/src/views/DashboardView.vue"],
+      summaryFile: ".harness/runs/M7-D-REWORK/delivery-summary.md",
+      summarySha256: `sha256:${"a".repeat(64)}`,
+      ownedManifestFile: ".harness/runs/M7-D-REWORK/owned-manifest.json",
+      ownedManifestSha256: `sha256:${"b".repeat(64)}`,
+    };
+    state.logs = Array.from({ length: 12 }, (_, index) => (
+      index === 11
+        ? {
+          type: "blocked",
+          from: "delivery-preparation",
+          revision: 12,
+          createdAt: FIXED_NOW,
+        }
+        : {
+          type: "transition",
+          revision: index + 1,
+          createdAt: FIXED_NOW,
+        }
+    ));
+    const taskDagFile = ".harness/runs/M7-D-REWORK/phases/02-task-dag/task-dag.json";
+    const taskDagContent = `${JSON.stringify({ schemaVersion: "2.0", storyId: state.storyId })}\n`;
+    await write(root, taskDagFile, taskDagContent);
+    await write(
+      root,
+      ".harness/runs/M7-D-REWORK/phases/03-implementation/implementation-owner.json",
+      `${JSON.stringify({
+        schemaVersion: "1.0",
+        storyId: state.storyId,
+        runId: state.runtime.runId,
+        phase: "implementation",
+        mode: "ordinary",
+        ownerId: state.runtime.records[3].dispatchId,
+        preparedRevision: 4,
+        taskDagFile,
+        taskDagSha256: `sha256:${createHash("sha256").update(taskDagContent).digest("hex")}`,
+        acquiredAt: FIXED_NOW,
+      }, null, 2)}\n`,
+    );
+    await write(root, stateFile, `${JSON.stringify(state, null, 2)}\n`);
+    await write(root, ".harness/states/active-run.json", `${JSON.stringify({
+      schemaVersion: "1.0",
+      runId: state.storyId,
+      stateFile,
+      status: "blocked",
+      revision: 12,
+      updatedAt: FIXED_NOW,
+    }, null, 2)}\n`);
+
+    const result = await runStateCommand({
+      root,
+      command: "rework",
+      stateFile,
+      reason: "Include the late UI regression fix in implementation facts.",
+      actor: "user",
+      now: () => "2026-08-18T07:00:00.000Z",
+    });
+
+    assert.equal(result.state.phase, "implementation");
+    assert.equal(result.state.runtime.status, "active");
+    assert.equal(result.state.runtime.revision, 13);
+    assert.equal(result.state.runtime.activeBlock, null);
+    assert.deepEqual(result.state.dag.nodes.map((node) => node.status), ["planned"]);
+    assert.deepEqual(result.state.implementation.actualFiles, []);
+    assert.equal(result.state.review.status, "pending");
+    assert.equal(result.state.verification.environment.status, "not-checked");
+    assert.equal(result.state.delivery.status, "pending");
+    assert.equal(result.state.runtime.records.length, phases.length);
+    assert.deepEqual(
+      result.state.runtime.reworks[0].supersededDispatchIds,
+      state.runtime.records.slice(3).map((record) => record.dispatchId),
+    );
+    assert.equal(result.state.logs.at(-1).type, "rework");
+    assert.equal(result.pointer.status, "active");
+
+    const nextOwnerId = "00000000-0000-4000-8000-999999999999";
+    const acquired = await acquireImplementationOwner({
+      root,
+      state: result.state,
+      mode: "ordinary",
+      ownerId: nextOwnerId,
+      taskDagFile,
+      now: () => "2026-08-18T07:01:00.000Z",
+    });
+    assert.equal(acquired.owner.ownerId, nextOwnerId);
+    assert.equal(acquired.owner.preparedRevision, 13);
+    const archivedOwner = await readJson(
+      root,
+      `.harness/runs/M7-D-REWORK/phases/03-implementation/superseded-owners/${result.state.runtime.reworks[0].reworkId}.json`,
+    );
+    assert.equal(archivedOwner.ownerId, state.runtime.records[3].dispatchId);
+
+    const secondState = structuredClone(result.state);
+    const replacementDispatchIds = [
+      nextOwnerId,
+      "00000000-0000-4000-8000-999999999998",
+      "00000000-0000-4000-8000-999999999997",
+      "00000000-0000-4000-8000-999999999996",
+      "00000000-0000-4000-8000-999999999995",
+    ];
+    phases.slice(3).forEach((phase, index) => {
+      secondState.runtime.records.push({
+        id: `result:${replacementDispatchIds[index]}`,
+        type: "phase-result",
+        phase,
+        status: "applied",
+        path: `.harness/runs/M7-D-REWORK/${phase}/rework-result.json`,
+        sha256: `sha256:${String(index + 11).repeat(64).slice(0, 64)}`,
+        bytes: 1,
+        message: "",
+        actor: "story-runtime",
+        dispatchId: replacementDispatchIds[index],
+        preparedRevision: index + 13,
+        appliedRevision: index + 14,
+        createdAt: FIXED_NOW,
+      });
+    });
+    secondState.phase = "blocked";
+    secondState.runtime.status = "blocked";
+    secondState.runtime.revision = 20;
+    secondState.runtime.previousPhase = "delivery-preparation";
+    secondState.runtime.activeBlock = {
+      previousPhase: "delivery-preparation",
+      reason: "A second late fix changed implementation facts.",
+      owner: "harness-runtime",
+      suggestedAction: "Run the bounded rework again.",
+      blockedAt: FIXED_NOW,
+    };
+    secondState.runtime.updatedAt = FIXED_NOW;
+    secondState.logs.push(
+      { type: "transition", revision: 14, createdAt: FIXED_NOW },
+      { type: "transition", revision: 15, createdAt: FIXED_NOW },
+      { type: "transition", revision: 16, createdAt: FIXED_NOW },
+      { type: "transition", revision: 17, createdAt: FIXED_NOW },
+      { type: "transition", revision: 18, createdAt: FIXED_NOW },
+      {
+        type: "transition",
+        from: "interface-verification",
+        to: "delivery-preparation",
+        revision: 19,
+        createdAt: FIXED_NOW,
+      },
+      {
+        type: "blocked",
+        from: "delivery-preparation",
+        revision: 20,
+        createdAt: FIXED_NOW,
+      },
+    );
+    assert.doesNotThrow(() => validateStateDocument(secondState));
+    const wrongRevision = structuredClone(secondState);
+    wrongRevision.runtime.reworks[0].triggeredRevision = 1;
+    assert.throws(() => validateStateDocument(wrongRevision), /rework|supersed|trigger/i);
+    const missingPhase = structuredClone(secondState);
+    missingPhase.runtime.reworks[0].supersededDispatchIds.pop();
+    assert.throws(() => validateStateDocument(missingPhase), /rework|supersed|phase/i);
+    const wrongPhase = structuredClone(secondState);
+    wrongPhase.runtime.reworks[0].supersededDispatchIds[0] = state.runtime.records[0].dispatchId;
+    assert.throws(() => validateStateDocument(wrongPhase), /rework|supersed|phase/i);
+    await write(root, stateFile, `${JSON.stringify(secondState, null, 2)}\n`);
+    await write(root, ".harness/states/active-run.json", `${JSON.stringify({
+      schemaVersion: "1.0",
+      runId: secondState.storyId,
+      stateFile,
+      status: "blocked",
+      revision: 20,
+      updatedAt: FIXED_NOW,
+    }, null, 2)}\n`);
+
+    const secondResult = await runStateCommand({
+      root,
+      command: "rework",
+      stateFile,
+      reason: "Include a second late fix.",
+      actor: "user",
+      now: () => "2026-08-18T07:02:00.000Z",
+    });
+    assert.equal(secondResult.state.runtime.revision, 21);
+    assert.deepEqual(
+      secondResult.state.runtime.reworks[1].supersededDispatchIds,
+      replacementDispatchIds,
+    );
+    const finalOwnerId = "00000000-0000-4000-8000-999999999994";
+    await acquireImplementationOwner({
+      root,
+      state: secondResult.state,
+      mode: "ordinary",
+      ownerId: finalOwnerId,
+      taskDagFile,
+      now: () => "2026-08-18T07:03:00.000Z",
+    });
+    const secondArchivedOwner = await readJson(
+      root,
+      `.harness/runs/M7-D-REWORK/phases/03-implementation/superseded-owners/${secondResult.state.runtime.reworks[1].reworkId}.json`,
+    );
+    assert.equal(secondArchivedOwner.ownerId, nextOwnerId);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 await testInitCreatesRunAndPointerWithoutEditingTemplate();
 await testStatusLocatesRunThroughPointer();
 await testExplicitStateFileIsIndependentFromActivePointer();
@@ -2432,6 +2710,7 @@ await testRecordAndTestGate();
 await testV2RecordIsSemanticallyIdempotent();
 await testReviewBlockerGate();
 await testBlockAndResumeRestorePreviousPhase();
+console.log("M7D-SCENARIO:block-resume:passed");
 await testPassedTestsAdvanceAndTaskDagValidatorBlocks();
 await testBuildOnlyCanAdvanceWithoutApproval();
 await testCompleteFromDeliveryPreparationWithoutGitApproval();
@@ -2466,6 +2745,7 @@ await testWorkflowMetadataIsReturnedAndBoundToStateVersion();
 await testStateWriteLockDoesNotPersistState();
 await testStateWriteLockSerializesConcurrentCallbacks();
 await testStateWriteLockWaitsForTemporarilyUnreadableLock();
+await testBoundedImplementationReworkSupersedesDownstreamResults();
 await testResumeRejectsInvalidPreviousPhaseWithoutPersistence();
 await testGitBaselineCapturesDirtyPathsAndRenameOrdering();
 await testGitBaselineRejectsInvalidRepositoryStatesWithoutPersistence();

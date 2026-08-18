@@ -22,7 +22,7 @@ const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const READ_COMMANDS = new Set(["status", "validate"]);
-const WRITE_COMMANDS = new Set(["record", "next", "block", "resume", "complete"]);
+const WRITE_COMMANDS = new Set(["record", "next", "block", "resume", "rework", "complete"]);
 const V1_PHASES = new Set([
   "requirement", "technical-design", "task-dag", "implementation", "unit-test",
   "code-review", "build-publish", "interface-verification", "git-delivery", "done", "blocked",
@@ -34,6 +34,13 @@ const V2_PHASES = new Set([
 const V2_ACTIVE_PHASES = new Set([...V2_PHASES].filter((phase) => !["done", "blocked"].includes(phase)));
 const RUNTIME_STATUSES = new Set(["template", "active", "blocked", "completed"]);
 const RECORD_TYPES = new Set(["output", "test", "review", "approval", "note", "phase-result"]);
+export const REWORK_PHASES = [
+  "implementation",
+  "unit-test",
+  "code-review",
+  "build-publish",
+  "interface-verification",
+];
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -225,13 +232,115 @@ function validateSimpleArrayObject(value, allowedFields, label) {
   for (const field of allowedFields) assertArray(value[field], `${label}.${field}`);
 }
 
+export function assertReworkSupersessions(state) {
+  const reworks = state.runtime.reworks ?? [];
+  if (!reworks.length) return state;
+  const appliedRecords = state.runtime.records.filter(
+    (record) => record.type === "phase-result" && record.status === "applied",
+  );
+  const superseded = new Set();
+  let previousTriggeredRevision = 0;
+  for (const rework of reworks) {
+    if (rework.triggeredRevision <= previousTriggeredRevision) {
+      throw new Error("Rework triggered revisions must be strictly increasing.");
+    }
+    previousTriggeredRevision = rework.triggeredRevision;
+    const blockedLog = state.logs.find(
+      (log) => log.type === "blocked"
+        && log.from === "delivery-preparation"
+        && log.revision === rework.triggeredRevision,
+    );
+    const reworkLog = state.logs.find(
+      (log) => log.type === "rework"
+        && log.reworkId === rework.reworkId
+        && log.from === "delivery-preparation"
+        && log.to === "implementation"
+        && log.revision === rework.triggeredRevision + 1,
+    );
+    if (!blockedLog || !reworkLog || reworkLog.createdAt !== rework.createdAt) {
+      throw new Error(`Rework '${rework.reworkId}' does not match its blocked and rework logs.`);
+    }
+    const activeAtTrigger = appliedRecords.filter(
+      (record) => record.appliedRevision <= rework.triggeredRevision
+        && !superseded.has(record.dispatchId),
+    );
+    const expectedDispatchIds = REWORK_PHASES.map((phase) => {
+      const matches = activeAtTrigger.filter((record) => record.phase === phase);
+      if (matches.length !== 1) {
+        throw new Error(`Rework '${rework.reworkId}' requires one active '${phase}' phase-result.`);
+      }
+      return matches[0].dispatchId;
+    });
+    if (rework.supersededDispatchIds.length !== expectedDispatchIds.length
+        || expectedDispatchIds.some((dispatchId) => !rework.supersededDispatchIds.includes(dispatchId))) {
+      throw new Error(`Rework '${rework.reworkId}' does not supersede the complete active phase chain.`);
+    }
+    rework.supersededDispatchIds.forEach((dispatchId) => superseded.add(dispatchId));
+  }
+  return state;
+}
+
+function validateReworks(state) {
+  const runtime = state.runtime;
+  if (!Object.hasOwn(runtime, "reworks")) return;
+  assertArray(runtime.reworks, "E2E v2 runtime.reworks");
+  const reworkIds = new Set();
+  const supersededDispatchIds = new Set();
+  const appliedDispatchIds = new Set(
+    runtime.records
+      .filter((record) => record.type === "phase-result" && record.status === "applied")
+      .map((record) => record.dispatchId),
+  );
+  for (const [index, rework] of runtime.reworks.entries()) {
+    const label = `E2E v2 runtime.reworks[${index}]`;
+    const fields = [
+      "reworkId", "reason", "actor", "discoveredPhase", "targetPhase",
+      "triggeredRevision", "supersededDispatchIds", "createdAt",
+    ];
+    assertKeys(rework, new Set(fields), fields, label);
+    for (const field of ["reworkId", "reason", "actor"]) {
+      assertString(rework[field], `${label}.${field}`);
+    }
+    if (!UUID_PATTERN.test(rework.reworkId)) throw new Error(`${label}.reworkId must be a UUID.`);
+    if (reworkIds.has(rework.reworkId)) throw new Error(`${label}.reworkId must be unique.`);
+    reworkIds.add(rework.reworkId);
+    if (rework.discoveredPhase !== "delivery-preparation" || rework.targetPhase !== "implementation") {
+      throw new Error(`${label} must describe delivery-preparation to implementation rework.`);
+    }
+    assertInteger(rework.triggeredRevision, `${label}.triggeredRevision`, 1);
+    assertArray(rework.supersededDispatchIds, `${label}.supersededDispatchIds`);
+    if (!rework.supersededDispatchIds.length) {
+      throw new Error(`${label}.supersededDispatchIds must not be empty.`);
+    }
+    for (const dispatchId of rework.supersededDispatchIds) {
+      if (typeof dispatchId !== "string" || !UUID_PATTERN.test(dispatchId)) {
+        throw new Error(`${label}.supersededDispatchIds must contain UUIDs.`);
+      }
+      if (!appliedDispatchIds.has(dispatchId)) {
+        throw new Error(`${label} references an unknown applied dispatchId.`);
+      }
+      if (supersededDispatchIds.has(dispatchId)) {
+        throw new Error(`${label} supersedes a dispatchId more than once.`);
+      }
+      supersededDispatchIds.add(dispatchId);
+    }
+    assertNullableDate(rework.createdAt, `${label}.createdAt`, false);
+  }
+  assertReworkSupersessions(state);
+}
+
 function validateV2Runtime(state) {
   const runtime = state.runtime;
   const fields = [
     "runId", "workflow", "workflowVersion", "status", "revision", "previousPhase",
-    "activeBlock", "records", "createdAt", "updatedAt",
+    "activeBlock", "records", "reworks", "createdAt", "updatedAt",
   ];
-  assertKeys(runtime, new Set(fields), fields, "E2E v2 runtime");
+  assertKeys(
+    runtime,
+    new Set(fields),
+    fields.filter((field) => field !== "reworks"),
+    "E2E v2 runtime",
+  );
   if (runtime.runId !== state.storyId) throw new Error("E2E v2 runtime runId must match storyId.");
   assertString(runtime.workflow, "E2E v2 runtime.workflow");
   if (runtime.workflowVersion !== E2E_STATE_V2) {
@@ -241,6 +350,7 @@ function validateV2Runtime(state) {
   assertInteger(runtime.revision, "E2E v2 runtime.revision");
   if (runtime.previousPhase !== null) assertString(runtime.previousPhase, "E2E v2 runtime.previousPhase");
   validateRecords(runtime.records, "E2E v2 runtime.records", { strict: true });
+  validateReworks(state);
 
   const template = runtime.status === "template";
   assertNullableDate(runtime.createdAt, "E2E v2 runtime.createdAt", template);
@@ -514,7 +624,7 @@ export function validateStateDocument(value) {
       capabilities: {
         allowedCommands: schemaVersion === E2E_STATE_V1 || value.runtime.status === "template" || value.runtime.status === "completed"
           ? ["status", "validate"]
-          : ["status", "validate", "record", "next", "block", "resume", "complete"],
+          : ["status", "validate", "record", "next", "block", "resume", "rework", "complete"],
       },
     };
   }

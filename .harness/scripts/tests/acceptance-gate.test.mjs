@@ -533,6 +533,101 @@ async function testCompletionGateRecomputesSummaryAndAppliedPhaseChain() {
     },
   }));
 
+  const reworked = structuredClone(state);
+  const supersededPhases = [
+    "implementation",
+    "unit-test",
+    "code-review",
+    "build-publish",
+    "interface-verification",
+  ];
+  const supersededRecords = reworked.runtime.records.filter(
+    (item) => item.status === "applied" && supersededPhases.includes(item.phase),
+  );
+  reworked.runtime.reworks = [{
+    reworkId: "00000000-0000-4000-8000-100000000000",
+    reason: "Late verification fix changed implementation facts.",
+    actor: "user",
+    discoveredPhase: "delivery-preparation",
+    targetPhase: "implementation",
+    triggeredRevision: 9,
+    supersededDispatchIds: supersededRecords.map((record) => record.dispatchId),
+    createdAt: NOW,
+  }];
+  reworked.logs = Array.from({ length: 10 }, (_, index) => {
+    if (index === 8) {
+      return {
+        type: "blocked",
+        from: "delivery-preparation",
+        revision: 9,
+        createdAt: NOW,
+      };
+    }
+    if (index === 9) {
+      return {
+        type: "rework",
+        reworkId: reworked.runtime.reworks[0].reworkId,
+        from: "delivery-preparation",
+        to: "implementation",
+        revision: 10,
+        createdAt: NOW,
+      };
+    }
+    return { type: "transition", revision: index + 1, createdAt: NOW };
+  });
+  supersededPhases.forEach((phase, index) => {
+    reworked.runtime.records.push({
+      id: `result:00000000-0000-4000-8000-${String(index + 101).padStart(12, "0")}`,
+      type: "phase-result",
+      phase,
+      status: "applied",
+      path: `.harness/runs/M7-A3-TEST/${phase}/rework-result.json`,
+      sha256: `sha256:${String(index + 11).repeat(64).slice(0, 64)}`,
+      bytes: 1,
+      message: "",
+      actor: "story-runtime",
+      dispatchId: `00000000-0000-4000-8000-${String(index + 101).padStart(12, "0")}`,
+      preparedRevision: index + 10,
+      appliedRevision: index + 11,
+      createdAt: NOW,
+    });
+  });
+  assert.doesNotThrow(() => assertCompletionGate(reworked, {
+    currentPhaseResult: {
+      phase: "delivery-preparation",
+      dispatchId: "00000000-0000-4000-8000-000000000109",
+      preparedRevision: 15,
+      appliedRevision: 16,
+    },
+  }));
+  const malformedReworkRevision = structuredClone(reworked);
+  malformedReworkRevision.runtime.reworks[0].triggeredRevision = 1;
+  assert.throws(
+    () => assertCompletionGate(malformedReworkRevision, {
+      currentPhaseResult: {
+        phase: "delivery-preparation",
+        dispatchId: "00000000-0000-4000-8000-000000000109",
+        preparedRevision: 15,
+        appliedRevision: 16,
+      },
+    }),
+    /rework|supersed|trigger/i,
+  );
+  const malformedReworkPhase = structuredClone(reworked);
+  malformedReworkPhase.runtime.reworks[0].supersededDispatchIds[0] =
+    malformedReworkPhase.runtime.records.find((item) => item.phase === "requirement").dispatchId;
+  assert.throws(
+    () => assertCompletionGate(malformedReworkPhase, {
+      currentPhaseResult: {
+        phase: "delivery-preparation",
+        dispatchId: "00000000-0000-4000-8000-000000000109",
+        preparedRevision: 15,
+        appliedRevision: 16,
+      },
+    }),
+    /rework|supersed|phase/i,
+  );
+
   const unexplainedGap = structuredClone(resumed);
   unexplainedGap.logs = unexplainedGap.logs.filter((item) => item.revision !== 10);
   assert.throws(

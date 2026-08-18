@@ -27,3 +27,7 @@ frontend/.vite/
 .harness/runs/**/result.json
 .harness/runs/**/checkpoint.json
 .harness/runs/**/evidence/
+.harness/runs/**/active-attempt.json
+.harness/runs/**/implementation-owner.json
+.harness/runs/**/superseded-owners/
+.harness/runs/**/knowledge/
