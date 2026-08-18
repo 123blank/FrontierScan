@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: api
 doc_type: overview
-git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
-source_fingerprint: sha256:eac33941cb0b45f792cbff9bba24aab06f97034a44c3d8aec30061a333b04db9
-generated_at: 2026-07-28T16:41:12.137Z
+git_hash: f12d893896617845242abb75e23d577fc730d579
+source_fingerprint: sha256:0fc4832ffc61a9dfb5cdb9dbcefe9e6a1bad9c7ac2d22a61cb8adabb9e5ae2df
+generated_at: 2026-08-18T08:27:04.713Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -25,7 +25,7 @@ source_files:
 - 区域路径：`frontend/src/api`
 - 文件数：6
 - Vue 组件数：0
-- API 调用数：23
+- API 调用数：25
 - 路由数：0
 - Store 数：0
 

@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: api
 doc_type: api-usage
-git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
-source_fingerprint: sha256:eac33941cb0b45f792cbff9bba24aab06f97034a44c3d8aec30061a333b04db9
-generated_at: 2026-07-28T16:41:12.137Z
+git_hash: f12d893896617845242abb75e23d577fc730d579
+source_fingerprint: sha256:0fc4832ffc61a9dfb5cdb9dbcefe9e6a1bad9c7ac2d22a61cb8adabb9e5ae2df
+generated_at: 2026-08-18T08:27:04.713Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -22,6 +22,8 @@ source_files:
 
 - GET /articles (frontend/src/api/articles.ts)
 - GET /articles/${id} (frontend/src/api/articles.ts)
+- PUT /articles/${id}/read (frontend/src/api/articles.ts)
+- DELETE /articles/${id}/read (frontend/src/api/articles.ts)
 - POST /articles/${id}/summary/retry (frontend/src/api/articles.ts)
 - POST /articles/${id}/favorite (frontend/src/api/articles.ts)
 - DELETE /articles/${id}/favorite (frontend/src/api/articles.ts)

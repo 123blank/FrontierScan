@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: views
 doc_type: routes
-git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
-source_fingerprint: sha256:58c83e16d8cb1b2d8c72aa13d4e3ad3b2948ee469d952bfa16a89749ea23eb3c
-generated_at: 2026-07-28T16:41:12.137Z
+git_hash: f12d893896617845242abb75e23d577fc730d579
+source_fingerprint: sha256:87f5bf9c15531d9bde3e1102112e126cca6874103515925154b63b3d336e4038
+generated_at: 2026-08-18T08:27:04.713Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

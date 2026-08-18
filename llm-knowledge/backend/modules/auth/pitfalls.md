@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: auth
 doc_type: pitfalls
-git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
+git_hash: f12d893896617845242abb75e23d577fc730d579
 source_fingerprint: sha256:8c3fbb52cd829b48dfadadefb099fac71ed8a3f969c81464adb48ac29160c2c3
-generated_at: 2026-07-28T16:41:12.137Z
+generated_at: 2026-08-18T08:26:55.918Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

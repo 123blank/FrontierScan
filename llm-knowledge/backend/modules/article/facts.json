@@ -146,6 +146,15 @@
           ]
         },
         {
+          "name": "readStatus",
+          "type": "String",
+          "binding": "RequestParam",
+          "annotations": [
+            "@RequestParam(defaultValue = \"all\")",
+            "@Pattern(regexp = \"all|read|unread\",\n                    message = \"readStatus must be one of all, read, unread\")"
+          ]
+        },
+        {
           "name": "page",
           "type": "int",
           "binding": "RequestParam",
@@ -170,6 +179,60 @@
       "method": "GET",
       "path": "/api/articles/{id}",
       "handler": "get",
+      "return_type": "ApiResponse<Article>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "controller": "ArticleController",
+      "method": "PUT",
+      "path": "/api/articles/{id}/read",
+      "handler": "markAsRead",
+      "return_type": "ApiResponse<Article>",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "JwtPrincipal",
+          "binding": "",
+          "annotations": [
+            "@AuthenticationPrincipal"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "Long",
+          "binding": "PathVariable",
+          "annotations": [
+            "@PathVariable"
+          ]
+        }
+      ],
+      "security": [],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleController.java"
+    },
+    {
+      "controller": "ArticleController",
+      "method": "DELETE",
+      "path": "/api/articles/{id}/read",
+      "handler": "markAsUnread",
       "return_type": "ApiResponse<Article>",
       "parameters": [
         {
@@ -381,6 +444,46 @@
   ],
   "async_methods": [],
   "transactional_methods": [
+    {
+      "class": "ArticleService",
+      "name": "markAsRead",
+      "return_type": "Article",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "articleId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
+    {
+      "class": "ArticleService",
+      "name": "markAsUnread",
+      "return_type": "Article",
+      "parameters": [
+        {
+          "name": "userId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        },
+        {
+          "name": "articleId",
+          "type": "Long",
+          "binding": "",
+          "annotations": []
+        }
+      ],
+      "file": "backend/src/main/java/com/frontierscan/article/ArticleService.java"
+    },
     {
       "class": "ArticleService",
       "name": "batchSaveArticles",
@@ -659,6 +762,7 @@
     "jakarta.persistence.GenerationType",
     "jakarta.persistence.Id",
     "jakarta.persistence.Table",
+    "jakarta.validation.constraints.Pattern",
     "java.time.LocalDate",
     "java.time.LocalTime",
     "java.time.OffsetDateTime",
@@ -684,10 +788,12 @@
     "org.springframework.stereotype.Component",
     "org.springframework.stereotype.Service",
     "org.springframework.transaction.annotation.Transactional",
+    "org.springframework.validation.annotation.Validated",
     "org.springframework.web.bind.annotation.DeleteMapping",
     "org.springframework.web.bind.annotation.GetMapping",
     "org.springframework.web.bind.annotation.PathVariable",
     "org.springframework.web.bind.annotation.PostMapping",
+    "org.springframework.web.bind.annotation.PutMapping",
     "org.springframework.web.bind.annotation.RequestMapping",
     "org.springframework.web.bind.annotation.RequestParam",
     "org.springframework.web.bind.annotation.RestController"
@@ -700,6 +806,10 @@
     {
       "kind": "migration",
       "file": "backend/src/main/resources/db/migration/V10__make_article_source_hash_global_unique.sql"
+    },
+    {
+      "kind": "migration",
+      "file": "backend/src/main/resources/db/migration/V11__add_article_read_status.sql"
     },
     {
       "kind": "migration",

@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-08-10
+> 最后更新：2026-08-18
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：M5-D-D `WaveRetire` 已完成并推送到 `origin/dev`，提交为 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558`；`M5-D-D-001` 已进入 `done/completed` revision `18`。M5 已具备单个 implementation wave 从计划、创建、Mock Worker 执行、主树串行集成、M3 apply 到审批门控回收的临时 Git fixture 闭环。下一步推荐 M6-A：选择一个范围较小的真实业务任务，按现有单 Story 工作流完成需求、实现、测试、审核、构建和真实 API/UI 验证，以验收 Harness 的单业务开发闭环。暂不实现自动 Git 提交/推送、通用 M6 Engine、真实 Agent 自动调度、Fork-Join 或生产发布部署。14 个业务模块的 L1/L3 与 backend、frontend、common 知识状态以 freshness 检查为准。
+> 当前重点：M7-A1 至 M7-D 已完成工作区实施与验收，`M7-D-001` 已进入 `done/completed` revision `19`。State v2、统一阶段结果、验收语义门禁、交付准备、确定性串行驱动器、知识新鲜度闭环、异常 fixture 和真实业务 Story 均已通过验证；`done` 不代表已执行 Git 提交或推送。当前工作区尚未提交，下一阶段只能在用户批准后启动 M8-A 只读 `code-reviewer` Provider 设计。真实 Agent Provider、并行 Worktree、Fork-Join、自动 Git 和生产发布仍未实现。
 
 ---
 
@@ -1736,7 +1736,7 @@ M5-D-C2 已实现 integration manifest 原子冻结、`recover-freeze`、wave �
 - Worker Runtime 97/97、Worktree lifecycle 39/39、Wave 35/35、Wave execution 9/9 和 Story Runtime 均通过；两轮独立审核及闭环复审最终无 BLOCKER/WARNING。
 - `M5-D-D-001` 已在 revision `18` 进入 `done/completed`，实现提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 已推送到 `origin/dev`。
 
-### 16.28 2026-08-10 当前推荐：M6-A 单业务开发闭环验收
+### 16.28 2026-08-10 历史计划：M6-A 单业务开发闭环验收
 
 M6-A 不先新增通用 Runtime，而是选择一个范围较小、验收标准明确的真实业务任务，使用当前 Harness 完成一次真实闭环：
 
@@ -1744,6 +1744,17 @@ M6-A 不先新增通用 Runtime，而是选择一个范围较小、验收标准�
 requirement -> technical-design -> task-dag -> implementation -> unit-test
 -> code-review -> build-publish -> interface-verification -> git-delivery -> done
 ```
+
+以上是 M6-A 当时使用的 State v1 历史流程。当前 State v2 的末阶段已经调整为：
+
+```text
+requirement -> technical-design -> task-dag -> implementation -> unit-test
+-> code-review -> build-publish -> interface-verification
+-> delivery-preparation -> done
+```
+
+`done` 只表示业务开发和交付准备闭环完成。后续获批的 Git 事实通过独立、版本化的
+`delivery-receipt.json` 记录，不修改完成态 State。
 
 验收要求：
 
@@ -1754,4 +1765,21 @@ requirement -> technical-design -> task-dag -> implementation -> unit-test
 - Git 提交、推送和 PR 继续逐次由用户批准，不纳入首版自动闭环。
 - 发现缺口时只补完成该业务闭环所需的最小 Adapter，不提前实现通用 M6 Engine、真实 Agent 自动派发或 Fork-Join。
 
-M6-A 是对“单个真实业务任务能否由当前 Harness 完成开发闭环”的正式验收，不代表 Harness 全部路线完成。通过后再根据真实缺口决定 M7 稳定性加固或真实 Agent 接入。
+M6-A 是对“单个真实业务任务能否由当前 Harness 完成开发闭环”的历史验收，不代表 Harness 全部路线完成。其发现的结构化状态、证据去重、知识新鲜度和交付归属问题已在 M7 中继续加固。
+
+### 16.29 2026-08-18 当前状态：M7 单 Story 确定性闭环完成
+
+权威路线位于 `docs/harness-m7-m12-roadmap/`，M7-D 设计、计划和报告位于
+`docs/harness-m7d-closure-acceptance/`，真实验收 Story 为 `M7-D-001`。
+
+- M7-A1 至 M7-A4 已完成 State v2 契约、统一阶段结果投影、验收追踪门禁、运行时一致性和交付语义。
+- M7-B 已提供确定性串行入口，由程序根据 State 返回唯一下一动作；认知任务仍由当前 Codex 会话完成。
+- M7-C 已把任务相关知识新鲜度、最小刷新、重检和逐区域 `accepted-stale` 纳入正式状态与门禁。
+- M7-D 异常 fixture 覆盖阻塞恢复、缺口批准、知识过期批准、结果漂移、重复 apply、中断恢复、无 Git 完成和独立交付回执。
+- `M7-D-001` 已完成真实 API 与 Chrome UI 验收，五项 required acceptance criterion 全部为 `verified`。
+- 最终 State 为 `done/completed` revision `19`，交付准备认领 9 个业务文件，`delivery.gitStatus=not-requested`。
+- `verify-story-closure.ps1` 能只依赖完成态 State 和绑定证据复核需求、DAG、修改、测试、审核、构建、界面验收与交付准备事实。
+- M7-D 验收中发现的后期返工需求通过受限 rework/supersession 闭环处理：只允许未完成 State v2 从阻塞的 `delivery-preparation` 返回 `implementation`，随后完整重走质量阶段。
+- 当前工作区尚未执行 Git 暂存、提交或推送。
+
+下一阶段是 M8-A 只读 `code-reviewer` Provider，但必须由用户单独批准启动。M8-A 的目标是接入第一个真实、受权限约束、输出结构化 result 的 Agent Provider；不得扩展到业务代码写入、并行、Worktree 或 Git 自动化。

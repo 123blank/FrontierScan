@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: llm
 doc_type: storage
-git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
+git_hash: f12d893896617845242abb75e23d577fc730d579
 source_fingerprint: sha256:5862707da6dc63e015b169d263bc4240c28c694d02c2070395d54422159c6615
-generated_at: 2026-07-28T16:41:12.137Z
+generated_at: 2026-08-18T08:26:55.918Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

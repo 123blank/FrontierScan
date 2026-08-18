@@ -4,11 +4,11 @@ layer: L1-baseline
 area: backend
 module: article
 doc_type: dependencies
-git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
-source_fingerprint: sha256:02897b16ea75aacf078cb5559e731ab6e8d90f3a10e4121a11641f642ae653b4
-generated_at: 2026-07-28T16:41:12.137Z
+git_hash: f12d893896617845242abb75e23d577fc730d579
+source_fingerprint: sha256:1be9274e55442429c8a5da213e792fd54df8500799df185c03b9f2242fc6efe6
+generated_at: 2026-08-18T08:26:55.918Z
 baseline_status: fresh
-semantic_status: fresh
+semantic_status: pending
 source_files:
   - backend/src/main/java/com/frontierscan/article/Article.java
   - backend/src/main/java/com/frontierscan/article/ArticleController.java
@@ -47,6 +47,7 @@ source_files:
 - jakarta.persistence.GenerationType
 - jakarta.persistence.Id
 - jakarta.persistence.Table
+- jakarta.validation.constraints.Pattern
 - java.time.LocalDate
 - java.time.LocalTime
 - java.time.OffsetDateTime
@@ -72,12 +73,11 @@ source_files:
 - org.springframework.stereotype.Component
 - org.springframework.stereotype.Service
 - org.springframework.transaction.annotation.Transactional
+- org.springframework.validation.annotation.Validated
 - org.springframework.web.bind.annotation.DeleteMapping
 - org.springframework.web.bind.annotation.GetMapping
 - org.springframework.web.bind.annotation.PathVariable
 - org.springframework.web.bind.annotation.PostMapping
-- org.springframework.web.bind.annotation.RequestMapping
-- org.springframework.web.bind.annotation.RequestParam
 
 ## 待增强说明
 

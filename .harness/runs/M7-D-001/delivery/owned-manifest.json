@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M7-D-001",
+  "runId": "M7-D-001",
+  "baselineHead": "f12d893896617845242abb75e23d577fc730d579",
+  "entries": [
+    {
+      "path": "backend/src/main/java/com/frontierscan/article/ArticleController.java",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:2ff4ac6b3b696c0ea77bf48502b8f0168dcd724cccfda744abe6f5a7068d6565",
+      "blobOid": "0cc6f1a686d732090b64eb076c661a8e2f9d1dd5",
+      "mode": "100644"
+    },
+    {
+      "path": "backend/src/main/java/com/frontierscan/article/ArticleRepository.java",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:340ec37ae1ff86b1fda3a279897c767529e7f66f78640243da37ab1459c34887",
+      "blobOid": "c2bf046f0d57686fc38fcc1767069c269925f312",
+      "mode": "100644"
+    },
+    {
+      "path": "backend/src/main/java/com/frontierscan/article/ArticleService.java",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:f7d32f96539b9c1500aebfc7bcce8c13b1992d47ea5b4489e1806a3b1dfa85eb",
+      "blobOid": "3117dfed441bc616de89ffbf61d1bf9509c8380d",
+      "mode": "100644"
+    },
+    {
+      "path": "backend/src/test/java/com/frontierscan/article/ArticleReadStatusApiIntegrationTest.java",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:100fcdb04b02164c3db334608d4e09838a9ae8833a81f384ae8c0ae2f1963e41",
+      "blobOid": "2f3c3d0406b5dab5ea5e02e64e3ae03caf25727c",
+      "mode": "100644"
+    },
+    {
+      "path": "backend/src/test/java/com/frontierscan/article/ArticleServiceFilterTest.java",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:53d096d7b4c487c5de63e96d77fcdc2a21d9843d7add8cea7d620b5b865a12ac",
+      "blobOid": "0ed648fd5a17c7b6b35743894fc684e2da515d6e",
+      "mode": "100644"
+    },
+    {
+      "path": "frontend/src/api/articles.ts",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:cec561547ab933f64618143a4aed1e6fb8313d1795897c2a617a5f623f564029",
+      "blobOid": "6dd3dec83895fb7112c11e8707a2f6986ebc8536",
+      "mode": "100644"
+    },
+    {
+      "path": "frontend/src/utils/readStatusFilter.ts",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:f31fc7abea18b948972f95c91dde8c7f6e2c96f0556c33f8b90ed87f6ccf81c4",
+      "blobOid": "21c32d97e7f3d58abe7b3b9f35066fcb70c0583c",
+      "mode": "100644"
+    },
+    {
+      "path": "frontend/src/views/DashboardView.vue",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:9b708f4b0e71cfd1624fce96e305f2a1b7d3e89d954e2dfc38e9c2ff95657d8f",
+      "blobOid": "488d61bb8b4ef5879436956f6dfdd0fa3cc1e76e",
+      "mode": "100644"
+    },
+    {
+      "path": "frontend/tests/readStatusFilter.test.ts",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:9e4be068a06b6e3a348245f6669928ffac571facfa4f9c9611fcac870cf91509",
+      "blobOid": "7e18a211484768bcadb33ec45116b5347fc7fb6c",
+      "mode": "100644"
+    }
+  ],
+  "generatedAt": "2026-08-18T08:03:52.714Z"
+}

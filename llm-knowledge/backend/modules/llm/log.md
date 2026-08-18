@@ -68,3 +68,11 @@
 - 2026-07-16T15:13:11.540Z: generate-kb mode=baseline, semantic_status=pending
 
 - 2026-07-28T16:41:12.137Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-08-14T09:26:02.473Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-08-14T09:26:27.199Z: generate-kb mode=semantic, semantic_status=failed
+
+- 2026-08-14T09:28:32.334Z: generate-kb mode=semantic, semantic_status=pending
+
+- 2026-08-18T08:26:55.918Z: generate-kb mode=baseline, semantic_status=pending

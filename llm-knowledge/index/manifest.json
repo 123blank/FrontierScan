@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
   "generated_by": "frontier-kb-generate",
-  "generated_at": "2026-07-28T16:41:12.137Z",
-  "git_hash": "b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a",
+  "generated_at": "2026-08-18T08:27:04.713Z",
+  "git_hash": "f12d893896617845242abb75e23d577fc730d579",
   "source_fingerprints": {
-    "backend": "sha256:c4968dc81529d61cd91410c95f2864ed1e3f4b166a88b0b4b7044548ed1acd5d",
-    "frontend": "sha256:c9a94d3a93441cf9d26b0ca452a53dc9291e7d044b748d5cf1802bee938f5999",
-    "common": "sha256:8e021b148ddca2189a908f83fa50ef2ae9ca9b3dc0e2943b640b3b68d6bd8669"
+    "backend": "sha256:035abee87399bbaa18679e087c554469a932795a70debeebd4a69195ffe30ccb",
+    "frontend": "sha256:f28f3f6526b2c0a28de5bcf9eeb50c75bbe0c74f4e50e058a954459d5709a6cc",
+    "common": "sha256:ebc27f71d3e44ee94de8429d3740d2362cd29b783a2be8ed98fcac8d29d608f4"
   },
   "source_fingerprint_status": {
     "backend": "complete",
@@ -18,7 +18,7 @@
     "common",
     "frontend"
   ],
-  "chunk_count": 329,
+  "chunk_count": 339,
   "semantic_status": "pending",
   "embeddings_status": "skipped",
   "embedding_model": "text-embedding-v4",

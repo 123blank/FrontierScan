@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时已实现；M3-M4 的 Dispatcher 与受约束 Mock Worker 已实现，M5-A 单 Worktree 及后续 Worktree Wave 能力也已实现。M7-A1 至 M7-C 已进一步实现 State v2、统一阶段结果、验收追踪、交付语义、最小确定性串行驱动和任务相关知识新鲜度闭环。真实 Agent 自动派发、多 Story Fork-Join、分支删除、自动 Git 交付和生产发布部署仍未实现。
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时已实现；M3-M4 的 Dispatcher 与受约束 Mock Worker 已实现，M5-A 单 Worktree 及后续 Worktree Wave 能力也已实现。M7-A1 至 M7-D 已完成 State v2、统一阶段结果、验收追踪、交付语义、最小确定性串行驱动、任务相关知识新鲜度和真实单 Story 双重闭环验收。真实 Agent 自动派发、多 Story Fork-Join、分支删除、自动 Git 交付和生产发布部署仍未实现。
 
 ## Added Structure
 
@@ -415,4 +415,14 @@ reparse point、仓库外 realpath 或 `..` 目录前缀绕过。backend/fronten
 area 顺序刷新后历史 receipt 仍可组合审计；`custom/` 始终保持当前内容不变。
 
 `knowledge-stale` 与 `verification-gap` 使用互斥 approval 契约。Runtime 不自动选择刷新或接受 stale，M7-C 完成也不表示
-已经执行 Git 提交或推送。当前剩余验收是 M7-D：异常 fixture 与一个真实业务 Story 的双重闭环。
+已经执行 Git 提交或推送。
+
+## M7-D 双重闭环验收
+
+M7-D 通过里程碑 acceptance suite 和 `M7-D-001` Dashboard 阅读状态筛选真实 Story 验证了单 Story 确定性闭环。最终 State 为 `done/completed` revision `19`，五项 required criterion 均为 `verified`，且 `delivery.gitStatus=not-requested`。
+
+真实 UI 验收触发一次严格受限的 late-stage rework：只能从 blocked `delivery-preparation` 回到 `implementation`，历史结果通过 supersession 保留，随后重新经过 unit-test、code-review、build-publish、interface-verification 和 delivery-preparation。该机制不是任意回退，也不引入 Agent、Worktree、并行或 Git 自动化。
+
+`verify-story-closure.ps1` 只读取 completed State 和正式绑定证据，深检 phase-result 及其内嵌 outputs/records，并复用正式 projector 核对 supersession 后九阶段有效 result 与最终 State 投影，随后输出需求、决策、知识、DAG、实现、测试、审核、构建、验证与交付摘要。M7-D 还修复了大量控制产物参与交付复制身份折叠的性能问题，并明确构建产物与固定证据目录使用不同的安全读取边界。
+
+M7 单 Story 串行目标已完成。下一阶段是经用户批准后设计 M8-A 只读 `code-reviewer` Provider；当前 Agent 注册表和 Mock Worker 仍不等于真实 Provider。

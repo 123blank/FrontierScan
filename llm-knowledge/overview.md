@@ -25,9 +25,9 @@ Current knowledge status:
 
 | Layer | Status | Evidence |
 | --- | --- | --- |
-| L1 deterministic baseline | `stale` | 当前工作区修改已使 backend、frontend、common source fingerprint 与已生成基线不一致；规划与实现时必须检查 freshness 并核验源码 |
+| L1 deterministic baseline | `fresh` | 2026-08-18 已根据 M7-D 最终业务源码重新生成 backend 与 frontend 基线；backend、frontend、common source fingerprint 均与当前工作区匹配 |
 | L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call has completed controlled acceptance |
-| L3 local index | `stale` | 当前索引仍可用于渐进查询，但 source fingerprint 已变化，命中结果必须回到源码核验 |
+| L3 local index | `fresh` | backend 与 frontend 基线刷新后已重建本地关键词和元数据索引；未来源码发生变化时仍须重新执行 freshness 检查 |
 | Optional embeddings | `on-demand` | `-WithEmbeddings` writes source-fingerprinted JSONL vectors after successful OpenAI API calls; keyword/metadata retrieval remains the active consumer |
 
 Current limitations:
@@ -48,8 +48,9 @@ Current limitations:
 - M5-D-B 在同一 Runtime 中增加审批门控 `WaveCreate`：每个明确 wave 的批准绑定当前 `plan.json` SHA-256；同一 run/Story 的所有 wave 共享创建/恢复锁，恢复在替换前重验完整锁集合、替换后匹配本次生成的随机 `lockId`，所有 Git、状态、回执和释放动作前重新执行计划与 owner fencing。恢复异常保留锁，部分失败保留已创建 Worktree并只补齐缺失项；动态锁事实只出现在 `WaveStatus` 命令结果顶层。首次 WavePlan 后，复用 WavePlan/WaveStatus 不再持久化动态观察，稳定状态只由持锁 WaveCreate 更新；完整 Git 事实为 `ready` 后才写绑定计划、DAG、稳定状态和任务 HEAD 的完成回执。正式仓库未执行 WaveCreate；并行 Worker、跨 Worktree 集成、合并、回收、Fork-Join 和状态推进仍未实现。
 - M5-D-C1/C2 已实现单个完整 implementation wave 的执行与集成闭环：`prepare-wave` 生成 v1.2 dispatch、checkpoint、统一 owner 和 execution ledger；并行 Mock Worker 通过不可变 attempt 与 fencing 收敛到 ready。C2 原子冻结 integration manifest，按稳定任务顺序串行集成主树，保留 partial 前缀并显式恢复；`finalize-wave` 生成正式 phase 产物、wave receipt 和 checkpoint 绑定，既有 M3 `apply` 只推进一次并支持中断恢复。正式仓库未执行 Worker、Worktree 或候选写入；回收、真实 Agent、自动提交、推送和发布仍未实现。
 - M5-D-D 已实现审批门控 `WaveRetire`：仅对 `done/completed`、ledger `finalized`、M3 apply 与正式产物完整的单个 wave 生效。它在首次删除前全局重验所有任务、主树、Worktree、保留分支和冲突锁，使用普通/recovery 双锁与 `lockId` fencing，按 WavePlan 顺序删除 Worktree，并在 Git 注册、目录和分支后验通过后写 task receipt。稳定 receipt 前缀支持中断恢复，最终回执绑定完成态、M3、Wave 与全部任务证据。首版保留分支，不执行 `prune`、自动提交、推送、发布或部署；真实删除仅在临时 fixture。
-- M5-D-D 已以提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 推送到 `origin/dev`，`M5-D-D-001` 为 `done/completed` revision `18`。下一步推荐 M6-A：选择一个范围较小的真实业务任务，按现有单 Story 工作流完成业务实现、真实测试/构建、独立审核和 API/UI 验证，以验收单业务开发闭环。M6-A 不包含自动 Git 提交/推送、通用 M6 Engine、真实 Agent 自动派发、Fork-Join 或生产部署。
-- M7-C 已实现 `technical-design` attempt 内的 relevant area freshness 检查、最小刷新、当前 source fingerprint 门禁、已有 result 的单 area recheck、可组合不可变 refresh receipt 和逐区域 `accepted-stale`。common 刷新显式保护 backend、frontend、common 三域；知识路径和生成器写入根目录拒绝 junction、symlink、仓库外 realpath 与 `..` 前缀绕过。下一步为 M7-D 异常 fixture 与真实 Story 双重闭环验收。
+- M5-D-D 已以提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 推送到 `origin/dev`，`M5-D-D-001` 为 `done/completed` revision `18`。当时规划的下一步是 M6-A 单业务开发闭环验收；该历史里程碑已经完成，其发现的问题已由 M7 继续加固。M6-A 不包含自动 Git 提交/推送、通用 M6 Engine、真实 Agent 自动派发、Fork-Join 或生产部署。
+- M7-C 已实现 `technical-design` attempt 内的 relevant area freshness 检查、最小刷新、当前 source fingerprint 门禁、已有 result 的单 area recheck、可组合不可变 refresh receipt 和逐区域 `accepted-stale`。common 刷新显式保护 backend、frontend、common 三域；知识路径和生成器写入根目录拒绝 junction、symlink、仓库外 realpath 与 `..` 前缀绕过。
+- M7-D 已通过异常 fixture 和 `M7-D-001` Dashboard 阅读状态筛选真实 Story。最终 State 为 `done/completed` revision `19`，真实 API/Chrome UI 覆盖五项 required criterion，交付准备认领 9 个业务文件并显式记录 2 个预测外返工文件。`verify-story-closure.ps1` 可仅读取 State 与绑定证据输出完整闭环摘要。下一步为用户批准后设计 M8-A 只读 `code-reviewer` Provider；当前注册表和 Mock Worker 仍不是真实 Agent Provider。
 
 Trust rule:
 

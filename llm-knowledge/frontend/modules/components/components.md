@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: components
 doc_type: components
-git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
+git_hash: f12d893896617845242abb75e23d577fc730d579
 source_fingerprint: sha256:8602688b0ef2e5c559d84c76c352cbe4f86de8c254c1c269da53d02f4928c879
-generated_at: 2026-07-28T16:41:12.137Z
+generated_at: 2026-08-18T08:27:04.713Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

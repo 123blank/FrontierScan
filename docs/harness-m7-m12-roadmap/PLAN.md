@@ -264,28 +264,28 @@ docs/harness-m7d-closure-acceptance/REPORT.md（验收后）
 
 ### 8.2 Fixture
 
-- [ ] block/resume。
-- [ ] accepted gap。
-- [ ] accepted stale。
-- [ ] result 漂移和重复 apply。
-- [ ] 阶段中断恢复。
-- [ ] 无 Git 完成。
-- [ ] 完成后记录 Git receipt。
+- [x] block/resume。
+- [x] accepted gap。
+- [x] accepted stale。
+- [x] result 漂移和重复 apply。
+- [x] 阶段中断恢复。
+- [x] 无 Git 完成。
+- [x] 完成后记录 Git receipt。
 
 ### 8.3 真实 Story
 
-- [ ] 选择范围小、验收清晰且能运行真实测试的业务。
-- [ ] 使用 State v2 和串行驱动完成九阶段。
-- [ ] 真实发生的缺口如实记录，不制造阻塞。
-- [ ] 最终编写机器核验脚本，仅读取 State 回答闭环事实。
-- [ ] 更新目标基线、交接、结构清单和知识。
+- [x] 选择 Dashboard 阅读状态筛选作为真实业务。
+- [x] 使用 State v2 和串行驱动完成九阶段及一次受控 late-stage rework。
+- [x] 真实发生的 UI 缺陷、环境状态和返工如实记录。
+- [x] 最终机器核验脚本仅读取 State 与绑定证据回答闭环事实。
+- [x] 更新目标基线、交接、结构清单和知识。
 
 ### 8.4 M7 完成门禁
 
-- State v2 与串行驱动通过真实业务验收。
-- 相关知识 fresh 或逐项 accepted-stale。
-- 独立审核无 BLOCKER/WARNING。
-- 用户批准进入 M8。
+- [x] State v2 与串行驱动通过真实业务验收。
+- [x] 相关知识通过正式 freshness 流程处理。
+- [x] 业务最终独立审核无 BLOCKER/WARNING。
+- [ ] 用户批准进入 M8-A 设计。
 
 ## 9. M8-A：只读审核 Provider
 

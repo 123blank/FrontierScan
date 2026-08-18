@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: styles
 doc_type: overview
-git_hash: b71020d8057d8c7bbc02beed0ab40f6e35e6ca2a
+git_hash: f12d893896617845242abb75e23d577fc730d579
 source_fingerprint: sha256:6ac0a5064f3e815ba924bdd978559a4cc5b3b6dcfa5fb4d034c0ea8f9196cfed
-generated_at: 2026-07-28T16:41:12.137Z
+generated_at: 2026-08-18T08:27:04.713Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
