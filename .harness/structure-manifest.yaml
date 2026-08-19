@@ -39,6 +39,7 @@ required_directories:
   - docs/harness-m7a4-runtime-delivery
   - docs/harness-m7b-serial-driver
   - docs/harness-m7c-kb-freshness-loop
+  - docs/harness-m8a-review-provider
 required_files:
   - .harness/README.md
   - .harness/schemas/product-state.schema.json
@@ -317,6 +318,8 @@ required_files:
   - docs/harness-m7c-kb-freshness-loop/DESIGN.md
   - docs/harness-m7c-kb-freshness-loop/PLAN.md
   - docs/harness-m7c-kb-freshness-loop/REPORT.md
+  - docs/harness-m8a-review-provider/DESIGN.md
+  - docs/harness-m8a-review-provider/PLAN.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
