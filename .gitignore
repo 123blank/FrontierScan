@@ -34,3 +34,7 @@ frontend/.vite/
 
 # Harness local Agent Provider overrides
 .harness/config/agent-providers.local.json
+
+# Harness local Agent Provider runtime artifacts
+.harness/runs/**/attempts/**/provider/
+.harness/runs/**/delivery/receipts/
