@@ -4,7 +4,7 @@
 > 基线版本：1.3
 > 建立日期：2026-08-11
 > 最近更新：2026-08-21
-> 当前实施基线：`b98a55a chore(harness): ignore local provider runtime artifacts`；M8-A 已完成并提交，尚未推送
+> 当前实施基线：`65761a9 chore(knowledge): refresh knowledge baseline after M8-A sync`；M8-A 与相关文档/知识同步已完成并提交，尚未推送
 > 参考文章：[从 AI Coding 到 Harness Engineering 的端到端工程开发实践](https://mp.weixin.qq.com/s/UE-RZH9hnbBd06CVapFGrA)
 > 文章发布：腾讯技术工程，2026-07-03
 > 原文核验方式：2026-08-11 在 Chrome 浏览器中直接阅读微信原文

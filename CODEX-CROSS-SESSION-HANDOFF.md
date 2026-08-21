@@ -109,14 +109,16 @@ codex --version
 | 项目 | 值 |
 | --- | --- |
 | 当前分支 | `dev` |
-| `HEAD` | `b98a55a7e288933d966c69acc854b13bae1c001d` |
+| 本轮内容基线 | `65761a9660ef9691329fc84df2ebca97d8691728` |
 | `origin/dev` | `621cd3b6ff89708d24feeb4ee4bd7fbfd88d7542` |
-| ahead/behind | `dev` ahead 3、behind 0 |
-| 工作区 | 本轮自动化能力评估、交接、架构、Skill、结构清单和知识基线同步尚未提交；M8-A 原始 Provider attempt 与 delivery receipt 作为本地运行资产被忽略 |
+| ahead/behind | 动态值；本轮新增提交尚未推送，必须通过下方命令现场读取 |
+| 工作区 | 本轮自动化能力评估、交接、架构、Skill、结构清单和知识基线已提交；实际清洁状态必须通过下方命令现场读取 |
 
 最近关键提交：
 
 ```text
+65761a9 chore(knowledge): refresh knowledge baseline after M8-A sync
+a315850 docs(harness): synchronize M8-A automation status
 b98a55a chore(harness): ignore local provider runtime artifacts
 ecc987e feat(harness): add M8-A review provider
 c977dae docs(harness): design M8-A review provider
@@ -127,7 +129,7 @@ f12d893 feat(harness): implement M7-C knowledge freshness loop
 80a4d6f feat(harness): implement M7-B serial driver
 ```
 
-M8-A 已提交但尚未推送。`.harness/config/agent-providers.local.json`、Provider attempt 原始运行资产和 delivery receipt 被忽略，不得提交。后续交付仍不得使用 `git add .`。
+M8-A 和本轮文档/知识同步已提交但尚未推送。`.harness/config/agent-providers.local.json`、Provider attempt 原始运行资产和 delivery receipt 被忽略，不得提交。后续交付仍不得使用 `git add .`。
 
 新会话必须实际运行以下命令，不得直接沿用本节：
 
@@ -1039,8 +1041,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 截至 2026-08-21：
 
-- 当前分支为 `dev`，HEAD 为 `b98a55a chore(harness): ignore local provider runtime artifacts`；`dev` 相对 `origin/dev` ahead 3。
-- M7 与 M8-A 已完成并提交，当前尚未推送；本轮自动化能力评估、交接、架构、Skill、结构清单和知识基线同步尚未提交。
+- 当前分支为 `dev`；本轮内容已交付到 `65761a9 chore(knowledge): refresh knowledge baseline after M8-A sync`，最终动态 HEAD 和 ahead/behind 必须通过 Git 命令现场读取。
+- M7、M8-A 以及本轮自动化能力评估、交接、架构、Skill、结构清单和知识基线同步均已提交，当前尚未推送。
 - `M8-A-001` 已完成首个真实只读 `code-reviewer` Provider 闭环，最终 State 为 `done/completed` revision `51`。
 - 五项 required criterion 均为 `verified`；本 Story 不修改业务 API/UI，浏览器和 HTTP 验证不适用。
 - 最新成功执行为 dispatch `19cd43d7-1d4e-4e02-89ed-a8079a8a8ccb`、request `a5025528-930c-4820-b726-7fc66fd900a5`、execution `cab18d21-f92b-4c8b-a8f3-d0706e72c7ab`，`exitCode=0`。

@@ -1796,7 +1796,7 @@ M6-A 是对“单个真实业务任务能否由当前 Harness 完成开发闭环
 - `read-only` 是同一操作系统用户下的写入边界，不是严格文件读取 ACL。
 - 最终 State 为 `done/completed` revision `51`，五项 required criterion 均为 `verified`。
 - State 和 owned manifest 的权威 owned 文件数量为 37；`PLAN.md` 是唯一 initial dirty/unrelated 文件，旧交付摘要中的 38 已由 `ERRATA.md` 更正。
-- M8-A 实现提交为 `ecc987e`，本地运行资产忽略规则提交为 `b98a55a`；截至本次同步，本地 `dev` 相对本地跟踪的 `origin/dev` ahead 3、behind 0，尚未推送。
+- M8-A 实现提交为 `ecc987e`，本地运行资产忽略规则提交为 `b98a55a`，文档同步提交为 `a315850`，知识基线提交为 `65761a9`；这些提交尚未推送，动态 HEAD 和 ahead/behind 必须现场运行 Git 命令读取。
 - 审核任务启动后可独立完成，但 `Prepare -> Run -> Materialize -> Apply`、finding 复核和返工仍由当前 Codex 会话编排，不属于无人干预流水线。
 - backend、frontend、common 知识基线和索引均为 `fresh`，语义增强仍为 `pending`。
 - 当前下一阶段是经用户批准后设计 M8-B：单任务、单隔离 Worktree、串行的 backend/frontend developer Provider。
