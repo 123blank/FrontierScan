@@ -3017,6 +3017,9 @@ async function applyBlockedV2(root, options, context) {
     if (result.status !== "blocked") throw new Error("Blocked State transaction requires a blocked result.");
 
     const candidate = structuredClone(fresh.state);
+    if (phase.id === "code-review") {
+      candidate.review = structuredClone(result.payload);
+    }
     appendUniqueRecords(
       candidate,
       result.records.map((item, index) => evidenceRecord(result, item, timestamp, index)),

@@ -57,6 +57,32 @@ Directory layout:
 Use `states/` for active workflow files and `outputs/` for generated plans, review reports,
 verification reports, and other phase artifacts.
 
+## M8-A Read-only Review Provider
+
+`run-provider.ps1` provides the first real Agent Provider entry for the State v2
+`code-review` phase:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\.harness\scripts\run-provider.ps1 `
+  -Command Status `
+  -StateFile .\.harness\states\e2e-<storyId>.json `
+  -Json
+```
+
+The supported flow is `Prepare -> Run -> Materialize -> run-e2e Apply`. M8-A only
+permits the `code-reviewer` role and the `codex-cli` Adapter. The Runtime freezes
+the task, bounded context, role policy, Provider profile and model choice, then
+validates the structured response and repository integrity before generating the
+formal report and phase result.
+
+Project defaults are stored in `.harness/config/agent-providers.json`; optional
+local overrides use `.harness/config/agent-providers.local.json` and are ignored
+by Git. Credentials must never be stored in either file. A `null` model means the
+Runtime does not pass `--model`; it does not claim inheritance from a parent UI
+session. `readIsolation=same-os-user-readonly-sandbox` is a write boundary, not a
+strict file-read ACL.
+
 ## Structure Validation
 
 Run the read-only structure check from the repository root:

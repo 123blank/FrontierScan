@@ -285,7 +285,7 @@ docs/harness-m7d-closure-acceptance/REPORT.md（验收后）
 - [x] State v2 与串行驱动通过真实业务验收。
 - [x] 相关知识通过正式 freshness 流程处理。
 - [x] 业务最终独立审核无 BLOCKER/WARNING。
-- [ ] 用户批准进入 M8-A 设计。
+- [x] 用户批准进入 M8-A 设计。
 
 ## 9. M8-A：只读审核 Provider
 
@@ -299,13 +299,14 @@ docs/harness-m8a-review-provider/REPORT.md（实施后）
 
 ### 9.2 实施任务
 
-- [ ] 调研当前 Codex 可验证的非交互 Provider 调用方式和权限边界。
-- [ ] 定义 provider request、context manifest、response 和 usage metadata。
-- [ ] 复用 Worker policy，首个角色只允许 `code-reviewer`。
-- [ ] 禁止 candidate business files、Git、发布和 State 写入。
-- [ ] 实现超时、输出大小、非法 JSON、额外字段和中断恢复。
-- [ ] Runtime 校验后写正式 review result。
-- [ ] 在真实 Story 中同时执行人工审核和 Provider 审核，比较有效发现。
+- [x] 调研当前 Codex 可验证的非交互 Provider 调用方式和权限边界。
+- [x] 定义 provider request、context manifest、response、execution receipt 和模型路由元数据。
+- [x] 复用 Worker policy，首个角色只允许 `code-reviewer`。
+- [x] 禁止 candidate business files、Git、发布和 State 写入。
+- [x] 实现超时、输出大小、非法 JSON、额外字段、完整性核对和中断恢复。
+- [x] Runtime 校验后写正式 review result。
+- [x] 实现 `role -> profile -> adapter/model` 配置、项目默认、本地覆盖和未指定模型语义。
+- [x] 在真实 Story 中同时执行人工审核和 Provider 审核，比较有效发现。
 
 ### 9.3 验收标准
 
@@ -313,6 +314,10 @@ docs/harness-m8a-review-provider/REPORT.md（实施后）
 - Provider 失败不污染正式结果。
 - 替换 Provider 不改变 phase result 和 State 契约。
 - 至少一个真实审核任务证明其结果有实际价值。
+
+完成证据：`M8-A-001` 已通过真实 `codex exec`、人工/Provider 对比、五项 required
+criterion 验收和最终闭包核验，State 为 `done/completed` revision `51`。进入 M8-B 前
+仍需完成专项设计、独立审核和用户批准。
 
 ## 10. M8-B：单任务开发 Provider
 

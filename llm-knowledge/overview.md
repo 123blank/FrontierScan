@@ -25,7 +25,7 @@ Current knowledge status:
 
 | Layer | Status | Evidence |
 | --- | --- | --- |
-| L1 deterministic baseline | `fresh` | 2026-08-18 已根据 M7-D 最终业务源码重新生成 backend 与 frontend 基线；backend、frontend、common source fingerprint 均与当前工作区匹配 |
+| L1 deterministic baseline | `fresh` | 2026-08-19 已重验 backend、frontend、common source fingerprint，均与当前工作区匹配 |
 | L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call has completed controlled acceptance |
 | L3 local index | `fresh` | backend 与 frontend 基线刷新后已重建本地关键词和元数据索引；未来源码发生变化时仍须重新执行 freshness 检查 |
 | Optional embeddings | `on-demand` | `-WithEmbeddings` writes source-fingerprinted JSONL vectors after successful OpenAI API calls; keyword/metadata retrieval remains the active consumer |
@@ -50,7 +50,8 @@ Current limitations:
 - M5-D-D 已实现审批门控 `WaveRetire`：仅对 `done/completed`、ledger `finalized`、M3 apply 与正式产物完整的单个 wave 生效。它在首次删除前全局重验所有任务、主树、Worktree、保留分支和冲突锁，使用普通/recovery 双锁与 `lockId` fencing，按 WavePlan 顺序删除 Worktree，并在 Git 注册、目录和分支后验通过后写 task receipt。稳定 receipt 前缀支持中断恢复，最终回执绑定完成态、M3、Wave 与全部任务证据。首版保留分支，不执行 `prune`、自动提交、推送、发布或部署；真实删除仅在临时 fixture。
 - M5-D-D 已以提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 推送到 `origin/dev`，`M5-D-D-001` 为 `done/completed` revision `18`。当时规划的下一步是 M6-A 单业务开发闭环验收；该历史里程碑已经完成，其发现的问题已由 M7 继续加固。M6-A 不包含自动 Git 提交/推送、通用 M6 Engine、真实 Agent 自动派发、Fork-Join 或生产部署。
 - M7-C 已实现 `technical-design` attempt 内的 relevant area freshness 检查、最小刷新、当前 source fingerprint 门禁、已有 result 的单 area recheck、可组合不可变 refresh receipt 和逐区域 `accepted-stale`。common 刷新显式保护 backend、frontend、common 三域；知识路径和生成器写入根目录拒绝 junction、symlink、仓库外 realpath 与 `..` 前缀绕过。
-- M7-D 已通过异常 fixture 和 `M7-D-001` Dashboard 阅读状态筛选真实 Story。最终 State 为 `done/completed` revision `19`，真实 API/Chrome UI 覆盖五项 required criterion，交付准备认领 9 个业务文件并显式记录 2 个预测外返工文件。`verify-story-closure.ps1` 可仅读取 State 与绑定证据输出完整闭环摘要。下一步为用户批准后设计 M8-A 只读 `code-reviewer` Provider；当前注册表和 Mock Worker 仍不是真实 Agent Provider。
+- M7-D 已通过异常 fixture 和 `M7-D-001` Dashboard 阅读状态筛选真实 Story。最终 State 为 `done/completed` revision `19`，真实 API/Chrome UI 覆盖五项 required criterion，交付准备认领 9 个业务文件并显式记录 2 个预测外返工文件。`verify-story-closure.ps1` 可仅读取 State 与绑定证据输出完整闭环摘要。
+- M8-A 已接入首个真实只读 `code-reviewer` Provider。Runtime 通过 `role -> profile -> adapter/model` 配置冻结 Provider request、最小 context manifest、权限策略和模型来源，本机 `codex exec` 使用固定 argv、`read-only` sandbox 与结构化输出执行。最终真实 execution receipt 为 `completed/exitCode=0`，仓库与隔离根完整性检查通过；Agent 不返回 candidate files，正式 evidence、报告和 result 由 Runtime 生成。`M8-A-001` 最终为 `done/completed` revision `51`，五项 required criterion 均为 `verified`。其他角色、写入型 Provider、跨供应商 HTTP Adapter、并行和自动 Git 仍未实现；下一步是经用户批准后设计 M8-B。
 
 Trust rule:
 

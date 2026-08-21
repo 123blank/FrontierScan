@@ -282,6 +282,7 @@ role
 profile
 adapter
 requestedModel
+modelSource
 configSha256
 taskFile
 taskSha256
@@ -297,6 +298,7 @@ createdAt
 
 - `phase` 必须为 `code-review`。
 - `role` 必须为 `code-reviewer`。
+- `modelSource` 在 Prepare 时按实际覆盖来源冻结；Run 和 execution receipt 只能核对并复用，不能根据模型值重新推断。
 - task 必须是 State v2 当前有效 attempt。
 - `preparedRevision` 必须等于当前 State revision。
 - response output Schema 的路径和 SHA-256 必须在 Prepare 时冻结；Run 只使用 request 已绑定的 Schema。
@@ -319,7 +321,7 @@ M8-A 采用以下最小化措施：
 - 使用 `--skip-git-repo-check`，Provider 不依赖自行打开 Git 仓库。
 - manifest 中冻结的文本内容由 Runtime 按总量限制直接装配进 stdin prompt。
 - prompt 明确禁止搜索、打开或引用 manifest 之外的路径。
-- 正式 receipt 如实声明 `readIsolation=os-user-boundary`，不得描述为严格 manifest ACL。
+- 正式 receipt 如实声明 `readIsolation=same-os-user-readonly-sandbox`，表示子进程与父进程使用同一操作系统用户，仅由 Codex `read-only` sandbox 约束写入；不得描述为操作系统用户隔离或严格 manifest ACL。
 
 这能减少意外读取和上下文漂移，但不是强对抗读取隔离。若未来要求严格证明 Agent 只能读取白名单文件，必须单独引入不同操作系统身份、容器或等价的进程级文件系统沙箱，不在 M8-A 中虚构该能力。
 
@@ -533,8 +535,8 @@ Runtime 生成固定系统化任务说明，包含：
 
 ### 8.3 进程边界
 
-- 默认超时 30 秒，配置不允许扩大；测试可注入更短超时。
-- 超时后先发送终止信号，等待固定宽限期，再强制结束进程树。
+- 默认超时 180 秒，配置不允许扩大；测试可注入更短超时。该值基于真实审核约 21.4 至 112.5 秒的执行样本，并保留约 67.5 秒抖动余量；原 30 秒边界已被连续两次真实超时证明不可用。
+- 超时后先冻结 `timed-out` 终态，再发送终止信号、等待固定宽限期并强制结束进程树；终止过程中产生的 `close` 事件不得覆盖超时分类，Adapter 仍须等待终止完成后再返回。
 - stdout、stderr 各自设置上限，超限立即终止。
 - JSONL 事件只用于诊断和提取最终响应，不直接成为正式 State。
 - 进程退出码非零、缺失最终响应、多个最终响应、非法 UTF-8 或非法 JSON 均失败关闭。
@@ -606,7 +608,7 @@ result.json
 职责：
 
 - `evidence/provider-review-response.json`：保存通过 Schema 校验的结构化结论，位于现有 Story Runtime 允许的 `<attemptRoot>/evidence/` 边界内。
-- `<task.expectedOutputs[0]>`：Runtime 使用固定模板渲染的人类报告；普通执行通常为 `code-review-report.md`，rework 时使用 Story Runtime 冻结的 `code-review-report.rework-<reworkId>.md`。
+- `<task.expectedOutputs[0]>`：仅当审核通过时，由 Runtime 使用固定模板渲染正式人类报告；普通执行通常为 `code-review-report.md`，rework 时使用 Story Runtime 冻结的 `code-review-report.rework-<reworkId>.md`。blocked attempt 只保存 attempt-scoped response evidence，不写固定正式报告。
 - `result.json`：Runtime 转换为现有 dispatch result v2 的 `code-review` payload。
 
 转换规则：
@@ -631,7 +633,7 @@ result.json
 - 其他 phase 的 blocked result 行为保持不变。
 - 恢复和 rework 后历史 finding 继续通过 State、result 和 supersession 证据保留，不能只存在于 Markdown。
 
-materialize 采用逐文件临时写入和 rename，提交点固定为 `result.json` 最后写入。若在 result 前中断，已有 provider evidence 或报告可以作为恢复诊断保留，但 Story Runtime 仍视为 result 缺失，不会 apply 半成品。本阶段不声称多个文件构成单次文件系统原子事务。
+materialize 采用逐文件临时写入和 rename，提交点固定为 `result.json` 最后写入。blocked 路径按 `evidence -> result.json` 写入；passed 路径按 `evidence -> 原子替换正式报告 -> result.json` 写入。若在 result 前中断，已有 provider evidence 或 passed 报告可以作为恢复诊断保留，但 Story Runtime 仍视为 result 缺失，不会 apply 半成品。本阶段不声称多个文件构成单次文件系统原子事务。
 
 ## 11. Provider Execution Receipt
 
@@ -713,6 +715,7 @@ provider/
   request.json
   context-manifest.json
   executions/<providerExecutionId>/
+    execution-claim.json
     raw-events.jsonl
     diagnostics.json
     execution-receipt.json
@@ -725,6 +728,11 @@ provider/
 - task、State revision、配置、manifest 或 prompt 漂移时当前 request 失效并失败关闭，不允许在同一执行中静默重建。
 - 已存在合法正式 `result.json` 时禁止再次启动 Provider。
 - 已存在成功 execution receipt 和合法 raw response、但尚无 `result.json` 时，不重复调用模型，进入幂等 materialize。
+- `Run` 在调用 Adapter 前先写入不可变 `execution-claim.json`。若父进程在 receipt 提交前崩溃，
+  claim-only 表示执行结果不可判定：不得对同一冻结 request 再次调用模型，也不得伪造成功或失败
+  execution receipt。
+- claim-only 由显式 `Materialize` 生成 Runtime 自有 evidence 和 code-review blocked result；
+  apply 后通过现有 block/resume 创建全新 attempt 和 request。旧 claim 保留且不覆盖。
 - 已成功 materialize 且尚未 apply 时，E2E Runtime 返回 `apply-result`，不重复审核。
 - 失败执行保留有界诊断，不污染正式 response/report/result。
 
@@ -743,7 +751,9 @@ provider/
 - Adapter 创建 Codex 子进程后，通过 lockId fencing 将 child PID 和 Provider execution ID 写回锁。
 - 每个命令在锁内重新读取 State revision、task、request、context、execution receipts 和 `result.json`。
 - 同一 request 不能并发启动两个 Agent 进程。
-- `Materialize` 必须绑定一个唯一的成功 execution，不能使用“最新文件”猜测。
+- 普通成功路径的 `Materialize` 必须绑定一个唯一的成功 execution，不能使用“最新文件”猜测。
+- claim-only 恢复路径必须重新核对 claim 身份、request 哈希、receipt 缺失和无存活进程事实，
+  只生成不可判定 evidence 与 blocked result，不生成 Provider response、execution receipt 或通过报告。
 - 写入 execution receipt、正式 evidence、报告和 result 前再次核对 `lockId`，防止过期持有者提交。
 - 进程异常退出遗留锁时，必须分别核对父进程和子进程；任一记录进程仍存活时不得回收。两个进程都不存在且超过“Provider 超时 + 固定宽限期”后才允许确定性回收，回收事实写入诊断。
 - 锁文件是控制资产，不进入 State、Git owned files 或 Provider 上下文。
@@ -751,6 +761,8 @@ provider/
 ### 12.3 重试策略
 
 M8-A 不自动重试模型调用。超时、进程失败或非法响应后返回明确失败状态，由当前会话或未来调度器决定是否在同一冻结 request 上重试。
+claim-only 不属于普通失败：由于无法判断模型是否已经收到请求，同一 request 永久禁止重跑，只能显式
+Materialize 为 blocked，再通过新 attempt 发起新的 request。
 
 理由：
 
@@ -770,6 +782,7 @@ provider-ready
 provider-run-in-progress
 provider-failed
 provider-materialize-required
+provider-execution-indeterminate
 provider-materialized
 provider-invalid
 ```
@@ -778,10 +791,11 @@ provider-invalid
 
 1. 正式 `result.json` 存在并通过 Story Runtime 校验：`provider-materialized`。
 2. request、context 或执行证据漂移：`provider-invalid`。
-3. 存在唯一成功 execution receipt 和合法 raw response，但正式 result 缺失：`provider-materialize-required`。
-4. 最新已完成 execution receipt 为失败、超时、非法响应或完整性违规：`provider-failed`。
-5. 存在合法 request/context 且无已完成或活跃 execution：`provider-ready`。
-6. 不存在 request：`provider-not-prepared`。
+3. 存在合法 claim、对应 receipt 缺失且无存活 run 进程：`provider-execution-indeterminate`。
+4. 存在唯一成功 execution receipt 和合法 raw response，但正式 result 缺失：`provider-materialize-required`。
+5. 最新已完成 execution receipt 为失败、超时、非法响应或完整性违规：`provider-failed`。
+6. 存在合法 request/context 且无已完成或活跃 execution：`provider-ready`。
+7. 不存在 request：`provider-not-prepared`。
 
 活跃锁对应的 Agent 子进程仍存在时，Status 返回 `provider-run-in-progress`，不允许第二次 Run。
 
@@ -804,13 +818,16 @@ provider-ready        -> provider-run-required
 provider-run-in-progress -> provider-run-in-progress
 provider-failed       -> provider-retry-decision
 provider-materialize-required -> provider-materialize-required
+provider-execution-indeterminate -> provider-indeterminate-materialization-required
 provider-invalid      -> provider-invalid
 provider-materialized -> apply-result
 ```
 
 其他 phase 或角色继续保持现有 `cognitive-action-required`，不被 M8-A 改写。
 
-`run-e2e Step` 首版不会自动执行 `provider-prepare-required`、`provider-run-required`、`provider-materialize-required` 或 `provider-retry-decision`，避免改变 M7-B“一次只做明确确定性动作”的语义。用户或当前 Codex 会话通过专用入口执行：
+`run-e2e Step` 首版不会自动执行 `provider-prepare-required`、`provider-run-required`、
+`provider-materialize-required`、`provider-indeterminate-materialization-required` 或
+`provider-retry-decision`，避免改变 M7-B“一次只做明确确定性动作”的语义。用户或当前 Codex 会话通过专用入口执行：
 
 ```powershell
 .\.harness\scripts\run-provider.ps1 `
@@ -830,6 +847,8 @@ Provider 成功后：
 - `provider-prepare-required`：执行 `run-provider Prepare`。
 - `provider-run-required`：执行 `run-provider Run`。
 - `provider-materialize-required`：执行 `run-provider Materialize`，不再次调用模型。
+- `provider-indeterminate-materialization-required`：显式执行 `run-provider Materialize`，生成
+  不可判定 evidence 和 blocked result；不得对原 request 再次执行 `Run`。
 - `provider-retry-decision`：读取最新失败 receipt；由用户或当前会话决定是否对同一 request 再次 `Run`。
 - `provider-invalid`：停止并报告漂移，不自动删除或覆盖证据。
 - `apply-result`：使用现有 `run-e2e Apply`。
@@ -947,6 +966,9 @@ Profile 和 Model 只允许在 `Prepare` 时提供；`Run`、`Materialize` 和 `
 - materialize 中断不产生合法 `result.json`；残留 evidence、receipt 或报告不能被识别为可 apply 的正式结果。
 - Provider Prepare、Run 和 Materialize 并发时由同一 attempt/request 锁串行。
 - 成功 execution 后、result 前中断时进入 `provider-materialize-required`，恢复不重复调用模型。
+- claim 已提交但 receipt 缺失时进入 `provider-execution-indeterminate`；显式 Materialize 生成 blocked
+  result，不调用 Adapter、不生成 receipt/response/report，并可在 result-last 中断后幂等恢复。
+- claim 身份或哈希漂移继续返回 `provider-invalid`，不得降级为不可判定恢复。
 - 成功后由现有 Story Runtime apply，Provider Runtime 不直接改 State。
 
 ### 15.5 无写入证明

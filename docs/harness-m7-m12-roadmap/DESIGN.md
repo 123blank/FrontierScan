@@ -2,7 +2,7 @@
 
 > 日期：2026-08-12
 >
-> 状态：路线已批准；M7-A1、M7-A2 已完成，M7-A3 已实施并进入独立代码审核收口
+> 状态：路线已批准；M7 与 M8-A 已完成，下一阶段为待批准的 M8-B 专项设计
 >
 > 当前基线：`53c1f29 docs(harness): establish target and gap baseline`
 >
@@ -646,6 +646,10 @@ Runtime 负责：
 - 不允许业务文件候选。
 - 只允许结构化审核 result 和报告。
 - 不提供 Git、发布、网络写入或 State 写能力。
+- 通过 `role -> profile -> adapter/model` 配置路由选择执行模型。
+- 项目默认配置可提交，本地覆盖被忽略，密钥不得进入配置、State、日志或回执。
+- 首版只实现 `codex-cli` Adapter；跨供应商 HTTP Adapter 延后到对应角色确有需求时单独设计。
+- `read-only` 只约束写入，不声称同一操作系统用户下存在严格读取 ACL。
 
 ### 13.3 M8-B
 

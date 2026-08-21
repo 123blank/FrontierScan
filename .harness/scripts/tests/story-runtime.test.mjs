@@ -4170,9 +4170,11 @@ quality_gates:
       });
       assert.equal(
         stepped.action,
-        ["unit-test", "build-publish"].includes(phase)
-          ? "adapter-selection-required"
-          : "cognitive-action-required",
+        phase === "code-review"
+          ? "provider-prepare-required"
+          : ["unit-test", "build-publish"].includes(phase)
+            ? "adapter-selection-required"
+            : "cognitive-action-required",
       );
       const inspected = await runStoryCommand(storyOptions(root, { command: "inspect" }));
       const prepared = {
@@ -5130,6 +5132,70 @@ async function testStructuredFailedTestsCannotAdvance() {
   }
 }
 
+async function testBlockedCodeReviewProjectsFindingsBeforeBlockingState() {
+  const { root, storyId } = await createFixture("M8-A-BLOCKED-REVIEW");
+  try {
+    await setFixtureState(root, storyId, (state) => {
+      state.phase = "code-review";
+      state.runtime.previousPhase = "unit-test";
+      state.review = { findings: [], status: "pending" };
+    });
+    const prepared = await runStoryCommand(storyOptions(root, { command: "prepare" }));
+    const payload = {
+      findings: [{
+        findingId: "PF-1234567890ABCDEF",
+        severity: "WARNING",
+        status: "open",
+        summary: "Provider fixture warning.",
+        file: ".harness/scripts/lib/provider-runtime.mjs",
+        line: 10,
+        evidence: `${prepared.task.attemptRoot}/evidence/provider-review-response.json`,
+      }],
+      status: "blocked",
+    };
+    await write(
+      root,
+      payload.findings[0].evidence,
+      `${JSON.stringify({ findings: payload.findings }, null, 2)}\n`,
+    );
+    const evidence = await readFile(path.join(root, payload.findings[0].evidence));
+    await writePreparedResult(root, prepared, dispatchResultV2(prepared.task, {
+      status: "blocked",
+      summary: "Provider review found a warning.",
+      outputs: [],
+      records: [{
+        type: "review",
+        status: "BLOCKER",
+        path: payload.findings[0].evidence,
+        sha256: `sha256:${createHash("sha256").update(evidence).digest("hex")}`,
+        bytes: evidence.length,
+        message: "Provider review found a warning.",
+        actor: "code-reviewer",
+      }],
+      payload,
+      diagnostics: {
+        code: "provider-review-findings",
+        message: "Provider review found unresolved findings.",
+        details: [payload.findings[0].findingId],
+      },
+      blocker: {
+        reason: "Provider review found unresolved findings.",
+        owner: "code-fixer",
+        suggestedAction: "Fix findings and rerun review.",
+      },
+    }));
+
+    const applied = await runStoryCommand(storyOptions(root, { command: "apply" }));
+    assert.equal(applied.status, "blocked");
+    assert.equal(applied.state.phase, "blocked");
+    assert.deepEqual(applied.state.review, payload);
+    assert.equal(applied.state.runtime.previousPhase, "code-review");
+    assert.equal(applied.state.runtime.activeBlock.reason, "Provider review found unresolved findings.");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 await testDispatchV12RequiresRuntimeDerivedWaveIdentity();
 await testDispatchResultV12RequiresWaveScopedEvidence();
 await testPrepareWaveCreatesRuntimeDerivedDispatchesWithoutAdvancingState();
@@ -5206,6 +5272,7 @@ await testApplyFailedAndBlockedResultsKeepDeterministicState();
 await testApplyKeepsStateUnchangedBeforeAtomicProjection();
 await testFailedAdapterAndBlockerCannotAdvanceUntilResolved();
 await testStructuredFailedTestsCannotAdvance();
+await testBlockedCodeReviewProjectsFindingsBeforeBlockingState();
 await testBuildPhaseRequiresACommandAdapterResult();
 await testNoBuildAdapterRejectsBackendOrFrontendChanges();
 await testApplyReconcilesAfterAdvanceBeforeCheckpointWrite();

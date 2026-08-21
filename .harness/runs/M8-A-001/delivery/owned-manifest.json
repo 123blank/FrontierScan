@@ -1,0 +1,305 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M8-A-001",
+  "runId": "M8-A-001",
+  "baselineHead": "c977dae67d3117e507a1c7dfb52156368fa52cb2",
+  "entries": [
+    {
+      "path": ".gitignore",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:593c3910ea94510f83209b1fe08ab275d15175e3ace5493dba14d741329dc8e7",
+      "blobOid": "c897fecf2c61dca14af2daaa1c07984a6b8ec913",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/config/agent-providers.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:6d499df962ecdb4738cdb326a240d5617e1ca40cc2677fe3b5a1cdbd6f148f74",
+      "blobOid": "1741cd55875ebf933e8b79ccfde2dd147b2c19d9",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/README.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:3f3d00ce6997cb629165e72620375274b070b2d2907f56c4834e116aa9797d32",
+      "blobOid": "1d773a72c69f83cb340bc9abd948bcfcf742d0cb",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-provider-config.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:174b2ab79c659d9c213302792ae2f8917eaa4b9689230da158c5068afc280e56",
+      "blobOid": "29cd2c839adf3261ea3c55443978ee7cea704bda",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-provider-context.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:5174b1af2789553e23cd454d59cb65ba1eed2e99b5e45c60cbee75eb129fcb4e",
+      "blobOid": "db4fde7eb4e2444892794ad3dbc4f34a85bba0ea",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-provider-execution-receipt.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:723168d426eacc3e06611353facdb83253d0a0763c5dacc62ed45bb884d295e3",
+      "blobOid": "bfab8b4dd6c4105cb61c3a3eca5e97b91b2f8479",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-provider-request.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:b64aa36b5065e2b829215df0bcb664fcbca16f138bb6fea6e57954a8e7d8b89b",
+      "blobOid": "83774d8de8ec18c4a0bf1464c192e0283eb4bf15",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-provider-response.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:8c59e25f8340eeccb1f6ae3435e0fec1b5debb12a5e62cdd38d8ba0e88d5bc64",
+      "blobOid": "9afa19ed80e4d6d051b52dac27164738148e7441",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/dispatch-result-v2.schema.json",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:58ccf596fe1234d4007ec0f10108ec0aaa0cf3230467a910113ff6a3a2b7f7a9",
+      "blobOid": "549cb7abe7c4954ccc1246ad7de4b99f711ed7f0",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/dispatch-contract.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:a6102832718f3daac29ec7f1bb32a7089faa9efe6e83f48d19ff29815274d70f",
+      "blobOid": "1ae57468e05d4858d8f2dd9ac4c0e4094d894131",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/e2e-runtime.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:d13a6790de68db22f0d3f587ff3cfbda0fed13a0b3158c967559aa93b60f0b21",
+      "blobOid": "580005441b87ab0280a9c0b0db7dc302959270bf",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/provider-adapters/codex-cli.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:a78f2a4da2fffeaae45bf20030e63c6d5ec675ac1e46d8fc5dbe51f8c875eaf3",
+      "blobOid": "d698ea222dd4a41523136dba4bf88c8522c1eef3",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/provider-config.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:01dc47e6bc3f6eadd2f8baada4766be303336cba7e8e48dd0c9635ff18bdf018",
+      "blobOid": "2aeb4ec8aa537acbb61be1f912ca7195c8b9fce2",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/provider-context.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:4e33cab39823dcc262c29c6f98967be5ce87266bb2efb4e9803d940aebb14daf",
+      "blobOid": "dc6bbf253bef8670d2da2fd9ddf4600120a77e39",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/provider-contract.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:9b7609f765b40aa1e5b825a7d84bf0705a41b219fabb29c586440eb2240f2671",
+      "blobOid": "0ccef09134f51a6d499b6889477708b90955c511",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/provider-runtime.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:b9737231f5dabe22cacd3b0b50c42f977540f74fc4107ea801233b726974d947",
+      "blobOid": "e5df0cec065e0f74e7a29708638de5160f15b2ac",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/story-runtime.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:768fddb81d17ebfd64226650b601891e61d27b98551a651249c90a7ae0cb1ee2",
+      "blobOid": "1c76a9bc801f8f6813f7092cc4f2ceb005b5e299",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/worker-runtime.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:392fa764e2eb2bc54bc39e22a1f23e586c76e1ea56ef784260ed0b489f3f496f",
+      "blobOid": "95d96502ce10ec7e7a1610a10af03756db8611cd",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/README.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:6568f60ce1880a752470b10751fc08ffebf59143f02d39a5e68c6390987cb917",
+      "blobOid": "69c54b9540de7bcf1f8504f416629565a19b56c0",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/run-provider.ps1",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:4b8c7a3528a73e1816ae72124ec384360099459de4edc2e47d8f96dea950873e",
+      "blobOid": "921f5d48980c9177debcf82e5866ae19e4cbef9d",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/codex-cli-provider.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:598de35a456db17d222f7438622f1922aa269592ae5edd2531f87547274da7ea",
+      "blobOid": "8df0da8c42766687aa23d1e1c248fcd25e1a8116",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/e2e-runtime.test.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:fd663186c79fbf3e0487647f97a399bf5474d000aa109d4f8d2d127b248d1da1",
+      "blobOid": "2e80fc73df6bc1bb0759af50d03a7d2a5a7b31fb",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/provider-cli.test.ps1",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:b1dd9efbe8ef34f449b4ad8cbb598a5f3cf3a213e734dd1e885b67b42d4775f8",
+      "blobOid": "02f2bbc0e32d0bd993b128ce2218fe4510293284",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/provider-config.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:73e01814165d846e5e5615fef6dff95469a56b5a0d65e5ba0e58cf1efbec466c",
+      "blobOid": "ab1c9bd764b121ef3fc3078c071a44a6168a2907",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/provider-context.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:ba06b1a236b91021df7efd9239f65b27266fe9ee61e9aa9959aa456d058a47e3",
+      "blobOid": "c2258190b0b8adf53bfd22d666500abe87d32f61",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/provider-contract.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:2313491575856b0e453fb103fdfadef475a7bf1f2add35e237d1e85c4b23fe63",
+      "blobOid": "3b8feaf6a89a88c4da6b52e6cdca732fe5f22237",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/provider-runtime.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:72fdff050a394d9637fd5394a6e8279b8ef1fc31b867c3d17e27398ab9211849",
+      "blobOid": "53f4b2bd02a7405a2294ece6316c4403b91090b0",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/story-runtime.test.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:abc118adc609f7ae9e8996e3fe9c58b3a44234a9d93762c2dcbdf5fce13df591",
+      "blobOid": "6752a1a0d37a1e36fffca424d24f4ee6b54c31ee",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/structure-manifest.yaml",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:9e16a30f477dd6177ad528db3c350e92976e6d572ceb92b04cfea21e63440852",
+      "blobOid": "b1907480e3135345690a0e6c6ef3d8e5da383279",
+      "mode": "100644"
+    },
+    {
+      "path": "CODEX-CROSS-SESSION-HANDOFF.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:3c1ad87658b8da55d3c235b94408d50a072f2f465b8b0bbb28d1e79002a01c47",
+      "blobOid": "fbbfa20d067fa671c80028f9757fcc53aa34b3e5",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/harness-engineering-target-and-gap.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:5380590df2456480edcbb4688716d9d5508b070a29453a2866c75dc1c06f1d41",
+      "blobOid": "ab59bb396a8504bb607729a66fbf0cf27eaf400d",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/harness-m7-m12-roadmap/DESIGN.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:fd9781a9e866728a8ab39b8cec466be4b620da887a679d3b26ed2bf1b5abf85a",
+      "blobOid": "893185939950ef48f4f73f24d0f38d7486977a0a",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/harness-m7-m12-roadmap/PLAN.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:d02fb6ac868fa79a1d0e7308afe78f14801e9087f3001f1d5ff86830eea512fb",
+      "blobOid": "4b94af2ba027ac380ee98b5efd6040b5a97aed2a",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/harness-m8a-review-provider/DESIGN.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:e9a693c81173b3b3350ac8c2a2ce5d1ccbe8cb04e9492a3608971c7be22f3ffd",
+      "blobOid": "b01191e878a60801dae03056ae2796bee3b1a106",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/harness-m8a-review-provider/REPORT.md",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:e796d816ae790da772b6fd9e3bae3f50307ed1f2c8d9c4f71bc89efeeae8a13f",
+      "blobOid": "ed31e977725456df769942d3dedf736db38cf9be",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/harness-structure-checklist.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:8a160c5b3f2843bd09ce7233a28982cab1f9c0d84984a944b5d1afa2384ee723",
+      "blobOid": "abc50e15afb51b9d6e62e8313cc11fc1de679d4d",
+      "mode": "100644"
+    },
+    {
+      "path": "llm-knowledge/overview.md",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:aeea5f4be5d3c7674395195c82b9a348583545817105fb836dba5199a5a03f0b",
+      "blobOid": "58834cbe6fb27c64e41d52afeee2e46d4cbf1f3a",
+      "mode": "100644"
+    }
+  ],
+  "generatedAt": "2026-08-19T15:42:36.421Z"
+}

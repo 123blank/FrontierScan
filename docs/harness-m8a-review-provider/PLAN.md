@@ -4,7 +4,7 @@
 >
 > 日期：2026-08-19
 >
-> 状态：计划完成，已通过独立只读复审，无 BLOCKER/WARNING，待用户批准实施
+> 状态：已完成
 >
 > 设计依据：`docs/harness-m8a-review-provider/DESIGN.md`
 >
@@ -25,7 +25,7 @@
 - 不修改 State v2、dispatch result v2 和 Worker 权限的既有业务语义，除非本计划明确列出。
 - 不重写现有 Mock Worker；M4/M5 历史协议必须保持兼容。
 - M8-A 只允许 `code-reviewer`，其他角色即使配置了 Profile 也不得启动。
-- `read-only` 只声明写入边界，不宣称实现了严格文件读取 ACL。
+- `read-only` 只声明写入边界，不宣称实现了严格文件读取 ACL；execution receipt 使用 `readIsolation=same-os-user-readonly-sandbox`，不得写成操作系统用户隔离。
 - 不实现 `openai-compatible`、百炼、开发 Agent、Worktree、并行或自动 Git。
 - 不执行真实 Git 提交、推送、PR、发布或部署。
 - 真实 `codex exec` 验收只在 fixture、全量回归和独立代码审核通过后进行。
@@ -43,7 +43,7 @@
 .harness/runs/M8-A-001/
 ```
 
-- [ ] **0.1 核对活动 State**
+- [x] **0.1 核对活动 State**
 
 运行：
 
@@ -63,11 +63,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 若 M8-A DESIGN/PLAN 仍为 dirty，停止 Task 0，并请求用户单独批准规划文档的 Git 交付；不得自动提交。
 
-- [ ] **0.2 初始化 M8-A-001**
+- [x] **0.2 初始化 M8-A-001**
 
 使用现有 State Runtime 创建摘要为“实现真实只读 code-reviewer Agent Provider”的 State v2 Story，冻结当前 HEAD、branch 和初始 dirty paths。
 
-- [ ] **0.3 完成 requirement phase**
+- [x] **0.3 完成 requirement phase**
 
 验收标准至少覆盖：
 
@@ -79,11 +79,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 通过现有 `run-e2e Prepare/Apply` 生成并应用合法 requirement result。
 
-- [ ] **0.4 完成 technical-design phase**
+- [x] **0.4 完成 technical-design phase**
 
 将已批准 `DESIGN.md` 的决策、影响区域、知识快照和风险投影到 State。
 
-- [ ] **0.5 完成 task-dag phase**
+- [x] **0.5 完成 task-dag phase**
 
 创建并验证 M8-A task DAG：
 
@@ -92,7 +92,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - 不包含业务源码。
 - criterion 引用完整。
 
-- [ ] **0.6 推进到 implementation**
+- [x] **0.6 推进到 implementation**
 
 运行 State/DAG 校验，确认 State 当前 phase 为 `implementation`，再开始 Task 1 的代码实施。
 
@@ -177,7 +177,7 @@ CODEX-CROSS-SESSION-HANDOFF.md
 
 - 新建：`.harness/scripts/tests/provider-config.test.mjs`
 
-- [ ] **1.1 编写内置默认配置 RED**
+- [x] **1.1 编写内置默认配置 RED**
 
 测试在不存在项目配置和本地配置时，要求返回：
 
@@ -196,7 +196,7 @@ CODEX-CROSS-SESSION-HANDOFF.md
 
 验证结果：因 `provider-config.mjs` 尚不存在而失败。
 
-- [ ] **1.2 编写项目配置与本地覆盖 RED**
+- [x] **1.2 编写项目配置与本地覆盖 RED**
 
 覆盖：
 
@@ -208,7 +208,7 @@ CODEX-CROSS-SESSION-HANDOFF.md
 
 验证结果：全部因缺少配置加载器而失败。
 
-- [ ] **1.3 编写严格失败 RED**
+- [x] **1.3 编写严格失败 RED**
 
 覆盖：
 
@@ -223,7 +223,7 @@ CODEX-CROSS-SESSION-HANDOFF.md
 
 验证结果：测试必须明确失败，不能静默回退默认值。
 
-- [ ] **1.4 运行配置 RED**
+- [x] **1.4 运行配置 RED**
 
 运行：
 
@@ -245,7 +245,7 @@ node .\.harness\scripts\tests\provider-config.test.mjs
 - 修改：`.gitignore`
 - 修改：`.harness/structure-manifest.yaml`
 
-- [ ] **2.1 新增项目默认配置**
+- [x] **2.1 新增项目默认配置**
 
 固定内容：
 
@@ -267,7 +267,7 @@ node .\.harness\scripts\tests\provider-config.test.mjs
 
 不填写具体付费模型。
 
-- [ ] **2.2 新增严格配置 Schema**
+- [x] **2.2 新增严格配置 Schema**
 
 要求：
 
@@ -278,7 +278,7 @@ node .\.harness\scripts\tests\provider-config.test.mjs
 - Profile ID 和 role ID 使用稳定安全模式。
 - `profiles` 至少包含一个 Profile。
 
-- [ ] **2.3 实现确定性配置合并**
+- [x] **2.3 实现确定性配置合并**
 
 实现：
 
@@ -291,7 +291,7 @@ node .\.harness\scripts\tests\provider-config.test.mjs
 
 同名 Profile 完整替换，不执行任意深合并。
 
-- [ ] **2.4 绑定 Agent 注册表**
+- [x] **2.4 绑定 Agent 注册表**
 
 读取 `.codex/agents/agents.yaml`：
 
@@ -299,11 +299,11 @@ node .\.harness\scripts\tests\provider-config.test.mjs
 - Profile 不能改变角色 category、capability 或路径策略。
 - M8-A 执行许可仍单独固定为 `code-reviewer`。
 
-- [ ] **2.5 生成规范化配置哈希**
+- [x] **2.5 生成规范化配置哈希**
 
 按稳定键排序生成规范 JSON 和 `sha256:<hex>`，相同有效配置必须得到相同哈希。
 
-- [ ] **2.6 忽略本地配置**
+- [x] **2.6 忽略本地配置**
 
 在 `.gitignore` 增加：
 
@@ -311,7 +311,7 @@ node .\.harness\scripts\tests\provider-config.test.mjs
 .harness/config/agent-providers.local.json
 ```
 
-- [ ] **2.7 运行配置 GREEN**
+- [x] **2.7 运行配置 GREEN**
 
 运行：
 
@@ -329,7 +329,7 @@ node .\.harness\scripts\tests\provider-config.test.mjs
 
 - 新建：`.harness/scripts/tests/provider-contract.test.mjs`
 
-- [ ] **3.1 编写 request 严格结构 RED**
+- [x] **3.1 编写 request 严格结构 RED**
 
 覆盖：
 
@@ -344,6 +344,7 @@ role
 profile
 adapter
 requestedModel
+modelSource
 configSha256
 taskFile/taskSha256
 policy
@@ -353,9 +354,9 @@ promptTemplateVersion/promptTemplateSha256
 createdAt
 ```
 
-错误身份、未知字段、错误 phase 和非 reviewer role 必须失败。
+错误身份、未知字段、错误 phase 和非 reviewer role 必须失败。`modelSource` 必须在 Prepare 时冻结，Run 和 execution receipt 只能核对并复用；即使显式覆盖模型与 Profile 模型值相同，也必须保留 `runtime-override`。
 
-- [ ] **3.2 编写 context manifest RED**
+- [x] **3.2 编写 context manifest RED**
 
 覆盖：
 
@@ -364,7 +365,7 @@ createdAt
 - 文件路径唯一且大小合计一致。
 - finding 可引用路径与普通上下文路径分离。
 
-- [ ] **3.3 编写 response RED**
+- [x] **3.3 编写 response RED**
 
 覆盖：
 
@@ -375,7 +376,7 @@ createdAt
 - 使用 `evidenceText` 和 `rationale`。
 - 禁止 candidate files、patch、shell、Markdown 文件内容和 State 字段。
 
-- [ ] **3.4 编写 execution receipt RED**
+- [x] **3.4 编写 execution receipt RED**
 
 execution receipt 绑定：
 
@@ -386,7 +387,7 @@ execution receipt 绑定：
 
 它不绑定正式 result 哈希；正式 result 也不引用 execution receipt，禁止循环依赖。
 
-- [ ] **3.5 运行契约 RED**
+- [x] **3.5 运行契约 RED**
 
 运行：
 
@@ -409,7 +410,7 @@ node .\.harness\scripts\tests\provider-contract.test.mjs
 - 新建：`.harness/scripts/lib/provider-contract.mjs`
 - 修改：`.harness/structure-manifest.yaml`
 
-- [ ] **4.1 实现 JSON Schema**
+- [x] **4.1 实现 JSON Schema**
 
 所有 Schema：
 
@@ -418,7 +419,7 @@ node .\.harness\scripts\tests\provider-contract.test.mjs
 - 对 ID、SHA-256、时间、路径和枚举使用现有项目格式。
 - 不复制或放宽 State v2 finding 契约。
 
-- [ ] **4.2 实现纯验证函数**
+- [x] **4.2 实现纯验证函数**
 
 导出独立函数：
 
@@ -431,7 +432,7 @@ validateProviderExecutionReceipt
 
 验证函数不得读写文件或调用 Git。
 
-- [ ] **4.3 实现 response 到正式 finding 的纯映射**
+- [x] **4.3 实现 response 到正式 finding 的纯映射**
 
 规则：
 
@@ -440,7 +441,7 @@ validateProviderExecutionReceipt
 - `evidenceText` 和 `rationale` 不进入 State finding。
 - INFO 不阻塞，BLOCKER/WARNING 阻塞。
 
-- [ ] **4.4 运行契约 GREEN**
+- [x] **4.4 运行契约 GREEN**
 
 运行：
 
@@ -458,7 +459,7 @@ node .\.harness\scripts\tests\provider-contract.test.mjs
 
 - 新建：`.harness/scripts/tests/provider-context.test.mjs`
 
-- [ ] **5.1 编写当前 attempt 身份 RED**
+- [x] **5.1 编写当前 attempt 身份 RED**
 
 只接受：
 
@@ -468,7 +469,7 @@ node .\.harness\scripts\tests\provider-contract.test.mjs
 - task dispatch、run、story 和 revision 与 State 一致。
 - 正式 result 尚不存在。
 
-- [ ] **5.2 编写最小上下文 RED**
+- [x] **5.2 编写最小上下文 RED**
 
 要求 manifest 包含：
 
@@ -482,7 +483,7 @@ node .\.harness\scripts\tests\provider-contract.test.mjs
 - task-owned diff。
 - 当前有效测试证据摘要。
 
-- [ ] **5.3 编写知识门禁 RED**
+- [x] **5.3 编写知识门禁 RED**
 
 覆盖：
 
@@ -491,7 +492,7 @@ node .\.harness\scripts\tests\provider-contract.test.mjs
 - relevant stale/missing 阻止 Prepare。
 - not-relevant 不加载。
 
-- [ ] **5.4 编写路径与大小 RED**
+- [x] **5.4 编写路径与大小 RED**
 
 覆盖：
 
@@ -501,7 +502,7 @@ node .\.harness\scripts\tests\provider-contract.test.mjs
 - 非 UTF-8 拒绝。
 - symlink、junction/reparse point、目录和路径逃逸拒绝。
 
-- [ ] **5.5 编写 reviewTargets RED**
+- [x] **5.5 编写 reviewTargets RED**
 
 `reviewTargets` 只来自 Runtime 验证后的 task-owned diff：
 
@@ -509,7 +510,7 @@ node .\.harness\scripts\tests\provider-contract.test.mjs
 - State、报告、知识文档和测试证据不能自动成为 finding target。
 - 初始无关 dirty 文件不能进入。
 
-- [ ] **5.6 运行上下文 RED**
+- [x] **5.6 运行上下文 RED**
 
 运行：
 
@@ -528,7 +529,7 @@ node .\.harness\scripts\tests\provider-context.test.mjs
 - 新建：`.harness/scripts/lib/provider-context.mjs`
 - 修改：`.harness/scripts/tests/provider-context.test.mjs`
 
-- [ ] **6.1 复用现有路径安全函数**
+- [x] **6.1 复用现有路径安全函数**
 
 优先提取或复用 `worker-runtime.mjs` 已验证的：
 
@@ -540,7 +541,7 @@ node .\.harness\scripts\tests\provider-context.test.mjs
 
 不复制一套行为不一致的宽松实现。
 
-- [ ] **6.2 生成 State 最小投影**
+- [x] **6.2 生成 State 最小投影**
 
 只包含审核需要的：
 
@@ -556,7 +557,7 @@ knowledge areas
 
 不把完整 logs、历史 superseded result 或 delivery 数据默认放入上下文。
 
-- [ ] **6.3 生成 task-owned diff**
+- [x] **6.3 生成 task-owned diff**
 
 通过固定 Git argv 或现有差异收集能力：
 
@@ -565,7 +566,7 @@ knowledge areas
 - 输出有界文本。
 - reviewTargets 与差异文件一一对账。
 
-- [ ] **6.4 生成规范 context manifest 候选**
+- [x] **6.4 生成规范 context manifest 候选**
 
 返回待 Prepare 写入的规范对象，目标路径为：
 
@@ -575,11 +576,11 @@ knowledge areas
 
 每项绑定 SHA-256 和 bytes。本任务只构造和验证候选，不写正式文件；正式 request/context 原子写入只由 Task 10 的 Prepare 负责。
 
-- [ ] **6.5 生成内联 prompt data**
+- [x] **6.5 生成内联 prompt data**
 
 Runtime 从 manifest 对应冻结内容生成单一有界数据块；Adapter 不自行读取仓库。
 
-- [ ] **6.6 运行上下文 GREEN**
+- [x] **6.6 运行上下文 GREEN**
 
 运行：
 
@@ -597,7 +598,7 @@ node .\.harness\scripts\tests\provider-context.test.mjs
 
 - 新建：`.harness/scripts/tests/codex-cli-provider.test.mjs`
 
-- [ ] **7.1 编写 argv 白名单 RED**
+- [x] **7.1 编写 argv 白名单 RED**
 
 必须包含：
 
@@ -624,13 +625,13 @@ workspace-write
 danger-full-access
 ```
 
-- [ ] **7.2 编写模型参数 RED**
+- [x] **7.2 编写模型参数 RED**
 
 - `model=null` 时没有 `--model`。
 - 显式模型时只有一个 `--model <id>`。
 - 模型字符串不能被解释为额外 argv。
 
-- [ ] **7.3 编写 stdin 与隔离目录 RED**
+- [x] **7.3 编写 stdin 与隔离目录 RED**
 
 - prompt 通过 stdin。
 - `--cd` 不指向仓库根目录。
@@ -638,7 +639,7 @@ danger-full-access
 - 不通过 shell 执行。
 - output Schema 副本必须与 request 冻结的路径和 SHA-256 一致。
 
-- [ ] **7.4 编写 JSONL RED**
+- [x] **7.4 编写 JSONL RED**
 
 覆盖：
 
@@ -650,7 +651,7 @@ danger-full-access
 - stdout/stderr 超限。
 - 非零退出码。
 
-- [ ] **7.5 编写超时和进程树 RED**
+- [x] **7.5 编写超时和进程树 RED**
 
 短超时后：
 
@@ -658,7 +659,7 @@ danger-full-access
 - 子进程树退出。
 - 不返回成功 response。
 
-- [ ] **7.6 运行 Adapter RED**
+- [x] **7.6 运行 Adapter RED**
 
 运行：
 
@@ -677,7 +678,7 @@ node .\.harness\scripts\tests\codex-cli-provider.test.mjs
 - 新建：`.harness/scripts/lib/provider-adapters/codex-cli.mjs`
 - 修改：`.harness/scripts/tests/codex-cli-provider.test.mjs`
 
-- [ ] **8.1 实现可执行文件发现**
+- [x] **8.1 实现可执行文件发现**
 
 顺序：
 
@@ -686,11 +687,11 @@ node .\.harness\scripts\tests\codex-cli-provider.test.mjs
 
 不允许项目配置提供 executable，不扫描整个磁盘。
 
-- [ ] **8.2 实现固定 argv 构造**
+- [x] **8.2 实现固定 argv 构造**
 
 使用 `spawn`/`execFile` argv 数组，不经过 PowerShell、cmd 或 shell 字符串。
 
-- [ ] **8.3 实现隔离工作目录**
+- [x] **8.3 实现隔离工作目录**
 
 - 在系统临时目录创建。
 - 只放固定占位文件和必要 output Schema 副本。
@@ -698,21 +699,22 @@ node .\.harness\scripts\tests\codex-cli-provider.test.mjs
 - 执行完成后按现有临时资源策略回收；异常时允许诊断路径受控保留。
 - 调用前冻结隔离目录完整 tree manifest；调用后拒绝任意新增、修改或删除。
 
-- [ ] **8.4 实现有界 JSONL 解析**
+- [x] **8.4 实现有界 JSONL 解析**
 
 - 独立限制 stdout/stderr。
 - 只接受一个最终结构化 response。
 - Adapter 不直接写正式 response、报告或 result。
 
-- [ ] **8.5 实现超时终止**
+- [x] **8.5 实现超时终止**
 
-默认 30 秒：
+默认 180 秒：
 
 - 先终止。
 - 固定宽限期后结束进程树。
+- 超时终态必须先于进程终止产生的 `close` 事件冻结，且 Adapter 等待终止完成后再返回。
 - 返回可验证的 timeout diagnostics。
 
-- [ ] **8.6 记录 Adapter 元数据**
+- [x] **8.6 记录 Adapter 元数据**
 
 返回：
 
@@ -729,7 +731,7 @@ bounded diagnostics
 
 不得记录认证内容或完整环境变量。
 
-- [ ] **8.7 运行 Adapter GREEN**
+- [x] **8.7 运行 Adapter GREEN**
 
 运行：
 
@@ -747,7 +749,7 @@ node .\.harness\scripts\tests\codex-cli-provider.test.mjs
 
 - 新建：`.harness/scripts/tests/provider-runtime.test.mjs`
 
-- [ ] **9.1 编写状态派生 RED**
+- [x] **9.1 编写状态派生 RED**
 
 覆盖：
 
@@ -761,7 +763,7 @@ node .\.harness\scripts\tests\codex-cli-provider.test.mjs
 request/context/receipt 漂移 -> provider-invalid
 ```
 
-- [ ] **9.2 编写 Prepare RED**
+- [x] **9.2 编写 Prepare RED**
 
 要求：
 
@@ -773,7 +775,7 @@ request/context/receipt 漂移 -> provider-invalid
 - output Schema 路径、SHA-256 和 prompt template 哈希写入 request。
 - Run/Materialize 不能重新提供或覆盖 Profile/Model。
 
-- [ ] **9.3 编写并发锁 RED**
+- [x] **9.3 编写并发锁 RED**
 
 覆盖：
 
@@ -784,7 +786,7 @@ request/context/receipt 漂移 -> provider-invalid
 - 合法 stale lock 恢复。
 - parent 已退出但 childPid 对应 Codex 进程仍存活时不得回收锁。
 
-- [ ] **9.4 编写失败零污染 RED**
+- [x] **9.4 编写失败零污染 RED**
 
 Provider 失败、超时或非法 response 后：
 
@@ -793,14 +795,14 @@ Provider 失败、超时或非法 response 后：
 - execution receipt 和有界诊断可存在。
 - 隔离工作目录的新增、修改和删除都会触发完整性失败。
 
-- [ ] **9.5 编写执行成功中断 RED**
+- [x] **9.5 编写执行成功中断 RED**
 
 成功 raw response 和 execution receipt 已写、正式 result 未写时：
 
 - Status 为 `provider-materialize-required`。
 - 重试不再次调用模型。
 
-- [ ] **9.6 运行 Runtime RED**
+- [x] **9.6 运行 Runtime RED**
 
 运行：
 
@@ -819,11 +821,11 @@ node .\.harness\scripts\tests\provider-runtime.test.mjs
 - 新建：`.harness/scripts/lib/provider-runtime.mjs`
 - 修改：`.harness/scripts/tests/provider-runtime.test.mjs`
 
-- [ ] **10.1 实现 Provider Status**
+- [x] **10.1 实现 Provider Status**
 
 只从 State、task、request、execution receipt、锁和 result 推导，不创建第二份 State。
 
-- [ ] **10.2 实现 attempt/request 级锁**
+- [x] **10.2 实现 attempt/request 级锁**
 
 锁文件：
 
@@ -845,7 +847,7 @@ startedAt
 timeoutMs
 ```
 
-- [ ] **10.3 实现锁内重新校验**
+- [x] **10.3 实现锁内重新校验**
 
 Prepare、Run、Materialize 在执行实际动作前都重新读取：
 
@@ -854,7 +856,7 @@ Prepare、Run、Materialize 在执行实际动作前都重新读取：
 - result 是否存在。
 - execution 是否已存在或活跃。
 
-- [ ] **10.4 实现 Prepare**
+- [x] **10.4 实现 Prepare**
 
 原子写入：
 
@@ -876,11 +878,11 @@ output Schema path/SHA-256
 prompt template version/SHA-256
 ```
 
-- [ ] **10.5 实现 stale lock 恢复**
+- [x] **10.5 实现 stale lock 恢复**
 
 分别核对 parentPid 和 childPid。任一仍存活时不回收；两者都不存在且超过最大 Provider 时间窗口才回收，记录恢复诊断并使用 lockId fencing。
 
-- [ ] **10.6 运行控制面测试**
+- [x] **10.6 运行控制面测试**
 
 运行：
 
@@ -899,7 +901,7 @@ node .\.harness\scripts\tests\provider-runtime.test.mjs
 - 修改：`.harness/scripts/lib/provider-runtime.mjs`
 - 修改：`.harness/scripts/tests/provider-runtime.test.mjs`
 
-- [ ] **11.1 实现调用前完整性快照**
+- [x] **11.1 实现调用前完整性快照**
 
 冻结：
 
@@ -911,7 +913,7 @@ node .\.harness\scripts\tests\provider-runtime.test.mjs
 
 ignored 非绑定文件明确不在证明范围。
 
-- [ ] **11.2 调用 Adapter**
+- [x] **11.2 调用 Adapter**
 
 只传：
 
@@ -927,13 +929,13 @@ timeout
 
 Run 只能消费 request 已冻结的 Profile、模型和 output Schema；CLI 或配置文件中的后续变化不得覆盖它们。
 
-- [ ] **11.3 实现调用后完整性核对**
+- [x] **11.3 实现调用后完整性核对**
 
 重新核对调用前事实；任一变化生成 `integrity-violation` execution receipt，禁止正式 materialize。
 
 隔离工作目录使用 tree manifest 核对新增、修改和删除；只有父 Runtime 在进程结束后执行的受控回收不属于违规。
 
-- [ ] **11.4 写入 execution 证据**
+- [x] **11.4 写入 execution 证据**
 
 路径：
 
@@ -947,11 +949,11 @@ provider/executions/<providerExecutionId>/
 
 输出有界、原子写入，失败 execution 不覆盖历史。
 
-- [ ] **11.5 禁止自动重试**
+- [x] **11.5 禁止自动重试**
 
 失败后返回 `provider-failed`。只有用户或当前会话再次执行 Run 才创建新 execution。
 
-- [ ] **11.6 运行 Run GREEN**
+- [x] **11.6 运行 Run GREEN**
 
 运行：
 
@@ -973,12 +975,14 @@ node .\.harness\scripts\tests\codex-cli-provider.test.mjs
 - 修改：`.harness/scripts/lib/story-runtime.mjs`
 - 修改：`.harness/scripts/tests/story-runtime.test.mjs`
 
-- [ ] **12.1 编写完整 Materialize RED**
+- [x] **12.1 编写完整 Materialize RED**
 
 在任何 Materialize 实现前覆盖：
 
-- 普通审核报告使用当前 `task.expectedOutputs[0]`。
-- rework 审核报告使用版本化 `task.expectedOutputs[0]`。
+- passed 普通审核报告使用当前 `task.expectedOutputs[0]`。
+- passed rework 审核报告使用版本化 `task.expectedOutputs[0]`。
+- blocked attempt 只写 attempt-scoped response evidence 和 blocked result，不写固定正式报告。
+- passed 重审在共享锁内原子替换固定正式报告，允许从历史 blocked 遗留报告恢复。
 - 唯一成功 execution 选择，禁止“最新文件”猜测。
 - finding 到 State v2 的字段映射。
 - BLOCKER/WARNING 生成 blocked result，INFO/无 finding 生成 completed result。
@@ -989,7 +993,7 @@ node .\.harness\scripts\tests\codex-cli-provider.test.mjs
 - code-review blocked payload 投影到 State。
 - 非 code-review blocked 行为保持不变。
 
-- [ ] **12.2 运行 Materialize RED**
+- [x] **12.2 运行 Materialize RED**
 
 运行：
 
@@ -1000,11 +1004,11 @@ node .\.harness\scripts\tests\story-runtime.test.mjs
 
 预期：新增 Materialize 和 blocked projection 用例 FAIL，原因是功能尚未实现。
 
-- [ ] **12.3 选择唯一成功 execution**
+- [x] **12.3 选择唯一成功 execution**
 
 Materialize 必须显式绑定 execution ID，或由 Runtime 证明当前 request 只有一个未 materialize 的成功 execution。不得使用文件时间或“最新文件”猜测。
 
-- [ ] **12.4 写正式 response evidence**
+- [x] **12.4 写正式 response evidence**
 
 固定路径：
 
@@ -1014,7 +1018,7 @@ Materialize 必须显式绑定 execution ID，或由 Runtime 证明当前 reques
 
 内容必须通过 response Schema，路径符合 Story Runtime evidence 边界。
 
-- [ ] **12.5 根据 task.expectedOutputs 渲染审核报告**
+- [x] **12.5 根据 task.expectedOutputs 渲染审核报告**
 
 输出路径只来自当前 task：
 
@@ -1022,9 +1026,9 @@ Materialize 必须显式绑定 execution ID，或由 Runtime 证明当前 reques
 <task.expectedOutputs[0]>
 ```
 
-普通执行通常为 `code-review-report.md`；rework 必须使用 Story Runtime 冻结的 `code-review-report.rework-<reworkId>.md`。使用 Runtime 模板，不直接采用模型生成的 Markdown。
+passed 普通执行通常为 `code-review-report.md`；passed rework 必须使用 Story Runtime 冻结的 `code-review-report.rework-<reworkId>.md`。blocked 不写该固定正式报告。使用 Runtime 模板，不直接采用模型生成的 Markdown。
 
-- [ ] **12.6 映射 finding**
+- [x] **12.6 映射 finding**
 
 生成现有 State v2 finding：
 
@@ -1046,23 +1050,22 @@ evidence
 - 只有 INFO 或无 finding：生成 `status=completed`、`review.status=passed`。
 - Provider execution 自身失败不进入此映射，不生成正式 result。
 
-- [ ] **12.7 实现严格 blocked review 投影**
+- [x] **12.7 实现严格 blocked review 投影**
 
 仅当 `phase=code-review` 时，在 `applyBlockedV2()` 同一事务内验证并投影合法 payload，然后进入 blocked；不得放宽其他 phase。
 
-- [ ] **12.8 最后写入 result.json**
+- [x] **12.8 最后写入 result.json**
 
 顺序：
 
 ```text
-evidence
--> report
--> result.json
+blocked: evidence -> result.json
+passed: evidence -> 原子替换 report -> result.json
 ```
 
 `result.json` 是唯一提交点。
 
-- [ ] **12.9 覆盖中断恢复**
+- [x] **12.9 覆盖中断恢复**
 
 复用 12.1 已建立的 RED，在 evidence 和 report 后分别注入中断：
 
@@ -1071,7 +1074,7 @@ evidence
 - 再次 Materialize 幂等完成，不再次调用模型。
 - execution receipt 继续保持不可变，不新增第二套 materialization receipt。
 
-- [ ] **12.10 运行 Materialize GREEN**
+- [x] **12.10 运行 Materialize GREEN**
 
 运行：
 
@@ -1094,7 +1097,7 @@ node .\.harness\scripts\tests\story-runtime.test.mjs
 - 修改：`.harness/scripts/tests/e2e-runtime.test.mjs`
 - 修改：`.harness/structure-manifest.yaml`
 
-- [ ] **13.1 编写 CLI RED**
+- [x] **13.1 编写 CLI RED**
 
 覆盖：
 
@@ -1114,7 +1117,7 @@ Json
 
 `Profile` 和 `Model` 只允许 `Prepare` 使用；`Run`、`Materialize` 和 `Status` 传入时必须拒绝。所有命令拒绝 Adapter、executable、argv、prompt、context path、timeout 扩大和输出路径覆盖。
 
-- [ ] **13.2 实现 PowerShell 薄入口**
+- [x] **13.2 实现 PowerShell 薄入口**
 
 PowerShell 只做：
 
@@ -1125,7 +1128,7 @@ PowerShell 只做：
 
 不复制 Provider 业务规则。
 
-- [ ] **13.3 编写 E2E 映射 RED**
+- [x] **13.3 编写 E2E 映射 RED**
 
 当 Story inspection 为 code-review 的 `awaiting-result` 时：
 
@@ -1141,15 +1144,15 @@ provider-materialized -> apply-result
 
 其他 phase 继续返回 `cognitive-action-required`。
 
-- [ ] **13.4 实现 E2E 映射**
+- [x] **13.4 实现 E2E 映射**
 
 E2E Runtime 只调用 Provider Status，不复制 request、receipt 或锁验证。
 
-- [ ] **13.5 保持 Step 非自动执行**
+- [x] **13.5 保持 Step 非自动执行**
 
 `run-e2e Step` 对 Provider 动作只返回状态，不自动 Prepare、Run、Materialize 或重试。
 
-- [ ] **13.6 运行 CLI/E2E GREEN**
+- [x] **13.6 运行 CLI/E2E GREEN**
 
 运行：
 
@@ -1164,7 +1167,7 @@ node .\.harness\scripts\tests\e2e-runtime.test.mjs
 
 **目标：** 证明 M8-A 没有破坏历史 Mock Worker、State 和串行闭环。
 
-- [ ] **14.1 运行 Provider 专项**
+- [x] **14.1 运行 Provider 专项**
 
 ```powershell
 node .\.harness\scripts\tests\provider-config.test.mjs
@@ -1175,7 +1178,7 @@ node .\.harness\scripts\tests\provider-runtime.test.mjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\tests\provider-cli.test.ps1
 ```
 
-- [ ] **14.2 运行 M4/M5 Worker 回归**
+- [x] **14.2 运行 M4/M5 Worker 回归**
 
 ```powershell
 node .\.harness\scripts\tests\worker-runtime.test.mjs
@@ -1183,7 +1186,7 @@ node .\.harness\scripts\tests\worktree-worker-runtime.test.mjs
 node .\.harness\scripts\tests\worktree-wave-execution-runtime.test.mjs
 ```
 
-- [ ] **14.3 运行 M7 核心回归**
+- [x] **14.3 运行 M7 核心回归**
 
 ```powershell
 node .\.harness\scripts\tests\state-runtime.test.mjs
@@ -1193,7 +1196,7 @@ node .\.harness\scripts\tests\acceptance-gate.test.mjs
 node .\.harness\scripts\tests\knowledge-runtime.test.mjs
 ```
 
-- [ ] **14.4 运行结构和 smoke**
+- [x] **14.4 运行结构和 smoke**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\validate-structure.ps1
@@ -1201,7 +1204,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\smoke
 git diff --check
 ```
 
-- [ ] **14.5 检查安全声明**
+- [x] **14.5 检查安全声明**
 
 运行可复现的禁止范围审计：
 
@@ -1240,7 +1243,7 @@ $processCalls
 
 **目标：** 在真实 Provider 调用前关闭 Runtime 和安全问题。
 
-- [ ] **15.1 创建充分上下文的独立审核 Agent**
+- [x] **15.1 创建充分上下文的独立审核 Agent**
 
 上下文至少包括：
 
@@ -1252,7 +1255,7 @@ $processCalls
 - Worker policy。
 - 专项测试和回归结果。
 
-- [ ] **15.2 审核 task-owned diff**
+- [x] **15.2 审核 task-owned diff**
 
 重点：
 
@@ -1266,7 +1269,7 @@ $processCalls
 - finding 到 State 契约映射。
 - 模型配置不扩大权限。
 
-- [ ] **15.3 修复 BLOCKER/WARNING**
+- [x] **15.3 修复 BLOCKER/WARNING**
 
 每项修复：
 
@@ -1275,7 +1278,7 @@ $processCalls
 3. 运行受影响测试。
 4. 重新只读复审。
 
-- [ ] **15.4 达到审核门禁**
+- [x] **15.4 达到审核门禁**
 
 最终独立复审必须：
 
@@ -1288,7 +1291,7 @@ WARNING = 0
 
 **目标：** 证明不是 Mock Provider，而是真实 Codex Agent 完成只读审核。
 
-- [ ] **16.1 确认真实调用前置条件**
+- [x] **16.1 确认真实调用前置条件**
 
 确认：
 
@@ -1298,7 +1301,7 @@ WARNING = 0
 - Provider 专项、回归和独立代码审核全部通过。
 - 用户已批准执行本次真实本机 Agent 调用。
 
-- [ ] **16.2 将 M8-A-001 推进到 code-review**
+- [x] **16.2 将 M8-A-001 推进到 code-review**
 
 复用 Task 0 初始化的 `M8-A-001`：
 
@@ -1311,7 +1314,7 @@ WARNING = 0
 
 不得使用手工伪造的孤立 task 绕过前置阶段，也不得为了验收故意植入缺陷。
 
-- [ ] **16.3 完成人工只读审核**
+- [x] **16.3 完成人工只读审核**
 
 当前 Codex 会话按 `frontier-code-review-gate` 记录：
 
@@ -1319,7 +1322,7 @@ WARNING = 0
 - 证据。
 - 通过或阻塞结论。
 
-- [ ] **16.4 Prepare 真实 request**
+- [x] **16.4 Prepare 真实 request**
 
 ```powershell
 .\.harness\scripts\run-provider.ps1 `
@@ -1330,7 +1333,7 @@ WARNING = 0
 
 核对 request、context、Profile、模型语义和哈希。
 
-- [ ] **16.5 Run 真实 Provider**
+- [x] **16.5 Run 真实 Provider**
 
 ```powershell
 .\.harness\scripts\run-provider.ps1 `
@@ -1341,7 +1344,7 @@ WARNING = 0
 
 核对真实 `codex exec` execution receipt。
 
-- [ ] **16.6 Materialize 并 apply**
+- [x] **16.6 Materialize 并 apply**
 
 如 Status 为 `provider-materialize-required`：
 
@@ -1361,7 +1364,7 @@ result 就绪后：
   -Json
 ```
 
-- [ ] **16.7 对比人工与 Provider 审核**
+- [x] **16.7 对比人工与 Provider 审核**
 
 比较：
 
@@ -1372,7 +1375,7 @@ result 就绪后：
 - 证据可复核性。
 - 是否符合当前阶段审核范围。
 
-- [ ] **16.8 关闭真实 finding**
+- [x] **16.8 关闭真实 finding**
 
 若 finding 成立：
 
@@ -1381,7 +1384,7 @@ result 就绪后：
 - 再次人工和 Provider 审核。
 - 不允许直接将 Provider finding 标为 resolved。
 
-- [ ] **16.9 达到真实验收门禁**
+- [x] **16.9 达到真实验收门禁**
 
 必须证明：
 
@@ -1391,7 +1394,7 @@ result 就绪后：
 - 最终无未解决 BLOCKER/WARNING。
 - 人工与 Provider 对比报告可审计。
 
-- [ ] **16.10 将 M8-A-001 完整收口到 done**
+- [x] **16.10 将 M8-A-001 完整收口到 done**
 
 code-review 通过后继续使用现有九阶段工作流：
 
@@ -1402,6 +1405,63 @@ code-review 通过后继续使用现有九阶段工作流：
 5. 运行 `verify-story-closure.ps1`，确认只读取最终 State 和绑定证据即可回答 M8-A 闭环事实。
 
 M8-A-001 不允许停留在 code-review 后被描述为里程碑完成。
+
+### 16R：自定义 Codex 模型 Provider 阻塞修复
+
+第二次真实执行已经证明超时和完整性修复有效，但固定 `--ignore-user-config` 会隔离用户级 `model_provider`，导致自定义 Provider 凭据被错误用于 OpenAI 官方端点。保留安全隔离边界，并通过受限 Profile 元数据重建必要配置。
+
+- [x] **16R.1 将 401 失败 attempt 正式投影为 blocked**
+- [x] **16R.2 为 Provider 元数据、冻结 request、配置漂移和固定 CLI 参数编写 RED**
+- [x] **16R.3 实现严格 Schema、确定性配置哈希和 request/receipt 契约**
+- [x] **16R.4 实现固定白名单 `-c` 参数和安全 TOML 字符串编码**
+- [x] **16R.5 创建不含密钥的本地 Profile 覆盖并完成专项与全量回归**
+- [x] **16R.6 完成独立只读复审并关闭本次 BLOCKER**
+- [x] **16R.7 恢复 Story，创建新 attempt 并重新执行真实 Provider**
+- [x] **16R.8 修复 claim-only 不可判定执行的恢复闭环**
+
+真实 Provider 复审发现：`execution-claim.json` 已提交但 receipt 尚未提交时，父进程崩溃会使
+active attempt 永久进入 `provider-invalid`。按 TDD 完成：
+
+- 新增 `provider-execution-indeterminate` 派生状态和 E2E 显式 materialization 动作。
+- 禁止对同一冻结 request 自动或手工 `Run`。
+- 复用 `Materialize` 生成 Runtime evidence 和 code-review blocked result。
+- 不生成 Provider response、execution receipt 或通过报告。
+- 覆盖 result-last 中断恢复、幂等、claim 漂移和零 Adapter 调用测试。
+- 专项、E2E/Story、结构、State 和差异检查通过，待新真实 Provider attempt 复审。
+
+- [x] **16R.9 修复恢复 response 与冻结 request 的身份绑定**
+
+真实 Provider 复审发现：恢复路径只验证 response Schema 与 receipt 中的 response 哈希，协调修改
+`raw-response.json` 身份和 `receipt.responseSha256` 可绕过冻结 request。按 TDD 增加协同篡改
+fixture，并在每次磁盘恢复读取时重新对账：
+
+```text
+providerRequestId
+dispatchId
+storyId
+runId
+phase
+role
+```
+
+任一漂移返回 `provider-invalid`，不得进入 Materialize。
+
+- [x] **16R.10 修复输出超限终止与分类**
+
+真实 Provider 复审发现：stdout/stderr 超限只触发进程树终止，但没有独立 settle 等待中的 outcome；
+若 tracked child 不产生 `close`，会等满 180 秒并误分类为 `timed-out`。按 TDD 完成：
+
+- output-limit 独立完成 outcome，不依赖 `close`。
+- 等待 `killProcessTree` 完成后再返回。
+- 保持 `invalid-response` 分类和有界诊断。
+- 覆盖子进程持续打开、终止函数返回但不发出 `close` 的 fixture。
+
+边界：
+
+- 继续固定 `--ignore-user-config`、`--sandbox read-only`、`--ephemeral`、`--json`、`shell=false`。
+- 仅允许 `id`、HTTPS `baseUrl`、`wireApi=responses` 和 boolean `requiresOpenAiAuth`。
+- API Key 只来自现有 Codex 登录状态或环境，不进入项目配置、State、日志或回执。
+- 不允许任意 `-c` 键、argv、环境变量、可执行文件或 prompt。
 
 ## 20. Task 17：文档、知识和里程碑收口
 
@@ -1420,7 +1480,7 @@ M8-A-001 不允许停留在 code-review 后被描述为里程碑完成。
 - 修改：必要的 `llm-knowledge/common/`
 - 修改：`.harness/structure-manifest.yaml`
 
-- [ ] **17.1 编写中文 REPORT**
+- [x] **17.1 编写中文 REPORT**
 
 报告必须区分：
 
@@ -1431,7 +1491,7 @@ M8-A-001 不允许停留在 code-review 后被描述为里程碑完成。
 - 已关闭问题。
 - 剩余边界。
 
-- [ ] **17.2 更新长期目标基线**
+- [x] **17.2 更新长期目标基线**
 
 将“真实 Agent Provider 未接入”更新为 M8-A 当前真实状态，但不得声称：
 
@@ -1440,11 +1500,11 @@ M8-A-001 不允许停留在 code-review 后被描述为里程碑完成。
 - 严格读取 ACL 已实现。
 - M8-B/M9 已启动。
 
-- [ ] **17.3 更新路线和结构清单**
+- [x] **17.3 更新路线和结构清单**
 
 同步 M8-A 完成证据和下一步 M8-B 启动门禁。
 
-- [ ] **17.4 更新交接文档**
+- [x] **17.4 更新交接文档**
 
 包含：
 
@@ -1455,7 +1515,7 @@ M8-A-001 不允许停留在 code-review 后被描述为里程碑完成。
 - 已实现安全边界。
 - 明确未实现能力。
 
-- [ ] **17.5 检查知识新鲜度**
+- [x] **17.5 检查知识新鲜度**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\check-kb-freshness.ps1
@@ -1463,7 +1523,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\check
 
 只刷新 M8-A 实际影响的 common/Harness 知识，保留 `custom/`。
 
-- [ ] **17.6 最终全量校验**
+- [x] **17.6 最终全量校验**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\validate-structure.ps1
@@ -1471,7 +1531,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\smoke
 git diff --check
 ```
 
-- [ ] **17.7 最终独立只读复审**
+- [x] **17.7 最终独立只读复审**
 
 审核实现、测试、真实验收、REPORT、目标基线和交接的一致性。要求无 BLOCKER/WARNING。
 
@@ -1479,7 +1539,7 @@ git diff --check
 
 **目标：** 明确本次 owned changes 和验证证据，不自动执行 Git。
 
-- [ ] **18.1 生成修改清单**
+- [x] **18.1 生成修改清单**
 
 区分：
 
@@ -1488,13 +1548,13 @@ git diff --check
 - 本任务开始前已有无关修改。
 - 本任务运行生成但不应提交的本地资产。
 
-- [ ] **18.2 运行交付摘要**
+- [x] **18.2 运行交付摘要**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\summarize-delivery.ps1
 ```
 
-- [ ] **18.3 核对 Git 安全边界**
+- [x] **18.3 核对 Git 安全边界**
 
 确认没有：
 
@@ -1504,6 +1564,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\summa
 - 认证信息。
 - 临时执行目录。
 - 无关业务文件。
+
+完成态外勘误 `docs/harness-m8a-review-provider/ERRATA.md` 不属于冻结的 37 个 owned
+文件；后续 Git 交付时必须将其作为独立更正文件披露。
 
 ### 18.4 外部交付批准门禁
 
@@ -1521,20 +1584,20 @@ git push
 
 只有以下项目全部勾选后，才能把 M8-A 标记为完成：
 
-- [ ] Provider 配置支持 role -> profile -> adapter/model。
-- [ ] 未指定模型的隔离 CLI 默认语义准确记录。
-- [ ] 真实 `codex exec` 只读 reviewer 可执行。
-- [ ] Agent 不返回 candidate files。
-- [ ] Runtime 生成 evidence、report、execution receipt 和 result。
-- [ ] code-review blocked findings 能在同一 State 事务中投影并进入 blocked。
-- [ ] State/Story Runtime 契约未被 Provider 绕过。
-- [ ] Prepare/Run/Materialize/Apply 可从磁盘事实恢复。
-- [ ] 并发 Run 被 attempt/request 锁阻止。
-- [ ] 失败、超时、非法输出和完整性违规不污染正式结果。
-- [ ] read-only 没有被错误声明为严格读取 ACL。
-- [ ] M4/M5/M7 回归通过。
-- [ ] 独立代码审核无 BLOCKER/WARNING。
-- [ ] 至少一次真实 Story 或真实 task-owned diff 完成人工/Provider 审核对比。
-- [ ] M8-A-001 最终进入 done/completed，并通过 closure verifier。
-- [ ] 目标基线、路线、结构清单、交接和知识状态已同步。
-- [ ] 用户批准进入 M8-B 之前，不启动开发 Provider 实施。
+- [x] Provider 配置支持 role -> profile -> adapter/model。
+- [x] 未指定模型的隔离 CLI 默认语义准确记录。
+- [x] 真实 `codex exec` 只读 reviewer 可执行。
+- [x] Agent 不返回 candidate files。
+- [x] Runtime 生成 evidence、report、execution receipt 和 result。
+- [x] code-review blocked findings 能在同一 State 事务中投影并进入 blocked。
+- [x] State/Story Runtime 契约未被 Provider 绕过。
+- [x] Prepare/Run/Materialize/Apply 可从磁盘事实恢复。
+- [x] 并发 Run 被 attempt/request 锁阻止。
+- [x] 失败、超时、非法输出和完整性违规不污染正式结果。
+- [x] read-only 没有被错误声明为严格读取 ACL。
+- [x] M4/M5/M7 回归通过。
+- [x] 独立代码审核无 BLOCKER/WARNING。
+- [x] 至少一次真实 Story 或真实 task-owned diff 完成人工/Provider 审核对比。
+- [x] M8-A-001 最终进入 done/completed，并通过 closure verifier。
+- [x] 目标基线、路线、结构清单、交接和知识状态已同步。
+- [x] 用户批准进入 M8-B 之前，不启动开发 Provider 实施。

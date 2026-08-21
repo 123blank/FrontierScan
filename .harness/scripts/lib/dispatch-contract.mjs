@@ -282,7 +282,11 @@ function validateDispatchResultV20(result) {
     : result.status === "failed"
       ? ["diagnostics"]
       : result.status === "blocked"
-        ? ["diagnostics", "blocker"]
+        ? [
+            "diagnostics",
+            "blocker",
+            ...(result.phase === "code-review" ? ["payload"] : []),
+          ]
         : [];
   assertExactFields(result, [...common, ...branchFields], "Dispatch result");
   for (const field of [...common, ...branchFields]) {
@@ -326,8 +330,12 @@ function validateDispatchResultV20(result) {
   }
   if (!Array.isArray(result.records)) throw new Error("Dispatch result records must be an array.");
   result.records.forEach(validateDispatchRecordV20);
-  if (result.status === "completed") validatePhasePayload(result.phase, result.payload);
+  if (result.status === "completed"
+      || (result.status === "blocked" && result.phase === "code-review")) {
+    validatePhasePayload(result.phase, result.payload);
+  }
   else validateDiagnostics(result.diagnostics);
+  if (result.status === "blocked") validateDiagnostics(result.diagnostics);
   if (result.status === "blocked") validateBlocker(result.blocker);
   return result;
 }

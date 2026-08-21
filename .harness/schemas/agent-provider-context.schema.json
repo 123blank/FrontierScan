@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-provider-context.schema.json",
+  "title": "FrontierScan Agent Provider Context Manifest",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    }
+  },
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "runId",
+    "dispatchId",
+    "role",
+    "entries",
+    "reviewTargets",
+    "knowledgeAreas",
+    "totalBytes",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "storyId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "dispatchId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "role": {
+      "const": "code-reviewer"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "sha256",
+          "bytes",
+          "purpose",
+          "source"
+        ],
+        "properties": {
+          "path": {
+            "$ref": "#/$defs/path"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2097152
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "enum": [
+              "task",
+              "state",
+              "dag",
+              "knowledge",
+              "policy",
+              "diff",
+              "test-evidence",
+              "project-rule"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "reviewTargets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "sha256",
+          "changeKind"
+        ],
+        "properties": {
+          "path": {
+            "$ref": "#/$defs/path"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "changeKind": {
+            "enum": [
+              "added",
+              "modified",
+              "deleted",
+              "renamed"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "knowledgeAreas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "area",
+          "status",
+          "loadedFiles"
+        ],
+        "properties": {
+          "area": {
+            "enum": [
+              "backend",
+              "frontend",
+              "common"
+            ]
+          },
+          "status": {
+            "enum": [
+              "fresh",
+              "accepted-stale"
+            ]
+          },
+          "loadedFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/path"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "totalBytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8388608
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

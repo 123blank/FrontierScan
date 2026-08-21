@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-provider-execution-receipt.schema.json",
+  "title": "FrontierScan Agent Provider Execution Receipt",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "nullableSha256": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/sha256"
+        }
+      ]
+    },
+    "nullablePath": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nullableModel": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "modelProvider": {
+      "type": "object",
+      "required": [
+        "id",
+        "baseUrl",
+        "wireApi",
+        "requiresOpenAiAuth"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "baseUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^https://(?![^/?#]*@)[^\\s\\u0000-\\u001f\\u007f/?#]+(?:/[^\\s\\u0000-\\u001f\\u007f?#]*)?$"
+        },
+        "wireApi": {
+          "const": "responses"
+        },
+        "requiresOpenAiAuth": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "providerExecutionId",
+    "providerRequestId",
+    "dispatchId",
+    "storyId",
+    "runId",
+    "phase",
+    "role",
+    "profile",
+    "adapter",
+    "modelProvider",
+    "configSha256",
+    "requestFile",
+    "requestSha256",
+    "contextManifestFile",
+    "contextManifestSha256",
+    "promptTemplateVersion",
+    "promptTemplateSha256",
+    "requestedModel",
+    "resolvedModel",
+    "reportedModel",
+    "modelSource",
+    "adapterVersion",
+    "readIsolation",
+    "startedAt",
+    "finishedAt",
+    "exitCode",
+    "status",
+    "responseFile",
+    "responseSha256",
+    "integrityChecks",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "providerExecutionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "providerRequestId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "dispatchId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "storyId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "phase": {
+      "const": "code-review"
+    },
+    "role": {
+      "const": "code-reviewer"
+    },
+    "profile": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "adapter": {
+      "const": "codex-cli"
+    },
+    "modelProvider": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/modelProvider"
+        }
+      ]
+    },
+    "configSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "requestFile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requestSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "contextManifestFile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contextManifestSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "promptTemplateVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "promptTemplateSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "requestedModel": {
+      "$ref": "#/$defs/nullableModel"
+    },
+    "resolvedModel": {
+      "$ref": "#/$defs/nullableModel"
+    },
+    "reportedModel": {
+      "$ref": "#/$defs/nullableModel"
+    },
+    "modelSource": {
+      "enum": [
+        "runtime-override",
+        "local-config",
+        "project-config",
+        "builtin-default"
+      ]
+    },
+    "adapterVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "readIsolation": {
+      "const": "same-os-user-readonly-sandbox"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exitCode": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed",
+        "timed-out",
+        "invalid-response",
+        "integrity-violation"
+      ]
+    },
+    "responseFile": {
+      "$ref": "#/$defs/nullablePath"
+    },
+    "responseSha256": {
+      "$ref": "#/$defs/nullableSha256"
+    },
+    "integrityChecks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "checkId",
+          "status",
+          "beforeSha256",
+          "afterSha256",
+          "details"
+        ],
+        "properties": {
+          "checkId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "not-applicable"
+            ]
+          },
+          "beforeSha256": {
+            "$ref": "#/$defs/nullableSha256"
+          },
+          "afterSha256": {
+            "$ref": "#/$defs/nullableSha256"
+          },
+          "details": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "maxItems": 32
+    }
+  },
+  "additionalProperties": false
+}

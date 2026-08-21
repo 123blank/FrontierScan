@@ -2,7 +2,7 @@
 
 > 适用仓库：`D:\ProjectStudy\FrontierScan`
 >
-> 快照日期：2026-08-18
+> 快照日期：2026-08-19
 >
 > 维护目的：让新的 Codex 会话在不依赖旧聊天记录的情况下，尽可能准确地恢复项目事实、工作阶段、安全边界、用户习惯和下一步方向。
 >
@@ -82,14 +82,16 @@
 | 仓库根目录 | `D:\ProjectStudy\FrontierScan` |
 | 主要开发分支 | `dev` |
 | 远程仓库 | `origin` → `https://github.com/123blank/FrontierScan.git` |
-| 当前可执行 Codex | VS Code 扩展内 `codex.exe` |
-| 本次检测版本 | `codex-cli 0.146.0-alpha.9.2` |
+| 当前 CMD `codex` | `D:\Node\codex.cmd` |
+| 当前扩展 Codex | `c:\Users\czd\.vscode\extensions\openai.chatgpt-26.5814.41407-win32-x64\bin\windows-x86_64\codex.exe` |
+| 本次检测版本 | `codex-cli 0.148.0` |
 | 项目级 `.codex/config.toml` | 当前不存在 |
 
-当前 PowerShell 中 `codex.cmd` 不在 `PATH`。本次实际检测命令使用：
+当前 PowerShell 会优先命中 `D:\Node\codex.ps1`，受执行策略影响可能失败。CMD 中的 `codex` 正常解析到 `D:\Node\codex.cmd`。可靠检查方式：
 
 ```powershell
-& 'C:\Users\czd\.vscode\extensions\openai.chatgpt-26.5727.51351-win32-x64\bin\windows-x86_64\codex.exe' --version
+where.exe codex
+cmd.exe /d /c codex --version
 ```
 
 新会话不能假设扩展路径和版本保持不变，应重新运行：
@@ -102,28 +104,28 @@ codex --version
 
 ### 2.2 Git 状态
 
-2026-08-18 当前事实：
+2026-08-19 当前事实：
 
 | 项目 | 值 |
 | --- | --- |
 | 当前分支 | `dev` |
-| `HEAD` | `f12d893896617845242abb75e23d577fc730d579` |
-| `origin/dev` | `09e80f2ebdb85c5abf7ea55fe134159a86eeddf0` |
-| ahead/behind | `dev` ahead 5、behind 0 |
-| 工作区 | M7-D Harness、真实业务、运行产物、文档和知识修改均未提交 |
+| `HEAD` | `c977dae67d3117e507a1c7dfb52156368fa52cb2` |
+| `origin/dev` | `621cd3b6ff89708d24feeb4ee4bd7fbfd88d7542` |
+| ahead/behind | `dev` ahead 1、behind 0 |
+| 工作区 | M8-A Provider、Runtime、测试、真实运行产物、文档和知识修改均未提交 |
 
 最近关键提交：
 
 ```text
+c977dae docs(harness): design M8-A review provider
+621cd3b docs(harness): complete M7-D closure acceptance
+4f2910f feat(article): add read status filtering
+0be58dd feat(harness): add M7-D closure verification
 f12d893 feat(harness): implement M7-C knowledge freshness loop
 80a4d6f feat(harness): implement M7-B serial driver
-fe210dc feat(harness): implement M7-A4 delivery semantics
-cea21a8 feat(harness): implement M7-A3 acceptance gates
-fe65b0b feat(harness): implement M7-A2 phase result projection
-09e80f2 feat(harness): implement M7-A1 state v2 contract
 ```
 
-工作区包含 9 个真实业务 owned 文件、M7-D Runtime/测试、专项文档、completed State 运行产物和知识刷新。提交前必须重新按实际提交目标审核范围，不得使用 `git add .`。
+工作区不包含 backend/frontend 业务修改，主要是 M8-A Provider 配置、Schema、Runtime、专项测试、CLI、文档和运行证据。`.harness/config/agent-providers.local.json` 被忽略，不得提交。提交前必须重新按最终 owned manifest 审核范围，不得使用 `git add .`。
 
 新会话必须实际运行以下命令，不得直接沿用本节：
 
@@ -470,37 +472,37 @@ a1f72ee feat(harness): add wave integration and finalization
 
 | 字段 | 值 |
 | --- | --- |
-| runId | `M7-D-001` |
-| stateFile | `.harness/states/e2e-M7-D-001.json` |
+| runId | `M8-A-001` |
+| stateFile | `.harness/states/e2e-M8-A-001.json` |
 | status | `completed` |
-| revision | `19` |
+| revision | `51` |
 
 目标状态：
 
 | 字段 | 值 |
 | --- | --- |
-| storyId | `M7-D-001` |
+| storyId | `M8-A-001` |
 | phase | `done` |
 | runtime.status | `completed` |
-| runtime.revision | `19` |
+| runtime.revision | `51` |
 | previousPhase | `delivery-preparation` |
 | review.status | `passed` |
 
 阶段产物完整存在：
 
 ```text
-.harness/runs/M5-D-D-001/phases/00-requirement/requirement-breakdown.md
-.harness/runs/M5-D-D-001/phases/01-technical-design/technical-design.md
-.harness/runs/M5-D-D-001/phases/02-task-dag/task-dag.json
-.harness/runs/M5-D-D-001/phases/03-implementation/implementation-notes.md
-.harness/runs/M5-D-D-001/phases/04-unit-test/test-report.md
-.harness/runs/M5-D-D-001/phases/05-code-review/code-review-report.md
-.harness/runs/M5-D-D-001/phases/06-build-publish/build-report.md
-.harness/runs/M5-D-D-001/phases/07-interface-verification/interface-verification-report.md
-.harness/runs/M5-D-D-001/phases/08-git-delivery/delivery-report.md
+.harness/runs/M8-A-001/phases/00-requirement/requirement-breakdown.md
+.harness/runs/M8-A-001/phases/01-technical-design/technical-design.md
+.harness/runs/M8-A-001/phases/02-task-dag/task-dag.json
+.harness/runs/M8-A-001/phases/03-implementation/implementation-notes.md
+.harness/runs/M8-A-001/phases/04-unit-test/test-report.md
+.harness/runs/M8-A-001/phases/05-code-review/code-review-report.md
+.harness/runs/M8-A-001/phases/06-build-publish/build-report.md
+.harness/runs/M8-A-001/phases/07-interface-verification/interface-verification-report.md
+.harness/runs/M8-A-001/phases/08-delivery-preparation/delivery-report.md
 ```
 
-当前没有尚未完成的活动 Story。不要继续修改 `M7-D-001` 的完成态；后续 Git 事实只能进入独立 delivery receipt。
+当前没有尚未完成的活动 Story。不要继续修改 `M8-A-001` 的完成态；后续 Git 事实只能进入独立 delivery receipt。
 
 新会话校验命令：
 
@@ -513,7 +515,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\.harness\scripts\run-state.ps1 `
   -Command validate `
-  -StateFile .\.harness\states\e2e-M7-D-001.json
+  -StateFile .\.harness\states\e2e-M8-A-001.json
 ```
 
 ---
@@ -527,9 +529,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - 自动删除任务分支
 - 自动 `git worktree prune`
 - Worktree 自动复用或遗留资产自动清扫
-- 真实 Codex Agent provider
 - 恶意 Worker 的操作系统级隔离
-- 真实 Agent Provider 驱动的自动认知任务
+- 除 `code-reviewer` 外的真实 Agent Provider 自动认知任务
+- 写入型 backend/frontend developer Provider
+- 跨供应商 HTTP Adapter
 - 正式仓库中的真实 WaveCreate、Worker、候选集成和 WaveRetire 执行
 - 真实发布、部署和环境交付
 - 无审批 Git add/commit/push/PR
@@ -543,19 +546,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 下一项架构里程碑应是：
 
 ```text
-M8-A：只读审核 Provider
+M8-B：单任务开发 Provider
 ```
 
-M7 已用 `M7-D-001` 完成单 Story 串行闭环真实验收。下一步应先设计可替换、受权限控制的只读 `code-reviewer` Provider，而不是直接开放写能力或并行。
+M8-A 已用 `M8-A-001` 完成真实只读 `code-reviewer` Provider 验收。下一步应先设计单任务、单隔离 Worktree、串行的 backend/frontend developer Provider，不直接开放并行、主树写入或自动 Git。
 
 推荐首版范围：
 
-1. 先建立 `docs/harness-m8a-review-provider/DESIGN.md` 与 `PLAN.md`。
-2. Provider 首个角色只允许 `code-reviewer`，默认只读，不得修改业务文件、State、Git 或外部系统。
-3. Runtime 冻结 task、最小 context manifest 和权限策略，并验证超时、非法输出、越权路径与中断恢复。
-4. Runtime 而不是 Agent 写正式 State 和报告。
-5. 使用一个真实 Story 对比人工审核与 Provider 审核结果。
-6. 设计和独立审核通过后仍需用户批准才能实施。
+1. 先建立 `docs/harness-m8b-development-provider/DESIGN.md` 与 `PLAN.md`。
+2. 只开放单个 DAG task 和单个隔离 Worktree，保持串行。
+3. 写入必须同时匹配角色策略、`predictedFiles` 和冻结上下文。
+4. Provider 不直接修改主树、State、Git 或外部系统，由 Runtime 收集和受控集成候选。
+5. 覆盖越权路径、部分输出、超时、重试、候选漂移和恢复。
+6. 设计与独立审核通过后仍需用户批准才能实施。
 
 ---
 
@@ -702,7 +705,7 @@ git-committer
 
 `.codex/agents/agents.yaml` 是职责注册表，不是自动运行证据。
 
-当前 M4-B Worker 策略与 12 个角色一一对应，但真实 Codex Agent provider 尚未接入。新会话不得说“已自动派发给 backend-developer”等，除非当前运行时确实执行了可验证的 Agent 调度。
+当前 M4-B Worker 策略与 12 个角色一一对应，M8-A 只接入了真实 `code-reviewer` Provider。新会话不得说“已自动派发给 backend-developer”等，除非后续 Runtime 确实执行了可验证的 Agent 调度。
 
 ---
 
@@ -1028,18 +1031,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 ## 21. 当前会话结束时的最终摘要
 
-截至 2026-08-18：
+截至 2026-08-19：
 
-- 当前分支为 `dev`，HEAD 为 `f12d893 feat(harness): implement M7-C knowledge freshness loop`；`dev` 相对 `origin/dev` ahead 5。
-- M7-A1 至 M7-D 均已实施；M7-D 当前工作区尚未提交。
-- `M7-D-001` 已完成 Dashboard 阅读状态筛选真实 Story，最终 State 为 `done/completed` revision `19`。
-- 五项 required criterion 均为 `verified`；后端 163 个测试、前端 helper 2 个测试、前端构建、真实 API 和 Chrome UI 验收通过。
-- UI 验收触发一次严格受限 late-stage rework，历史阶段结果通过 supersession 保留并重新经过完整质量链。
-- M7-D acceptance suite、增强后的 closure verifier、State/DAG/结构和差异检查通过；closure verifier 已绑定正式 task/attempt/workflow/required outputs，深检 phase-result 内嵌 outputs/records，并核对 supersession 后九阶段有效 result 与最终 State 投影。
-- 交付准备认领 9 个业务文件，2 个返工新增文件进入 `outOfPredictionFiles`；Harness/文档/知识修改保持 unrelated。
-- `PrepareManifest` 大量控制文件扫描问题、closure verifier 构建产物边界，以及终审发现的 State/result 投影、内嵌证据、正式路径身份和规范化 attempt evidence 边界漏检均已按 TDD 修复。
-- 最终独立只读复审无 BLOCKER/WARNING；closure verifier 的剩余边界是验证磁盘证据链与 State 一致，不重新执行历史外部环境和业务命令。
+- 当前分支为 `dev`，HEAD 为 `c977dae docs(harness): design M8-A review provider`；`dev` 相对 `origin/dev` ahead 1。
+- M7 已完成；M8-A Provider、Runtime、测试、运行证据、报告和知识同步当前工作区尚未提交。
+- `M8-A-001` 已完成首个真实只读 `code-reviewer` Provider 闭环，最终 State 为 `done/completed` revision `51`。
+- 五项 required criterion 均为 `verified`；本 Story 不修改业务 API/UI，浏览器和 HTTP 验证不适用。
+- 最新成功执行为 dispatch `19cd43d7-1d4e-4e02-89ed-a8079a8a8ccb`、request `a5025528-930c-4820-b726-7fc66fd900a5`、execution `cab18d21-f92b-4c8b-a8f3-d0706e72c7ab`，`exitCode=0`。
+- 真实 Provider 多轮审核发现并推动关闭 12 类身份、模型路由、隔离声明、锁、恢复和超时问题；最终人工与 Provider 审核均无 BLOCKER/WARNING。
+- Provider 专项、State/Story/E2E、Worker、结构、smoke、State 校验、闭包核验和 `git diff --check` 通过。
+- backend、frontend、common 知识新鲜度均为 fresh；语义增强继续为 pending。
+- `PLAN.md` 是 Story 初始化前 dirty 文件，最终交付必须继续列为 unrelated，不得纳入 owned manifest。
 - `done/completed` 仍不表示 Git 已提交或推送；completed State 外可生成 append-only delivery receipt，只读核对 commit tree 和 remote ref，不执行 Git 写操作。
 - 当前正式仓库没有执行 `git add`、`git commit`、`git push`、Worktree、Docker、发布或部署。
-- 下一里程碑为用户批准后设计 `M8-A：只读审核 Provider`。
-- 项目仍不具备真实 Agent Provider、多 Story Fork-Join、本地 Compose 验收和自动 Git 交付。
+- 下一里程碑为用户批准后设计 `M8-B：单任务开发 Provider`。
+- 项目仍不具备写入型开发 Provider、多 Story Fork-Join、本地 Compose 验收和自动 Git 交付。

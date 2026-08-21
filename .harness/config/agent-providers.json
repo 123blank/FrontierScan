@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "defaultProfile": "codex-default",
+  "profiles": {
+    "codex-default": {
+      "adapter": "codex-cli",
+      "model": null
+    }
+  },
+  "roleBindings": {
+    "code-reviewer": "codex-default"
+  }
+}

@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-provider-request.schema.json",
+  "title": "FrontierScan Agent Provider Request",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "name",
+        "category",
+        "readPathPrefixes",
+        "writePathPrefixes",
+        "capabilities"
+      ],
+      "properties": {
+        "name": {
+          "const": "code-reviewer"
+        },
+        "category": {
+          "const": "review"
+        },
+        "readPathPrefixes": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "writePathPrefixes": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "capabilities": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "modelProvider": {
+      "type": "object",
+      "required": [
+        "id",
+        "baseUrl",
+        "wireApi",
+        "requiresOpenAiAuth"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "baseUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^https://(?![^/?#]*@)[^\\s\\u0000-\\u001f\\u007f/?#]+(?:/[^\\s\\u0000-\\u001f\\u007f?#]*)?$"
+        },
+        "wireApi": {
+          "const": "responses"
+        },
+        "requiresOpenAiAuth": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "providerRequestId",
+    "dispatchId",
+    "storyId",
+    "runId",
+    "phase",
+    "preparedRevision",
+    "role",
+    "profile",
+    "adapter",
+    "requestedModel",
+    "modelSource",
+    "modelProvider",
+    "configSha256",
+    "taskFile",
+    "taskSha256",
+    "policy",
+    "contextManifestFile",
+    "contextManifestSha256",
+    "outputSchemaFile",
+    "outputSchemaSha256",
+    "promptTemplateVersion",
+    "promptTemplateSha256",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "providerRequestId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "dispatchId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "storyId": {
+      "$ref": "#/$defs/id"
+    },
+    "runId": {
+      "$ref": "#/$defs/id"
+    },
+    "phase": {
+      "const": "code-review"
+    },
+    "preparedRevision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "role": {
+      "const": "code-reviewer"
+    },
+    "profile": {
+      "$ref": "#/$defs/id"
+    },
+    "adapter": {
+      "const": "codex-cli"
+    },
+    "requestedModel": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
+        }
+      ]
+    },
+    "modelSource": {
+      "type": "string",
+      "enum": [
+        "runtime-override",
+        "local-config",
+        "project-config",
+        "builtin-default"
+      ]
+    },
+    "modelProvider": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/modelProvider"
+        }
+      ]
+    },
+    "configSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "taskFile": {
+      "$ref": "#/$defs/path"
+    },
+    "taskSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "policy": {
+      "$ref": "#/$defs/policy"
+    },
+    "contextManifestFile": {
+      "$ref": "#/$defs/path"
+    },
+    "contextManifestSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "outputSchemaFile": {
+      "$ref": "#/$defs/path"
+    },
+    "outputSchemaSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "promptTemplateVersion": {
+      "$ref": "#/$defs/id"
+    },
+    "promptTemplateSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

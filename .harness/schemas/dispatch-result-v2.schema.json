@@ -334,6 +334,23 @@
       "else": { "not": { "required": ["blocker"] } }
     },
     {
+      "if": {
+        "properties": {
+          "status": { "const": "blocked" },
+          "phase": { "const": "code-review" }
+        },
+        "required": ["status", "phase"]
+      },
+      "then": { "required": ["payload"] },
+      "else": {
+        "if": {
+          "properties": { "status": { "enum": ["failed", "blocked"] } },
+          "required": ["status"]
+        },
+        "then": { "not": { "required": ["payload"] } }
+      }
+    },
+    {
       "if": { "properties": { "phase": { "const": "requirement" } }, "required": ["phase"] },
       "then": { "properties": { "payload": { "$ref": "#/$defs/requirementPayload" } } }
     },

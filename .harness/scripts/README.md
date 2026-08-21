@@ -9,6 +9,7 @@ validate-state.ps1
 run-state.ps1
 run-story.ps1
 run-e2e.ps1
+run-provider.ps1
 run-delivery.ps1
 verify-story-closure.ps1
 run-worktree.ps1
@@ -31,6 +32,8 @@ smoke-harness-flow.ps1
 - `validate-state.ps1`、`validate-task-dag.ps1`、`validate-structure.ps1`、`kb-query.ps1`、`select-tests.ps1`、`collect-diff-context.ps1`、`scan-knowledge-inputs.ps1`、`check-kb-freshness.ps1`、`plan-worktrees.ps1`、`derive-interface-cases.ps1`、`plan-build.ps1`、`summarize-delivery.ps1` 和 `smoke-harness-flow.ps1` 已实现为只读辅助脚本；状态校验覆盖 E2E、Product 和 `active-run` 指针。
 - `run-state.ps1` 是单 Story 确定性状态运行时入口，支持 `init/status/validate/record/next/block/resume/complete`。更新命令使用独占锁、原子 JSON 写入和 JSONL 事务事件；`status/validate` 保持只读。
 - `run-e2e.ps1` 是 M7-B 最小确定性串行驱动入口，支持 `Status/Step/Apply`。它通过 Story Runtime 的只读 `inspect` 获取唯一下一动作；`Step` 一次最多执行一个 `prepare` 或 `apply`，认知任务、Adapter 选择和批准需求都会明确暂停。
+- `run-provider.ps1` 是 M8-A 真实只读审核 Provider 入口，支持 `Status/Prepare/Run/Materialize`。它只允许当前 State v2 `code-review` attempt 的 `code-reviewer`，从项目默认、本地覆盖和单次 Prepare 覆盖解析 Profile/模型，并冻结 `modelSource`。`Run` 使用固定 `codex exec` argv、仓库外隔离目录和 `read-only` sandbox；`Materialize` 由 Runtime 生成 evidence、正式报告和 result，Provider 不直接修改 State 或业务文件。
+- Provider 配置位于 `.harness/config/agent-providers.json`，本地覆盖为被 Git 忽略的 `agent-providers.local.json`。配置只允许受限 `codex-cli` Profile 和可选模型/自定义 model provider 元数据，不允许 API Key、可执行文件、任意 argv、环境变量或 prompt。未指定模型时不传 `--model`；同一操作系统用户的 `read-only` sandbox 不等于严格读取 ACL。
 - M7-C 在 `technical-design` attempt 内增加 `check-knowledge`、`refresh-knowledge` 和 `approve-stale`。已有 completed result 时重复 `check-knowledge -Area <area>` 会受控重查并原子替换该 area；刷新产物使用 attempt 内不可变 content-addressed evidence，common 显式保护三域。`run-e2e` 对 relevant stale 返回 `knowledge-refresh-required`，不会自动刷新或伪造用户批准。
 - `lib/e2e-runtime.mjs` 不读取 Markdown，不解析私有 attempt 文件，不运行任意 shell，不启动 Agent，也不执行 Git、Worktree、发布或并行操作。
 - `run-delivery.ps1` 是 M7-A4 交付事实入口，支持 `PrepareManifest/Summarize/Record`。它只读取 Git 或写入 Harness 控制证据，不执行 `git add/commit/push`；`PrepareManifest` 在 Story 写锁内生成 owned manifest，`Record` 在 completed State 外追加版本化交付回执。

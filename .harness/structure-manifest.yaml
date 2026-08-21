@@ -2,6 +2,7 @@ schema_version: "1.0"
 description: Required structural files for the FrontierScan Harness scaffold.
 required_directories:
   - .harness
+  - .harness/config
   - .harness/schemas
   - .harness/states
   - .harness/workflows
@@ -42,6 +43,12 @@ required_directories:
   - docs/harness-m8a-review-provider
 required_files:
   - .harness/README.md
+  - .harness/config/agent-providers.json
+  - .harness/schemas/agent-provider-config.schema.json
+  - .harness/schemas/agent-provider-request.schema.json
+  - .harness/schemas/agent-provider-context.schema.json
+  - .harness/schemas/agent-provider-response.schema.json
+  - .harness/schemas/agent-provider-execution-receipt.schema.json
   - .harness/schemas/product-state.schema.json
   - .harness/schemas/e2e-state.schema.json
   - .harness/schemas/e2e-state-v2.schema.json
@@ -114,6 +121,11 @@ required_files:
   - .harness/scripts/kb-query.ps1
   - .harness/scripts/generate-kb.ps1
   - .harness/scripts/lib/generate-kb.mjs
+  - .harness/scripts/lib/provider-config.mjs
+  - .harness/scripts/lib/provider-contract.mjs
+  - .harness/scripts/lib/provider-context.mjs
+  - .harness/scripts/lib/provider-adapters/codex-cli.mjs
+  - .harness/scripts/lib/provider-runtime.mjs
   - .harness/scripts/lib/source-fingerprint.mjs
   - .harness/scripts/lib/state-runtime.mjs
   - .harness/scripts/lib/state-contract.mjs
@@ -141,6 +153,11 @@ required_files:
   - .harness/scripts/lib/story-closure-verifier.mjs
   - .harness/scripts/lib/worktree-wave-execution-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
+  - .harness/scripts/tests/provider-config.test.mjs
+  - .harness/scripts/tests/provider-contract.test.mjs
+  - .harness/scripts/tests/provider-context.test.mjs
+  - .harness/scripts/tests/codex-cli-provider.test.mjs
+  - .harness/scripts/tests/provider-runtime.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
   - .harness/scripts/tests/kb-freshness.test.ps1
@@ -164,6 +181,7 @@ required_files:
   - .harness/scripts/tests/delivery-runtime.test.mjs
   - .harness/scripts/tests/delivery-cli.test.ps1
   - .harness/scripts/tests/e2e-runtime.test.mjs
+  - .harness/scripts/tests/provider-cli.test.ps1
   - .harness/scripts/tests/knowledge-runtime.test.mjs
   - .harness/scripts/tests/e2e-cli.test.ps1
   - .harness/scripts/tests/story-closure-verifier.test.mjs
@@ -186,6 +204,7 @@ required_files:
   - .harness/scripts/run-worktree.ps1
   - .harness/scripts/run-delivery.ps1
   - .harness/scripts/run-e2e.ps1
+  - .harness/scripts/run-provider.ps1
   - .codex/agents/agents.yaml
   - .codex/agents/worker-policies.json
   - .codex/skills/README.md

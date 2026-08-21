@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { inspectProvider as inspectProviderRuntime } from "./provider-runtime.mjs";
 import { runStoryCommand } from "./story-runtime.mjs";
 
 const ACTIONS = {
@@ -14,6 +15,17 @@ const ACTIONS = {
   "result-invalid": "cognitive-action-required",
   blocked: "blocked",
   completed: "completed",
+};
+
+const PROVIDER_ACTIONS = {
+  "provider-not-prepared": "provider-prepare-required",
+  "provider-ready": "provider-run-required",
+  "provider-run-in-progress": "provider-run-in-progress",
+  "provider-failed": "provider-retry-decision",
+  "provider-materialize-required": "provider-materialize-required",
+  "provider-execution-indeterminate": "provider-indeterminate-materialization-required",
+  "provider-invalid": "provider-invalid",
+  "provider-materialized": "apply-result",
 };
 
 function actionResult(story) {
@@ -36,8 +48,28 @@ function actionResult(story) {
 export async function runE2ECommand(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   const runStory = options.runStory ?? runStoryCommand;
+  const inspectProvider = options.inspectProvider ?? inspectProviderRuntime;
   const storyOptions = { root, stateFile: options.stateFile };
-  const inspect = async () => actionResult(await runStory({ ...storyOptions, command: "inspect" }));
+  const inspect = async () => {
+    const story = await runStory({ ...storyOptions, command: "inspect" });
+    const result = actionResult(story);
+    if (story.state.phase !== "code-review" || story.inspection.status !== "awaiting-result") {
+      return result;
+    }
+    const providerInspection = await inspectProvider({
+      root,
+      stateFile: story.stateFile,
+    });
+    const action = PROVIDER_ACTIONS[providerInspection.status];
+    if (!action) {
+      throw new Error(`Unsupported Provider inspection status: ${providerInspection.status ?? "(missing)"}`);
+    }
+    return {
+      ...result,
+      action,
+      providerInspection,
+    };
+  };
   const current = await inspect();
 
   if (options.command === "status") return current;

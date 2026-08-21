@@ -89,7 +89,7 @@ async function readRegularFile(filePath, label) {
   return readFile(filePath, "utf8");
 }
 
-function resolveRepositoryPath(root, relativePath, label) {
+export function resolveRepositoryPath(root, relativePath, label) {
   if (typeof relativePath !== "string" || !relativePath || relativePath.includes("\\") || path.isAbsolute(relativePath)) {
     throw new Error(`${label} must be a repository-relative path.`);
   }
@@ -102,7 +102,7 @@ function resolveRepositoryPath(root, relativePath, label) {
   return { fullPath, relative };
 }
 
-async function assertPathHasNoSymlink(root, fullPath, label) {
+export async function assertPathHasNoSymlink(root, fullPath, label) {
   const repositoryRoot = path.resolve(root);
   const parts = path.relative(repositoryRoot, fullPath).split(path.sep).filter(Boolean);
   let current = repositoryRoot;
@@ -117,7 +117,7 @@ async function assertPathHasNoSymlink(root, fullPath, label) {
   }
 }
 
-function decodeUtf8(buffer, label) {
+export function decodeUtf8(buffer, label) {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
   } catch {
@@ -125,7 +125,7 @@ function decodeUtf8(buffer, label) {
   }
 }
 
-async function readBoundedUtf8(root, relativePath, label) {
+export async function readBoundedUtf8(root, relativePath, label) {
   const resolved = resolveRepositoryPath(root, relativePath, label);
   await assertPathHasNoSymlink(root, resolved.fullPath, label);
   const info = await lstat(resolved.fullPath).catch((error) => {
@@ -135,10 +135,15 @@ async function readBoundedUtf8(root, relativePath, label) {
   if (!info.isFile() || info.isSymbolicLink()) throw new Error(`${label} must be a regular file.`);
   if (info.size > FILE_LIMIT_BYTES) throw new Error(`${label} exceeds the 2 MiB file limit.`);
   const buffer = await readFile(resolved.fullPath);
-  return { ...resolved, bytes: buffer.byteLength, content: decodeUtf8(buffer, label) };
+  return {
+    ...resolved,
+    bytes: buffer.byteLength,
+    content: decodeUtf8(buffer, label),
+    sha256: `sha256:${createHash("sha256").update(buffer).digest("hex")}`,
+  };
 }
 
-function pathMatchesPrefix(relativePath, prefix) {
+export function pathMatchesPrefix(relativePath, prefix) {
   const normalizedPath = filesystemPathKey(relativePath);
   const normalizedPrefix = filesystemPathKey(prefix);
   return normalizedPrefix.endsWith("/") ? normalizedPath.startsWith(normalizedPrefix) : normalizedPath === normalizedPrefix;

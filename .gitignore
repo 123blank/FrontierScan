@@ -31,3 +31,6 @@ frontend/.vite/
 .harness/runs/**/implementation-owner.json
 .harness/runs/**/superseded-owners/
 .harness/runs/**/knowledge/
+
+# Harness local Agent Provider overrides
+.harness/config/agent-providers.local.json
