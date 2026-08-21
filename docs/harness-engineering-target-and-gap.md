@@ -3,8 +3,8 @@
 > 文档状态：目标基线
 > 基线版本：1.3
 > 建立日期：2026-08-11
-> 最近更新：2026-08-19
-> 当前实施基线：`c977dae docs(harness): design M8-A review provider`；M8-A 工作区待提交
+> 最近更新：2026-08-21
+> 当前实施基线：`b98a55a chore(harness): ignore local provider runtime artifacts`；M8-A 已完成并提交，尚未推送
 > 参考文章：[从 AI Coding 到 Harness Engineering 的端到端工程开发实践](https://mp.weixin.qq.com/s/UE-RZH9hnbBd06CVapFGrA)
 > 文章发布：腾讯技术工程，2026-07-03
 > 原文核验方式：2026-08-11 在 Chrome 浏览器中直接阅读微信原文
@@ -292,7 +292,7 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 
 ## 7. 当前实现对比
 
-以下进度以 2026-08-19、实施基线 `c977dae`、M7-D 已完成闭环和 M8-A 当前工作区为基线。M8-A 已通过专项 fixture、真实 `codex exec` 审核、人工/Provider 对比和五项验收；当前工作区尚未执行 Git 提交或推送。
+以下进度以 2026-08-21、实施基线 `b98a55a`、M7-D 与 M8-A 已完成闭环为基线。M8-A 已通过专项 fixture、真实 `codex exec` 审核、人工/Provider 对比和五项验收，并由提交 `ecc987e` 交付；当前尚未推送。
 
 | 文章能力 | FrontierScan 当前证据 | 状态 | 估算完成度 |
 | --- | --- | --- | ---: |
@@ -374,8 +374,11 @@ M6-A 的 v1 历史空字段继续保持只读，不迁移、不改写；它不�
 ```text
 Codex 读取 State
 -> Codex 判断下一步
--> Codex 调用脚本
--> Codex 手动生成产物和记录
+-> 普通认知阶段由 Codex 生成产物
+-> code-review 阶段由 Codex 启动 Provider 链
+-> Provider 独立审核
+-> Runtime 生成正式证据和 result
+-> Codex 调用 Apply 推进 State
 ```
 
 文章的演进目标是：
@@ -389,6 +392,8 @@ Codex 读取 State
 ```
 
 M7-B 已提供统一 `run-e2e Status/Step/Apply` 确定性入口，M7-D 证明新会话可从 State 恢复唯一下一动作。M8-A 进一步接入了可替换的真实 `code-reviewer` Provider：Runtime 冻结 request、context、权限和模型路由，本机 `codex exec` 在 `read-only` sandbox 中执行，Runtime 校验完整性后生成正式审核证据和 result。
+
+当前审核执行本身已经具有实际自动化价值，但 `Prepare -> Run -> Materialize -> Apply` 仍由当前 Codex 会话按 Runtime 动作串联；`run-e2e Step` 不会自动执行完整 Provider 链，Agent 也不会自动修复 finding 或决定返工流程。详细评估见 `docs/harness-m8a-review-provider/AUTOMATION-ASSESSMENT.md`。
 
 当前剩余差距是 requirement、design、developer、tester 等角色仍由当前 Codex 会话完成；M8-B 只计划开放单任务、单 Worktree、串行的开发 Provider，不允许 Provider 决定全局流程。
 
@@ -558,7 +563,7 @@ git diff --check
 
 ## 13. 当前架构决策摘要
 
-截至 2026-08-19，FrontierScan Harness 的正式方向为：
+截至 2026-08-21，FrontierScan Harness 的正式方向为：
 
 1. 继续以“知识库工程 + 端到端开发工程”为总体结构。
 2. 以 `AGENTS.md` 作为用户自然语言任务的默认入口。

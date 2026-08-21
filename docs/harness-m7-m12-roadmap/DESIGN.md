@@ -4,7 +4,7 @@
 >
 > 状态：路线已批准；M7 与 M8-A 已完成，下一阶段为待批准的 M8-B 专项设计
 >
-> 当前基线：`53c1f29 docs(harness): establish target and gap baseline`
+> 路线制定基线：`53c1f29 docs(harness): establish target and gap baseline`
 >
 > 目标基线：`docs/harness-engineering-target-and-gap.md`
 

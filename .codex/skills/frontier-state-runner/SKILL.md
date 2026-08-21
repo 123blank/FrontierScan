@@ -112,4 +112,4 @@ M7-C technical-design 知识闭环使用：
 - 更新按 `pointer stage -> state commit -> pointer promote` 提交；临时指针领先状态时回退正式指针，状态达到临时指针 revision 后才恢复它。
 - 跨 Story 指针候选按当前原子写入身份恢复；正式指针 revision 领先状态时失败关闭，状态领先指针可以按写入顺序恢复。
 - 默认指针和已有运行状态必须通过运行时契约校验；显式 `-StateFile` 仍可在无关活动指针损坏时独立使用。
-- M7-A3 已实现验收追踪与 `verification-gap` 语义门禁，M7-A4 已实现 owned files、交付准备对账和独立交付回执，M7-B 已实现最小确定性串行驱动器。知识新鲜度闭环、Agent 自动派发、正式并行、真实发布或 Git 自动写入仍未实现。
+- M7-A3 已实现验收追踪与 `verification-gap` 语义门禁，M7-A4 已实现 owned files、交付准备对账和独立交付回执，M7-B 已实现最小确定性串行驱动器，M7-C 已实现任务相关知识新鲜度闭环。M8-A 仅接入真实只读 `code-reviewer` Provider；其他角色自动派发、写入型开发 Provider、正式并行、真实发布或 Git 自动写入仍未实现。

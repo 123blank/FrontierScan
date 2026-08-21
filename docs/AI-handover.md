@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-08-18
+> 最后更新：2026-08-21
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：M7-A1 至 M7-D 已完成工作区实施与验收，`M7-D-001` 已进入 `done/completed` revision `19`。State v2、统一阶段结果、验收语义门禁、交付准备、确定性串行驱动器、知识新鲜度闭环、异常 fixture 和真实业务 Story 均已通过验证；`done` 不代表已执行 Git 提交或推送。当前工作区尚未提交，下一阶段只能在用户批准后启动 M8-A 只读 `code-reviewer` Provider 设计。真实 Agent Provider、并行 Worktree、Fork-Join、自动 Git 和生产发布仍未实现。
+> 当前重点：M7 与 M8-A 已完成。`M8-A-001` 已进入 `done/completed` revision `51`，首个真实只读 `code-reviewer` Provider 已通过真实 `codex exec`、人工/Provider 对比和闭包核验。审核任务被明确启动后可独立执行，但完整 `Prepare -> Run -> Materialize -> Apply` 链、finding 复核和返工仍由当前 Codex 会话编排。下一阶段是待批准的 M8-B 单任务开发 Provider；写入型 Agent、并行 Worktree、Fork-Join、自动 Git 和生产发布仍未实现。
 
 ---
 
@@ -1782,4 +1782,22 @@ M6-A 是对“单个真实业务任务能否由当前 Harness 完成开发闭环
 - M7-D 验收中发现的后期返工需求通过受限 rework/supersession 闭环处理：只允许未完成 State v2 从阻塞的 `delivery-preparation` 返回 `implementation`，随后完整重走质量阶段。
 - 当前工作区尚未执行 Git 暂存、提交或推送。
 
-下一阶段是 M8-A 只读 `code-reviewer` Provider，但必须由用户单独批准启动。M8-A 的目标是接入第一个真实、受权限约束、输出结构化 result 的 Agent Provider；不得扩展到业务代码写入、并行、Worktree 或 Git 自动化。
+以上为 M7 完成时的历史状态；后续 M8-A 已完成，当前状态见下一节。
+
+### 16.30 2026-08-21 当前状态：M8-A 只读审核 Provider 完成
+
+权威设计、计划、报告、勘误和自动化能力评估位于
+`docs/harness-m8a-review-provider/`，真实验收 Story 为 `M8-A-001`。
+
+- 已接入首个真实只读 `code-reviewer` Provider，仅允许 `code-review` 阶段调用。
+- Runtime 冻结 task、最小上下文、角色策略、Profile 和模型来源，以固定参数启动本机 `codex exec`。
+- 项目配置支持 `role -> profile -> adapter/model`；本地覆盖被 Git 忽略。未指定模型时不传 `--model`，不声称继承父 UI 会话临时模型。
+- Agent 只返回结构化审核结果，正式 evidence、报告、execution receipt 和 phase result 由 Runtime 生成。
+- `read-only` 是同一操作系统用户下的写入边界，不是严格文件读取 ACL。
+- 最终 State 为 `done/completed` revision `51`，五项 required criterion 均为 `verified`。
+- State 和 owned manifest 的权威 owned 文件数量为 37；`PLAN.md` 是唯一 initial dirty/unrelated 文件，旧交付摘要中的 38 已由 `ERRATA.md` 更正。
+- M8-A 实现提交为 `ecc987e`，本地运行资产忽略规则提交为 `b98a55a`；截至本次同步，本地 `dev` 相对本地跟踪的 `origin/dev` ahead 3、behind 0，尚未推送。
+- 审核任务启动后可独立完成，但 `Prepare -> Run -> Materialize -> Apply`、finding 复核和返工仍由当前 Codex 会话编排，不属于无人干预流水线。
+- backend、frontend、common 知识基线和索引均为 `fresh`，语义增强仍为 `pending`。
+- 当前下一阶段是经用户批准后设计 M8-B：单任务、单隔离 Worktree、串行的 backend/frontend developer Provider。
+- M8-B 之前不开放主树直接写入、并行、Fork-Join、自动 Git、发布或部署。

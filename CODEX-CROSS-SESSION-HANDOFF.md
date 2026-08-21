@@ -109,14 +109,16 @@ codex --version
 | 项目 | 值 |
 | --- | --- |
 | 当前分支 | `dev` |
-| `HEAD` | `c977dae67d3117e507a1c7dfb52156368fa52cb2` |
+| `HEAD` | `b98a55a7e288933d966c69acc854b13bae1c001d` |
 | `origin/dev` | `621cd3b6ff89708d24feeb4ee4bd7fbfd88d7542` |
-| ahead/behind | `dev` ahead 1、behind 0 |
-| 工作区 | M8-A Provider、Runtime、测试、真实运行产物、文档和知识修改均未提交 |
+| ahead/behind | `dev` ahead 3、behind 0 |
+| 工作区 | 本轮自动化能力评估、交接、架构、Skill、结构清单和知识基线同步尚未提交；M8-A 原始 Provider attempt 与 delivery receipt 作为本地运行资产被忽略 |
 
 最近关键提交：
 
 ```text
+b98a55a chore(harness): ignore local provider runtime artifacts
+ecc987e feat(harness): add M8-A review provider
 c977dae docs(harness): design M8-A review provider
 621cd3b docs(harness): complete M7-D closure acceptance
 4f2910f feat(article): add read status filtering
@@ -125,7 +127,7 @@ f12d893 feat(harness): implement M7-C knowledge freshness loop
 80a4d6f feat(harness): implement M7-B serial driver
 ```
 
-工作区不包含 backend/frontend 业务修改，主要是 M8-A Provider 配置、Schema、Runtime、专项测试、CLI、文档和运行证据。`.harness/config/agent-providers.local.json` 被忽略，不得提交。提交前必须重新按最终 owned manifest 审核范围，不得使用 `git add .`。
+M8-A 已提交但尚未推送。`.harness/config/agent-providers.local.json`、Provider attempt 原始运行资产和 delivery receipt 被忽略，不得提交。后续交付仍不得使用 `git add .`。
 
 新会话必须实际运行以下命令，不得直接沿用本节：
 
@@ -533,6 +535,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - 除 `code-reviewer` 外的真实 Agent Provider 自动认知任务
 - 写入型 backend/frontend developer Provider
 - 跨供应商 HTTP Adapter
+- `run-e2e Step` 自动执行完整 `Prepare -> Run -> Materialize -> Apply` Provider 链
+- 自动修复审核 finding 或自动推进返工后的测试与复审
 - 正式仓库中的真实 WaveCreate、Worker、候选集成和 WaveRetire 执行
 - 真实发布、部署和环境交付
 - 无审批 Git add/commit/push/PR
@@ -550,6 +554,8 @@ M8-B：单任务开发 Provider
 ```
 
 M8-A 已用 `M8-A-001` 完成真实只读 `code-reviewer` Provider 验收。下一步应先设计单任务、单隔离 Worktree、串行的 backend/frontend developer Provider，不直接开放并行、主树写入或自动 Git。
+
+当前 `code-reviewer` 的准确定位是：审核任务被当前会话启动后可独立完成受限审核并返回机器可判定结果，但 Provider 链、finding 复核和返工仍由当前 Codex 会话编排。详见 `docs/harness-m8a-review-provider/AUTOMATION-ASSESSMENT.md`。
 
 推荐首版范围：
 
@@ -1031,15 +1037,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 ## 21. 当前会话结束时的最终摘要
 
-截至 2026-08-19：
+截至 2026-08-21：
 
-- 当前分支为 `dev`，HEAD 为 `c977dae docs(harness): design M8-A review provider`；`dev` 相对 `origin/dev` ahead 1。
-- M7 已完成；M8-A Provider、Runtime、测试、运行证据、报告和知识同步当前工作区尚未提交。
+- 当前分支为 `dev`，HEAD 为 `b98a55a chore(harness): ignore local provider runtime artifacts`；`dev` 相对 `origin/dev` ahead 3。
+- M7 与 M8-A 已完成并提交，当前尚未推送；本轮自动化能力评估、交接、架构、Skill、结构清单和知识基线同步尚未提交。
 - `M8-A-001` 已完成首个真实只读 `code-reviewer` Provider 闭环，最终 State 为 `done/completed` revision `51`。
 - 五项 required criterion 均为 `verified`；本 Story 不修改业务 API/UI，浏览器和 HTTP 验证不适用。
 - 最新成功执行为 dispatch `19cd43d7-1d4e-4e02-89ed-a8079a8a8ccb`、request `a5025528-930c-4820-b726-7fc66fd900a5`、execution `cab18d21-f92b-4c8b-a8f3-d0706e72c7ab`，`exitCode=0`。
 - 真实 Provider 多轮审核发现并推动关闭 12 类身份、模型路由、隔离声明、锁、恢复和超时问题；最终人工与 Provider 审核均无 BLOCKER/WARNING。
 - Provider 专项、State/Story/E2E、Worker、结构、smoke、State 校验、闭包核验和 `git diff --check` 通过。
+- `code-reviewer` 的审核执行已经具备实际自动化价值，但完整 Provider 链、finding 复核和返工仍由当前 Codex 会话编排。
 - backend、frontend、common 知识新鲜度均为 fresh；语义增强继续为 pending。
 - `PLAN.md` 是 Story 初始化前 dirty 文件，最终交付必须继续列为 unrelated，不得纳入 owned manifest。
 - `done/completed` 仍不表示 Git 已提交或推送；completed State 外可生成 append-only delivery receipt，只读核对 commit tree 和 remote ref，不执行 Git 写操作。

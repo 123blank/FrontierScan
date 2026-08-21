@@ -339,6 +339,9 @@ required_files:
   - docs/harness-m7c-kb-freshness-loop/REPORT.md
   - docs/harness-m8a-review-provider/DESIGN.md
   - docs/harness-m8a-review-provider/PLAN.md
+  - docs/harness-m8a-review-provider/REPORT.md
+  - docs/harness-m8a-review-provider/ERRATA.md
+  - docs/harness-m8a-review-provider/AUTOMATION-ASSESSMENT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -346,13 +349,15 @@ status_notes:
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
   state_runtime: implemented-v2-with-v1-read-only-compatibility
-  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1
-  deterministic_scripts: mixed-read-only-helpers-state-story-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
-  business_code_changes: none-required-for-m0-m5dd
-  roadmap_planning: m7-m12-documentation-approved-m7a1-m7a2-m7a3-m7a4-m7b-m7c-implemented
+  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1-readonly-code-review-provider-v1
+  deterministic_scripts: mixed-read-only-helpers-state-story-provider-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
+  business_code_changes: none-required-for-m0-m5dd-m6a-and-m7d-real-stories-completed
+  roadmap_planning: m7-m12-documentation-approved-m7-complete-m8a-complete-m8b-next
   m7a1_state_v2: implemented-fixture-verified-independent-review-passed
   m7a2_phase_result: implemented-fixture-verified-independent-review-passed
   m7a3_acceptance_gates: implemented-fixture-verified-independent-review-passed
   m7a4_runtime_delivery: implemented-fixture-verified-independent-review-passed
   m7b_serial_driver: implemented-nine-phase-fixture-verified-independent-review-passed
   m7c_knowledge_freshness: implemented-fixture-verified-independent-review-passed
+  m7d_closure_acceptance: completed-fixture-and-real-story-verified
+  m8a_review_provider: completed-real-codex-cli-reviewer-verified
