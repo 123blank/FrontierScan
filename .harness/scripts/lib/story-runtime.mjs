@@ -1213,7 +1213,16 @@ function isAllowedPhaseOutput(output, phaseRoot, state) {
     || (
       state.phase === "delivery-preparation"
       && output === `.harness/runs/${state.runtime.runId}/delivery/owned-manifest.json`
-    );
+  );
+}
+
+function phaseOwnerAgent(phase, state) {
+  if (phase.id !== "implementation") return phase.owner_agent;
+  const pending = (state.dag?.nodes ?? []).filter((node) => node.status === "pending");
+  return pending.length === 1
+      && ["backend-developer", "frontend-developer"].includes(pending[0].ownerAgent)
+    ? pending[0].ownerAgent
+    : phase.owner_agent;
 }
 
 function validateTask(root, task, state, phase, expectedPhaseRoot) {
@@ -1232,7 +1241,7 @@ function validateTask(root, task, state, phase, expectedPhaseRoot) {
   }
   const allowedAdapters = PHASE_ADAPTERS[phase.id] ?? [];
   const expectedOutputs = phaseOutputs(root, phase, expectedPhaseRoot, state);
-  if (task.ownerAgent !== phase.owner_agent
+  if (task.ownerAgent !== phaseOwnerAgent(phase, state)
       || task.purpose !== phase.purpose
       || task.next !== phase.next[0]
       || !Number.isInteger(task.preparedRevision)
@@ -1605,7 +1614,7 @@ async function prepareFromContext(root, options, verifiedBatch, context, prepara
     storyId: located.state.storyId,
     runId: located.state.runtime.runId,
     phase: phase.id,
-    ownerAgent: phase.owner_agent,
+    ownerAgent: phaseOwnerAgent(phase, located.state),
     purpose: phase.purpose,
     preparedRevision: located.state.runtime.revision,
     preparedAt: timestamp,

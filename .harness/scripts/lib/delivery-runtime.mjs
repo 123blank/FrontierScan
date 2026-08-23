@@ -111,6 +111,7 @@ function parseUntrackedZ(source) {
   for (const entry of nulFields(Buffer.isBuffer(source) ? source : Buffer.from(source))) {
     if (!entry.startsWith("?? ")) continue;
     const filePath = normalizePath(entry.slice(3));
+    if (filePath.startsWith(".harness/tmp/")) continue;
     validateRepositoryPath(filePath, "Git untracked path");
     relations.push({ path: filePath, changeKind: "added", sourcePath: null });
   }

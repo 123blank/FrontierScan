@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, test } from "node:test";
 import { claimBatchTask, prepareSerialBatch } from "../lib/batch-runtime.mjs";
+import { developmentToolchainSha256 } from "../lib/development-provider-contract.mjs";
 import { runWorktreeIntegration } from "../lib/worktree-integration-runtime.mjs";
 import { runWorktreeWorker } from "../lib/worktree-worker-runtime.mjs";
 import { resolveBatchBase, runWorktreeCommand } from "../lib/worktree-runtime.mjs";
@@ -32,6 +33,11 @@ async function writeJson(filePath, value) {
 
 async function readJson(root, relative) {
   return JSON.parse(await readFile(path.join(root, relative), "utf8"));
+}
+
+async function fileEvidence(root, relative) {
+  const buffer = await readFile(path.join(root, relative));
+  return { sha256: sha256(buffer), bytes: buffer.byteLength };
 }
 
 async function updateWorkerResult(fixture, mutate) {
@@ -209,6 +215,273 @@ async function createFixture(options = {}) {
       now: () => "2026-07-21T00:00:04.000Z",
     },
   };
+}
+
+async function convertToDevelopmentSource(fixture, { keepLegacy = false } = {}) {
+  const task = await readJson(fixture.root, fixture.taskFile);
+  const worktreeDirectory = `.harness/runs/${fixture.runId}/worktrees/${fixture.taskId}`;
+  const worktreePlanFile = `${worktreeDirectory}/plan.json`;
+  const worktreeStatusFile = `${worktreeDirectory}/status.json`;
+  const worktreePlan = await readJson(fixture.root, worktreePlanFile);
+  const worktreeRoot = path.join(fixture.root, worktreePlan.worktreePath);
+  const providerRoot = `${taskFileDirectory(fixture.taskFile)}/development-provider-fixture`;
+  const requestFile = `${providerRoot}/request.json`;
+  const executionReceiptFile = `${providerRoot}/execution-receipt.json`;
+  const candidateManifestFile = `${providerRoot}/candidate-manifest.json`;
+  const testReceiptFile = `${providerRoot}/test-receipt.json`;
+  const resultEvidenceFile = `${providerRoot}/development-provider-result-evidence.json`;
+  const stdoutFile = `${providerRoot}/test-stdout.txt`;
+  const stderrFile = `${providerRoot}/test-stderr.txt`;
+  const contextFile = `${providerRoot}/context.json`;
+  const schemaFile = `${providerRoot}/response.schema.json`;
+  const providerRequestId = "22222222-2222-4222-8222-222222222222";
+  const providerExecutionId = "33333333-3333-4333-8333-333333333333";
+  const businessFiles = [fixture.existingFile, fixture.newFile];
+  const candidateFiles = [];
+  for (const relative of businessFiles) {
+    const evidence = await fileEvidence(worktreeRoot, relative);
+    candidateFiles.push({
+      path: relative,
+      changeType: relative === fixture.existingFile ? "update" : "create",
+      ...evidence,
+      kind: "backend",
+    });
+  }
+  await writeJson(path.join(fixture.root, contextFile), { fixture: true });
+  await writeFile(path.join(fixture.root, schemaFile), "{}\n", "utf8");
+  const request = {
+    schemaVersion: "1.0",
+    providerRequestId,
+    dispatchId: task.dispatchId,
+    storyId: fixture.storyId,
+    runId: fixture.runId,
+    phase: "implementation",
+    preparedRevision: task.preparedRevision,
+    taskId: fixture.taskId,
+    role: "backend-developer",
+    profile: "codex-default",
+    adapter: "codex-cli",
+    requestedModel: null,
+    modelSource: "builtin-default",
+    modelProvider: null,
+    configSha256: sha256("config"),
+    taskFile: fixture.taskFile,
+    taskSha256: (await fileEvidence(fixture.root, fixture.taskFile)).sha256,
+    taskDagFile: fixture.taskDagFile,
+    taskDagSha256: (await fileEvidence(fixture.root, fixture.taskDagFile)).sha256,
+    worktreePlanFile,
+    worktreePlanSha256: (await fileEvidence(fixture.root, worktreePlanFile)).sha256,
+    worktreeStatusFile,
+    worktreeStatusSha256: (await fileEvidence(fixture.root, worktreeStatusFile)).sha256,
+    worktreePath: worktreeRoot,
+    baseCommit: worktreePlan.baseCommit,
+    policy: {
+      name: "backend-developer",
+      category: "execution",
+      readPathPrefixes: ["backend/"],
+      writePathPrefixes: ["backend/src/"],
+      capabilities: ["backend-write"],
+    },
+    contextManifestFile: contextFile,
+    contextManifestSha256: (await fileEvidence(fixture.root, contextFile)).sha256,
+    outputSchemaFile: schemaFile,
+    outputSchemaSha256: (await fileEvidence(fixture.root, schemaFile)).sha256,
+    createdAt: "2026-07-21T00:00:03.000Z",
+  };
+  await writeJson(path.join(fixture.root, requestFile), request);
+  const candidate = {
+    schemaVersion: "1.0",
+    storyId: fixture.storyId,
+    runId: fixture.runId,
+    dispatchId: task.dispatchId,
+    taskId: fixture.taskId,
+    role: "backend-developer",
+    baseCommit: worktreePlan.baseCommit,
+    headCommit: worktreePlan.baseCommit,
+    worktreePath: worktreeRoot,
+    baselineSha256: sha256("baseline"),
+    afterSha256: sha256("after"),
+    gitStatusSha256: sha256("status"),
+    files: candidateFiles,
+    totalBytes: candidateFiles.reduce((sum, file) => sum + file.bytes, 0),
+    createdAt: "2026-07-21T00:00:03.000Z",
+  };
+  await writeJson(path.join(fixture.root, candidateManifestFile), candidate);
+  await writeFile(path.join(fixture.root, stdoutFile), "tests passed\n", "utf8");
+  await writeFile(path.join(fixture.root, stderrFile), "", "utf8");
+  const testReceipt = {
+    schemaVersion: "1.0",
+    storyId: fixture.storyId,
+    runId: fixture.runId,
+    dispatchId: task.dispatchId,
+    taskId: fixture.taskId,
+    candidateManifestFile,
+    candidateManifestSha256: (await fileEvidence(fixture.root, candidateManifestFile)).sha256,
+    adapterId: "backend-maven",
+    commandId: "maven-test",
+    workingDirectory: "backend",
+    toolchain: {
+      adapterId: "backend-maven",
+      mavenPath: "D:/fixture/maven/bin/mvn.cmd",
+      mavenVersion: "maven-fixture-1.0",
+      mavenSha256: sha256("maven-fixture"),
+      javaPath: "D:/fixture/jdk/bin/java.exe",
+      javaVersion: "java-fixture-17",
+      javaSha256: sha256("java-fixture"),
+      repositoryPath: "D:/fixture/home/.m2/repository",
+      repositoryIdentity: sha256("fixture-m2"),
+    },
+    toolchainSha256: developmentToolchainSha256({
+      adapterId: "backend-maven",
+      mavenPath: "D:/fixture/maven/bin/mvn.cmd",
+      mavenVersion: "maven-fixture-1.0",
+      mavenSha256: sha256("maven-fixture"),
+      javaPath: "D:/fixture/jdk/bin/java.exe",
+      javaVersion: "java-fixture-17",
+      javaSha256: sha256("java-fixture"),
+      repositoryPath: "D:/fixture/home/.m2/repository",
+      repositoryIdentity: sha256("fixture-m2"),
+    }),
+    status: "passed",
+    exitCode: 0,
+    stdoutFile,
+    stdoutSha256: (await fileEvidence(fixture.root, stdoutFile)).sha256,
+    stderrFile,
+    stderrSha256: (await fileEvidence(fixture.root, stderrFile)).sha256,
+    candidateBeforeSha256: sha256("candidate"),
+    candidateAfterSha256: sha256("candidate"),
+    executedAt: "2026-07-21T00:00:03.000Z",
+  };
+  await writeJson(path.join(fixture.root, testReceiptFile), testReceipt);
+  const executionReceipt = {
+    schemaVersion: "1.0",
+    providerExecutionId,
+    providerRequestId,
+    dispatchId: task.dispatchId,
+    storyId: fixture.storyId,
+    runId: fixture.runId,
+    phase: "implementation",
+    taskId: fixture.taskId,
+    role: "backend-developer",
+    profile: "codex-default",
+    adapter: "codex-cli",
+    requestedModel: null,
+    reportedModel: "fixture-model",
+    modelSource: "builtin-default",
+    adapterVersion: "codex-cli/test",
+    sandbox: "workspace-write",
+    workingRoot: worktreeRoot,
+    writeIsolation: "task-worktree-workspace-write",
+    requestFile,
+    requestSha256: (await fileEvidence(fixture.root, requestFile)).sha256,
+    responseFile: contextFile,
+    responseSha256: (await fileEvidence(fixture.root, contextFile)).sha256,
+    stdoutFile,
+    stdoutSha256: (await fileEvidence(fixture.root, stdoutFile)).sha256,
+    stderrFile,
+    stderrSha256: (await fileEvidence(fixture.root, stderrFile)).sha256,
+    startedAt: "2026-07-21T00:00:03.000Z",
+    finishedAt: "2026-07-21T00:00:03.000Z",
+    exitCode: 0,
+    status: "completed",
+    diagnostics: [],
+  };
+  await writeJson(path.join(fixture.root, executionReceiptFile), executionReceipt);
+  const evidence = {
+    schemaVersion: "1.0",
+    providerRequestId,
+    providerExecutionId,
+    requestFile,
+    requestSha256: (await fileEvidence(fixture.root, requestFile)).sha256,
+    executionReceiptFile,
+    executionReceiptSha256: (await fileEvidence(fixture.root, executionReceiptFile)).sha256,
+    candidateManifestFile,
+    candidateManifestSha256: (await fileEvidence(fixture.root, candidateManifestFile)).sha256,
+    testReceiptFile,
+    testReceiptSha256: (await fileEvidence(fixture.root, testReceiptFile)).sha256,
+  };
+  await writeJson(path.join(fixture.root, resultEvidenceFile), evidence);
+  const notesEvidence = await fileEvidence(worktreeRoot, fixture.phaseOutput);
+  const result = {
+    schemaVersion: "2.0",
+    dispatchId: task.dispatchId,
+    storyId: fixture.storyId,
+    runId: fixture.runId,
+    phase: "implementation",
+    preparedRevision: task.preparedRevision,
+    status: "completed",
+    summary: "Development Provider completed the integration fixture.",
+    outputs: [{ path: fixture.phaseOutput, ...notesEvidence }],
+    records: [{
+      type: "note",
+      status: "recorded",
+      path: resultEvidenceFile,
+      ...(await fileEvidence(fixture.root, resultEvidenceFile)),
+      message: "Development Provider evidence.",
+      actor: "development-provider-runtime",
+    }],
+    payload: {
+      taskUpdates: [{ taskId: fixture.taskId, status: "done" }],
+      actualFiles: businessFiles,
+      method: "tdd",
+      exceptionReason: null,
+      notes: ["Fixture completed."],
+    },
+  };
+  await writeJson(path.join(worktreeRoot, fixture.officialResultFile), result);
+  const receiptFiles = [
+    ...candidateFiles.map(({ path: relative, sha256: hash, bytes, kind }) => ({
+      path: relative, sha256: hash, bytes, kind,
+    })),
+    { path: fixture.phaseOutput, ...notesEvidence, kind: "phase-output" },
+  ].sort((left, right) => left.path.localeCompare(right.path, "en"));
+  const developmentReceiptFile = `${worktreeDirectory}/development-provider-receipt.json`;
+  const developmentReceipt = {
+    schemaVersion: "1.0",
+    executorKind: "development-provider",
+    storyId: fixture.storyId,
+    runId: fixture.runId,
+    dispatchId: task.dispatchId,
+    taskId: fixture.taskId,
+    phase: "implementation",
+    ownerAgent: "backend-developer",
+    providerRequestId,
+    providerExecutionId,
+    baseCommit: worktreePlan.baseCommit,
+    headCommit: worktreePlan.baseCommit,
+    outcome: "ready-for-integration",
+    requestFile,
+    requestSha256: (await fileEvidence(fixture.root, requestFile)).sha256,
+    executionReceiptFile,
+    executionReceiptSha256: (await fileEvidence(fixture.root, executionReceiptFile)).sha256,
+    candidateManifestFile,
+    candidateManifestSha256: (await fileEvidence(fixture.root, candidateManifestFile)).sha256,
+    testReceiptFile,
+    testReceiptSha256: (await fileEvidence(fixture.root, testReceiptFile)).sha256,
+    resultEvidenceFile: fixture.officialResultFile,
+    resultSha256: (await fileEvidence(worktreeRoot, fixture.officialResultFile)).sha256,
+    contextEvidenceFile: candidateManifestFile,
+    contextEvidenceSha256: (await fileEvidence(fixture.root, candidateManifestFile)).sha256,
+    files: receiptFiles,
+    completedAt: "2026-07-21T00:00:03.000Z",
+  };
+  await writeJson(path.join(fixture.root, developmentReceiptFile), developmentReceipt);
+  if (!keepLegacy) {
+    await rm(path.join(fixture.root, fixture.executionReceiptFile), { force: true });
+    await rm(path.join(fixture.root, `${worktreeDirectory}/input-manifest.json`), { force: true });
+  }
+  return {
+    developmentReceiptFile,
+    requestFile,
+    executionReceiptFile,
+    candidateManifestFile,
+    testReceiptFile,
+    resultEvidenceFile,
+  };
+}
+
+function taskFileDirectory(taskFile) {
+  return path.posix.dirname(taskFile);
 }
 
 async function createBatchIntegrationFixture(options = {}) {
@@ -825,6 +1098,131 @@ test("plan writes a stable content-addressed bundle and reuses identical evidenc
     const bundle = await readFile(path.join(fixture.root, artifact.bundlePath));
     assert.equal(sha256(bundle), artifact.candidateSha256);
   }
+});
+
+test("development source plans v1.1 while legacy remains v1.0 and dual sources fail closed", async () => {
+  const legacy = await createFixture();
+  assert.equal((await runWorktreeIntegration(legacy.input)).plan.schemaVersion, "1.0");
+
+  const development = await createFixture();
+  const source = await convertToDevelopmentSource(development);
+  const planned = await runWorktreeIntegration(development.input);
+  assert.equal(planned.plan.schemaVersion, "1.1");
+  assert.equal(planned.plan.candidateSourceKind, "development-provider");
+  assert.equal(planned.plan.candidateSourceReceiptFile, source.developmentReceiptFile);
+  assert.equal(planned.plan.candidateContextFile, source.candidateManifestFile);
+  assert.equal(planned.plan.resultEvidenceFile, development.officialResultFile);
+  assert.equal(Object.hasOwn(planned.plan, "inputManifestFile"), false);
+  assert.deepEqual((await runWorktreeIntegration(development.input)).plan, planned.plan);
+
+  const dual = await createFixture();
+  await convertToDevelopmentSource(dual, { keepLegacy: true });
+  await assert.rejects(
+    runWorktreeIntegration(dual.input),
+    /multiple candidate sources|legacy.*development|dual source/i,
+  );
+});
+
+test("development source rejects failed test and evidence drift before planning", async () => {
+  const failed = await createFixture();
+  const failedSource = await convertToDevelopmentSource(failed);
+  const testReceipt = await readJson(failed.root, failedSource.testReceiptFile);
+  testReceipt.status = "failed";
+  testReceipt.exitCode = 1;
+  await writeJson(path.join(failed.root, failedSource.testReceiptFile), testReceipt);
+  const receipt = await readJson(failed.root, failedSource.developmentReceiptFile);
+  receipt.testReceiptSha256 = (await fileEvidence(failed.root, failedSource.testReceiptFile)).sha256;
+  await writeJson(path.join(failed.root, failedSource.developmentReceiptFile), receipt);
+  await assert.rejects(runWorktreeIntegration(failed.input), /passed test|test.*failed/i);
+
+  const forged = await createFixture();
+  const forgedSource = await convertToDevelopmentSource(forged);
+  const forgedTestReceipt = await readJson(forged.root, forgedSource.testReceiptFile);
+  forgedTestReceipt.adapterId = "frontend-npm";
+  await writeJson(path.join(forged.root, forgedSource.testReceiptFile), forgedTestReceipt);
+  const forgedReceipt = await readJson(forged.root, forgedSource.developmentReceiptFile);
+  forgedReceipt.testReceiptSha256 = (
+    await fileEvidence(forged.root, forgedSource.testReceiptFile)
+  ).sha256;
+  await writeJson(path.join(forged.root, forgedSource.developmentReceiptFile), forgedReceipt);
+  await assert.rejects(
+    runWorktreeIntegration(forged.input),
+    /adapter|command|directory|toolchain.*drift/i,
+  );
+
+  const drifted = await createFixture();
+  const driftedSource = await convertToDevelopmentSource(drifted);
+  await writeFile(path.join(drifted.root, driftedSource.requestFile), "{}\n", "utf8");
+  await assert.rejects(runWorktreeIntegration(drifted.input), /request.*hash|evidence.*drift/i);
+
+  const statusDrifted = await createFixture();
+  const statusDriftedSource = await convertToDevelopmentSource(statusDrifted);
+  const request = await readJson(statusDrifted.root, statusDriftedSource.requestFile);
+  const status = await readJson(statusDrifted.root, request.worktreeStatusFile);
+  await writeFile(
+    path.join(statusDrifted.root, request.worktreeStatusFile),
+    `${JSON.stringify(status, null, 2)} \n`,
+    "utf8",
+  );
+  await assert.rejects(
+    runWorktreeIntegration(statusDrifted.input),
+    /worktree status.*hash|status.*evidence.*drift/i,
+  );
+});
+
+test("development source rejects failed or identity-drifted execution receipts", async () => {
+  const mutations = [
+    (receipt) => { receipt.status = "failed"; receipt.exitCode = 1; },
+    (receipt) => { receipt.role = "frontend-developer"; },
+    (receipt) => { receipt.profile = "forged-profile"; },
+    (receipt) => {
+      receipt.requestedModel = "forged-model";
+      receipt.modelSource = "local-config";
+    },
+    (receipt) => { receipt.dispatchId = "99999999-9999-4999-8999-999999999999"; },
+  ];
+  for (const mutate of mutations) {
+    const fixture = await createFixture();
+    const source = await convertToDevelopmentSource(fixture);
+    const executionReceipt = await readJson(fixture.root, source.executionReceiptFile);
+    mutate(executionReceipt);
+    await writeJson(path.join(fixture.root, source.executionReceiptFile), executionReceipt);
+    const receipt = await readJson(fixture.root, source.developmentReceiptFile);
+    receipt.executionReceiptSha256 = (
+      await fileEvidence(fixture.root, source.executionReceiptFile)
+    ).sha256;
+    await writeJson(path.join(fixture.root, source.developmentReceiptFile), receipt);
+    await assert.rejects(
+      runWorktreeIntegration(fixture.input),
+      /execution.*completed|execution.*identity|request.*execution|matching.*execution/i,
+    );
+  }
+});
+
+test("development source apply preserves result-last ordering", async () => {
+  const fixture = await createFixture();
+  await convertToDevelopmentSource(fixture);
+  await runWorktreeIntegration(fixture.input);
+  const observed = [];
+  const applied = await runWorktreeIntegration({
+    ...fixture.input,
+    command: "apply",
+    confirmApply: true,
+    testHooks: {
+      afterArtifactRename: async ({ kind }) => {
+        observed.push(kind);
+        if (kind !== "result") {
+          await assert.rejects(
+            access(path.join(fixture.root, fixture.officialResultFile)),
+            /ENOENT/,
+          );
+        }
+      },
+    },
+  });
+  assert.equal(applied.status.state, "ready-for-apply");
+  assert.deepEqual(observed, ["backend", "backend", "phase-output", "result"]);
+  assert.equal((await readJson(fixture.root, fixture.officialResultFile)).schemaVersion, "2.0");
 });
 
 test("integration accepts a Git-clean base after checkout line-ending conversion", async () => {

@@ -41,6 +41,7 @@ required_directories:
   - docs/harness-m7b-serial-driver
   - docs/harness-m7c-kb-freshness-loop
   - docs/harness-m8a-review-provider
+  - docs/harness-m8b-development-provider
 required_files:
   - .harness/README.md
   - .harness/config/agent-providers.json
@@ -49,6 +50,13 @@ required_files:
   - .harness/schemas/agent-provider-context.schema.json
   - .harness/schemas/agent-provider-response.schema.json
   - .harness/schemas/agent-provider-execution-receipt.schema.json
+  - .harness/schemas/agent-development-request.schema.json
+  - .harness/schemas/agent-development-context.schema.json
+  - .harness/schemas/agent-development-response.schema.json
+  - .harness/schemas/agent-development-execution-receipt.schema.json
+  - .harness/schemas/agent-development-candidate-manifest.schema.json
+  - .harness/schemas/agent-development-test-receipt.schema.json
+  - .harness/schemas/agent-development-receipt.schema.json
   - .harness/schemas/product-state.schema.json
   - .harness/schemas/e2e-state.schema.json
   - .harness/schemas/e2e-state-v2.schema.json
@@ -123,6 +131,9 @@ required_files:
   - .harness/scripts/lib/generate-kb.mjs
   - .harness/scripts/lib/provider-config.mjs
   - .harness/scripts/lib/provider-contract.mjs
+  - .harness/scripts/lib/development-provider-contract.mjs
+  - .harness/scripts/lib/development-provider-context.mjs
+  - .harness/scripts/lib/development-provider-runtime.mjs
   - .harness/scripts/lib/provider-context.mjs
   - .harness/scripts/lib/provider-adapters/codex-cli.mjs
   - .harness/scripts/lib/provider-runtime.mjs
@@ -155,8 +166,13 @@ required_files:
   - .harness/scripts/tests/generate-kb.test.mjs
   - .harness/scripts/tests/provider-config.test.mjs
   - .harness/scripts/tests/provider-contract.test.mjs
+  - .harness/scripts/tests/development-provider-contract.test.mjs
+  - .harness/scripts/tests/development-provider-context.test.mjs
+  - .harness/scripts/tests/development-provider-runtime.test.mjs
+  - .harness/scripts/tests/development-provider-e2e.test.mjs
   - .harness/scripts/tests/provider-context.test.mjs
   - .harness/scripts/tests/codex-cli-provider.test.mjs
+  - .harness/scripts/tests/codex-cli-development-provider.test.mjs
   - .harness/scripts/tests/provider-runtime.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
@@ -182,6 +198,7 @@ required_files:
   - .harness/scripts/tests/delivery-cli.test.ps1
   - .harness/scripts/tests/e2e-runtime.test.mjs
   - .harness/scripts/tests/provider-cli.test.ps1
+  - .harness/scripts/tests/development-provider-cli.test.ps1
   - .harness/scripts/tests/knowledge-runtime.test.mjs
   - .harness/scripts/tests/e2e-cli.test.ps1
   - .harness/scripts/tests/story-closure-verifier.test.mjs
@@ -205,6 +222,7 @@ required_files:
   - .harness/scripts/run-delivery.ps1
   - .harness/scripts/run-e2e.ps1
   - .harness/scripts/run-provider.ps1
+  - .harness/scripts/run-development-provider.ps1
   - .codex/agents/agents.yaml
   - .codex/agents/worker-policies.json
   - .codex/skills/README.md
@@ -342,6 +360,9 @@ required_files:
   - docs/harness-m8a-review-provider/REPORT.md
   - docs/harness-m8a-review-provider/ERRATA.md
   - docs/harness-m8a-review-provider/AUTOMATION-ASSESSMENT.md
+  - docs/harness-m8b-development-provider/DESIGN.md
+  - docs/harness-m8b-development-provider/PLAN.md
+  - docs/harness-m8b-development-provider/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
@@ -349,10 +370,10 @@ status_notes:
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
   state_runtime: implemented-v2-with-v1-read-only-compatibility
-  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1-readonly-code-review-provider-v1
+  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1-readonly-code-review-provider-v1-single-task-development-provider-v1
   deterministic_scripts: mixed-read-only-helpers-state-story-provider-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
   business_code_changes: none-required-for-m0-m5dd-m6a-and-m7d-real-stories-completed
-  roadmap_planning: m7-m12-documentation-approved-m7-complete-m8a-complete-m8b-next
+  roadmap_planning: m7-m12-documentation-approved-m7-complete-m8-complete-m9-next
   m7a1_state_v2: implemented-fixture-verified-independent-review-passed
   m7a2_phase_result: implemented-fixture-verified-independent-review-passed
   m7a3_acceptance_gates: implemented-fixture-verified-independent-review-passed
@@ -361,3 +382,4 @@ status_notes:
   m7c_knowledge_freshness: implemented-fixture-verified-independent-review-passed
   m7d_closure_acceptance: completed-fixture-and-real-story-verified
   m8a_review_provider: completed-real-codex-cli-reviewer-verified
+  m8b_development_provider: completed-real-codex-cli-fixture-and-backend-story-verified

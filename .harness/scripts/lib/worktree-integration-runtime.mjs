@@ -3,9 +3,17 @@ import { execFile } from "node:child_process";
 import { lstat, mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { isDeepStrictEqual, promisify } from "node:util";
 import { inspectBatchWorktreePlan, recordBatchIntegration } from "./batch-runtime.mjs";
 import { validateDispatchResultStructure, validateDispatchTaskStructure } from "./dispatch-contract.mjs";
+import {
+  validateDevelopmentCandidateManifest,
+  validateDevelopmentExecutionReceipt,
+  validateDevelopmentReceipt,
+  validateDevelopmentRequest,
+  validateDevelopmentTestReceipt,
+  validateDevelopmentTestReceiptBinding,
+} from "./development-provider-contract.mjs";
 import { loadTaskDag, matchesPredictedFile } from "./task-dag-contract.mjs";
 import { runWorktreeCommand } from "./worktree-runtime.mjs";
 
@@ -21,6 +29,15 @@ const BATCH_INTEGRATION_PLAN_FIELDS = [
   "checkpointFile", "checkpointSha256", "worktreePlanFile", "worktreePlanSha256", "inputManifestFile", "inputManifestSha256",
   "executionReceiptFile", "executionReceiptSha256", "workerResultEvidenceFile", "workerResultSha256", "inheritedSnapshotFile",
   "inheritedSnapshotSha256", "resultFile", "artifacts", "plannedAt",
+];
+const DEVELOPMENT_INTEGRATION_PLAN_FIELDS = [
+  "schemaVersion", "storyId", "runId", "taskId", "dispatchId", "phase", "ownerAgent",
+  "stateFile", "preparedRevision", "baseCommit", "worktreePath", "taskDagFile",
+  "taskDagSha256", "taskFile", "taskSha256", "checkpointFile", "checkpointSha256",
+  "worktreePlanFile", "worktreePlanSha256", "candidateSourceKind",
+  "candidateSourceReceiptFile", "candidateSourceReceiptSha256", "candidateContextFile",
+  "candidateContextSha256", "resultEvidenceFile", "resultEvidenceSha256", "resultFile",
+  "artifacts", "plannedAt",
 ];
 const BATCH_APPLY_MARKER_FIELDS = [
   "schemaVersion", "storyId", "runId", "batchId", "taskId", "dispatchId", "planSha256", "createdAt",
@@ -264,6 +281,7 @@ function integrationPaths(state, taskId) {
     worktreeStatusFile: `${taskDirectory}/status.json`,
     manifestFile: `${taskDirectory}/input-manifest.json`,
     executionReceiptFile: `${taskDirectory}/execution-receipt.json`,
+    developmentReceiptFile: `${taskDirectory}/development-provider-receipt.json`,
   };
 }
 
@@ -1028,18 +1046,32 @@ async function runBatchWorktreeIntegration(root, command, options) {
 }
 
 function validateStoredPlan(plan, context) {
-  const requiredStrings = [
+  const commonStrings = [
     "schemaVersion", "storyId", "runId", "taskId", "dispatchId", "phase", "ownerAgent", "stateFile",
     "baseCommit", "worktreePath", "taskDagFile", "taskDagSha256", "taskFile", "taskSha256",
-    "checkpointFile", "checkpointSha256", "worktreePlanFile", "worktreePlanSha256", "inputManifestFile",
-    "inputManifestSha256", "executionReceiptFile", "executionReceiptSha256", "workerResultEvidenceFile",
-    "workerResultSha256", "resultFile", "plannedAt",
+    "checkpointFile", "checkpointSha256", "worktreePlanFile", "worktreePlanSha256",
+    "resultFile", "plannedAt",
   ];
-  if (!plan || typeof plan !== "object" || requiredStrings.some((field) => typeof plan[field] !== "string")
-      || plan.schemaVersion !== "1.0" || !Number.isInteger(plan.preparedRevision) || !Array.isArray(plan.artifacts)) {
+  const sourceStrings = plan?.schemaVersion === "1.1"
+    ? [
+        "candidateSourceKind", "candidateSourceReceiptFile", "candidateSourceReceiptSha256",
+        "candidateContextFile", "candidateContextSha256", "resultEvidenceFile",
+        "resultEvidenceSha256",
+      ]
+    : [
+        "inputManifestFile", "inputManifestSha256", "executionReceiptFile",
+        "executionReceiptSha256", "workerResultEvidenceFile", "workerResultSha256",
+      ];
+  if (!plan || typeof plan !== "object"
+      || [...commonStrings, ...sourceStrings].some((field) => typeof plan[field] !== "string")
+      || !["1.0", "1.1"].includes(plan.schemaVersion)
+      || !Number.isInteger(plan.preparedRevision)
+      || !Array.isArray(plan.artifacts)) {
     throw new Error("Existing integration plan has an invalid structure.");
   }
-  const expectedPlanFields = [...requiredStrings, "preparedRevision", "artifacts"];
+  const expectedPlanFields = plan.schemaVersion === "1.1"
+    ? DEVELOPMENT_INTEGRATION_PLAN_FIELDS
+    : [...commonStrings, ...sourceStrings, "preparedRevision", "artifacts"];
   if (Object.keys(plan).length !== expectedPlanFields.length || expectedPlanFields.some((field) => !(field in plan))) {
     throw new Error("Existing integration plan must contain only the supported fields.");
   }
@@ -1049,10 +1081,18 @@ function validateStoredPlan(plan, context) {
       || plan.phase !== context.task.phase || plan.ownerAgent !== context.task.ownerAgent
       || plan.stateFile !== context.stateFile || plan.preparedRevision !== context.task.preparedRevision
       || plan.taskFile !== context.taskFile || plan.checkpointFile !== context.checkpointFile
-      || plan.worktreePlanFile !== context.paths.worktreePlanFile
-      || plan.inputManifestFile !== context.paths.manifestFile
-      || plan.executionReceiptFile !== context.paths.executionReceiptFile) {
+      || plan.worktreePlanFile !== context.paths.worktreePlanFile) {
     throw new Error("Existing integration plan identity does not match the current dispatch.");
+  }
+  if (plan.schemaVersion === "1.0"
+      && (plan.inputManifestFile !== context.paths.manifestFile
+        || plan.executionReceiptFile !== context.paths.executionReceiptFile)) {
+    throw new Error("Existing legacy integration plan source does not match the current dispatch.");
+  }
+  if (plan.schemaVersion === "1.1"
+      && (plan.candidateSourceKind !== "development-provider"
+        || plan.candidateSourceReceiptFile !== context.paths.developmentReceiptFile)) {
+    throw new Error("Existing development integration plan source does not match the current dispatch.");
   }
   if (plan.resultFile !== expectedResultFile) {
     throw new Error("Integration result must use the fixed result.json for the current M3 task.");
@@ -1100,6 +1140,194 @@ async function loadContext(root, options) {
   };
 }
 
+async function normalizeCandidateSource(root, context, worktreePlanLoaded) {
+  const legacyManifest = await readJsonOptional(
+    root,
+    context.paths.manifestFile,
+    "M5-B1 input manifest",
+  );
+  const legacyReceipt = await readJsonOptional(
+    root,
+    context.paths.executionReceiptFile,
+    "M5-B1 execution receipt",
+  );
+  const developmentReceipt = await readJsonOptional(
+    root,
+    context.paths.developmentReceiptFile,
+    "Development Provider receipt",
+  );
+  const hasLegacy = Boolean(legacyManifest || legacyReceipt);
+  if (hasLegacy && !(legacyManifest && legacyReceipt)) {
+    throw new Error("Legacy candidate source requires both input manifest and execution receipt.");
+  }
+  if (hasLegacy && developmentReceipt) {
+    throw new Error("Integration found multiple candidate sources: legacy and development-provider.");
+  }
+  if (!hasLegacy && !developmentReceipt) {
+    throw new Error("Integration requires one legacy or development-provider candidate source.");
+  }
+  if (hasLegacy) {
+    validateReceiptIdentity(
+      legacyReceipt.value,
+      context.state,
+      context.task,
+      context.taskId,
+      worktreePlanLoaded.value,
+    );
+    const resultLoaded = await readJson(
+      root,
+      legacyReceipt.value.resultEvidenceFile,
+      "M5-B1 Worker result evidence",
+    );
+    return {
+      kind: "legacy-worker",
+      receipt: legacyReceipt.value,
+      receiptLoaded: legacyReceipt,
+      contextLoaded: legacyManifest,
+      resultLoaded,
+      resultSourceFile: legacyReceipt.value.resultEvidenceFile,
+    };
+  }
+
+  const receipt = developmentReceipt.value;
+  validateDevelopmentReceipt(receipt);
+  if (receipt.storyId !== context.state.storyId
+      || receipt.runId !== context.state.runtime.runId
+      || receipt.taskId !== context.taskId
+      || receipt.dispatchId !== context.task.dispatchId
+      || receipt.phase !== context.task.phase
+      || receipt.ownerAgent !== context.task.ownerAgent
+      || receipt.baseCommit !== worktreePlanLoaded.value.baseCommit
+      || receipt.headCommit !== worktreePlanLoaded.value.baseCommit
+      || receipt.outcome !== "ready-for-integration") {
+    throw new Error("Development Provider receipt identity does not match the current dispatch.");
+  }
+  const [requestLoaded, executionLoaded, candidateLoaded, testLoaded] = await Promise.all([
+    readJson(root, receipt.requestFile, "Development Provider request"),
+    readJson(root, receipt.executionReceiptFile, "Development execution receipt"),
+    readJson(root, receipt.candidateManifestFile, "Development candidate manifest"),
+    readJson(root, receipt.testReceiptFile, "Development test receipt"),
+  ]);
+  if (receipt.requestSha256 !== requestLoaded.sha256
+      || receipt.executionReceiptSha256 !== executionLoaded.sha256
+      || receipt.candidateManifestSha256 !== candidateLoaded.sha256
+      || receipt.contextEvidenceFile !== receipt.candidateManifestFile
+      || receipt.contextEvidenceSha256 !== candidateLoaded.sha256
+      || receipt.testReceiptSha256 !== testLoaded.sha256) {
+    throw new Error("Development Provider request, execution, candidate, or test evidence hash drifted.");
+  }
+  validateDevelopmentRequest(requestLoaded.value);
+  validateDevelopmentExecutionReceipt(executionLoaded.value);
+  validateDevelopmentCandidateManifest(candidateLoaded.value);
+  validateDevelopmentTestReceipt(testLoaded.value);
+  validateDevelopmentTestReceiptBinding(testLoaded.value, {
+    role: receipt.ownerAgent,
+    worktreePath: requestLoaded.value.worktreePath,
+  });
+  const taskDagLoaded = await readRegularFile(
+    root,
+    requestLoaded.value.taskDagFile,
+    "Development task DAG evidence",
+  );
+  if (testLoaded.value.status !== "passed"
+      || testLoaded.value.candidateBeforeSha256 !== testLoaded.value.candidateAfterSha256
+      || testLoaded.value.candidateManifestFile !== receipt.candidateManifestFile
+      || testLoaded.value.candidateManifestSha256 !== candidateLoaded.sha256
+      || executionLoaded.value.status !== "completed"
+      || executionLoaded.value.providerRequestId !== receipt.providerRequestId
+      || executionLoaded.value.providerExecutionId !== receipt.providerExecutionId
+      || executionLoaded.value.dispatchId !== requestLoaded.value.dispatchId
+      || executionLoaded.value.storyId !== requestLoaded.value.storyId
+      || executionLoaded.value.runId !== requestLoaded.value.runId
+      || executionLoaded.value.phase !== requestLoaded.value.phase
+      || executionLoaded.value.taskId !== requestLoaded.value.taskId
+      || executionLoaded.value.role !== requestLoaded.value.role
+      || executionLoaded.value.profile !== requestLoaded.value.profile
+      || executionLoaded.value.adapter !== requestLoaded.value.adapter
+      || executionLoaded.value.requestedModel !== requestLoaded.value.requestedModel
+      || executionLoaded.value.modelSource !== requestLoaded.value.modelSource
+      || executionLoaded.value.requestFile !== receipt.requestFile
+      || executionLoaded.value.requestSha256 !== requestLoaded.sha256
+      || executionLoaded.value.workingRoot !== requestLoaded.value.worktreePath
+      || requestLoaded.value.providerRequestId !== receipt.providerRequestId
+      || requestLoaded.value.dispatchId !== receipt.dispatchId
+      || requestLoaded.value.storyId !== receipt.storyId
+      || requestLoaded.value.runId !== receipt.runId
+      || requestLoaded.value.taskId !== receipt.taskId
+      || requestLoaded.value.preparedRevision !== context.task.preparedRevision
+      || requestLoaded.value.taskFile !== context.taskFile
+      || requestLoaded.value.taskSha256 !== context.taskLoaded.sha256
+      || requestLoaded.value.taskDagFile !== worktreePlanLoaded.value.taskDagFile
+      || requestLoaded.value.taskDagSha256 !== taskDagLoaded.sha256
+      || requestLoaded.value.taskDagSha256 !== worktreePlanLoaded.value.taskDagSha256
+      || requestLoaded.value.worktreePlanFile !== context.paths.worktreePlanFile
+      || requestLoaded.value.worktreePlanSha256 !== worktreePlanLoaded.sha256
+      || requestLoaded.value.baseCommit !== worktreePlanLoaded.value.baseCommit
+      || candidateLoaded.value.dispatchId !== receipt.dispatchId
+      || candidateLoaded.value.taskId !== receipt.taskId
+      || candidateLoaded.value.baseCommit !== receipt.baseCommit
+      || candidateLoaded.value.headCommit !== receipt.headCommit
+      || candidateLoaded.value.worktreePath
+        !== resolveInsideRoot(root, worktreePlanLoaded.value.worktreePath, "Development Worktree").fullPath) {
+    throw new Error("Development Provider requires matching request, execution, candidate, and passed test evidence.");
+  }
+  const candidateFiles = candidateLoaded.value.files
+    .map(({ path: file, sha256: fileSha, bytes, kind }) => ({
+      path: file,
+      sha256: fileSha,
+      bytes,
+      kind,
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path, "en"));
+  const receiptBusinessFiles = receipt.files
+    .filter((file) => file.kind !== "phase-output")
+    .sort((left, right) => left.path.localeCompare(right.path, "en"));
+  const receiptOutputs = receipt.files
+    .filter((file) => file.kind === "phase-output")
+    .map((file) => file.path);
+  if (!isDeepStrictEqual(candidateFiles, receiptBusinessFiles)
+      || !isDeepStrictEqual(receiptOutputs, context.task.expectedOutputs)) {
+    throw new Error("Development Provider receipt files do not match candidate and phase outputs.");
+  }
+  const resultSourceFile = path.posix.join(
+    worktreePlanLoaded.value.worktreePath.replaceAll("\\", "/"),
+    receipt.resultEvidenceFile,
+  );
+  const resultLoaded = await readJson(
+    root,
+    resultSourceFile,
+    "Development Provider result candidate",
+  );
+  validateDispatchResultStructure(resultLoaded.value);
+  if (receipt.resultSha256 !== resultLoaded.sha256
+      || resultLoaded.value.schemaVersion !== "2.0"
+      || resultLoaded.value.status !== "completed"
+      || resultLoaded.value.dispatchId !== context.task.dispatchId
+      || resultLoaded.value.storyId !== context.task.storyId
+      || resultLoaded.value.runId !== context.state.runtime.runId
+      || resultLoaded.value.phase !== context.task.phase
+      || resultLoaded.value.preparedRevision !== context.task.preparedRevision
+      || JSON.stringify(resultLoaded.value.outputs.map((item) => item.path))
+        !== JSON.stringify(context.task.expectedOutputs)) {
+    throw new Error("Development Provider result candidate does not match the current dispatch.");
+  }
+  for (const record of resultLoaded.value.records.filter((item) => item.path !== null)) {
+    const evidence = await readRegularFile(root, record.path, "Development Provider result evidence");
+    if (record.sha256 !== evidence.sha256 || record.bytes !== evidence.bytes) {
+      throw new Error("Development Provider result evidence drifted.");
+    }
+  }
+  return {
+    kind: "development-provider",
+    receipt,
+    receiptLoaded: developmentReceipt,
+    contextLoaded: candidateLoaded,
+    requestLoaded,
+    resultLoaded,
+    resultSourceFile,
+  };
+}
+
 async function validatePlanReuse(root, context, existing) {
   validateStoredPlan(existing.value, context);
   const plan = existing.value;
@@ -1108,10 +1336,19 @@ async function validatePlanReuse(root, context, existing) {
     [plan.checkpointFile, plan.checkpointSha256, "M3 checkpoint evidence"],
     [plan.taskDagFile, plan.taskDagSha256, "Task DAG evidence"],
     [plan.worktreePlanFile, plan.worktreePlanSha256, "Worktree plan evidence"],
-    [plan.inputManifestFile, plan.inputManifestSha256, "Worker input manifest evidence"],
-    [plan.executionReceiptFile, plan.executionReceiptSha256, "Worker execution receipt evidence"],
-    [plan.workerResultEvidenceFile, plan.workerResultSha256, "Worker result evidence"],
   ];
+  if (plan.schemaVersion === "1.0") {
+    evidence.push(
+      [plan.inputManifestFile, plan.inputManifestSha256, "Worker input manifest evidence"],
+      [plan.executionReceiptFile, plan.executionReceiptSha256, "Worker execution receipt evidence"],
+      [plan.workerResultEvidenceFile, plan.workerResultSha256, "Worker result evidence"],
+    );
+  } else {
+    evidence.push(
+      [plan.candidateSourceReceiptFile, plan.candidateSourceReceiptSha256, "Development Provider receipt evidence"],
+      [plan.candidateContextFile, plan.candidateContextSha256, "Development candidate context evidence"],
+    );
+  }
   for (const [file, expected, label] of evidence) {
     if ((await readRegularFile(root, file, label)).sha256 !== expected) {
       throw new Error(`${label} hash changed after integration planning.`);
@@ -1124,14 +1361,33 @@ async function validatePlanReuse(root, context, existing) {
     }
   }
   const worktreePlan = (await readJson(root, plan.worktreePlanFile, "Worktree plan evidence")).value;
-  const receipt = (await readJson(root, plan.executionReceiptFile, "Worker execution receipt evidence")).value;
-  const result = await readRegularFile(root, plan.workerResultEvidenceFile, "Worker result evidence");
+  const source = await normalizeCandidateSource(
+    root,
+    context,
+    { value: worktreePlan, sha256: plan.worktreePlanSha256 },
+  );
+  const receipt = source.receipt;
+  const result = source.resultLoaded;
   if (plan.baseCommit !== worktreePlan.baseCommit || plan.worktreePath !== worktreePlan.worktreePath
       || plan.taskDagFile !== worktreePlan.taskDagFile || plan.taskDagSha256 !== worktreePlan.taskDagSha256) {
     throw new Error("Existing integration plan does not match the M5-A Worktree plan.");
   }
-  if (plan.workerResultEvidenceFile !== receipt.resultEvidenceFile) {
+  if (plan.schemaVersion === "1.0"
+      && (source.kind !== "legacy-worker"
+        || plan.inputManifestSha256 !== source.contextLoaded.sha256
+        || plan.executionReceiptSha256 !== source.receiptLoaded.sha256
+        || plan.workerResultEvidenceFile !== receipt.resultEvidenceFile
+        || plan.workerResultSha256 !== result.sha256)) {
     throw new Error("Existing integration plan Worker result path does not match the M5-B1 receipt.");
+  }
+  if (plan.schemaVersion === "1.1"
+      && (source.kind !== "development-provider"
+        || plan.candidateSourceReceiptSha256 !== source.receiptLoaded.sha256
+        || plan.candidateContextFile !== receipt.contextEvidenceFile
+        || plan.candidateContextSha256 !== source.contextLoaded.sha256
+        || plan.resultEvidenceFile !== receipt.resultEvidenceFile
+        || plan.resultEvidenceSha256 !== result.sha256)) {
+    throw new Error("Existing integration plan Development Provider source drifted.");
   }
   const nonResultArtifacts = plan.artifacts.filter((artifact) => artifact.kind !== "result");
   if (nonResultArtifacts.length !== receipt.files?.length) {
@@ -1152,7 +1408,6 @@ async function validatePlanReuse(root, context, existing) {
   }
   const resultArtifact = plan.artifacts.find((artifact) => artifact.kind === "result");
   if (resultArtifact.path !== plan.resultFile || resultArtifact.baseSha256 !== null
-      || resultArtifact.candidateSha256 !== plan.workerResultSha256
       || resultArtifact.candidateSha256 !== result.sha256 || resultArtifact.bytes !== result.bytes) {
     throw new Error("Existing integration plan result mapping changed.");
   }
@@ -1384,26 +1639,30 @@ async function createPlan(root, context, options) {
   const { state, task, taskId, paths } = context;
   const worktreePlanLoaded = await readJson(root, paths.worktreePlanFile, "M5-A Worktree plan");
   const historicalStatus = await readRegularFile(root, paths.worktreeStatusFile, "M5-A Worktree status");
-  const manifestLoaded = await readJson(root, paths.manifestFile, "M5-B1 input manifest");
-  const receiptLoaded = await readJson(root, paths.executionReceiptFile, "M5-B1 execution receipt");
-  const receipt = receiptLoaded.value;
-  validateReceiptIdentity(receipt, state, task, taskId, worktreePlanLoaded.value);
-  if (receipt.planSha256 !== worktreePlanLoaded.sha256
-      || receipt.statusSha256 !== historicalStatus.sha256
-      || receipt.inputManifestSha256 !== manifestLoaded.sha256) {
-    throw new Error("M5-B1 execution receipt evidence hash does not match current files.");
-  }
-  const workerResultLoaded = await readJson(root, receipt.resultEvidenceFile, "M5-B1 Worker result evidence");
-  if (receipt.resultSha256 !== workerResultLoaded.sha256) throw new Error("M5-B1 Worker result hash does not match its receipt.");
-  validateDispatchResultStructure(workerResultLoaded.value);
-  if (workerResultLoaded.value.status !== "completed") throw new Error("M5-B2 requires a completed Worker result.");
-  if (workerResultLoaded.value.dispatchId !== task.dispatchId
-      || workerResultLoaded.value.storyId !== task.storyId
-      || workerResultLoaded.value.phase !== task.phase) {
-    throw new Error("M5-B1 Worker result identity does not match the current dispatch.");
-  }
-  if (JSON.stringify(workerResultLoaded.value.outputs.map((item) => item.path)) !== JSON.stringify(task.expectedOutputs)) {
-    throw new Error("M5-B1 Worker result outputs do not match the M3 task.");
+  const source = await normalizeCandidateSource(root, context, worktreePlanLoaded);
+  const receipt = source.receipt;
+  const workerResultLoaded = source.resultLoaded;
+  if (source.kind === "legacy-worker") {
+    if (receipt.planSha256 !== worktreePlanLoaded.sha256
+        || receipt.statusSha256 !== historicalStatus.sha256
+        || receipt.inputManifestSha256 !== source.contextLoaded.sha256
+        || receipt.resultSha256 !== workerResultLoaded.sha256) {
+      throw new Error("M5-B1 execution receipt evidence hash does not match current files.");
+    }
+    validateDispatchResultStructure(workerResultLoaded.value);
+    if (workerResultLoaded.value.status !== "completed") throw new Error("M5-B2 requires a completed Worker result.");
+    if (workerResultLoaded.value.dispatchId !== task.dispatchId
+        || workerResultLoaded.value.storyId !== task.storyId
+        || workerResultLoaded.value.phase !== task.phase) {
+      throw new Error("M5-B1 Worker result identity does not match the current dispatch.");
+    }
+    if (JSON.stringify(workerResultLoaded.value.outputs.map((item) => item.path))
+        !== JSON.stringify(task.expectedOutputs)) {
+      throw new Error("M5-B1 Worker result outputs do not match the M3 task.");
+    }
+  } else if (source.requestLoaded.value.worktreeStatusFile !== paths.worktreeStatusFile
+      || source.requestLoaded.value.worktreeStatusSha256 !== historicalStatus.sha256) {
+    throw new Error("Development Worktree status evidence hash drifted.");
   }
 
   const inspected = await runWorktreeCommand({
@@ -1502,7 +1761,7 @@ async function createPlan(root, context, options) {
   }
 
   const plan = {
-    schemaVersion: "1.0",
+    schemaVersion: source.kind === "development-provider" ? "1.1" : "1.0",
     storyId: state.storyId,
     runId: state.runtime.runId,
     taskId,
@@ -1521,16 +1780,30 @@ async function createPlan(root, context, options) {
     checkpointSha256: context.checkpointLoaded.sha256,
     worktreePlanFile: paths.worktreePlanFile,
     worktreePlanSha256: worktreePlanLoaded.sha256,
-    inputManifestFile: paths.manifestFile,
-    inputManifestSha256: manifestLoaded.sha256,
-    executionReceiptFile: paths.executionReceiptFile,
-    executionReceiptSha256: receiptLoaded.sha256,
-    workerResultEvidenceFile: receipt.resultEvidenceFile,
-    workerResultSha256: workerResultLoaded.sha256,
     resultFile: officialResultFile,
     artifacts: artifacts.map(({ buffer, ...artifact }) => artifact),
     plannedAt: (options.now ?? (() => new Date().toISOString()))(),
   };
+  if (source.kind === "legacy-worker") {
+    Object.assign(plan, {
+      inputManifestFile: paths.manifestFile,
+      inputManifestSha256: source.contextLoaded.sha256,
+      executionReceiptFile: paths.executionReceiptFile,
+      executionReceiptSha256: source.receiptLoaded.sha256,
+      workerResultEvidenceFile: receipt.resultEvidenceFile,
+      workerResultSha256: workerResultLoaded.sha256,
+    });
+  } else {
+    Object.assign(plan, {
+      candidateSourceKind: "development-provider",
+      candidateSourceReceiptFile: paths.developmentReceiptFile,
+      candidateSourceReceiptSha256: source.receiptLoaded.sha256,
+      candidateContextFile: receipt.contextEvidenceFile,
+      candidateContextSha256: source.contextLoaded.sha256,
+      resultEvidenceFile: receipt.resultEvidenceFile,
+      resultEvidenceSha256: workerResultLoaded.sha256,
+    });
+  }
   validateStoredPlan(plan, context);
   await writeAtomicJson(resolveInsideRoot(root, paths.planFile, "Integration plan").fullPath, plan);
   return { command: "plan", reused: false, planFile: paths.planFile, plan };

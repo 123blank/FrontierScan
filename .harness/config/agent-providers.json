@@ -8,6 +8,8 @@
     }
   },
   "roleBindings": {
+    "backend-developer": "codex-default",
+    "frontend-developer": "codex-default",
     "code-reviewer": "codex-default"
   }
 }

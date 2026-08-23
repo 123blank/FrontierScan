@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: layouts
 doc_type: overview
-git_hash: b98a55a7e288933d966c69acc854b13bae1c001d
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
 source_fingerprint: sha256:4f250962349684a43da1cfd35e6c8a8cb4d10df25c74a119e21baf09575bd452
-generated_at: 2026-08-21T09:54:30.279Z
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:

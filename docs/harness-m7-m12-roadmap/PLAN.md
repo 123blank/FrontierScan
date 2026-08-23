@@ -326,18 +326,18 @@ criterion 验收和最终闭包核验，State 为 `done/completed` revision `51`
 ```text
 docs/harness-m8b-development-provider/DESIGN.md
 docs/harness-m8b-development-provider/PLAN.md
-docs/harness-m8b-development-provider/REPORT.md（实施后）
+docs/harness-m8b-development-provider/REPORT.md
 ```
 
 ### 10.2 实施任务
 
-- [ ] 为 backend/frontend developer 定义受限写策略。
-- [ ] 只允许单任务、单 Worktree、串行执行。
-- [ ] 输入冻结 DAG node、predicted files、知识和继承快照。
-- [ ] 候选文件必须匹配 role capability 和 predicted files。
-- [ ] Runtime 收集、测试和受控集成，Provider 不直接修改主树。
-- [ ] 覆盖越权路径、部分输出、超时、重试和候选漂移。
-- [ ] 用真实小任务完成 Provider 开发验收。
+- [x] 为 backend/frontend developer 定义受限写策略。
+- [x] 只允许单任务、单 Worktree、串行执行。
+- [x] 输入冻结 DAG node、predicted files、知识和继承快照。
+- [x] 候选文件必须匹配 role capability 和 predicted files。
+- [x] Runtime 收集、测试和受控集成，Provider 不直接修改主树。
+- [x] 覆盖越权路径、部分输出、超时、重试和候选漂移。
+- [x] 用真实小任务完成 Provider 开发验收。
 
 ### 10.3 验收标准
 
@@ -345,6 +345,12 @@ docs/harness-m8b-development-provider/REPORT.md（实施后）
 - 主树只通过受控集成改变。
 - 失败后可重试且输入保持一致。
 - 用户批准进入 M9。
+
+完成证据：`M8-B-001` 完成 Development Provider 实现、专项 fixture、回归和独立
+审核；真实 Codex CLI fixture 完成 Worktree 写入、固定测试和 M5-B2 受控集成；
+`M8-B-REAL-001` 真实 backend Story 最终为 `done/completed` revision `10`，三项
+required criterion 均为 `verified`，Git 为 `not-requested`。M9 仍需专项设计、独立
+审核和用户批准后才能实施。
 
 ## 11. M9：条件式单 Story 并行
 

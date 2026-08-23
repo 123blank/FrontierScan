@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   loadProviderConfig,
   resolveProviderProfile,
@@ -78,6 +79,16 @@ async function testBuiltinDefaultConfig() {
       configSha256: loaded.configSha256,
     });
   });
+}
+
+async function testProjectDefaultsBindDeveloperRoles() {
+  const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  const projectConfig = JSON.parse(await readFile(
+    path.join(repositoryRoot, ".harness/config/agent-providers.json"),
+    "utf8",
+  ));
+  assert.equal(projectConfig.roleBindings["backend-developer"], "codex-default");
+  assert.equal(projectConfig.roleBindings["frontend-developer"], "codex-default");
 }
 
 async function testProjectLocalAndRuntimeOverrides() {
@@ -250,6 +261,20 @@ async function testStrictFailures() {
     },
     /unsupported field.*environment/i,
   );
+  for (const field of ["sandbox", "workingDirectory", "addDir", "writePaths"]) {
+    await assertProjectConfigRejected(
+      {
+        ...valid,
+        profiles: {
+          "codex-default": {
+            ...validProfile,
+            [field]: "unsafe",
+          },
+        },
+      },
+      new RegExp(`unsupported field.*${field}`, "i"),
+    );
+  }
   await assertProjectConfigRejected(
     {
       ...valid,
@@ -453,6 +478,7 @@ async function testModelProviderAffectsConfigHash() {
 }
 
 await testBuiltinDefaultConfig();
+await testProjectDefaultsBindDeveloperRoles();
 await testProjectLocalAndRuntimeOverrides();
 await testStrictFailures();
 await testConfigHashIsCanonical();

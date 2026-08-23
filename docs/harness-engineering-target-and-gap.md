@@ -1,10 +1,10 @@
 # FrontierScan Harness Engineering 目标与差距基线
 
 > 文档状态：目标基线
-> 基线版本：1.3
+> 基线版本：1.4
 > 建立日期：2026-08-11
-> 最近更新：2026-08-21
-> 当前实施基线：`65761a9 chore(knowledge): refresh knowledge baseline after M8-A sync`；M8-A 与相关文档/知识同步已完成并提交，尚未推送
+> 最近更新：2026-08-23
+> 当前实施基线：`6c35532 docs(harness): finalize synchronized handoff`；M8-B 修改尚未提交，动态 Git 状态以现场命令为准
 > 参考文章：[从 AI Coding 到 Harness Engineering 的端到端工程开发实践](https://mp.weixin.qq.com/s/UE-RZH9hnbBd06CVapFGrA)
 > 文章发布：腾讯技术工程，2026-07-03
 > 原文核验方式：2026-08-11 在 Chrome 浏览器中直接阅读微信原文
@@ -292,7 +292,7 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 
 ## 7. 当前实现对比
 
-以下进度以 2026-08-21、实施基线 `b98a55a`、M7-D 与 M8-A 已完成闭环为基线。M8-A 已通过专项 fixture、真实 `codex exec` 审核、人工/Provider 对比和五项验收，并由提交 `ecc987e` 交付；当前尚未推送。
+以下进度以 2026-08-23、实施基线 `6c35532`、M7 与 M8 已完成闭环为基线。M8-B 已通过专项 fixture、真实 `codex exec` 开发、M5-B2 受控集成、独立审核和真实 backend Story；当前修改尚未提交。
 
 | 文章能力 | FrontierScan 当前证据 | 状态 | 估算完成度 |
 | --- | --- | --- | ---: |
@@ -303,10 +303,10 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 | 单 Story 工作流 | `e2e-development-v2.yaml`、`M7-D-001` | 九阶段、阻塞恢复、受限返工和无 Git 完成均通过真实 Story | 96% |
 | 状态运行时 | `run-state.ps1`、`state-runtime.mjs`、`story-runtime.mjs` | v2 初始化、原子投影、阻塞恢复、两类批准、审计、supersession 和完成门禁已通过真实 Story | 95% |
 | 结构化 State 语义 | State v2、九阶段 result、`verify-story-closure.ps1` | 最终 State 可独立回答完整闭环事实；闭包核验器深检 result 内嵌证据并重算九阶段有效投影 | 96% |
-| 专家角色和 Skill | 12 个 Agent 注册角色、13 个项目 Skill、M8-A `code-reviewer` Provider | 首个真实只读角色已接入；开发、测试和设计角色仍未开放 | 48% |
+| 专家角色和 Skill | 12 个 Agent 注册角色、13 个项目 Skill、M8-A reviewer 与 M8-B developer Provider | 只读审核与单任务 backend/frontend 开发角色已接入；需求、设计和测试角色仍由当前会话执行 | 65% |
 | 任务 DAG | DAG 1.0/2.0 Schema、验证器和 State 投影 | v2 节点成为唯一任务事实源并绑定 criterion；真实 Story 串行执行通过 | 78% |
-| Worktree Wave | M5-A 至 M5-D Runtime 和测试 | Runtime 较完整，正式业务仍使用 Mock/fixture | 50% |
-| 单测和代码审核 | 测试门禁、审核 Skill、M6-A/M7-D 审核记录、M8-A 真实 Provider | 真实 Provider 已发现并推动关闭身份、模型来源、隔离声明、恢复和超时竞态问题 | 94% |
+| Worktree Wave | M5-A 至 M5-D Runtime、M8-B 单任务真实 Provider | 单 Worktree 真实开发与受控集成已验收；条件式多 Worktree 并行仍待 M9 | 65% |
+| 单测和代码审核 | 测试门禁、M8-A reviewer、M8-B 固定测试与真实 Story | 真实 Provider 已发现并关闭身份、隔离、恢复、候选、工具链和上下文重复问题 | 96% |
 | 构建和接口验证 | 构建结果、Chrome/API 证据、verification result | required criterion 已在真实 API/UI 环境全部 verified；自动环境编排仍待 M11 | 82% |
 | Git 交付边界 | owned manifest、delivery preparation、独立 receipt | 业务文件归属、预测外修改、无 Git 完成和完成后回执语义已实现 | 86% |
 | 外部 DevOps 集成 | 本地构建和 Docker 辅助能力 | 未接入完整测试环境和外部平台 | 20% |
@@ -317,15 +317,15 @@ FrontierScan 的近期目标不是复制腾讯内部平台，而是在当前单�
 与文章已经实践的整体 Harness 工程相比：
 
 ```text
-当前完成度约 86%～90%
-剩余差距约 10%～14%
+当前完成度约 89%～92%
+剩余差距约 8%～11%
 ```
 
 与 FrontierScan 当前限定的“单仓库、串行、单业务闭环、不自动 Git 交付”目标相比：
 
 ```text
-当前完成度约 99%
-剩余差距约 1%
+当前完成度约 100%
+剩余差距主要是自动串联成熟度，而非单业务闭环能力缺失
 ```
 
 这些比例是架构成熟度判断，不是精确项目管理工时。后续更新时必须同时提供实现证据，不能只修改百分比。
@@ -367,7 +367,7 @@ M7-A2 至 M7-C 建立的阶段投影、criterion 追踪、知识闭环和交付�
 
 M6-A 的 v1 历史空字段继续保持只读，不迁移、不改写；它不再代表新 v2 Story 的能力现状。
 
-### 9.2 首个真实认知 Provider 已接入，其他角色仍由当前会话执行
+### 9.2 审核与单任务开发 Provider 已接入，完整链路仍由当前会话串联
 
 当前实际模式是：
 
@@ -377,6 +377,8 @@ Codex 读取 State
 -> 普通认知阶段由 Codex 生成产物
 -> code-review 阶段由 Codex 启动 Provider 链
 -> Provider 独立审核
+-> implementation 阶段可由 Development Provider 在任务 Worktree 修改代码
+-> Runtime 固定测试并由 M5-B2 受控集成主树
 -> Runtime 生成正式证据和 result
 -> Codex 调用 Apply 推进 State
 ```
@@ -391,11 +393,11 @@ Codex 读取 State
 -> 结果自动回填 State
 ```
 
-M7-B 已提供统一 `run-e2e Status/Step/Apply` 确定性入口，M7-D 证明新会话可从 State 恢复唯一下一动作。M8-A 进一步接入了可替换的真实 `code-reviewer` Provider：Runtime 冻结 request、context、权限和模型路由，本机 `codex exec` 在 `read-only` sandbox 中执行，Runtime 校验完整性后生成正式审核证据和 result。
+M7-B 已提供统一 `run-e2e Status/Step/Apply` 确定性入口，M7-D 证明新会话可从 State 恢复唯一下一动作。M8-A 接入真实 `code-reviewer` Provider；M8-B 又接入单任务 backend/frontend developer Provider。Development Runtime 冻结 DAG node、criterion、knowledge、Worktree、Git baseline、角色权限和模型路由，本机 `codex exec` 在任务 Worktree 中执行，固定测试通过后生成候选与 receipt，再由 M5-B2 受控集成主树。
 
-当前审核执行本身已经具有实际自动化价值，但 `Prepare -> Run -> Materialize -> Apply` 仍由当前 Codex 会话按 Runtime 动作串联；`run-e2e Step` 不会自动执行完整 Provider 链，Agent 也不会自动修复 finding 或决定返工流程。详细评估见 `docs/harness-m8a-review-provider/AUTOMATION-ASSESSMENT.md`。
+审核和单任务开发执行已经具有实际自动化价值，但 Provider 的 `Prepare -> Run -> Materialize -> Test/Finalize -> Integration -> Apply` 仍由当前 Codex 会话按 Runtime 动作串联；`run-e2e Step` 不会无人干预执行完整 Provider 链，Agent 也不会决定全局流程、审核返工或交付操作。
 
-当前剩余差距是 requirement、design、developer、tester 等角色仍由当前 Codex 会话完成；M8-B 只计划开放单任务、单 Worktree、串行的开发 Provider，不允许 Provider 决定全局流程。
+当前剩余差距是 requirement、design、tester 等角色仍由当前 Codex 会话完成，单 Story 多任务并行尚未将已验收 Development Provider 接入 M5-D wave 编排。M9 只负责条件式并行，不允许 Provider 决定全局流程。
 
 ### 9.3 验证、知识和风险语义不完整
 
@@ -410,9 +412,9 @@ failed
 
 M7-A3 已使环境 blocked 不能伪装为 verified，并允许 required verification gap 在绑定当前 case、result、evidence 和用户理由的正式批准后进入 `accepted-with-known-gaps`。M7-C 已使 relevant stale/missing knowledge 只能在刷新为 fresh 或获得逐区域 `accepted-stale` 正式批准后推进；两类 approval 保持判别隔离。delivery remaining risk 的批准语义仍不在当前范围。
 
-### 9.4 Agent Provider 仍只覆盖只读审核角色
+### 9.4 Agent Provider 已覆盖只读审核和单任务开发角色
 
-`.codex/agents/agents.yaml` 仍只是角色注册表。M8-A 已证明真实 Codex Agent 能够以 `code-reviewer` 身份执行，但这不等于 12 个角色已经自动派发。M4/M5 Worker 的 Mock Provider 继续承担候选文件、Worktree 和并行协议 fixture，不应与真实只读 Provider 混淆。
+`.codex/agents/agents.yaml` 仍只是角色注册表。M8-A 已证明真实 Codex Agent 能够以 `code-reviewer` 身份执行；M8-B 已证明 backend/frontend developer 能在单任务 Worktree 中修改候选并受控集成，但这不等于 12 个角色已经自动派发。M4/M5 的 Mock Provider 继续承担多任务与并行协议 fixture，尚未被真实 Provider 全面替换。
 
 真实 Agent 接入应建立在完整 State 和确定性调度器之上，不能通过让多个 Agent 自行协商来替代主控制流。
 
@@ -433,7 +435,7 @@ M7-A3 已使环境 blocked 不能伪装为 verified，并允许 required verific
 - `docs/harness-m7-m12-roadmap/DESIGN.md`
 - `docs/harness-m7-m12-roadmap/PLAN.md`
 
-M7-A1 至 M7-D 已完成 fixture 与真实 Story 验收。M8-M12 仍须逐项设计、审核和批准；M7 完成不构成自动启动 M8 的授权。
+M7-A1 至 M7-D 与 M8-A/M8-B 已完成 fixture 和真实 Story 验收。M9-M12 仍须逐项设计、审核和批准；M8 完成不构成自动启动 M9 的授权。
 
 ### 10.1 M7：单 Story 确定性闭环硬化
 
@@ -450,7 +452,7 @@ M7 完成后，仅读取最终 State 即可回答需求、决策、知识、DAG�
 ### 10.2 M8：真实受限 Agent Provider
 
 - `M8-A` 已接入只读 `code-reviewer` Provider，由 Runtime 控制输入、权限、超时、模型路由、结果校验和正式写入；真实 `codex exec` 与人工审核对比已通过。
-- `M8-B` 在审核 Provider 验收后，接入单任务、单 Worktree、串行的 backend/frontend developer Provider。
+- `M8-B` 已接入单任务、单 Worktree、串行的 backend/frontend developer Provider；真实 Codex CLI fixture 与 `M8-B-REAL-001` backend Story 已通过。
 - Provider 不决定全局流程，不直接写主 State，不越过 Git、发布和外部写入批准边界。
 
 ### 10.3 M9：条件式单 Story 并行
@@ -563,7 +565,7 @@ git diff --check
 
 ## 13. 当前架构决策摘要
 
-截至 2026-08-21，FrontierScan Harness 的正式方向为：
+截至 2026-08-23，FrontierScan Harness 的正式方向为：
 
 1. 继续以“知识库工程 + 端到端开发工程”为总体结构。
 2. 以 `AGENTS.md` 作为用户自然语言任务的默认入口。
@@ -579,7 +581,7 @@ git diff --check
 12. State v2 移除顶层 `tasks`，以 `dag.nodes` 作为唯一任务事实源；State v1 只读兼容且不迁移。
 13. 每个 v2 阶段使用统一结构化 `result.json`，Markdown 不作为 Runtime 的核心事实解析源。
 14. `accepted-with-known-gaps` 和 `accepted-stale` 必须逐项获得用户批准并绑定理由与证据。
-15. M8 首个真实 Provider 为只读 `code-reviewer`；并行、Fork-Join 和本地 Docker Compose 闭环按 M9-M11 依次推进。
+15. M8 已完成只读 `code-reviewer` 与单任务 backend/frontend developer Provider；并行、Fork-Join 和本地 Docker Compose 闭环按 M9-M11 依次推进。
 16. M7-A3 已实现稳定 criterion、DAG/test/verification 覆盖和 `verification-gap` 逐项批准。
 17. M7-A4 已通过 fixture、兼容回归和独立审核，实现 record 语义幂等、actual-only owned 推导、受控 manifest、delivery apply 对账和独立 delivery receipt。
 18. M7-B 已实现 Story Runtime 只读 inspection、完整阶段 preflight 与 `run-e2e.ps1 Status/Step/Apply`，九阶段纵向 fixture 使用统一入口完成到 `done`，最终独立审核无 BLOCKER/WARNING。
@@ -591,4 +593,6 @@ git diff --check
 24. M8-A 的 `readIsolation=same-os-user-readonly-sandbox` 只声明同一操作系统用户下的写入限制，不声称严格文件读取 ACL。
 25. 未指定模型时，`codex-cli` 不传 `--model`；需要严格复现模型时必须显式配置。模型路由不得改变角色权限、上下文或固定 CLI 参数。
 26. M8-A 已完成 `M8-A-001` 九阶段闭环，最终 State 为 `done/completed` revision `51`，五项 required criterion 均为 `verified`，交付准备未执行 Git。
-27. 下一优先项为经用户批准后设计 M8-B 单任务开发 Provider。
+27. M8-B 已实现 Development Provider 的冻结上下文、Worktree/Git baseline、固定测试、候选 manifest、development receipt 和 M5-B2 受控集成；模型路由不改变权限。
+28. `M8-B-REAL-001` 已完成真实 backend Story，最终 State 为 `done/completed` revision `10`，三项 required criterion 均为 `verified`，交付准备未执行 Git。
+29. 下一优先项为经用户批准后设计 M9 条件式单 Story 并行。

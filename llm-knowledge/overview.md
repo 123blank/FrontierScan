@@ -25,7 +25,7 @@ Current knowledge status:
 
 | Layer | Status | Evidence |
 | --- | --- | --- |
-| L1 deterministic baseline | `fresh` | 2026-08-19 已重验 backend、frontend、common source fingerprint，均与当前工作区匹配 |
+| L1 deterministic baseline | `fresh` | 2026-08-23 已重验 backend、frontend、common source fingerprint，并同步 M8-B Harness 知识 |
 | L2 OpenAI semantic enrichment | `pending` | Mock success/failure/timeout/malformed/schema-invalid paths pass; no live API call has completed controlled acceptance |
 | L3 local index | `fresh` | backend 与 frontend 基线刷新后已重建本地关键词和元数据索引；未来源码发生变化时仍须重新执行 freshness 检查 |
 | Optional embeddings | `on-demand` | `-WithEmbeddings` writes source-fingerprinted JSONL vectors after successful OpenAI API calls; keyword/metadata retrieval remains the active consumer |
@@ -51,7 +51,8 @@ Current limitations:
 - M5-D-D 已以提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 推送到 `origin/dev`，`M5-D-D-001` 为 `done/completed` revision `18`。当时规划的下一步是 M6-A 单业务开发闭环验收；该历史里程碑已经完成，其发现的问题已由 M7 继续加固。M6-A 不包含自动 Git 提交/推送、通用 M6 Engine、真实 Agent 自动派发、Fork-Join 或生产部署。
 - M7-C 已实现 `technical-design` attempt 内的 relevant area freshness 检查、最小刷新、当前 source fingerprint 门禁、已有 result 的单 area recheck、可组合不可变 refresh receipt 和逐区域 `accepted-stale`。common 刷新显式保护 backend、frontend、common 三域；知识路径和生成器写入根目录拒绝 junction、symlink、仓库外 realpath 与 `..` 前缀绕过。
 - M7-D 已通过异常 fixture 和 `M7-D-001` Dashboard 阅读状态筛选真实 Story。最终 State 为 `done/completed` revision `19`，真实 API/Chrome UI 覆盖五项 required criterion，交付准备认领 9 个业务文件并显式记录 2 个预测外返工文件。`verify-story-closure.ps1` 可仅读取 State 与绑定证据输出完整闭环摘要。
-- M8-A 已接入首个真实只读 `code-reviewer` Provider。Runtime 通过 `role -> profile -> adapter/model` 配置冻结 Provider request、最小 context manifest、权限策略和模型来源，本机 `codex exec` 使用固定 argv、`read-only` sandbox 与结构化输出执行。审核任务被明确启动后，Agent 可独立审核并由 Runtime 生成 evidence、报告、execution receipt 和 result；但 `Prepare -> Run -> Materialize -> Apply` 与 finding 返工仍由当前 Codex 会话编排，不属于无人干预流水线。`M8-A-001` 最终为 `done/completed` revision `51`，五项 required criterion 均为 `verified`。其他角色、写入型 Provider、跨供应商 HTTP Adapter、并行和自动 Git 仍未实现；详细评估见 `docs/harness-m8a-review-provider/AUTOMATION-ASSESSMENT.md`。
+- M8-A 已接入真实只读 `code-reviewer` Provider。Runtime 通过 `role -> profile -> adapter/model` 配置冻结 Provider request、最小 context manifest、权限策略和模型来源，本机 `codex exec` 使用固定 argv、`read-only` sandbox 与结构化输出执行。`M8-A-001` 最终为 `done/completed` revision `51`，五项 required criterion 均为 `verified`。
+- M8-B 已接入单任务、单 Worktree、串行的 backend/frontend developer Provider。Agent 只直接写任务 Worktree；Runtime 冻结 DAG node、criterion、`predictedFiles`、知识、模型路由和 Git baseline，从磁盘差异生成候选，固定测试通过后由 M5-B2 受控集成主树。真实 Codex CLI fixture 和 `M8-B-REAL-001` backend Story 已通过，后者最终为 `done/completed` revision `10`。完整 Provider 链仍由当前 Codex 会话串联；跨供应商 HTTP Adapter、条件式并行、Fork-Join 和自动 Git 仍未实现。
 
 Trust rule:
 

@@ -83,6 +83,24 @@ Runtime does not pass `--model`; it does not claim inheritance from a parent UI
 session. `readIsolation=same-os-user-readonly-sandbox` is a write boundary, not a
 strict file-read ACL.
 
+## M8-B Single-task Development Provider
+
+`run-development-provider.ps1` provides the real single-task development entry for
+State v2 `implementation` attempts owned by `backend-developer` or
+`frontend-developer`. The supported flow is:
+
+```text
+Prepare -> Run -> Materialize -> Test -> Finalize
+-> M5-B2 Plan/Status/Apply -> run-e2e Apply
+```
+
+The Agent writes only the task Worktree. The Runtime freezes the DAG node,
+`predictedFiles`, role policy, knowledge context, Worktree and Git baseline; derives
+candidates from disk facts; runs a fixed test Adapter; and emits the development
+receipt and Story result candidate. The main worktree changes only through M5-B2
+controlled integration. M8-B is serial and does not create or retire Worktrees,
+run Git delivery, publish, deploy, or enable Fork-Join.
+
 ## Structure Validation
 
 Run the read-only structure check from the repository root:

@@ -1,0 +1,286 @@
+{
+  "schemaVersion": "2.0",
+  "storyId": "M8-B-001",
+  "nodes": [
+    {
+      "taskId": "T1-CONFIG",
+      "title": "以 TDD 开放开发角色的 Provider Profile 与模型路由",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/config/agent-providers.json",
+        ".harness/schemas/agent-provider-config.schema.json",
+        ".harness/scripts/lib/provider-config.mjs",
+        ".harness/scripts/tests/provider-config.test.mjs"
+      ],
+      "criterionIds": ["AC-M8B-MODEL-ROUTING"]
+    },
+    {
+      "taskId": "T2-CONTRACT",
+      "title": "以 TDD 建立 Development Provider 严格数据契约",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/schemas/agent-development-request.schema.json",
+        ".harness/schemas/agent-development-context.schema.json",
+        ".harness/schemas/agent-development-response.schema.json",
+        ".harness/schemas/agent-development-execution-receipt.schema.json",
+        ".harness/schemas/agent-development-candidate-manifest.schema.json",
+        ".harness/schemas/agent-development-test-receipt.schema.json",
+        ".harness/schemas/agent-development-receipt.schema.json",
+        ".harness/scripts/lib/development-provider-contract.mjs",
+        ".harness/scripts/tests/development-provider-contract.test.mjs",
+        ".harness/structure-manifest.yaml"
+      ],
+      "criterionIds": [
+        "AC-M8B-REAL-DEVELOPER",
+        "AC-M8B-WORKTREE-ONLY",
+        "AC-M8B-PREDICTED-FILE-GATE",
+        "AC-M8B-CANDIDATE-TEST",
+        "AC-M8B-RECOVERY"
+      ]
+    },
+    {
+      "taskId": "T3-CONTEXT",
+      "title": "以 TDD 冻结任务、知识、Worktree 与 Git 基线",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/development-provider-context.mjs",
+        ".harness/scripts/tests/development-provider-context.test.mjs"
+      ],
+      "criterionIds": [
+        "AC-M8B-WORKTREE-ONLY",
+        "AC-M8B-PREDICTED-FILE-GATE",
+        "AC-M8B-RECOVERY"
+      ]
+    },
+    {
+      "taskId": "T4-CODEX-ADAPTER",
+      "title": "以 TDD 增加固定 workspace-write Codex CLI Adapter",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/provider-adapters/codex-cli.mjs",
+        ".harness/scripts/tests/codex-cli-development-provider.test.mjs",
+        ".harness/scripts/tests/codex-cli-provider.test.mjs"
+      ],
+      "criterionIds": [
+        "AC-M8B-REAL-DEVELOPER",
+        "AC-M8B-WORKTREE-ONLY",
+        "AC-M8B-MODEL-ROUTING"
+      ]
+    },
+    {
+      "taskId": "T5-RUNTIME-PREPARE-RUN",
+      "title": "以 TDD 实现 Development Provider Status、Prepare、Run 与 claim-first",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/development-provider-runtime.mjs",
+        ".harness/scripts/tests/development-provider-runtime.test.mjs"
+      ],
+      "criterionIds": [
+        "AC-M8B-REAL-DEVELOPER",
+        "AC-M8B-WORKTREE-ONLY",
+        "AC-M8B-RECOVERY",
+        "AC-M8B-MODEL-ROUTING"
+      ]
+    },
+    {
+      "taskId": "T6-MATERIALIZE-TEST",
+      "title": "以 TDD 实现候选准入、可信工具链与固定 Test",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/development-provider-runtime.mjs",
+        ".harness/scripts/tests/development-provider-runtime.test.mjs"
+      ],
+      "criterionIds": [
+        "AC-M8B-PREDICTED-FILE-GATE",
+        "AC-M8B-CANDIDATE-TEST",
+        "AC-M8B-RECOVERY"
+      ]
+    },
+    {
+      "taskId": "T7-FINALIZE",
+      "title": "以 TDD 实现 Finalize、标准 evidence 投影与 Development receipt",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/development-provider-runtime.mjs",
+        ".harness/scripts/tests/development-provider-runtime.test.mjs"
+      ],
+      "criterionIds": [
+        "AC-M8B-CANDIDATE-TEST",
+        "AC-M8B-CONTROLLED-INTEGRATION",
+        "AC-M8B-RECOVERY"
+      ]
+    },
+    {
+      "taskId": "T8-INTEGRATION",
+      "title": "以 TDD 扩展 M5-B2 双来源归一化与 development plan v1.1",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/schemas/worktree-integration-plan.schema.json",
+        ".harness/scripts/lib/worktree-integration-runtime.mjs",
+        ".harness/scripts/tests/worktree-integration-runtime.test.mjs"
+      ],
+      "criterionIds": [
+        "AC-M8B-CONTROLLED-INTEGRATION",
+        "AC-M8B-RECOVERY"
+      ]
+    },
+    {
+      "taskId": "T9-CLI-E2E",
+      "title": "以 TDD 实现 Development Provider CLI 与 E2E 动作映射",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/run-development-provider.ps1",
+        ".harness/scripts/lib/e2e-runtime.mjs",
+        ".harness/scripts/tests/development-provider-cli.test.ps1",
+        ".harness/scripts/tests/e2e-runtime.test.mjs",
+        ".harness/scripts/tests/e2e-cli.test.ps1",
+        ".harness/structure-manifest.yaml"
+      ],
+      "criterionIds": [
+        "AC-M8B-REAL-DEVELOPER",
+        "AC-M8B-CONTROLLED-INTEGRATION",
+        "AC-M8B-RECOVERY"
+      ]
+    },
+    {
+      "taskId": "T10-FIXTURE",
+      "title": "建立 backend、frontend、越权、中断与模型路由纵向 fixture",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "unit-tester",
+      "predictedFiles": [
+        ".harness/scripts/tests/development-provider-e2e.test.mjs",
+        ".harness/scripts/tests/development-provider-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-integration-runtime.test.mjs"
+      ],
+      "criterionIds": [
+        "AC-M8B-REAL-DEVELOPER",
+        "AC-M8B-WORKTREE-ONLY",
+        "AC-M8B-PREDICTED-FILE-GATE",
+        "AC-M8B-CANDIDATE-TEST",
+        "AC-M8B-CONTROLLED-INTEGRATION",
+        "AC-M8B-RECOVERY",
+        "AC-M8B-MODEL-ROUTING"
+      ]
+    },
+    {
+      "taskId": "T11-REGRESSION-REVIEW",
+      "title": "执行专项回归、结构门禁和独立只读代码审核",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "code-reviewer",
+      "predictedFiles": [
+        ".harness/README.md",
+        ".harness/scripts/README.md",
+        "docs/harness-m8b-development-provider/REPORT.md"
+      ],
+      "criterionIds": [
+        "AC-M8B-REAL-DEVELOPER",
+        "AC-M8B-WORKTREE-ONLY",
+        "AC-M8B-PREDICTED-FILE-GATE",
+        "AC-M8B-CANDIDATE-TEST",
+        "AC-M8B-CONTROLLED-INTEGRATION",
+        "AC-M8B-RECOVERY",
+        "AC-M8B-MODEL-ROUTING"
+      ]
+    },
+    {
+      "taskId": "T12-REAL-ACCEPTANCE",
+      "title": "执行真实 Codex CLI fixture 与真实 backend Story 闭环验收",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "interface-verifier",
+      "predictedFiles": [
+        "docs/harness-m8b-development-provider/REPORT.md"
+      ],
+      "criterionIds": [
+        "AC-M8B-REAL-DEVELOPER",
+        "AC-M8B-WORKTREE-ONLY",
+        "AC-M8B-CANDIDATE-TEST",
+        "AC-M8B-CONTROLLED-INTEGRATION",
+        "AC-M8B-REAL-STORY"
+      ]
+    },
+    {
+      "taskId": "T13-DOC-KB-CLOSURE",
+      "title": "同步 Runtime 文档、路线、交接、结构清单和知识基线",
+      "type": "docs",
+      "status": "pending",
+      "ownerAgent": "requirement-analyst",
+      "predictedFiles": [
+        ".harness/README.md",
+        ".harness/scripts/README.md",
+        ".harness/structure-manifest.yaml",
+        "CODEX-CROSS-SESSION-HANDOFF.md",
+        "docs/harness-engineering-target-and-gap.md",
+        "docs/harness-m7-m12-roadmap/DESIGN.md",
+        "docs/harness-m7-m12-roadmap/PLAN.md",
+        "docs/harness-m8b-development-provider/REPORT.md",
+        "docs/harness-structure-checklist.md",
+        "llm-knowledge/common/meta.yaml",
+        "llm-knowledge/overview.md"
+      ],
+      "criterionIds": ["AC-M8B-REAL-STORY"]
+    }
+  ],
+  "edges": [
+    {"from": "T1-CONFIG", "to": "T2-CONTRACT", "reason": "Development 契约依赖稳定的角色与模型路由。"},
+    {"from": "T2-CONTRACT", "to": "T3-CONTEXT", "reason": "Context Builder 依赖 request/context 与 receipt 契约。"},
+    {"from": "T3-CONTEXT", "to": "T4-CODEX-ADAPTER", "reason": "写入 Adapter 需要冻结的 Worktree 与上下文身份。"},
+    {"from": "T4-CODEX-ADAPTER", "to": "T5-RUNTIME-PREPARE-RUN", "reason": "Runtime Run 依赖固定 workspace-write Adapter。"},
+    {"from": "T5-RUNTIME-PREPARE-RUN", "to": "T6-MATERIALIZE-TEST", "reason": "候选收集依赖可信 execution 与执行后事实。"},
+    {"from": "T6-MATERIALIZE-TEST", "to": "T7-FINALIZE", "reason": "Finalize 只消费冻结候选和 passed test receipt。"},
+    {"from": "T7-FINALIZE", "to": "T8-INTEGRATION", "reason": "M5-B2 development source 依赖完整 Development receipt。"},
+    {"from": "T8-INTEGRATION", "to": "T9-CLI-E2E", "reason": "E2E 映射依赖完整 Provider 与 Integration 派生状态。"},
+    {"from": "T9-CLI-E2E", "to": "T10-FIXTURE", "reason": "纵向 fixture 需要统一 CLI 和 E2E 动作链。"},
+    {"from": "T10-FIXTURE", "to": "T11-REGRESSION-REVIEW", "reason": "实现和异常 fixture 通过后才能进行全量回归与审核。"},
+    {"from": "T11-REGRESSION-REVIEW", "to": "T12-REAL-ACCEPTANCE", "reason": "真实模型和业务验收仅在回归与独立审核通过后执行。"},
+    {"from": "T12-REAL-ACCEPTANCE", "to": "T13-DOC-KB-CLOSURE", "reason": "文档与知识必须反映最终真实验收事实。"}
+  ],
+  "waves": [
+    ["T1-CONFIG"],
+    ["T2-CONTRACT"],
+    ["T3-CONTEXT"],
+    ["T4-CODEX-ADAPTER"],
+    ["T5-RUNTIME-PREPARE-RUN"],
+    ["T6-MATERIALIZE-TEST"],
+    ["T7-FINALIZE"],
+    ["T8-INTEGRATION"],
+    ["T9-CLI-E2E"],
+    ["T10-FIXTURE"],
+    ["T11-REGRESSION-REVIEW"],
+    ["T12-REAL-ACCEPTANCE"],
+    ["T13-DOC-KB-CLOSURE"]
+  ],
+  "globalChanges": [
+    "扩展项目 Provider 配置允许开发角色，但不允许配置权限、cwd、argv 或 sandbox。",
+    "新增 Development Provider Runtime、Schema、CLI 和 E2E 状态映射。",
+    "仅为 development candidate source 增加 worktree integration plan v1.1，legacy v1.0 保持兼容。",
+    "真实 Worktree 创建、测试环境、Git 和外部写操作继续受用户批准边界控制。"
+  ],
+  "risks": [
+    "RISK-M8B-WORKTREE：越权或不支持文件变化必须使整个 attempt 失败。",
+    "RISK-M8B-TOOLCHAIN：Agent 不能污染正式测试依赖、工具或增量产物。",
+    "RISK-M8B-GIT：linked Worktree 的完整 refs、config、index 和 common-dir 必须对账。",
+    "RISK-M8B-RECOVERY：claim-only、并发 Finalize 和部分 Integration 必须确定性恢复。",
+    "RISK-M8B-CONTRACT：State v2 五字段 implementation payload 和 result-last 不能漂移。"
+  ]
+}

@@ -272,6 +272,53 @@ export function buildCodexCliArgs({
   return args;
 }
 
+export function buildCodexDevelopmentArgs({
+  worktreePath,
+  preparedRoot,
+  schemaFile,
+  model,
+  modelProvider = null,
+}) {
+  assertAbsolutePath(worktreePath, "Codex development Worktree");
+  assertAbsolutePath(preparedRoot, "Codex development prepared root");
+  assertAbsolutePath(schemaFile, "Codex development output Schema");
+  const schemaRelative = path.relative(preparedRoot, schemaFile);
+  if (!schemaRelative || schemaRelative === ".." || schemaRelative.startsWith(`..${path.sep}`)
+      || path.isAbsolute(schemaRelative)) {
+    throw new Error("Codex development output Schema must stay inside the frozen prepared root.");
+  }
+  assertModel(model);
+  assertModelProvider(modelProvider);
+  const args = [
+    "exec",
+    "--approve-for-me",
+    "--ephemeral",
+    "--ignore-user-config",
+    "--output-schema",
+    schemaFile,
+    "--json",
+    "--cd",
+    worktreePath,
+  ];
+  if (modelProvider !== null) {
+    const prefix = `model_providers.${modelProvider.id}`;
+    args.push(
+      "-c",
+      `model_provider=${tomlString(modelProvider.id)}`,
+      "-c",
+      `${prefix}.name=${tomlString(modelProvider.id)}`,
+      "-c",
+      `${prefix}.base_url=${tomlString(modelProvider.baseUrl)}`,
+      "-c",
+      `${prefix}.wire_api=${tomlString(modelProvider.wireApi)}`,
+      "-c",
+      `${prefix}.requires_openai_auth=${modelProvider.requiresOpenAiAuth}`,
+    );
+  }
+  if (model !== null) args.push("--model", model);
+  return args;
+}
+
 async function treeEntries(root, current = root) {
   const entries = [];
   const children = await readdir(current, { withFileTypes: true });
@@ -371,23 +418,39 @@ function parseJsonl(stdoutBuffer) {
   if (events.some((event) => event?.type === "error" || event?.type === "turn.failed")) {
     throw new Error("Codex stdout contains a failure event alongside a final response.");
   }
+  const messages = [];
   const finals = [];
-  for (const event of events) {
+  const completedTurns = [];
+  for (const [index, event] of events.entries()) {
+    if (event?.type === "turn.completed") completedTurns.push(index);
     if (event?.type === "item.completed"
         && event.item?.type === "agent_message"
         && typeof event.item.text === "string") {
-      finals.push(event.item.text);
+      messages.push({index, text: event.item.text});
+      try {
+        const candidate = JSON.parse(event.item.text);
+        if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+          finals.push({index, response: candidate});
+        }
+      } catch {
+        // Codex may emit ordinary progress messages before its structured final response.
+      }
     }
   }
-  if (!finals.length) throw new Error("Codex stdout contains no final response.");
-  if (finals.length !== 1) throw new Error("Codex stdout contains multiple final responses.");
-  let response;
-  try {
-    response = JSON.parse(finals[0]);
-  } catch {
-    throw new Error("Codex final response is not valid JSON.");
+  if (!messages.length) throw new Error("Codex stdout contains no final response.");
+  if (!finals.length) throw new Error("Codex final response is not valid JSON.");
+  if (completedTurns.length > 1) throw new Error("Codex stdout contains multiple completed turns.");
+  if (completedTurns.length === 1) {
+    const completedIndex = completedTurns[0];
+    if (messages.some((message) => message.index > completedIndex)) {
+      throw new Error("Codex stdout contains an agent response after turn completion.");
+    }
+    const final = finals.filter((candidate) => candidate.index < completedIndex).at(-1);
+    if (!final) throw new Error("Codex completed turn contains no structured final response.");
+    return {events, response: final.response};
   }
-  return { events, response };
+  if (finals.length !== 1) throw new Error("Codex stdout contains multiple final responses.");
+  return {events, response: finals[0].response};
 }
 
 function errorEventDiagnostics(events) {
@@ -641,6 +704,9 @@ export async function runCodexCli({
         rawEvents = parsed.events;
       } catch (error) {
         if (status === "completed") status = "invalid-response";
+        try {
+          rawEvents = parseJsonlEvents(captured.stdout);
+        } catch {}
         diagnostics.push(error.message);
       }
     }
@@ -681,4 +747,146 @@ export async function runCodexCli({
       await rm(isolatedRoot, { recursive: true, force: true });
     }
   }
+}
+
+export async function runCodexDevelopmentCli({
+  executablePath,
+  adapterVersion = "codex-cli/unknown",
+  prompt,
+  outputSchemaFile,
+  outputSchemaSha256,
+  preparedRoot,
+  worktreePath,
+  request,
+  model = null,
+  modelProvider = null,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  stdoutLimitBytes = DEFAULT_STDOUT_LIMIT,
+  stderrLimitBytes = DEFAULT_STDERR_LIMIT,
+  parentEnv = process.env,
+  spawnProcess = spawn,
+  killProcessTree = defaultKillProcessTree,
+  onSpawn = async () => {},
+  now = () => new Date().toISOString(),
+}) {
+  if (typeof prompt !== "string" || !prompt) throw new Error("Codex development prompt is required.");
+  assertAbsolutePath(worktreePath, "Codex development Worktree");
+  if (!request || path.resolve(request.worktreePath ?? "") !== path.resolve(worktreePath)) {
+    throw new Error("Codex development Worktree must match the frozen request.");
+  }
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+    throw new Error("Codex development timeout must be a positive integer.");
+  }
+  const schemaContent = await readFile(outputSchemaFile);
+  if (!SHA256_PATTERN.test(outputSchemaSha256) || sha256(schemaContent) !== outputSchemaSha256) {
+    throw new Error("Codex development output Schema does not match the frozen SHA-256.");
+  }
+  const resolvedExecutablePath = executablePath ?? await discoverCodexExecutable();
+  assertAbsolutePath(resolvedExecutablePath, "Codex executable");
+  if (spawnProcess === spawn) await assertRegularExecutable(resolvedExecutablePath, "Codex executable");
+  const args = buildCodexDevelopmentArgs({
+    worktreePath,
+    preparedRoot,
+    schemaFile: outputSchemaFile,
+    model,
+    modelProvider,
+  });
+  const startedAt = now();
+  const child = spawnProcess(resolvedExecutablePath, args, {
+    cwd: worktreePath,
+    shell: false,
+    windowsHide: true,
+    detached: process.platform !== "win32",
+    stdio: ["pipe", "pipe", "pipe"],
+    env: codexEnvironment(parentEnv),
+  });
+  const execution = waitForChild({
+    child,
+    timeoutMs,
+    stdoutLimitBytes,
+    stderrLimitBytes,
+    killProcessTree,
+  });
+  const spawnOutcome = await waitForSpawn(child);
+  if (spawnOutcome.kind === "spawned") {
+    if (!Number.isInteger(spawnOutcome.pid) || spawnOutcome.pid <= 0) {
+      await killProcessTree(spawnOutcome.pid);
+      child.stdin.destroy();
+      throw new Error("Codex development process spawned without a positive PID.");
+    }
+    try {
+      await onSpawn(spawnOutcome.pid);
+    } catch (error) {
+      await killProcessTree(spawnOutcome.pid);
+      child.stdin.destroy();
+      throw error;
+    }
+    child.stdin.end(prompt);
+  } else {
+    child.stdin.destroy();
+  }
+  const captured = await execution;
+  const finishedAt = now();
+  const diagnostics = [];
+  let status = "completed";
+  let response = null;
+  let rawEvents = [];
+  const exitCode = captured.outcome.exitCode ?? null;
+  if (captured.outcome.kind === "timeout") {
+    status = "timed-out";
+    diagnostics.push(`Codex development process exceeded the ${timeoutMs} ms timeout.`);
+  } else if (captured.outcome.kind === "error") {
+    status = "failed";
+    diagnostics.push(`Codex development process failed to start: ${captured.outcome.error.message}`);
+  } else if (captured.limitError) {
+    status = "output-limit";
+    diagnostics.push(captured.limitError);
+  } else if (exitCode !== 0) {
+    status = "failed";
+    diagnostics.push(`Codex development process exited with code ${exitCode}.`);
+    try {
+      rawEvents = parseJsonlEvents(captured.stdout);
+      diagnostics.push(...errorEventDiagnostics(rawEvents));
+    } catch (error) {
+      diagnostics.push(error.message);
+    }
+  } else {
+    try {
+      const parsed = parseJsonl(captured.stdout);
+      response = parsed.response;
+      rawEvents = parsed.events;
+    } catch (error) {
+      status = "invalid-response";
+      try {
+        rawEvents = parseJsonlEvents(captured.stdout);
+      } catch {}
+      diagnostics.push(error.message);
+    }
+  }
+  if (captured.stderr.length) {
+    try {
+      const stderr = boundedDiagnostic(decodeUtf8(captured.stderr, "Codex development stderr"));
+      if (stderr) diagnostics.push(stderr);
+    } catch (error) {
+      if (status === "completed") status = "invalid-response";
+      diagnostics.push(error.message);
+    }
+  }
+  return {
+    adapter: "codex-cli",
+    adapterVersion,
+    executablePath: resolvedExecutablePath,
+    requestedModel: model,
+    reportedModel: response?.usage?.reportedModel ?? null,
+    startedAt,
+    finishedAt,
+    exitCode,
+    status,
+    response: status === "completed" ? response : null,
+    rawEvents,
+    stdout: captured.stdout,
+    stderr: captured.stderr,
+    diagnostics: diagnostics.slice(0, 32),
+    worktreePath,
+  };
 }

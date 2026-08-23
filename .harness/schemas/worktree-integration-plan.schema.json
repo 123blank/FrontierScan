@@ -7,12 +7,10 @@
     "schemaVersion", "storyId", "runId", "taskId", "dispatchId", "phase", "ownerAgent",
     "stateFile", "preparedRevision", "baseCommit", "worktreePath", "taskDagFile", "taskDagSha256",
     "taskFile", "taskSha256", "checkpointFile", "checkpointSha256", "worktreePlanFile",
-    "worktreePlanSha256", "inputManifestFile", "inputManifestSha256", "executionReceiptFile",
-    "executionReceiptSha256", "workerResultEvidenceFile", "workerResultSha256", "resultFile",
-    "artifacts", "plannedAt"
+    "worktreePlanSha256", "resultFile", "artifacts", "plannedAt"
   ],
   "properties": {
-    "schemaVersion": { "const": "1.0" },
+    "schemaVersion": { "enum": ["1.0", "1.1"] },
     "storyId": { "type": "string", "minLength": 1 },
     "runId": { "type": "string", "minLength": 1 },
     "taskId": { "type": "string", "minLength": 1 },
@@ -37,6 +35,13 @@
     "executionReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "workerResultEvidenceFile": { "type": "string", "minLength": 1 },
     "workerResultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "candidateSourceKind": { "const": "development-provider" },
+    "candidateSourceReceiptFile": { "type": "string", "minLength": 1 },
+    "candidateSourceReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "candidateContextFile": { "type": "string", "minLength": 1 },
+    "candidateContextSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "resultEvidenceFile": { "type": "string", "minLength": 1 },
+    "resultEvidenceSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "resultFile": { "type": "string", "minLength": 1 },
     "artifacts": {
       "type": "array",
@@ -57,5 +62,22 @@
     },
     "plannedAt": { "type": "string", "format": "date-time" }
   },
+  "oneOf": [
+    {
+      "properties": { "schemaVersion": { "const": "1.0" } },
+      "required": [
+        "inputManifestFile", "inputManifestSha256", "executionReceiptFile",
+        "executionReceiptSha256", "workerResultEvidenceFile", "workerResultSha256"
+      ]
+    },
+    {
+      "properties": { "schemaVersion": { "const": "1.1" } },
+      "required": [
+        "candidateSourceKind", "candidateSourceReceiptFile", "candidateSourceReceiptSha256",
+        "candidateContextFile", "candidateContextSha256", "resultEvidenceFile",
+        "resultEvidenceSha256"
+      ]
+    }
+  ],
   "additionalProperties": false
 }

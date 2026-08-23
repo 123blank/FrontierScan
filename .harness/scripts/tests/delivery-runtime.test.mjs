@@ -282,6 +282,24 @@ async function testControlOnlyAdditionsSkipIdentityFoldingWithoutDeletions() {
   }
 }
 
+async function testNestedHarnessTemporaryRepositoryIsIgnored() {
+  const { root, state } = await fixture();
+  try {
+    state.implementation.actualFiles = ["backend/owned.txt"];
+    await write(root, "backend/owned.txt", "changed\n");
+    const nestedRoot = path.join(root, ".harness", "tmp", "acceptance");
+    await mkdir(nestedRoot, { recursive: true });
+    await git(nestedRoot, "init", "-b", "dev");
+    await write(nestedRoot, "README.md", "temporary acceptance repository\n");
+
+    const facts = await deriveDeliveryFacts({ root, state });
+    assert.deepEqual(facts.ownedFiles, ["backend/owned.txt"]);
+    assert.deepEqual(facts.unrelatedDirtyFiles, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 async function testCrossControlAssetRenameFailsClosed() {
   for (const [source, target] of [
     ["backend/owned.txt", ".harness/runs/M7-A4-DELIVERY/phases/owned.txt"],
@@ -645,6 +663,7 @@ await testDeletedPathRecreatedIsFoldedToNetChange();
 await testUnstagedFilesystemRenameAndCopyAreDetected();
 await testCopyIntoRunControlAssetsIsIgnored();
 await testControlOnlyAdditionsSkipIdentityFoldingWithoutDeletions();
+await testNestedHarnessTemporaryRepositoryIsIgnored();
 await testCrossControlAssetRenameFailsClosed();
 await testCopySourceParticipatesInSafetyChecks();
 await testNotRequestedReceiptIsAppendOnlyAndIdempotent();

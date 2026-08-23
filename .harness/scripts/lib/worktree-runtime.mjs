@@ -229,7 +229,8 @@ async function assertRepositoryRoot(root, options) {
 }
 
 function validateState(state) {
-  if (!state || state.schemaVersion !== "1.0" || typeof state.storyId !== "string" || !state.storyId) {
+  if (!state || !["1.0", "2.0"].includes(state.schemaVersion)
+      || typeof state.storyId !== "string" || !state.storyId) {
     throw new Error("Harness state has an invalid identity.");
   }
   assertIdentifier(state.storyId, "Story ID");
@@ -1747,6 +1748,12 @@ async function collectBatchRetirementEvidence(root, context) {
   addAllowed(context.implementation.result.relative, context.implementation.result);
   addAllowed(context.implementation.checkpoint.relative, context.implementation.checkpoint);
   addAllowed(context.implementation.notes.relative, context.implementation.notes);
+  const implementationOwnerFile =
+    `.harness/runs/${context.state.runtime.runId}/phases/03-implementation/implementation-owner.json`;
+  addAllowed(
+    implementationOwnerFile,
+    await readBatchRetirementBuffer(root, implementationOwnerFile, "Implementation owner"),
+  );
 
   const tasks = [];
   for (const task of context.batch.ledger.tasks) {

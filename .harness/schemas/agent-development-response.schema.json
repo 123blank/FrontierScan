@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-development-response.schema.json",
+  "title": "FrontierScan Agent Development Response",
+  "type": "object",
+  "required": ["schemaVersion", "providerRequestId", "dispatchId", "storyId", "runId", "phase", "role", "status", "summary", "developmentMethod", "tddExceptionReason", "declaredFiles", "diagnostics", "usage"],
+  "properties": {
+    "schemaVersion": {"type": "string", "const": "1.0"},
+    "providerRequestId": {"type": "string", "format": "uuid"},
+    "dispatchId": {"type": "string", "format": "uuid"},
+    "storyId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "phase": {"type": "string", "const": "implementation"},
+    "role": {"type": "string", "enum": ["backend-developer", "frontend-developer"]},
+    "status": {"type": "string", "enum": ["completed", "failed"]},
+    "summary": {"type": "string", "minLength": 1},
+    "developmentMethod": {"type": "string", "enum": ["tdd", "exception"]},
+    "tddExceptionReason": {"type": ["string", "null"]},
+    "declaredFiles": {"type": "array", "items": {"type": "object", "required": ["path", "changeType", "purpose"], "properties": {"path": {"type": "string"}, "changeType": {"type": "string", "enum": ["create", "update"]}, "purpose": {"type": "string", "minLength": 1}}, "additionalProperties": false}},
+    "diagnostics": {"type": "array", "maxItems": 32, "items": {"type": "string", "minLength": 1}},
+    "usage": {"type": "object", "required": ["reportedModel", "inputTokens", "outputTokens"], "properties": {"reportedModel": {"type": ["string", "null"]}, "inputTokens": {"type": ["integer", "null"], "minimum": 0}, "outputTokens": {"type": ["integer", "null"], "minimum": 0}}, "additionalProperties": false}
+  },
+  "additionalProperties": false
+}

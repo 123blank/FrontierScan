@@ -2,7 +2,7 @@
 
 > 日期：2026-08-12
 >
-> 状态：路线已批准；M7 与 M8-A 已完成，下一阶段为待批准的 M8-B 专项设计
+> 状态：路线已批准；M7 与 M8 已完成，下一阶段为待批准的 M9 专项设计
 >
 > 路线制定基线：`53c1f29 docs(harness): establish target and gap baseline`
 >
@@ -34,6 +34,9 @@
 - M4-B 已实现受约束 Mock Worker。
 - M5 已实现单 Worktree、串行批次和同 wave 多 Worktree 的计划、执行、集成与回收 Runtime，真实 Git 副作用仅在临时 fixture 中验证。
 - M6-A 已使用真实业务完成需求、实现、测试、审核、构建、验证和交付闭环。
+- M7 已完成 State v2、验收追踪、确定性串行驱动、知识新鲜度和双重闭环验收。
+- M8-A 已接入真实只读 `code-reviewer` Provider。
+- M8-B 已接入单任务、单 Worktree、串行的 backend/frontend developer Provider，并通过真实 Codex CLI fixture 和真实 backend Story。
 
 ### 2.2 M6-A 暴露的问题
 
@@ -660,6 +663,14 @@ Runtime 负责：
 - 串行执行。
 - 修改 predicted files 和角色允许路径。
 - 由 Runtime 收集和受控集成。
+
+已实现语义：
+
+- Agent 只直接写任务 Worktree，主树只由 M5-B2 Runtime 写入。
+- Runtime 从磁盘和 Git 事实生成候选，固定测试通过后才生成 development receipt。
+- 模型路由不改变 role、sandbox、cwd 或 predicted file 权限。
+- 删除、重命名、symlink、submodule、二进制和越权候选失败关闭。
+- 真实 Codex CLI fixture 与 `M8-B-REAL-001` backend Story 已通过闭环验收。
 
 ## 14. M9 条件式并行
 

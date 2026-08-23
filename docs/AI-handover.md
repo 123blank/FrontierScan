@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-08-21
+> 最后更新：2026-08-23
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：M7 与 M8-A 已完成。`M8-A-001` 已进入 `done/completed` revision `51`，首个真实只读 `code-reviewer` Provider 已通过真实 `codex exec`、人工/Provider 对比和闭包核验。审核任务被明确启动后可独立执行，但完整 `Prepare -> Run -> Materialize -> Apply` 链、finding 复核和返工仍由当前 Codex 会话编排。下一阶段是待批准的 M8-B 单任务开发 Provider；写入型 Agent、并行 Worktree、Fork-Join、自动 Git 和生产发布仍未实现。
+> 当前重点：M7 与 M8 已完成。M8-A 接入真实只读 `code-reviewer`，M8-B 接入单任务、单 Worktree、串行的 backend/frontend developer Provider，并通过真实 Codex CLI fixture 和真实 backend Story。完整 Provider 链与阶段推进仍由当前 Codex 会话编排。下一阶段是待批准的 M9 条件式单 Story 并行；多 Story Fork-Join、自动 Git 和生产发布仍未实现。
 
 ---
 
@@ -1799,5 +1799,34 @@ M6-A 是对“单个真实业务任务能否由当前 Harness 完成开发闭环
 - M8-A 实现提交为 `ecc987e`，本地运行资产忽略规则提交为 `b98a55a`，文档同步提交为 `a315850`，知识基线提交为 `65761a9`；这些提交尚未推送，动态 HEAD 和 ahead/behind 必须现场运行 Git 命令读取。
 - 审核任务启动后可独立完成，但 `Prepare -> Run -> Materialize -> Apply`、finding 复核和返工仍由当前 Codex 会话编排，不属于无人干预流水线。
 - backend、frontend、common 知识基线和索引均为 `fresh`，语义增强仍为 `pending`。
-- 当前下一阶段是经用户批准后设计 M8-B：单任务、单隔离 Worktree、串行的 backend/frontend developer Provider。
+- M8-A 完成时的下一阶段是 M8-B；该阶段现已完成，当前进度见下一节。
 - M8-B 之前不开放主树直接写入、并行、Fork-Join、自动 Git、发布或部署。
+
+### 16.31 2026-08-23 当前状态：M8-B 单任务开发 Provider 完成
+
+权威设计、计划和报告位于 `docs/harness-m8b-development-provider/`，实施 Story 为
+`M8-B-001`，真实业务验收 Story 为 `M8-B-REAL-001`。
+
+- 已接入 `backend-developer` 与 `frontend-developer` 的单任务 Development Provider。
+- Agent 只直接写已创建的任务 Worktree；主树只由 M5-B2 Runtime 受控集成。
+- Runtime 冻结 DAG node、criterion、`predictedFiles`、知识、角色策略、模型路由、
+  Worktree 和 Git baseline，并从真实磁盘差异生成候选。
+- 固定测试通过后才生成 candidate/test/development receipt 和 implementation
+  notes/result 候选。
+- 删除、重命名、symlink、submodule、二进制、越权路径、ignored 副作用和 Git
+  元数据漂移均失败关闭。
+- 真实 Codex CLI fixture 完成 Worktree 写入、Maven 测试、候选冻结、M5-B2 集成和
+  Story Apply；Git 探针被 sandbox 拒绝或被 Runtime 对账识别。
+- `M8-B-REAL-001` 在独立临时仓库完成 SiteService 字段首尾空白归一化，完整后端
+  166 项测试、只读审核和 Maven package 通过，三项验收均为 `verified`。
+- 真实 Story 最终 State 为 `done/completed` revision `10`，
+  `delivery.gitStatus=not-requested`。
+- 真实验收发现 knowledge 与 DAG predicted source 重复时 Context Builder 误拒绝，
+  已按 predicted source 优先的最小规则完成 TDD 修复。
+- 正式实施 Story 在 Delivery 对账发现 initialization 前 dirty 文件归属错误后执行
+  受限 rework，并完整重走 implementation 至 delivery-preparation；最终 State 为
+  `done/completed` revision `29`，八项 required criterion 均为 `verified`。
+- Delivery Runtime 已按 TDD 忽略 `.harness/tmp/` 嵌套临时仓库目录，其他非规范路径
+  继续失败关闭；最终 manifest 绑定 29 个 owned files，Git 为 `not-requested`。
+- M8-B 不自动创建或回收 Worktree，不自动提交、推送、发布或部署，也不启用并行。
+- 下一阶段是经专项设计、独立审核和用户批准后的 M9 条件式单 Story 并行。

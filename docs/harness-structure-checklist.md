@@ -39,10 +39,12 @@
 | Build plan script | `.harness/scripts/plan-build.ps1` | Basic read-only build/publish plan done |
 | Delivery summary script | `.harness/scripts/summarize-delivery.ps1` | Basic read-only owned/unrelated change summary done |
 | Harness smoke flow script | `.harness/scripts/smoke-harness-flow.ps1` | 非破坏性 M2 初始化、M3 prepare/apply、M4-B mock Worker 与 M5-B3-B public batch prepare/plan/status 协议临时闭环已实现；不是业务 E2E |
-| Agent registry | `.codex/agents/agents.yaml` | 12 角色注册与 Worker 策略保持分离；M8-A 仅开放真实只读 `code-reviewer`，其他角色仍未自动派发 |
+| Agent registry | `.codex/agents/agents.yaml` | 12 角色注册与 Worker 策略保持分离；M8 已开放真实 `code-reviewer` 和单任务 backend/frontend developer，其他角色仍未自动派发 |
 | M8-A Provider 配置与模型路由 | `.harness/config/agent-providers.json`、`agent-provider-config.schema.json`、`provider-config.mjs` | 已实现 `role -> profile -> codex-cli/model`、项目默认、本地覆盖、配置哈希和自定义 Codex model provider 元数据白名单；本地配置与密钥不交付 |
 | M8-A Provider 契约与 Runtime | `agent-provider-*.schema.json`、`provider-contract.mjs`、`provider-context.mjs`、`provider-runtime.mjs` | 已实现冻结 request/context、严格 response/receipt、完整性快照、锁、超时、失败关闭、Materialize 和 result-last 恢复 |
 | M8-A Codex CLI Adapter | `provider-adapters/codex-cli.mjs`、`run-provider.ps1` | 已通过真实 `codex exec` 只读审核；固定 `read-only`、`ephemeral`、`ignore-user-config` 和结构化输出，不开放任意 argv 或写权限 |
+| M8-B Development Provider 契约与 Runtime | `agent-development-*.schema.json`、`development-provider-*.mjs`、`run-development-provider.ps1` | 已实现单任务 Prepare/Run/Materialize/Test/Finalize、冻结上下文、Worktree/Git baseline、候选对账、固定测试、receipt 和恢复 |
+| M8-B Codex CLI 与受控集成 | `provider-adapters/codex-cli.mjs`、`worktree-integration-runtime.mjs` | Agent 只写任务 Worktree，模型路由不扩大权限；M5-B2 plan v1.1 按 result-last 受控集成主树 |
 | 项目 Skill 目录 | `.codex/skills/` | 已完成 |
 | MVP Skill placeholders | `.codex/skills/frontier-*` | Replaced by basic guidance |
 | State runner Skill | `.codex/skills/frontier-state-runner/` | M2 deterministic runtime guidance and executable entry implemented V1 |
@@ -84,7 +86,7 @@
 | M5-D-B wave create plan/report | `docs/harness-m5d-wave-create/` | 已实现计划哈希审批门控、多 Worktree 顺序创建、波次锁恢复、`lockId` fencing、部分失败恢复和完成回执；正式仓库未执行创建 |
 | M5-D-C1/C2 wave execution design/plan/report | `docs/harness-m5d-wave-execution/` | 已实现单个完整 implementation wave 的并行执行、manifest freeze、主树串行集成、partial recovery、finalize-wave 和 M3 apply |
 | M5-D-D wave retirement design/plan/report | `docs/harness-m5d-wave-retire/` | 已实现完整 M3/Wave 证据绑定、完成态记录哈希、双锁恢复、有序 task receipt 前缀、写点 fencing、Git 后验、分支保留和最终回执 |
-| M7-M12 总体路线设计与计划 | `docs/harness-m7-m12-roadmap/DESIGN.md`、`docs/harness-m7-m12-roadmap/PLAN.md` | 路线文档已完成；M7 与 M8-A 已完成，M8-B 至 M12 仍按门禁推进 |
+| M7-M12 总体路线设计与计划 | `docs/harness-m7-m12-roadmap/DESIGN.md`、`docs/harness-m7-m12-roadmap/PLAN.md` | 路线文档已完成；M7 与 M8 已完成，M9 至 M12 仍按门禁推进 |
 | M7-A1 State v2 专项设计、计划与报告 | `docs/harness-m7a1-state-v2/` | 已实施并通过 fixture 验证；真实 Story 验收统一延期到 M7-D |
 | M7-A2 统一阶段结果与 State 投影设计、计划与报告 | `docs/harness-m7a2-phase-result/` | 已实施并通过 fixture 回归；修复 4 个 BLOCKER 后通过第二轮独立只读代码审核 |
 | M7-A3 验收追踪与语义门禁设计、计划与报告 | `docs/harness-m7a3-acceptance-gates/` | 已实施并通过专项及纵向 fixture；首轮 3 个 BLOCKER 和 1 个 WARNING 修复后通过第二轮独立只读代码审核 |
@@ -93,16 +95,17 @@
 | M7-C 知识新鲜度闭环 | `docs/harness-m7c-kb-freshness-loop/`、`knowledge-runtime.mjs` | relevant area State 投影、受控 recheck、可组合不可变 check/task/refresh evidence、最小 module/area 刷新、common 三域保护和逐区域 `accepted-stale` 已实现；最终独立审核无 BLOCKER/WARNING |
 | M7-D 双重闭环验收 | `docs/harness-m7d-closure-acceptance/`、`verify-story-closure.ps1`、`M7-D-001` | 异常 fixture、真实 Dashboard 阅读状态 Story、受限 late-stage rework、phase-result 内嵌证据与 State 投影闭包核验、交付准备均已通过；最终 State `done/completed` revision `19` |
 | M8-A 只读审核 Provider | `docs/harness-m8a-review-provider/`、`run-provider.ps1`、`M8-A-001` | Provider 配置、模型路由、冻结上下文、Codex CLI Adapter、Runtime 恢复和真实人工/Provider 审核对比已通过；审核任务启动后可独立执行，但 Provider 链与返工仍由当前 Codex 会话编排；最终 State `done/completed` revision `51` |
+| M8-B 单任务开发 Provider | `docs/harness-m8b-development-provider/`、`run-development-provider.ps1`、`M8-B-001`、`M8-B-REAL-001` | backend/frontend fixture、真实 Codex CLI Worktree 写入、固定测试、M5-B2 受控集成和真实 backend Story 已通过；实施 Story 最终 State `done/completed` revision `29`，真实 Story revision `10` |
 
 ## 延期功能工作
 
 - 在 CLI 升级或把 IDE/桌面端纳入目标时重新验证项目 Skill 加载路径；当前 CLI 保留 `.codex/skills`。
-- 接入写入型开发 Provider 或要求严格文件读取隔离前，继续复验 Codex sandbox 和操作系统级权限边界；M8-A `read-only` 不是严格读取 ACL，既有同进程 Mock Provider 也不是安全沙箱。
+- 要求恶意代码级隔离前，继续复验 Codex sandbox 和操作系统级权限边界；M8-A `read-only` 与 M8-B `workspace-write` 都不是严格读取 ACL 或完整安全沙箱。
 - M5-D-D 已实现并交付单个完整 wave 的审批门控 Worktree 回收闭环；`M5-D-D-001` 为 `done/completed` revision `18`，提交 `2b7269d` 已推送到 `origin/dev`。
 - M6-A 已完成真实单业务闭环验收，并暴露结构化 State、验收追踪、知识新鲜度、交付归属和串行编排差距。
 - M7-A1 至 M7-D 已完成 fixture 与真实 Story 验收；M7 单 Story 串行闭环目标完成。
-- M8-A 只读审核 Provider 已完成实现与真实验收；下一阶段为用户批准后的 M8-B 单任务开发 Provider 专项设计。
-- 写入型真实 Agent、正式并行、Fork-Join 和本地 Docker Compose 闭环分别延期到 M8-B、M9、M10 和 M11。
+- M8-A 只读审核与 M8-B 单任务开发 Provider 已完成实现和真实验收；下一阶段为用户批准后的 M9 条件式单 Story 并行专项设计。
+- 正式并行、Fork-Join 和本地 Docker Compose 闭环分别延期到 M9、M10 和 M11。
 - 多 wave 批量回收、分支删除、`git worktree prune`、自动清理和 Worktree 复用继续需要独立方案与明确批准。
 - 自动 Git 暂存、提交、推送、PR、生产发布和部署不在 M7-M12 当前批准范围内；完成后的 Git 事实仅由只读交付回执记录。
 
@@ -122,7 +125,7 @@
 
 该脚本只读检查必需 Harness 文件、JSON 可解析性和 Skill frontmatter。
 
-当前已验证结构：38 个目录、277 个必需文件和 13 个 Skill 文件。
+当前已验证结构：41 个目录、320 个必需文件和 13 个 Skill 文件。
 
 ## 知识查询
 
