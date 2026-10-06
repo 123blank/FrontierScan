@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "collectedAt": "2026-07-17T15:31:15.4530547+08:00",
+  "repositoryHead": "107e9939b56f831b1610285d2615fbc5e825a0e1",
+  "cliVersion": "codex-cli 0.144.1",
+  "method": "codex.cmd -C <cwd> debug prompt-input",
+  "parserScope": "<skills_instructions>/### Available skills metadata lines only",
+  "positiveRuns": [
+    { "run": 1, "count": 13, "uniqueCount": 13, "passed": true },
+    { "run": 2, "count": 13, "uniqueCount": 13, "passed": true },
+    { "run": 3, "count": 13, "uniqueCount": 13, "passed": true }
+  ],
+  "skillNames": [
+    "frontier-build-publish",
+    "frontier-code-review-gate",
+    "frontier-common",
+    "frontier-git-delivery",
+    "frontier-interface-verifier",
+    "frontier-kb-generate",
+    "frontier-kb-query",
+    "frontier-kb-refresh-check",
+    "frontier-requirement-breakdown",
+    "frontier-state-runner",
+    "frontier-task-dag-planner",
+    "frontier-test-gate",
+    "frontier-worktree-orchestrator"
+  ],
+  "locatorRule": "D:/ProjectStudy/FrontierScan/.codex/skills/<skill>/SKILL.md",
+  "allLocatorsMatched": true,
+  "setsIdenticalAcrossRuns": true,
+  "negativeControl": {
+    "cwdType": "outside-repository",
+    "count": 0,
+    "skillNames": [],
+    "passed": true
+  },
+  "modelCalled": false,
+  "fullPromptStored": false,
+  "passed": true
+}
+

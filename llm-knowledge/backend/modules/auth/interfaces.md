@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: auth
 doc_type: interfaces
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:2cf816b9b9819e4d244816bf1c39b3c4ea477f229593acf79737585b70fc2afa
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:8c3fbb52cd829b48dfadadefb099fac71ed8a3f969c81464adb48ac29160c2c3
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -19,15 +19,15 @@ source_files:
 
 # auth 接口与集成点
 
-## Controllers
+## 控制器
 
 - AuthController：/api/auth (backend/src/main/java/com/frontierscan/auth/AuthController.java)
 
-## HTTP Endpoints
+## HTTP 接口
 
 - POST /api/auth/login -> AuthController (backend/src/main/java/com/frontierscan/auth/AuthController.java)
 - POST /api/auth/me -> AuthController (backend/src/main/java/com/frontierscan/auth/AuthController.java)
 
-## 外部调用/集成提示
+## 外部调用与集成提示
 
-Needs AI Review: 自动基线只识别 Spring MVC 注解，复杂参数、权限、响应体和异常语义需由 L2 或人工补充。
+需要 AI 审核：自动基线只识别 Spring MVC 注解，复杂参数、权限、响应体和异常语义需由 L2 或人工补充。

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "f291aeb4-aa11-4e0b-b46a-8d6bdfefa0a8",
+  "storyId": "M3-001",
+  "phase": "code-review",
+  "status": "completed",
+  "summary": "Final review found no unresolved BLOCKER or WARNING after verified fixes.",
+  "outputs": [
+    {
+      "path": ".harness/runs/M3-001/phases/05-code-review/code-review-report.md"
+    }
+  ],
+  "records": [
+    {
+      "type": "review",
+      "status": "passed",
+      "path": ".harness/runs/M3-001/phases/05-code-review/code-review-report.md",
+      "message": "Harness M3 final code review passed with no unresolved BLOCKER or WARNING.",
+      "actor": "code-reviewer"
+    }
+  ]
+}

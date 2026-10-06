@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: collection
 doc_type: storage
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:989e52a4506cb7a3a3f671a7d940614b1270a0f23460cd17c63d2f182d89b958
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:4e9f1793b07cc45e7a704d995e2e646a580692abd1703f60cae725f4320b482f
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -33,14 +33,14 @@ source_files:
 
 # collection 存储基线
 
-## Entities / Tables
+## 实体与数据表
 
 - CollectionRun -> collection_runs (backend/src/main/java/com/frontierscan/collection/CollectionRun.java)
 
-## Repositories / Mappers
+## 数据仓库与映射器
 
 - CollectionRunRepository (backend/src/main/java/com/frontierscan/collection/CollectionRunRepository.java)
 
 ## 待增强说明
 
-Needs AI Review: 请结合 Flyway migration、索引、约束和查询模式补充数据语义。
+需要 AI 审核：请结合 Flyway 迁移、索引、约束和查询模式补充数据语义。

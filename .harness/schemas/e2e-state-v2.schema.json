@@ -1,0 +1,979 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/e2e-state-v2.schema.json",
+  "title": "FrontierScan E2E Harness State v2",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "path": { "type": "string", "minLength": 1, "pattern": "^(?!/|[A-Za-z]:|.*\\\\|.*(?:^|/)\\.\\.?/).+$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "pathArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/path" },
+      "uniqueItems": true
+    },
+    "nullableEvidence": {
+      "oneOf": [
+        {
+          "properties": {
+            "evidencePath": { "type": "null" },
+            "evidenceSha256": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "evidencePath": { "$ref": "#/$defs/path" },
+            "evidenceSha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      ]
+    },
+    "criterion": {
+      "type": "object",
+      "required": ["criterionId", "description", "source", "required"],
+      "properties": {
+        "criterionId": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "question": {
+      "type": "object",
+      "required": ["questionId", "question", "status", "resolution"],
+      "properties": {
+        "questionId": { "$ref": "#/$defs/id" },
+        "question": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "resolved"] },
+        "resolution": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "risk": {
+      "type": "object",
+      "required": ["riskId", "description", "severity", "mitigation"],
+      "properties": {
+        "riskId": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["low", "medium", "high"] },
+        "mitigation": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "remainingRisk": {
+      "type": "object",
+      "required": ["riskId", "description", "severity", "mitigation", "status", "approvalId"],
+      "properties": {
+        "riskId": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["low", "medium", "high"] },
+        "mitigation": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "accepted", "resolved"] },
+        "approvalId": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "knowledgeArea": {
+      "type": "object",
+      "required": [
+        "area", "relevant", "observedStatus", "status", "sourceFingerprint", "loadedFiles", "missing", "checkedAt",
+        "freshnessEvidencePath", "freshnessEvidenceSha256", "refreshTaskPath", "refreshTaskSha256",
+        "refreshReceiptPath", "refreshReceiptSha256", "approvalId"
+      ],
+      "properties": {
+        "area": { "$ref": "#/$defs/id" },
+        "relevant": { "type": "boolean" },
+        "observedStatus": { "enum": ["fresh", "stale", "missing", "not-relevant"] },
+        "status": { "enum": ["fresh", "stale", "missing", "accepted-stale", "not-relevant"] },
+        "sourceFingerprint": { "type": ["string", "null"], "minLength": 1 },
+        "loadedFiles": { "$ref": "#/$defs/pathArray" },
+        "missing": { "$ref": "#/$defs/stringArray" },
+        "checkedAt": { "type": ["string", "null"], "format": "date-time" },
+        "freshnessEvidencePath": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "freshnessEvidenceSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "refreshTaskPath": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "refreshTaskSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "refreshReceiptPath": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "refreshReceiptSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "approvalId": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] }
+      },
+      "additionalProperties": false
+    },
+    "testCase": {
+      "type": "object",
+      "required": ["caseId", "type", "required", "criterionIds", "expected"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["unit", "integration", "contract", "ui"] },
+        "required": { "type": "boolean" },
+        "criterionIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "expected": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "testCommand": {
+      "type": "object",
+      "required": ["commandId", "command", "status", "exitCode", "evidencePath", "evidenceSha256", "executedAt"],
+      "properties": {
+        "commandId": { "$ref": "#/$defs/id" },
+        "command": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["passed", "failed", "skipped", "blocked"] },
+        "exitCode": { "type": ["integer", "null"] },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [{ "$ref": "#/$defs/nullableEvidence" }],
+      "additionalProperties": false
+    },
+    "testResult": {
+      "type": "object",
+      "required": ["caseId", "status", "actual", "evidencePath", "evidenceSha256", "executedAt"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["passed", "failed", "skipped", "blocked"] },
+        "actual": { "type": "string", "minLength": 1 },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [{ "$ref": "#/$defs/nullableEvidence" }],
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "required": ["findingId", "severity", "status", "summary", "file", "line", "evidence"],
+      "properties": {
+        "findingId": { "$ref": "#/$defs/id" },
+        "severity": { "enum": ["BLOCKER", "WARNING", "INFO"] },
+        "status": { "enum": ["open", "resolved"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "file": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "line": { "type": ["integer", "null"], "minimum": 1 },
+        "evidence": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] }
+      },
+      "additionalProperties": false
+    },
+    "buildResult": {
+      "type": "object",
+      "required": ["buildId", "type", "status", "command", "evidencePath", "evidenceSha256", "executedAt"],
+      "properties": {
+        "buildId": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["backend", "frontend", "docker", "no-build"] },
+        "status": { "enum": ["passed", "failed", "skipped", "blocked"] },
+        "command": { "type": "string", "minLength": 1 },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [{ "$ref": "#/$defs/nullableEvidence" }],
+      "additionalProperties": false
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["artifactId", "type", "path", "sha256", "bytes"],
+      "properties": {
+        "artifactId": { "$ref": "#/$defs/id" },
+        "type": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/path" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "bytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "externalAction": {
+      "type": "object",
+      "required": ["actionId", "type", "status", "approvalId", "evidencePath", "evidenceSha256"],
+      "properties": {
+        "actionId": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["publish", "deploy", "docker-build", "docker-up", "docker-down"] },
+        "status": { "enum": ["not-requested", "approved", "executed", "blocked"] },
+        "approvalId": { "type": ["string", "null"], "minLength": 1 },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        { "$ref": "#/$defs/nullableEvidence" },
+        {
+          "if": { "properties": { "status": { "enum": ["approved", "executed"] } }, "required": ["status"] },
+          "then": { "properties": { "approvalId": { "type": "string", "minLength": 1 } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "verificationCase": {
+      "type": "object",
+      "required": ["caseId", "type", "required", "criterionIds", "action", "expected"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["api", "ui-flow", "manual"] },
+        "required": { "type": "boolean" },
+        "criterionIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "action": { "type": "string", "minLength": 1 },
+        "expected": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "verificationResult": {
+      "type": "object",
+      "required": ["caseId", "status", "actual", "evidencePath", "evidenceSha256", "approvalId", "executedAt"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["verified", "failed", "blocked", "accepted-with-known-gaps"] },
+        "actual": { "type": "string", "minLength": 1 },
+        "evidencePath": { "type": ["string", "null"] },
+        "evidenceSha256": { "type": ["string", "null"] },
+        "approvalId": { "type": ["string", "null"], "minLength": 1 },
+        "executedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        { "$ref": "#/$defs/nullableEvidence" },
+        {
+          "if": {
+            "properties": { "status": { "const": "accepted-with-known-gaps" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "evidencePath": { "$ref": "#/$defs/path" },
+              "evidenceSha256": { "$ref": "#/$defs/sha256" }
+            }
+          },
+          "else": {
+            "properties": { "approvalId": { "type": "null" } }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "formalApproval": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "approvalId",
+        "storyId",
+        "runId",
+        "phase",
+        "dispatchId",
+        "preparedRevision",
+        "subjectType",
+        "subjectId",
+        "subjectSha256",
+        "status",
+        "actor",
+        "reason",
+        "evidencePath",
+        "evidenceSha256",
+        "createdAt",
+        "receiptPath",
+        "receiptSha256"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "approvalId": { "$ref": "#/$defs/id" },
+        "storyId": { "$ref": "#/$defs/id" },
+        "runId": { "$ref": "#/$defs/id" },
+        "phase": { "enum": ["interface-verification", "technical-design"] },
+        "dispatchId": { "type": "string", "format": "uuid" },
+        "preparedRevision": { "type": "integer", "minimum": 1 },
+        "subjectType": { "enum": ["verification-gap", "knowledge-stale"] },
+        "subjectId": { "$ref": "#/$defs/id" },
+        "subjectSha256": { "$ref": "#/$defs/sha256" },
+        "status": { "const": "approved" },
+        "actor": { "const": "user" },
+        "reason": { "type": "string", "minLength": 1 },
+        "evidencePath": { "$ref": "#/$defs/path" },
+        "evidenceSha256": { "$ref": "#/$defs/sha256" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "receiptPath": { "$ref": "#/$defs/path" },
+        "receiptSha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "subjectType": { "const": "verification-gap" } },
+            "required": ["subjectType"]
+          },
+          "then": { "properties": { "phase": { "const": "interface-verification" } } },
+          "else": { "properties": { "phase": { "const": "technical-design" } } }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "phase",
+    "runtime",
+    "baseline",
+    "requirement",
+    "acceptance",
+    "knowledge",
+    "design",
+    "dag",
+    "implementation",
+    "tests",
+    "review",
+    "build",
+    "verification",
+    "delivery",
+    "approvals",
+    "worktrees",
+    "logs"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "storyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "phase": {
+      "enum": [
+        "requirement",
+        "technical-design",
+        "task-dag",
+        "implementation",
+        "unit-test",
+        "code-review",
+        "build-publish",
+        "interface-verification",
+        "delivery-preparation",
+        "done",
+        "blocked"
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "required": [
+        "runId",
+        "workflow",
+        "workflowVersion",
+        "status",
+        "revision",
+        "previousPhase",
+        "activeBlock",
+        "records",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+        "workflow": { "const": ".harness/workflows/e2e-development-v2.yaml" },
+        "workflowVersion": { "const": "2.0" },
+        "status": { "enum": ["template", "active", "blocked", "completed"] },
+        "revision": { "type": "integer", "minimum": 0 },
+        "previousPhase": { "type": ["string", "null"] },
+        "activeBlock": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["previousPhase", "reason", "owner", "suggestedAction", "blockedAt"],
+              "properties": {
+                "previousPhase": {
+                  "enum": [
+                    "requirement",
+                    "technical-design",
+                    "task-dag",
+                    "implementation",
+                    "unit-test",
+                    "code-review",
+                    "build-publish",
+                    "interface-verification",
+                    "delivery-preparation"
+                  ]
+                },
+                "reason": { "type": "string", "minLength": 1 },
+                "owner": { "type": "string", "minLength": 1 },
+                "suggestedAction": { "type": "string", "minLength": 1 },
+                "blockedAt": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "phase", "status", "path", "message", "actor", "createdAt"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "type": { "enum": ["output", "test", "review", "approval", "note", "phase-result"] },
+              "phase": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "minLength": 1 },
+              "path": { "type": ["string", "null"] },
+              "message": { "type": "string" },
+              "actor": { "type": "string", "minLength": 1 },
+              "createdAt": { "type": "string", "minLength": 1 },
+              "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+              "bytes": { "type": "integer", "minimum": 0 },
+              "dispatchId": { "type": "string", "minLength": 1 },
+              "preparedRevision": { "type": "integer", "minimum": 1 },
+              "appliedRevision": { "type": "integer", "minimum": 1 }
+            },
+            "allOf": [
+              {
+                "if": { "properties": { "type": { "const": "phase-result" } }, "required": ["type"] },
+                "then": {
+                  "required": [
+                    "id", "type", "phase", "status", "path", "sha256", "bytes", "message", "actor",
+                    "dispatchId", "preparedRevision", "appliedRevision", "createdAt"
+                  ],
+                  "properties": {
+                    "status": { "enum": ["applied", "blocked"] },
+                    "path": { "$ref": "#/$defs/path" },
+                    "sha256": { "$ref": "#/$defs/sha256" },
+                    "dispatchId": { "type": "string", "format": "uuid" }
+                  }
+                },
+                "else": {
+                  "not": {
+                    "anyOf": [
+                      { "required": ["bytes"] },
+                      { "required": ["dispatchId"] },
+                      { "required": ["preparedRevision"] },
+                      { "required": ["appliedRevision"] }
+                    ]
+                  }
+                }
+              }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "reworks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "reworkId",
+              "reason",
+              "actor",
+              "discoveredPhase",
+              "targetPhase",
+              "triggeredRevision",
+              "supersededDispatchIds",
+              "createdAt"
+            ],
+            "properties": {
+              "reworkId": { "type": "string", "format": "uuid" },
+              "reason": { "type": "string", "minLength": 1 },
+              "actor": { "type": "string", "minLength": 1 },
+              "discoveredPhase": { "const": "delivery-preparation" },
+              "targetPhase": { "const": "implementation" },
+              "triggeredRevision": { "type": "integer", "minimum": 1 },
+              "supersededDispatchIds": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "type": "string", "format": "uuid" }
+              },
+              "createdAt": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "createdAt": { "type": ["string", "null"] },
+        "updatedAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "baseline": {
+      "type": "object",
+      "required": ["head", "branch", "initialDirtyPaths", "capturedAt"],
+      "properties": {
+        "head": { "type": ["string", "null"], "pattern": "^[a-f0-9]{40}$" },
+        "branch": { "type": ["string", "null"] },
+        "initialDirtyPaths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "indexStatus", "worktreeStatus", "untracked"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "sourcePath": { "$ref": "#/$defs/path" },
+              "indexStatus": { "type": "string", "minLength": 1, "maxLength": 1 },
+              "worktreeStatus": { "type": "string", "minLength": 1, "maxLength": 1 },
+              "untracked": { "type": "boolean" }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "anyOf": [
+                    { "properties": { "indexStatus": { "enum": ["R", "C"] } }, "required": ["indexStatus"] },
+                    { "properties": { "worktreeStatus": { "enum": ["R", "C"] } }, "required": ["worktreeStatus"] }
+                  ]
+                },
+                "then": { "required": ["sourcePath"] },
+                "else": { "not": { "required": ["sourcePath"] } }
+              }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "capturedAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "requirement": {
+      "type": "object",
+      "required": ["summary", "openQuestions", "acceptanceCriteria", "inScope", "outOfScope"],
+      "properties": {
+        "summary": { "type": "string" },
+        "openQuestions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/question" }
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/criterion"
+          }
+        },
+        "inScope": { "$ref": "#/$defs/stringArray" },
+        "outOfScope": { "$ref": "#/$defs/stringArray" }
+      },
+      "additionalProperties": false
+    },
+    "acceptance": {
+      "type": "object",
+      "required": ["criteria"],
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "criterionId",
+              "required",
+              "taskIds",
+              "testCaseIds",
+              "verificationCaseIds",
+              "status",
+              "approvalIds"
+            ],
+            "properties": {
+              "criterionId": { "$ref": "#/$defs/id" },
+              "required": { "type": "boolean" },
+              "taskIds": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/id" },
+                "uniqueItems": true
+              },
+              "testCaseIds": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/id" },
+                "uniqueItems": true
+              },
+              "verificationCaseIds": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/id" },
+                "uniqueItems": true
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "verified",
+                  "accepted-with-known-gaps",
+                  "failed",
+                  "blocked"
+                ]
+              },
+              "approvalIds": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/id" },
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "knowledge": {
+      "type": "object",
+      "required": ["areas"],
+      "properties": {
+        "areas": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/knowledgeArea" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "design": {
+      "type": "object",
+      "required": ["decisions", "affectedAreas", "risks"],
+      "properties": {
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["decisionId", "summary", "rationale"],
+            "properties": {
+              "decisionId": { "$ref": "#/$defs/id" },
+              "summary": { "type": "string", "minLength": 1 },
+              "rationale": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "affectedAreas": { "$ref": "#/$defs/stringArray" },
+        "risks": { "type": "array", "items": { "$ref": "#/$defs/risk" } }
+      },
+      "additionalProperties": false
+    },
+    "dag": {
+      "type": "object",
+      "required": ["schemaVersion", "sourceFile", "sourceSha256", "nodes", "edges", "waves", "globalChanges", "risks"],
+      "properties": {
+        "schemaVersion": { "enum": [null, "2.0"] },
+        "sourceFile": { "type": ["string", "null"] },
+        "sourceSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+        "nodes": { "type": "array" },
+        "edges": { "type": "array" },
+        "waves": { "type": "array" },
+        "globalChanges": { "type": "array" },
+        "risks": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "implementation": {
+      "type": "object",
+      "required": ["method", "exceptionReason", "actualFiles", "completedTaskIds", "notes"],
+      "properties": {
+        "method": { "enum": [null, "tdd", "exception"] },
+        "exceptionReason": { "type": ["string", "null"] },
+        "actualFiles": { "$ref": "#/$defs/pathArray" },
+        "completedTaskIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "notes": { "$ref": "#/$defs/stringArray" }
+      },
+      "additionalProperties": false
+    },
+    "tests": {
+      "type": "object",
+      "required": ["cases", "commands", "results"],
+      "properties": {
+        "cases": { "type": "array", "items": { "$ref": "#/$defs/testCase" } },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/testCommand" } },
+        "results": { "type": "array", "items": { "$ref": "#/$defs/testResult" } }
+      },
+      "additionalProperties": false
+    },
+    "review": {
+      "type": "object",
+      "required": ["findings", "status"],
+      "properties": {
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "status": { "enum": ["pending", "passed", "blocked"] }
+      },
+      "additionalProperties": false
+    },
+    "build": {
+      "type": "object",
+      "required": ["results", "artifacts", "externalActions"],
+      "properties": {
+        "results": { "type": "array", "items": { "$ref": "#/$defs/buildResult" } },
+        "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+        "externalActions": { "type": "array", "items": { "$ref": "#/$defs/externalAction" } }
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "required": ["cases", "results", "environment"],
+      "properties": {
+        "cases": { "type": "array", "items": { "$ref": "#/$defs/verificationCase" } },
+        "results": { "type": "array", "items": { "$ref": "#/$defs/verificationResult" } },
+        "environment": {
+          "type": "object",
+          "required": ["status", "summary", "evidencePath", "evidenceSha256"],
+          "properties": {
+            "status": { "enum": ["not-checked", "available", "unavailable"] },
+            "summary": { "type": "string" },
+            "evidencePath": { "type": ["string", "null"] },
+            "evidenceSha256": {
+              "type": ["string", "null"],
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "delivery": {
+      "type": "object",
+      "required": [
+        "status",
+        "ownedFiles",
+        "outOfPredictionFiles",
+        "unrelatedDirtyFiles",
+        "remainingRisks",
+        "summaryFile",
+        "summarySha256",
+        "ownedManifestFile",
+        "ownedManifestSha256",
+        "gitStatus"
+      ],
+      "properties": {
+        "status": { "enum": ["pending", "ready", "blocked"] },
+        "ownedFiles": { "$ref": "#/$defs/pathArray" },
+        "outOfPredictionFiles": { "$ref": "#/$defs/pathArray" },
+        "unrelatedDirtyFiles": { "$ref": "#/$defs/pathArray" },
+        "remainingRisks": { "type": "array", "items": { "$ref": "#/$defs/remainingRisk" } },
+        "summaryFile": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "summarySha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "ownedManifestFile": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/path" }] },
+        "ownedManifestSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+        "gitStatus": { "enum": ["not-requested", "requested"] }
+      },
+      "additionalProperties": false
+    },
+    "approvals": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/formalApproval" }
+    },
+    "worktrees": { "type": "array" },
+    "logs": { "type": "array" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "delivery": {
+            "properties": { "summaryFile": { "type": "null" } },
+            "required": ["summaryFile"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "delivery": {
+            "properties": { "summarySha256": { "type": "null" } }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "delivery": {
+            "properties": { "summarySha256": { "$ref": "#/$defs/sha256" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "delivery": {
+            "properties": { "ownedManifestFile": { "type": "null" } },
+            "required": ["ownedManifestFile"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "delivery": {
+            "properties": { "ownedManifestSha256": { "type": "null" } }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "delivery": {
+            "properties": { "ownedManifestSha256": { "$ref": "#/$defs/sha256" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "delivery": {
+            "properties": { "status": { "const": "ready" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "delivery": {
+            "properties": {
+              "summaryFile": { "$ref": "#/$defs/path" },
+              "summarySha256": { "$ref": "#/$defs/sha256" },
+              "ownedManifestFile": { "$ref": "#/$defs/path" },
+              "ownedManifestSha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "template" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "revision": { "const": 0 },
+              "createdAt": { "type": "null" },
+              "updatedAt": { "type": "null" }
+            }
+          },
+          "baseline": {
+            "properties": {
+              "head": { "type": "null" },
+              "branch": { "type": "null" },
+              "capturedAt": { "type": "null" }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "revision": { "type": "integer", "minimum": 1 },
+              "createdAt": { "type": "string", "minLength": 1 },
+              "updatedAt": { "type": "string", "minLength": 1 }
+            }
+          },
+          "baseline": {
+            "properties": {
+              "head": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+              "branch": { "type": "string", "minLength": 1 },
+              "capturedAt": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "template" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": { "phase": { "const": "requirement" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "blocked" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "phase": { "const": "blocked" },
+          "runtime": {
+            "properties": { "activeBlock": { "type": "object" } },
+            "required": ["activeBlock"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "runtime": {
+            "properties": { "activeBlock": { "type": "null" } },
+            "required": ["activeBlock"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "completed" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": { "phase": { "const": "done" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "active" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "phase": {
+            "enum": [
+              "requirement",
+              "technical-design",
+              "task-dag",
+              "implementation",
+              "unit-test",
+              "code-review",
+              "build-publish",
+              "interface-verification",
+              "delivery-preparation"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "blocked" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "blocked" } },
+            "required": ["status"]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "done" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": { "status": { "const": "completed" } },
+            "required": ["status"]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

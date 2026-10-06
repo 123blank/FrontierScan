@@ -23,3 +23,7 @@ Severity values:
 ## Summary
 
 TBD
+
+## Result Payload
+
+`findings`、`status`

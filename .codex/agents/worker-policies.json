@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "1.0",
+  "roles": [
+    {
+      "name": "product-analyst",
+      "category": "planning",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/"],
+      "writePathPrefixes": [".harness/runs/"],
+      "capabilities": ["phase-output"]
+    },
+    {
+      "name": "requirement-analyst",
+      "category": "planning",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/"],
+      "writePathPrefixes": [".harness/runs/"],
+      "capabilities": ["phase-output"]
+    },
+    {
+      "name": "task-planner",
+      "category": "planning",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/"],
+      "writePathPrefixes": [".harness/runs/"],
+      "capabilities": ["phase-output"]
+    },
+    {
+      "name": "backend-developer",
+      "category": "execution",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/", "backend/"],
+      "writePathPrefixes": [".harness/runs/", "backend/src/"],
+      "capabilities": ["phase-output", "backend-write"]
+    },
+    {
+      "name": "frontend-developer",
+      "category": "execution",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/", "frontend/"],
+      "writePathPrefixes": [".harness/runs/", "frontend/src/"],
+      "capabilities": ["phase-output", "frontend-write"]
+    },
+    {
+      "name": "code-fixer",
+      "category": "execution",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/", "backend/", "frontend/"],
+      "writePathPrefixes": [".harness/runs/", "backend/src/", "frontend/src/"],
+      "capabilities": ["phase-output", "backend-write", "frontend-write"]
+    },
+    {
+      "name": "unit-tester",
+      "category": "verification",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/", "backend/", "frontend/"],
+      "writePathPrefixes": [".harness/runs/", "backend/src/test/"],
+      "capabilities": ["phase-output", "backend-test-write"]
+    },
+    {
+      "name": "test-case-designer",
+      "category": "verification",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/", "backend/", "frontend/"],
+      "writePathPrefixes": [".harness/runs/"],
+      "capabilities": ["phase-output"]
+    },
+    {
+      "name": "interface-verifier",
+      "category": "verification",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/", "backend/", "frontend/"],
+      "writePathPrefixes": [".harness/runs/"],
+      "capabilities": ["phase-output"]
+    },
+    {
+      "name": "code-reviewer",
+      "category": "review",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", ".codex/skills/", "docs/", "llm-knowledge/", "backend/", "frontend/"],
+      "writePathPrefixes": [".harness/runs/"],
+      "capabilities": ["phase-output"]
+    },
+    {
+      "name": "publisher",
+      "category": "integration",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", "docs/", "backend/", "frontend/"],
+      "writePathPrefixes": [".harness/runs/"],
+      "capabilities": ["phase-output"]
+    },
+    {
+      "name": "git-committer",
+      "category": "integration",
+      "readPathPrefixes": ["AGENTS.md", ".harness/", "docs/", "backend/", "frontend/"],
+      "writePathPrefixes": [".harness/runs/"],
+      "capabilities": ["phase-output"]
+    }
+  ]
+}

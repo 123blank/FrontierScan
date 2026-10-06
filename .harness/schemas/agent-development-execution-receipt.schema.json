@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-development-execution-receipt.schema.json",
+  "title": "FrontierScan Agent Development Execution Receipt",
+  "type": "object",
+  "required": ["schemaVersion", "providerExecutionId", "providerRequestId", "dispatchId", "storyId", "runId", "phase", "taskId", "role", "profile", "adapter", "requestedModel", "reportedModel", "modelSource", "adapterVersion", "sandbox", "workingRoot", "writeIsolation", "requestFile", "requestSha256", "responseFile", "responseSha256", "stdoutFile", "stdoutSha256", "stderrFile", "stderrSha256", "startedAt", "finishedAt", "exitCode", "status", "diagnostics"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"}, "providerExecutionId": {"type": "string", "format": "uuid"}, "providerRequestId": {"type": "string", "format": "uuid"}, "dispatchId": {"type": "string", "format": "uuid"},
+    "storyId": {"type": "string"}, "runId": {"type": "string"}, "phase": {"const": "implementation"}, "taskId": {"type": "string"}, "role": {"enum": ["backend-developer", "frontend-developer"]},
+    "profile": {"type": "string"}, "adapter": {"const": "codex-cli"}, "requestedModel": {"type": ["string", "null"]}, "reportedModel": {"type": ["string", "null"]},
+    "modelSource": {"enum": ["runtime-override", "local-config", "project-config", "builtin-default"]}, "adapterVersion": {"type": "string"},
+    "sandbox": {"const": "workspace-write"}, "workingRoot": {"type": "string"}, "writeIsolation": {"const": "task-worktree-workspace-write"},
+    "requestFile": {"type": "string"}, "requestSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "responseFile": {"type": "string"}, "responseSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "stdoutFile": {"type": "string"}, "stdoutSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "stderrFile": {"type": "string"}, "stderrSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "startedAt": {"type": "string", "format": "date-time"}, "finishedAt": {"type": "string", "format": "date-time"}, "exitCode": {"type": ["integer", "null"]},
+    "status": {"enum": ["completed", "failed", "timed-out", "invalid-response", "output-limit", "integrity-violation", "execution-indeterminate"]},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

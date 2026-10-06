@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/knowledge-refresh-task.schema.json",
+  "title": "FrontierScan Knowledge Refresh Task",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "refreshTaskId",
+    "storyId",
+    "runId",
+    "dispatchId",
+    "preparedRevision",
+    "area",
+    "parameters",
+    "protectedAreas",
+    "reason",
+    "sourcePaths",
+    "customSnapshots",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "refreshTaskId": { "type": "string", "pattern": "^KRT-[a-f0-9]{32}$" },
+    "storyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "area": { "enum": ["backend", "frontend", "common"] },
+    "parameters": {
+      "type": "object",
+      "required": ["area", "module", "mode"],
+      "properties": {
+        "area": { "enum": ["backend", "frontend", "common"] },
+        "module": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+          ]
+        },
+        "mode": { "enum": ["baseline", "semantic", "all"] }
+      },
+      "additionalProperties": false
+    },
+    "protectedAreas": {
+      "type": "array",
+      "items": { "enum": ["backend", "frontend", "common"] },
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "reason": { "type": "string", "minLength": 1 },
+    "sourcePaths": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "customSnapshots": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/areaSnapshot" },
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "fileSnapshot": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "areaSnapshot": {
+      "type": "object",
+      "required": ["area", "files"],
+      "properties": {
+        "area": { "enum": ["backend", "frontend", "common"] },
+        "files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fileSnapshot" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

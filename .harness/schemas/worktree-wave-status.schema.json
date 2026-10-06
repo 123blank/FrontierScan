@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-status.schema.json",
+  "title": "FrontierScan Harness Worktree Wave Status",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "runId",
+    "wave",
+    "wavePlanSha256",
+    "taskDagSha256",
+    "state",
+    "baseRef",
+    "baseCommit",
+    "tasks",
+    "observedAt",
+    "details"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "wave": { "type": "integer", "minimum": 1 },
+    "wavePlanSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "taskDagSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "state": { "type": "string", "enum": ["absent", "partial", "ready"] },
+    "baseRef": { "type": "string", "minLength": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "tasks": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["taskId", "state", "branch", "worktreePath", "headCommit", "details"],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "state": { "type": "string", "enum": ["absent", "branch-only", "created"] },
+          "branch": { "type": "string", "minLength": 1 },
+          "worktreePath": { "type": "string", "minLength": 1 },
+          "headCommit": { "type": ["string", "null"] },
+          "details": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "details": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

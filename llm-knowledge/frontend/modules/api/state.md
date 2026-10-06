@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: api
 doc_type: state
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:3e142de410653b7af917a1ce1d4ed598a58ccd3b2032b732bb3aa148c2fa1e70
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:0fc4832ffc61a9dfb5cdb9dbcefe9e6a1bad9c7ac2d22a61cb8adabb9e5ae2df
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -22,4 +22,4 @@ source_files:
 
 - 暂无自动识别结果。
 
-Needs AI Review: 跨页面状态、localStorage、鉴权状态和缓存刷新策略需补充。
+需要 AI 审核：跨页面状态、localStorage、鉴权状态和缓存刷新策略需补充。

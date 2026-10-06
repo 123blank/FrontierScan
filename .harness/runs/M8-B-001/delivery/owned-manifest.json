@@ -1,0 +1,241 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M8-B-001",
+  "runId": "M8-B-001",
+  "baselineHead": "6c3553298fe6e6b638a221c689eaf794f6dfa87a",
+  "entries": [
+    {
+      "path": ".harness/config/agent-providers.json",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:182a4a329fa8f3054242cc7a667dd949e18f8bffc01f78dbf4d44085ceb304d0",
+      "blobOid": "571b340ac1af5138565f32ff1e61dff2173237fd",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-development-candidate-manifest.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:433ed5df5f897bee799dee0889111976159c08e9f0773f0b556b0ad61e28f412",
+      "blobOid": "4dd43bdc72b1dacc2e88fbe625a9fc8c07745f31",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-development-context.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:f0bcb3d84be82e8c5a5534fe346b71b3cf06772c3eba9665734e0637c69ec381",
+      "blobOid": "46268fe76ef47758f9e20cbc9b38eb1cfbf72947",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-development-execution-receipt.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:567a7badfb680f059a175df01759b856935101bca0a1756f0fdbd02e862bef23",
+      "blobOid": "8d07f2577252781d51e60edd06f70346dea6e8ae",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-development-receipt.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:fda244e88e3794473b1213a1c2d9f1c64bbd8e6a7d08e18c83f7d7881763bf05",
+      "blobOid": "2560221eaf3afa81a7f86f7e72e32c6f2b8f295a",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-development-request.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:7682eb86d3a1530c62e8dcfbd9d61325855e55bee64fd33a94e80e6158859986",
+      "blobOid": "e3450881e0632b6bbd3d725c32f3e6271c67c5aa",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-development-response.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:4b5ea9e3aa86cd9bdfe783ca065a193402aa1bd9e5a262b7012ab4f7c015b891",
+      "blobOid": "85337c1aaf12f05f3af048385348420b12f53c57",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/agent-development-test-receipt.schema.json",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:454ee442a2cd7e53fed7d7d9f96adf3bbbfa364d5a28c5cafbe93ce80e5d8b43",
+      "blobOid": "dc0969ba93dd88e794c08d71f5f0ab2f422c7b72",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/schemas/worktree-integration-plan.schema.json",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:a662667c1eeb3228fbc213a27fcabcdbf4d20efa4f6bcba2bed9fd56945c3df5",
+      "blobOid": "7607116fc646b1e9afcbe06e0bca7a9e92ad7873",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/delivery-runtime.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:287a1ca6baec91887260bcb2f7d0c2865fd6988a044cc4e76ea1e0730d9b9cd6",
+      "blobOid": "4fd73ad344305df3c9a7a7aeff7745ede1064b44",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/development-provider-context.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:753e0412f7a304ce2af09a0de519a66be8549f36be45ca687ac9ec437701c17e",
+      "blobOid": "00da9c04a6f22ef27a587129e9f7ff47a77b1645",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/development-provider-contract.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:e7bc083988d7898a64727270a22bf6311179dfa01ded898fb0bd347b5d08dec4",
+      "blobOid": "8802f29f647d89f751fc3d5805ed736691ca96bd",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/development-provider-runtime.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:e6c6101c9b993353bb70ef4b2a7253cb8ce1b38c416bb15f97bf6cd4755e8318",
+      "blobOid": "def711ddcb66a0891a5be1a3c2d168fb4c67f244",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/e2e-runtime.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:2d64a02fa5fb6e6c2b288144868796cb77e15622a5d9092da3c51d42ea14e101",
+      "blobOid": "de341938eee81bd0e7a0abdfa40c9a2b584104b0",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/provider-adapters/codex-cli.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:96aa1d5dcbb187cec3114ae7197067546a8a1f088ff39fb0ebbd982c82ce8a66",
+      "blobOid": "eaf1cea50098fc3ce645af968d4b4bcbb2467b4f",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/story-runtime.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:2fd7f206ddc3928a970e3496542d9e13fab630e5f054c43eeb15e3f6891687ee",
+      "blobOid": "09956b26f1b58b0ca3d236b0dc4ed557c193b66d",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/worktree-integration-runtime.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:a2351a600e801fb54436bc5b8fa8b465f763340ef51b39fb98b985ac8c50df9b",
+      "blobOid": "ad44d7df7ec99658b086d4766638ff610e259029",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/lib/worktree-runtime.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:102be6bf7d917a3ac4796f94b35c8663f6a993307b09e14713a692969a256706",
+      "blobOid": "f63252c824685e8ca44b6e7fe0b64f27e4eb47e3",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/run-development-provider.ps1",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:1b69077013e1a1222e889ee877a92634aba34c8a81d3397fe6248aa1055059cf",
+      "blobOid": "c9e9a7a980d8589ccd3e1a66c91ff8c23bbb85ee",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/codex-cli-development-provider.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:d44cdff511dd4ea046ff1fa12db8bfb3506d0f3bab84e97c00b538d63caf16a9",
+      "blobOid": "e3c6a9dff8fdfdd156241521b3b795e9b828578d",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/delivery-runtime.test.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:20cdbf678a3fc705fea29e6fb3ec72912b603773730cbda992e7ecd4607717d6",
+      "blobOid": "16b3823d4adb3b4f7066ec3e4089fc4e139d827e",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/development-provider-cli.test.ps1",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:7265e74a93ec25fab2a0e462afa01f7d1e2dd4730b18e512aee71ab32820ecd5",
+      "blobOid": "4ce9a117f10e80990c6b12aa2bf656b251613cdf",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/development-provider-context.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:2d9af40fd6dc0aaec637d1e8f1e4f8e12ad06f8601ede1301a7427437ec07add",
+      "blobOid": "8a790577fee2273b45dc4ca5d2ef744bd1631788",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/development-provider-contract.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:cd8d0ce8999bc5bf562c1fc0caa512c0ae7b5c3605ea125243ca13d9a44572a5",
+      "blobOid": "057db53e2084d13e7c94fe2ff5691713747c3fd1",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/development-provider-e2e.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:06b9d3bfb63cb241e5937166d209945735c9b7c5e96b3eeeb17187111741a491",
+      "blobOid": "f0e2d0423a9e8f44c3b46ab8d7f97aa47c478d8a",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/development-provider-runtime.test.mjs",
+      "changeKind": "added",
+      "sourcePath": null,
+      "contentSha256": "sha256:2f3e077d52d23214de502167807bc188244663022718a627a2cdef4e0de30ccd",
+      "blobOid": "698a2288fdbd2114e28c4ba65860718d648a17c0",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/e2e-runtime.test.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:3fc9c083b7fe579b0e277498102bd8bb81b83abf31945fc83a4083cc81efc701",
+      "blobOid": "2a36b3ec25d238e693281375e3f6f5801166d3e5",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/provider-config.test.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:406df8e19962c49fe0789152b5b27551a69aac43afe78bd7418972b10806f60b",
+      "blobOid": "016caa3c0842af7a137a1778c50a7ff205da2e20",
+      "mode": "100644"
+    },
+    {
+      "path": ".harness/scripts/tests/worktree-integration-runtime.test.mjs",
+      "changeKind": "modified",
+      "sourcePath": null,
+      "contentSha256": "sha256:ffcccb88dcf5998c229e65d2c70ba26cb3b28f26ef03e93b7c807f1fce63c1ea",
+      "blobOid": "8e611a065eb2e43f6dbad710ee6435f4c7c2e0df",
+      "mode": "100644"
+    }
+  ],
+  "generatedAt": "2026-08-23T10:03:47.414Z"
+}

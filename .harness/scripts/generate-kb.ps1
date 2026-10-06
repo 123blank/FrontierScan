@@ -47,3 +47,7 @@ if ($Json) {
 }
 
 & node @arguments
+$nodeExitCode = $LASTEXITCODE
+if ($nodeExitCode -ne 0) {
+  exit $nodeExitCode
+}

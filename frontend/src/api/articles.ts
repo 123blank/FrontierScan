@@ -18,6 +18,7 @@ export const articleApi = {
     tagId?: number;
     startDate?: string;
     endDate?: string;
+    readStatus?: 'all' | 'read' | 'unread';
     page?: number;
     size?: number;
   }) {
@@ -30,6 +31,14 @@ export const articleApi = {
   /** 获取文章详情 */
   get(id: number) {
     return apiClient.get<ApiResponse<Article>>(`/articles/${id}`);
+  },
+  /** 标记文章已读 */
+  markRead(id: number) {
+    return apiClient.put<ApiResponse<Article>>(`/articles/${id}/read`);
+  },
+  /** 标记文章未读 */
+  markUnread(id: number) {
+    return apiClient.delete<ApiResponse<Article>>(`/articles/${id}/read`);
   },
   /** 重新生成文章摘要 */
   retrySummary(id: number) {

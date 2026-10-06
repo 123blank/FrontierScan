@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "13998512-7eb1-4f76-ac34-e66f97ac9d83",
+  "storyId": "M3-001",
+  "phase": "unit-test",
+  "status": "completed",
+  "preparedAt": "2026-07-16T14:47:07.613Z",
+  "updatedAt": "2026-07-16T14:58:32.294Z",
+  "adapterRuns": [
+    {
+      "adapter": "harness-m3-tests",
+      "status": "passed",
+      "evidencePath": ".harness/runs/M3-001/phases/04-unit-test/evidence/harness-m3-tests.json",
+      "finishedAt": "2026-07-16T14:56:30.159Z"
+    },
+    {
+      "adapter": "harness-state-tests",
+      "status": "passed",
+      "evidencePath": ".harness/runs/M3-001/phases/04-unit-test/evidence/harness-state-tests.json",
+      "finishedAt": "2026-07-16T14:56:38.845Z"
+    },
+    {
+      "adapter": "harness-structure",
+      "status": "passed",
+      "evidencePath": ".harness/runs/M3-001/phases/04-unit-test/evidence/harness-structure.json",
+      "finishedAt": "2026-07-16T14:56:41.001Z"
+    }
+  ],
+  "resultReceivedAt": "2026-07-16T14:58:32.294Z",
+  "completedAt": "2026-07-16T14:58:32.294Z"
+}

@@ -19,3 +19,7 @@ TBD
 | Test/Gate | Reason | Risk |
 | --- | --- | --- |
 | TBD | TBD | TBD |
+
+## Result Payload
+
+`cases`、`commands`、`results`

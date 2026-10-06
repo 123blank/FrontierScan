@@ -222,6 +222,10 @@ function Select-IndexMatches {
       }
     }
 
+    if ($matchedTerms -eq 0) {
+      continue
+    }
+
     if ($matchedTerms -eq $terms.Count) {
       $score += 10
     }
@@ -353,14 +357,18 @@ Write-Output "Mode: ${Mode}"
 Write-Output "Area: ${Area}"
 Write-Output "Query: ${Query}"
 
+$indexFreshness = Get-IndexFreshness -KnowledgeRoot $knowledgeRoot -RepoRoot $Root -SelectedArea $Area
+Write-Output "Index freshness: $($indexFreshness.Status) (semantic=$($indexFreshness.Semantic), embeddings=$($indexFreshness.Embeddings))"
+if ($indexFreshness.Reason) {
+  Write-Output "Index freshness reason: $($indexFreshness.Reason)"
+}
+if ($indexFreshness.Status -ne "fresh") {
+  Write-Output "Knowledge warning: index is not fresh; verify returned matches against source files."
+}
+
 $indexResults = @(Select-IndexMatches -KnowledgeRoot $knowledgeRoot -Needle $Query -SelectedArea $Area -SelectedMode $Mode -Limit $MaxMatches)
 if ($indexResults.Count -gt 0) {
-  $indexFreshness = Get-IndexFreshness -KnowledgeRoot $knowledgeRoot -RepoRoot $Root -SelectedArea $Area
   Write-Output "Source: llm-knowledge/index/chunks.json"
-  Write-Output "Index freshness: $($indexFreshness.Status) (semantic=$($indexFreshness.Semantic), embeddings=$($indexFreshness.Embeddings))"
-  if ($indexFreshness.Reason) {
-    Write-Output "Index freshness reason: $($indexFreshness.Reason)"
-  }
   Write-Output "Matches: $($indexResults.Count)"
   foreach ($result in $indexResults) {
     Write-Output "- score=$($result.Score) area=$($result.Area) module=$($result.Module) doc=$($result.DocType) baseline=$($result.BaselineStatus) semantic=$($result.SemanticStatus) path=$($result.Path): $($result.Text)"

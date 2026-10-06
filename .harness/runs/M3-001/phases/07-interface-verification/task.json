@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "2e8e16da-8510-4569-93b8-53312547aa3f",
+  "storyId": "M3-001",
+  "phase": "interface-verification",
+  "ownerAgent": "interface-verifier",
+  "purpose": "Verify API/UI behavior against acceptance criteria where an environment is available.",
+  "preparedRevision": 18,
+  "preparedAt": "2026-07-16T15:10:49.632Z",
+  "expectedOutputs": [
+    ".harness/runs/M3-001/phases/07-interface-verification/interface-verification-report.md"
+  ],
+  "allowedAdapters": [],
+  "next": "git-delivery"
+}

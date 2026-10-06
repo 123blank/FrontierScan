@@ -20,3 +20,81 @@
 - 2026-07-11T17:33:01.128Z: generate-kb mode=baseline, semantic_status=pending
 
 - 2026-07-11T17:38:46.678Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-07-13T03:38:04.038Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-07-13T06:37:01.284Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-07-15T03:45:44.398Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-07-15T08:13:34.848Z: generate-kb mode=semantic, semantic_status=failed
+
+- 2026-07-15T08:18:09.362Z: generate-kb mode=semantic, semantic_status=failed
+
+- 2026-07-15T08:58:18.293Z: generate-kb mode=semantic, semantic_status=failed
+
+- 2026-07-15T13:10:42.457Z: generate-kb mode=semantic, semantic_status=failed
+
+- 2026-07-15T13:16:58.266Z: generate-kb mode=semantic, semantic_status=fresh
+
+- 2026-07-15T13:30:48.821Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-15T13:35:39.137Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-15T13:48:58.533Z: generate-kb mode=semantic, semantic_status=fresh
+
+- 2026-07-15T14:08:48.750Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-15T14:53:50.592Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-15T15:00:02.197Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-15T15:45:26.999Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-15T15:48:15.724Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T02:42:46.675Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T03:45:01.900Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T03:48:06.501Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T05:37:32.467Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T05:43:26.410Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T06:28:46.889Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T06:30:41.409Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T07:34:22.262Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T07:39:13.768Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T08:16:58.316Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T08:21:42.704Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T08:51:47.497Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T14:55:20.865Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T15:06:29.337Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-16T15:13:11.540Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-07-28T16:41:12.137Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-08-14T09:26:02.473Z: generate-kb mode=baseline, semantic_status=fresh
+
+- 2026-08-14T09:26:27.199Z: generate-kb mode=semantic, semantic_status=failed
+
+- 2026-08-14T09:28:32.334Z: generate-kb mode=semantic, semantic_status=pending
+
+- 2026-08-18T08:26:55.918Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-08-21T09:54:30.279Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-08-23T09:23:47.445Z: generate-kb mode=baseline, semantic_status=pending
+
+- 2026-08-23T10:10:03.337Z: generate-kb mode=baseline, semantic_status=pending

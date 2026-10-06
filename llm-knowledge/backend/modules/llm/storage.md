@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: llm
 doc_type: storage
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:109e1ad7eb8d9914a617ea97266b44398468c426bf665808e0e74d2313e753dc
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:5862707da6dc63e015b169d263bc4240c28c694d02c2070395d54422159c6615
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -40,14 +40,14 @@ source_files:
 
 # llm 存储基线
 
-## Entities / Tables
+## 实体与数据表
 
 - ArticleTagMapping -> article_tags (backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMapping.java)
 - TagDomain -> tag_domains (backend/src/main/java/com/frontierscan/llm/tag/TagDomain.java)
 - ArticleTagMappingPo -> article_tags (backend/src/main/java/com/frontierscan/llm/tag/mp/ArticleTagMappingPo.java)
 - TagDomainPo -> tag_domains (backend/src/main/java/com/frontierscan/llm/tag/mp/TagDomainPo.java)
 
-## Repositories / Mappers
+## 数据仓库与映射器
 
 - ArticleTagMappingRepository (backend/src/main/java/com/frontierscan/llm/tag/ArticleTagMappingRepository.java)
 - TagDomainRepository (backend/src/main/java/com/frontierscan/llm/tag/TagDomainRepository.java)
@@ -56,4 +56,4 @@ source_files:
 
 ## 待增强说明
 
-Needs AI Review: 请结合 Flyway migration、索引、约束和查询模式补充数据语义。
+需要 AI 审核：请结合 Flyway 迁移、索引、约束和查询模式补充数据语义。

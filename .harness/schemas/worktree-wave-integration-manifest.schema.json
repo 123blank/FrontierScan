@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-integration-manifest.schema.json",
+  "title": "FrontierScan Harness Wave Integration Manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "freezeId",
+    "storyId",
+    "runId",
+    "phase",
+    "waveId",
+    "waveIndex",
+    "preparedRevision",
+    "taskDagFile",
+    "taskDagSha256",
+    "wavePlanFile",
+    "wavePlanSha256",
+    "creationReceiptFile",
+    "creationReceiptSha256",
+    "baseCommit",
+    "mainHeadCommit",
+    "businessStatusSnapshot",
+    "tasks",
+    "candidateFiles",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "freezeId": { "type": "string", "minLength": 1 },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "phase": { "const": "implementation" },
+    "waveId": { "type": "string", "pattern": "^wave-[a-f0-9]{16}$" },
+    "waveIndex": { "type": "integer", "minimum": 1 },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "taskDagFile": { "type": "string", "minLength": 1 },
+    "taskDagSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "wavePlanFile": { "type": "string", "minLength": 1 },
+    "wavePlanSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "creationReceiptFile": { "type": "string", "minLength": 1 },
+    "creationReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "mainHeadCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "businessStatusSnapshot": {
+      "type": "object",
+      "required": ["businessChanges", "phaseArtifacts"],
+      "properties": {
+        "businessChanges": { "type": "array", "maxItems": 0 },
+        "phaseArtifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "exists", "sha256", "bytes"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "exists": { "type": "boolean" },
+              "sha256": {
+                "type": ["string", "null"],
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              "bytes": { "type": ["integer", "null"], "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "dispatchId",
+          "taskFile",
+          "taskSha256",
+          "checkpointFile",
+          "checkpointSha256",
+          "attemptId",
+          "resultFile",
+          "resultSha256",
+          "executionReceiptFile",
+          "executionReceiptSha256",
+          "worktreePath",
+          "headCommit",
+          "predictedFiles"
+        ],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "dispatchId": { "type": "string", "format": "uuid" },
+          "taskFile": { "type": "string", "minLength": 1 },
+          "taskSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "checkpointFile": { "type": "string", "minLength": 1 },
+          "checkpointSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "attemptId": { "type": "string", "minLength": 1 },
+          "resultFile": { "type": "string", "minLength": 1 },
+          "resultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "executionReceiptFile": { "type": "string", "minLength": 1 },
+          "executionReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "worktreePath": { "type": "string", "minLength": 1 },
+          "headCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+          "predictedFiles": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "candidateFiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["taskId", "path", "type", "sha256", "bytes"],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["backend", "frontend", "phase-output"] },
+          "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

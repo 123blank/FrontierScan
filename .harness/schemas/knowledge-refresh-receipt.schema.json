@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/knowledge-refresh-receipt.schema.json",
+  "title": "FrontierScan Knowledge Refresh Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "refreshId",
+    "storyId",
+    "runId",
+    "dispatchId",
+    "preparedRevision",
+    "area",
+    "refreshTaskPath",
+    "refreshTaskSha256",
+    "parameters",
+    "protectedAreas",
+    "beforeFreshnessEvidencePath",
+    "beforeFreshnessEvidenceSha256",
+    "afterFreshnessEvidencePath",
+    "afterFreshnessEvidenceSha256",
+    "beforeCustomSnapshots",
+    "afterCustomSnapshots",
+    "generatedFiles",
+    "indexManifest",
+    "logFiles",
+    "status",
+    "completedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "refreshId": { "type": "string", "pattern": "^KRR-[a-f0-9]{32}$" },
+    "storyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "preparedRevision": { "type": "integer", "minimum": 1 },
+    "area": { "enum": ["backend", "frontend", "common"] },
+    "refreshTaskPath": { "type": "string", "minLength": 1 },
+    "refreshTaskSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "parameters": { "$ref": "knowledge-refresh-task.schema.json#/properties/parameters" },
+    "protectedAreas": { "$ref": "knowledge-refresh-task.schema.json#/properties/protectedAreas" },
+    "beforeFreshnessEvidencePath": { "type": "string", "minLength": 1 },
+    "beforeFreshnessEvidenceSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "afterFreshnessEvidencePath": { "type": "string", "minLength": 1 },
+    "afterFreshnessEvidenceSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "beforeCustomSnapshots": {
+      "type": "array",
+      "items": { "$ref": "knowledge-refresh-task.schema.json#/$defs/areaSnapshot" },
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "afterCustomSnapshots": {
+      "type": "array",
+      "items": { "$ref": "knowledge-refresh-task.schema.json#/$defs/areaSnapshot" },
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "generatedFiles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifactEvidence" }
+    },
+    "indexManifest": {
+      "allOf": [
+        { "$ref": "#/$defs/artifactEvidence" },
+        {
+          "properties": {
+            "path": { "const": "llm-knowledge/index/manifest.json" }
+          }
+        }
+      ]
+    },
+    "logFiles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifactEvidence" },
+      "uniqueItems": true
+    },
+    "status": { "const": "completed" },
+    "completedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "artifactEvidence": {
+      "type": "object",
+      "required": ["path", "sha256", "evidencePath", "evidenceSha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "evidencePath": { "type": "string", "minLength": 1 },
+        "evidenceSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

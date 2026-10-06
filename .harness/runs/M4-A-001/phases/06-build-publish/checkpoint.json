@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "647d32a6-c850-4f9a-9c4b-6aab91960784",
+  "storyId": "M4-A-001",
+  "phase": "build-publish",
+  "status": "completed",
+  "preparedAt": "2026-07-17T07:50:41.718Z",
+  "updatedAt": "2026-07-17T07:52:17.075Z",
+  "adapterRuns": [
+    {
+      "adapter": "harness-structure",
+      "status": "passed",
+      "evidencePath": ".harness/runs/M4-A-001/phases/06-build-publish/evidence/harness-structure.json",
+      "sha256": "sha256:9aa6b812c311be03adb6e4206b496384b96ddb9a45c993704ee8352206feeece",
+      "finishedAt": "2026-07-17T07:51:14.567Z"
+    },
+    {
+      "adapter": "no-build-required",
+      "status": "passed",
+      "evidencePath": ".harness/runs/M4-A-001/phases/06-build-publish/evidence/no-build-required.json",
+      "sha256": "sha256:2bcb860399edfc8c5e4a675556047bb90984736224b7f072f661aeafcef65926",
+      "finishedAt": "2026-07-17T07:51:23.937Z"
+    }
+  ],
+  "resultReceivedAt": "2026-07-17T07:52:17.075Z",
+  "completedAt": "2026-07-17T07:52:17.075Z"
+}

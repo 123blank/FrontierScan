@@ -17,7 +17,7 @@ Use this Skill after build/publish or local startup, when an environment is avai
 ```
 
 3. Read `references/environment-policy.md`.
-4. Fill concrete API requests, UI actions, auth/data setup, and expected observable results.
+4. Fill stable `caseId`, `required`, referenced `criterionIds`, concrete action, and expected observable result.
 5. Execute only when the environment is available and safe.
 6. Read `references/failure-diagnosis-policy.md` for failures.
 7. Write `.harness/reports/interface-verification-report.md` using `.harness/templates/interface-verification-report.md`.
@@ -32,4 +32,7 @@ Use this Skill after build/publish or local startup, when an environment is avai
 - Do not modify code while verifying.
 - Record unavailable environments instead of fabricating verification.
 - Include request/action, expected result, actual result, and diagnosis for failures.
-- Failed verification blocks delivery unless fixed or explicitly accepted.
+- Every required criterion must have a verification conclusion.
+- `accepted-with-known-gaps` requires `run-story.ps1 approve-gap` and a current attempt-scoped approval receipt.
+- Optional-only failed or blocked results remain visible but do not block required acceptance.
+- Required failed or blocked results block delivery; environment unavailable does not automatically count as accepted.

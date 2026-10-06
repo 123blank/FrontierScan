@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-provider-config.schema.json",
+  "title": "FrontierScan Agent Provider Configuration",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "profile": {
+      "type": "object",
+      "required": [
+        "adapter",
+        "model"
+      ],
+      "properties": {
+        "adapter": {
+          "const": "codex-cli"
+        },
+        "model": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
+            }
+          ]
+        },
+        "modelProvider": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/modelProvider"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "modelProvider": {
+      "type": "object",
+      "required": [
+        "id",
+        "baseUrl",
+        "wireApi",
+        "requiresOpenAiAuth"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "baseUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^https://(?![^/?#]*@)[^\\s\\u0000-\\u001f\\u007f/?#]+(?:/[^\\s\\u0000-\\u001f\\u007f?#]*)?$"
+        },
+        "wireApi": {
+          "const": "responses"
+        },
+        "requiresOpenAiAuth": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schemaVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "defaultProfile": {
+      "$ref": "#/$defs/id"
+    },
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/profile"
+      }
+    },
+    "roleBindings": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/id"
+      }
+    }
+  },
+  "additionalProperties": false
+}

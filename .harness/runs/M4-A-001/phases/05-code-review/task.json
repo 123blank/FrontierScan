@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "a7cdfdd7-7fab-4963-bad8-55683bee68b6",
+  "storyId": "M4-A-001",
+  "phase": "code-review",
+  "ownerAgent": "code-reviewer",
+  "purpose": "Review code changes and emit findings without modifying files.",
+  "preparedRevision": 12,
+  "preparedAt": "2026-07-17T07:41:17.955Z",
+  "expectedOutputs": [
+    ".harness/runs/M4-A-001/phases/05-code-review/code-review-report.md"
+  ],
+  "allowedAdapters": [],
+  "next": "build-publish"
+}

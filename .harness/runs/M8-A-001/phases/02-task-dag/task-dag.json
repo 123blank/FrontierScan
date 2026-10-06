@@ -1,0 +1,305 @@
+{
+  "schemaVersion": "2.0",
+  "storyId": "M8-A-001",
+  "nodes": [
+    {
+      "taskId": "T1-CONFIG-RED",
+      "title": "为 Provider 配置和模型路由编写失败测试",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "unit-tester",
+      "predictedFiles": [
+        ".harness/scripts/tests/provider-config.test.mjs",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-MODEL-ROUTING"
+      ]
+    },
+    {
+      "taskId": "T2-CONFIG-GREEN",
+      "title": "实现最小 Provider 配置、Schema 和确定性合并",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".gitignore",
+        ".harness/config/agent-providers.json",
+        ".harness/schemas/agent-provider-config.schema.json",
+        ".harness/scripts/lib/provider-config.mjs",
+        ".harness/structure-manifest.yaml",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-MODEL-ROUTING"
+      ]
+    },
+    {
+      "taskId": "T3-CONTRACT-RED",
+      "title": "为 Provider request、context、response 和 receipt 编写失败测试",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "unit-tester",
+      "predictedFiles": [
+        ".harness/scripts/tests/provider-contract.test.mjs",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-REAL-REVIEWER",
+        "AC-M8A-ZERO-CONTAMINATION",
+        "AC-M8A-RESULT-LAST"
+      ]
+    },
+    {
+      "taskId": "T4-CONTRACT-GREEN",
+      "title": "实现严格 Provider 数据契约和 finding 映射",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/schemas/agent-provider-request.schema.json",
+        ".harness/schemas/agent-provider-context.schema.json",
+        ".harness/schemas/agent-provider-response.schema.json",
+        ".harness/schemas/agent-provider-execution-receipt.schema.json",
+        ".harness/scripts/lib/provider-contract.mjs",
+        ".harness/structure-manifest.yaml",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-REAL-REVIEWER",
+        "AC-M8A-ZERO-CONTAMINATION",
+        "AC-M8A-RESULT-LAST"
+      ]
+    },
+    {
+      "taskId": "T5-CONTEXT-RED",
+      "title": "为冻结上下文、知识门禁和 reviewTargets 编写失败测试",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "unit-tester",
+      "predictedFiles": [
+        ".harness/scripts/tests/provider-context.test.mjs",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-REAL-REVIEWER",
+        "AC-M8A-ZERO-CONTAMINATION"
+      ]
+    },
+    {
+      "taskId": "T6-CONTEXT-GREEN",
+      "title": "实现有界冻结上下文和 task-owned diff",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/provider-context.mjs",
+        ".harness/scripts/tests/provider-context.test.mjs",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-REAL-REVIEWER",
+        "AC-M8A-ZERO-CONTAMINATION"
+      ]
+    },
+    {
+      "taskId": "T7-ADAPTER-RED",
+      "title": "为固定 Codex CLI argv、输出解析、超时和完整性编写失败测试",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "unit-tester",
+      "predictedFiles": [
+        ".harness/scripts/tests/codex-cli-provider.test.mjs",
+        ".harness/scripts/tests/provider-runtime.test.mjs",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-REAL-REVIEWER",
+        "AC-M8A-ZERO-CONTAMINATION",
+        "AC-M8A-RESULT-LAST"
+      ]
+    },
+    {
+      "taskId": "T8-ADAPTER-GREEN",
+      "title": "实现 Codex CLI Adapter 和 Provider Prepare、Run、Status",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/provider-adapters/codex-cli.mjs",
+        ".harness/scripts/lib/provider-runtime.mjs",
+        ".harness/scripts/tests/codex-cli-provider.test.mjs",
+        ".harness/scripts/tests/provider-runtime.test.mjs",
+        ".harness/structure-manifest.yaml",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-REAL-REVIEWER",
+        "AC-M8A-MODEL-ROUTING",
+        "AC-M8A-ZERO-CONTAMINATION",
+        "AC-M8A-RESULT-LAST"
+      ]
+    },
+    {
+      "taskId": "T9-MATERIALIZE",
+      "title": "以 TDD 实现 Materialize、result-last 和 blocked review 投影",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/provider-runtime.mjs",
+        ".harness/scripts/lib/story-runtime.mjs",
+        ".harness/scripts/tests/provider-runtime.test.mjs",
+        ".harness/scripts/tests/story-runtime.test.mjs",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-ZERO-CONTAMINATION",
+        "AC-M8A-RESULT-LAST"
+      ]
+    },
+    {
+      "taskId": "T10-CLI-E2E",
+      "title": "以 TDD 实现 Provider PowerShell CLI 和 E2E 动作映射",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/run-provider.ps1",
+        ".harness/scripts/lib/e2e-runtime.mjs",
+        ".harness/scripts/tests/provider-cli.test.ps1",
+        ".harness/scripts/tests/e2e-runtime.test.mjs",
+        ".harness/structure-manifest.yaml",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-REAL-REVIEWER",
+        "AC-M8A-RESULT-LAST"
+      ]
+    },
+    {
+      "taskId": "T11-REGRESSION-REVIEW",
+      "title": "执行专项回归、安全审计和独立只读代码审核",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "code-reviewer",
+      "predictedFiles": [
+        ".harness/scripts/README.md",
+        ".harness/README.md",
+        "docs/harness-m8a-review-provider/PLAN.md"
+      ],
+      "criterionIds": [
+        "AC-M8A-REAL-REVIEWER",
+        "AC-M8A-MODEL-ROUTING",
+        "AC-M8A-ZERO-CONTAMINATION",
+        "AC-M8A-RESULT-LAST"
+      ]
+    },
+    {
+      "taskId": "T12-REAL-CLOSURE",
+      "title": "执行真实 Provider 对比验收并完成 M8-A 文档知识收口",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "interface-verifier",
+      "predictedFiles": [
+        ".harness/README.md",
+        ".harness/scripts/README.md",
+        ".harness/structure-manifest.yaml",
+        "CODEX-CROSS-SESSION-HANDOFF.md",
+        "docs/harness-engineering-target-and-gap.md",
+        "docs/harness-m7-m12-roadmap/DESIGN.md",
+        "docs/harness-m7-m12-roadmap/PLAN.md",
+        "docs/harness-m8a-review-provider/PLAN.md",
+        "docs/harness-m8a-review-provider/REPORT.md",
+        "docs/harness-structure-checklist.md",
+        "llm-knowledge/common/meta.yaml"
+      ],
+      "criterionIds": [
+        "AC-M8A-COMPARISON-CLOSURE"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1-CONFIG-RED",
+      "to": "T2-CONFIG-GREEN",
+      "reason": "Provider 配置生产实现必须由可观察的失败测试驱动。"
+    },
+    {
+      "from": "T2-CONFIG-GREEN",
+      "to": "T3-CONTRACT-RED",
+      "reason": "数据契约测试依赖稳定的角色、Profile 和模型配置语义。"
+    },
+    {
+      "from": "T3-CONTRACT-RED",
+      "to": "T4-CONTRACT-GREEN",
+      "reason": "严格 request、context、response 和 receipt 契约必须先 RED 后 GREEN。"
+    },
+    {
+      "from": "T4-CONTRACT-GREEN",
+      "to": "T5-CONTEXT-RED",
+      "reason": "冻结上下文测试依赖已确定的 context manifest 契约。"
+    },
+    {
+      "from": "T5-CONTEXT-RED",
+      "to": "T6-CONTEXT-GREEN",
+      "reason": "上下文构造实现必须由路径、知识和大小门禁失败测试驱动。"
+    },
+    {
+      "from": "T6-CONTEXT-GREEN",
+      "to": "T7-ADAPTER-RED",
+      "reason": "Adapter 和 Runtime 测试需要可生成的冻结 request 与 context。"
+    },
+    {
+      "from": "T7-ADAPTER-RED",
+      "to": "T8-ADAPTER-GREEN",
+      "reason": "真实进程 Adapter 和 Provider Runtime 必须先验证固定 argv、超时和零污染 RED。"
+    },
+    {
+      "from": "T8-ADAPTER-GREEN",
+      "to": "T9-MATERIALIZE",
+      "reason": "Materialize 依赖成功 execution receipt 和 raw response。"
+    },
+    {
+      "from": "T9-MATERIALIZE",
+      "to": "T10-CLI-E2E",
+      "reason": "CLI 和 E2E 动作映射依赖完整 Provider 派生状态。"
+    },
+    {
+      "from": "T10-CLI-E2E",
+      "to": "T11-REGRESSION-REVIEW",
+      "reason": "专项实现完成后才能执行全量回归和独立安全审核。"
+    },
+    {
+      "from": "T11-REGRESSION-REVIEW",
+      "to": "T12-REAL-CLOSURE",
+      "reason": "真实本机 Agent 调用只在 fixture、回归和独立审核通过后进行。"
+    }
+  ],
+  "waves": [
+    ["T1-CONFIG-RED"],
+    ["T2-CONFIG-GREEN"],
+    ["T3-CONTRACT-RED"],
+    ["T4-CONTRACT-GREEN"],
+    ["T5-CONTEXT-RED"],
+    ["T6-CONTEXT-GREEN"],
+    ["T7-ADAPTER-RED"],
+    ["T8-ADAPTER-GREEN"],
+    ["T9-MATERIALIZE"],
+    ["T10-CLI-E2E"],
+    ["T11-REGRESSION-REVIEW"],
+    ["T12-REAL-CLOSURE"]
+  ],
+  "globalChanges": [
+    "新增项目级 Provider Profile 配置和本地覆盖忽略规则。",
+    "扩展 Story Runtime 的 code-review blocked payload 投影，但保持其他阶段语义不变。",
+    "扩展 E2E Runtime 的 code-review Provider 派生动作映射。"
+  ],
+  "risks": [
+    "RISK-M8A-WRITE：真实子进程必须证明没有修改仓库、State 或 Git。",
+    "RISK-M8A-CONTEXT：Prepare 后任何绑定输入漂移都必须失败关闭。",
+    "RISK-M8A-OUTPUT：模型输出必须通过严格 Schema 和 reviewTargets 路径门禁。",
+    "RISK-M8A-RECOVERY：并发和中断不能造成重复模型调用或半成品 apply。",
+    "RISK-M8A-MODEL：未指定模型时不得伪造父会话模型继承。"
+  ]
+}

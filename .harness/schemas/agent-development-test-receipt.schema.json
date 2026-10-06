@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-development-test-receipt.schema.json",
+  "title": "FrontierScan Agent Development Test Receipt",
+  "type": "object",
+  "required": ["schemaVersion", "storyId", "runId", "dispatchId", "taskId", "candidateManifestFile", "candidateManifestSha256", "adapterId", "commandId", "workingDirectory", "toolchain", "toolchainSha256", "status", "exitCode", "stdoutFile", "stdoutSha256", "stderrFile", "stderrSha256", "candidateBeforeSha256", "candidateAfterSha256", "executedAt"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"}, "storyId": {"type": "string"}, "runId": {"type": "string"}, "dispatchId": {"type": "string", "format": "uuid"}, "taskId": {"type": "string"},
+    "candidateManifestFile": {"type": "string"}, "candidateManifestSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "adapterId": {"type": "string"}, "commandId": {"type": "string"}, "workingDirectory": {"type": "string"},
+    "toolchain": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["adapterId", "mavenPath", "mavenVersion", "mavenSha256", "javaPath", "javaVersion", "javaSha256", "repositoryPath", "repositoryIdentity"],
+          "properties": {
+            "adapterId": {"const": "backend-maven"},
+            "mavenPath": {"type": "string"}, "mavenVersion": {"type": "string"}, "mavenSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+            "javaPath": {"type": "string"}, "javaVersion": {"type": "string"}, "javaSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+            "repositoryPath": {"type": "string"}, "repositoryIdentity": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["adapterId", "npmPath", "npmVersion", "npmSha256", "nodePath", "nodeVersion", "nodeSha256", "dependencySha256"],
+          "properties": {
+            "adapterId": {"const": "frontend-npm"},
+            "npmPath": {"type": "string"}, "npmVersion": {"type": "string"}, "npmSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+            "nodePath": {"type": "string"}, "nodeVersion": {"type": "string"}, "nodeSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+            "dependencySha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "toolchainSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "status": {"enum": ["passed", "failed", "timed-out", "output-limit", "interrupted"]}, "exitCode": {"type": ["integer", "null"]},
+    "stdoutFile": {"type": "string"}, "stdoutSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "stderrFile": {"type": ["string", "null"]}, "stderrSha256": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+    "candidateBeforeSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "candidateAfterSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "executedAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

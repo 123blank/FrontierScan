@@ -27,4 +27,15 @@ Acceptance criteria must be concrete enough for later test, review, and verifica
 
 ## Minimum Bar
 
-Every story must have at least one acceptance criterion. If behavior is unknown, create a discovery story with acceptance criteria for the discovery result.
+Every State v2 story must have at least one required acceptance criterion. If behavior is unknown, create a discovery story with acceptance criteria for the discovery result.
+
+Each criterion uses:
+
+| Field | Rule |
+| --- | --- |
+| `criterionId` | Stable and unique within the Story, such as `AC-001`. |
+| `description` | Observable behavior or result. |
+| `source` | User request, approved design, or discovery evidence. |
+| `required` | `true` blocks completion until accepted; `false` is tracked without blocking required completion. |
+
+Later DAG nodes, test cases, and verification cases reference `criterionId`. Text similarity or an unrelated passing test does not satisfy coverage.

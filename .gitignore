@@ -11,3 +11,30 @@ frontend/.vite/
 
 .env
 *.log
+
+# Harness local runtime state
+.harness/states/active-run.json
+.harness/states/e2e-*.json
+!.harness/states/e2e-state.template.json
+.harness/states/*.bak
+.harness/states/*.tmp
+.harness/states/*.lock
+.harness/states/*.events.jsonl
+.harness/worktrees/
+
+# Harness per-run transient assets
+.harness/runs/**/task.json
+.harness/runs/**/result.json
+.harness/runs/**/checkpoint.json
+.harness/runs/**/evidence/
+.harness/runs/**/active-attempt.json
+.harness/runs/**/implementation-owner.json
+.harness/runs/**/superseded-owners/
+.harness/runs/**/knowledge/
+
+# Harness local Agent Provider overrides
+.harness/config/agent-providers.local.json
+
+# Harness local Agent Provider runtime artifacts
+.harness/runs/**/attempts/**/provider/
+.harness/runs/**/delivery/receipts/

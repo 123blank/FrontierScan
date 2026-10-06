@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-integration-status.schema.json",
+  "title": "FrontierScan Harness Worktree Integration Status",
+  "type": "object",
+  "required": [
+    "schemaVersion", "storyId", "runId", "taskId", "dispatchId", "planSha256",
+    "state", "artifacts", "observedAt", "details"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "planSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "state": { "enum": ["planned", "applying", "ready-for-apply", "inconsistent"] },
+    "artifacts": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "state", "currentSha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["backend", "frontend", "phase-output", "result"] },
+          "state": { "enum": ["pending", "applied", "inconsistent"] },
+          "currentSha256": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "details": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

@@ -31,3 +31,7 @@ TBD
 ## Rollback / Safety Notes
 
 TBD
+
+## Result Payload
+
+`decisions`、`affectedAreas`、`knowledgeSnapshot`、`risks`

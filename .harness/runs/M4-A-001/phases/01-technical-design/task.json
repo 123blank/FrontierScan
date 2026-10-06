@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "5986e115-5282-4ccb-87dd-5a094a66e3b4",
+  "storyId": "M4-A-001",
+  "phase": "technical-design",
+  "ownerAgent": "requirement-analyst",
+  "purpose": "Produce a technical design using only relevant knowledge files.",
+  "preparedRevision": 2,
+  "preparedAt": "2026-07-17T07:17:41.893Z",
+  "expectedOutputs": [
+    ".harness/runs/M4-A-001/phases/01-technical-design/technical-design.md"
+  ],
+  "allowedAdapters": [],
+  "next": "task-dag"
+}

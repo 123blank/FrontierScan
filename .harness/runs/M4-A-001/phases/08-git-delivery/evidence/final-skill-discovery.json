@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M4-A-001",
+  "phase": "git-delivery",
+  "collectedAt": "2026-07-17T15:54:53.0105933+08:00",
+  "cliVersion": "codex-cli 0.144.1",
+  "parserScope": "<skills_instructions>/### Available skills metadata lines only",
+  "positiveRuns": [
+    { "run": 1, "count": 13, "uniqueCount": 13, "namesMatch": true, "locatorsMatch": true },
+    { "run": 2, "count": 13, "uniqueCount": 13, "namesMatch": true, "locatorsMatch": true },
+    { "run": 3, "count": 13, "uniqueCount": 13, "namesMatch": true, "locatorsMatch": true }
+  ],
+  "skillNames": [
+    "frontier-build-publish",
+    "frontier-code-review-gate",
+    "frontier-common",
+    "frontier-git-delivery",
+    "frontier-interface-verifier",
+    "frontier-kb-generate",
+    "frontier-kb-query",
+    "frontier-kb-refresh-check",
+    "frontier-requirement-breakdown",
+    "frontier-state-runner",
+    "frontier-task-dag-planner",
+    "frontier-test-gate",
+    "frontier-worktree-orchestrator"
+  ],
+  "setsIdentical": true,
+  "negativeControl": {
+    "cwdType": "outside-repository-temporary-directory",
+    "count": 0,
+    "passed": true
+  },
+  "fullPromptStored": false,
+  "modelCalled": false,
+  "passed": true
+}

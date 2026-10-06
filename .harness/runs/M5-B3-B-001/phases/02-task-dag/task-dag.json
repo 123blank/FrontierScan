@@ -1,0 +1,192 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-B3-B-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "建立 v1.1 dispatch 严格兼容契约",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/schemas/dispatch-task-v1.1.schema.json",
+        ".harness/schemas/dispatch-result-v1.1.schema.json",
+        ".harness/scripts/lib/dispatch-contract.mjs",
+        ".harness/scripts/tests/worker-runtime.test.mjs",
+        ".harness/scripts/tests/story-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "v1.0 保持严格字段集合并拒绝 v1.1 字段。",
+        "v1.1 dispatch 与 result 必须绑定 batchId、taskId、taskRoot 和相同身份。"
+      ]
+    },
+    {
+      "taskId": "T2",
+      "title": "实现串行 batch ledger 与任务状态机",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/schemas/serial-batch-ledger.schema.json",
+        ".harness/scripts/lib/batch-runtime.mjs",
+        ".harness/scripts/lib/task-dag-contract.mjs",
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/batch-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "batch 只接受 implementation phase 的 backend/frontend 节点；每项只生成位于 taskRoot 内的固定 task-report.md，业务候选与继承改写必须匹配该任务 predictedFiles 的 Windows 大小写不敏感规则。",
+        "baseCommit 只能由 worktree-runtime 通过固定 Git argv 解析；batch ledger 不执行 Git。一个 batch 一次只能 claim 一个确定性任务，DAG、已验证基准、锁或证据漂移均不能改变任务或 Harness 状态。"
+      ]
+    },
+    {
+      "taskId": "T3",
+      "title": "扩展 M3 批次准备与受控收尾",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/story-runtime.mjs",
+        ".harness/scripts/run-story.ps1",
+        ".harness/scripts/tests/story-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "批次完成前不生成可应用的正式 phase result，批次收尾只支持 implementation phase。",
+        "finalize-batch 去重汇总 task records，不推进 phase；既有 apply 只推进一次。"
+      ]
+    },
+    {
+      "taskId": "T4",
+      "title": "扩展 M5-A 为 batch Worktree 生命周期",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/schemas/worktree-batch-plan.schema.json",
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/run-worktree.ps1",
+        ".harness/scripts/tests/worktree-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "batch 分支和路径只能由 ledger 派生，创建仍需要双重批准。",
+        "单任务 plan/status/create 路径保持兼容。"
+      ]
+    },
+    {
+      "taskId": "T5",
+      "title": "实现累积 Worktree 的逐任务 Worker 执行",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-worker-runtime.mjs",
+        ".harness/scripts/lib/worker-runtime.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs",
+        ".harness/scripts/tests/worker-runtime.test.mjs",
+        ".harness/scripts/tests/batch-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "后续任务只能继承经验证的前序候选；任何业务候选或继承改写均必须匹配自身 predictedFiles 的共享路径规则。",
+        "Provider 超时和非法变更不会产生可用回执或选择后续任务。"
+      ]
+    },
+    {
+      "taskId": "T6",
+      "title": "实现逐任务集成与批次证据聚合",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-integration-runtime.mjs",
+        ".harness/scripts/run-worktree-integration.ps1",
+        ".harness/scripts/tests/worktree-integration-runtime.test.mjs",
+        ".harness/scripts/tests/batch-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "后续任务以前序 integration receipt 派生的不可变主树 allowlist 中的当前已集成文件作为哈希基线，其他主树业务改动必须拒绝。",
+        "单项集成不生成正式 phase result，也不推进 M3 状态。"
+      ]
+    },
+    {
+      "taskId": "T7",
+      "title": "扩展 M5-C 的 batch 回收校验",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/schemas/worktree-batch-retirement-receipt.schema.json",
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/run-worktree.ps1",
+        ".harness/scripts/tests/worktree-lifecycle-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "仅完成 Story、ledger 从全部 integration receipt 派生的累计未提交业务文件逐项哈希匹配且所有 batch 证据匹配时允许回收；其他主树改动必须拒绝。",
+        "回收保留 branch，并支持 Git 成功后的 receipt 恢复。"
+      ]
+    },
+    {
+      "taskId": "T8",
+      "title": "完成两任务纵向 fixture 与 Harness 回归",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "unit-tester",
+      "predictedFiles": [
+        ".harness/scripts/tests/serial-batch-runtime.test.mjs",
+        ".harness/scripts/smoke-harness-flow.ps1",
+        ".harness/scripts/tests/story-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-integration-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-lifecycle-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "临时 Git fixture 完成两个任务、一次 apply 和 batch retire。",
+        "所有现有 Harness 回归和非破坏性 Smoke 通过。"
+      ]
+    },
+    {
+      "taskId": "T9",
+      "title": "完成文档、结构登记与最终审核",
+      "type": "docs",
+      "status": "pending",
+      "ownerAgent": "code-reviewer",
+      "predictedFiles": [
+        "docs/harness-m5b3-batch-runtime/**",
+        ".harness/README.md",
+        ".harness/scripts/README.md",
+        ".harness/structure-manifest.yaml",
+        "docs/AI-handover.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        "llm-knowledge/common/overview.md",
+        ".harness/runs/M5-B3-B-001/**"
+      ],
+      "acceptanceCriteria": [
+        "中文报告记录需求覆盖、TDD、恢复、审核与延期边界。",
+        "结构清单、交接和架构说明与实际 Runtime 一致。"
+      ]
+    }
+  ],
+  "edges": [
+    { "from": "T1", "to": "T2", "reason": "ledger 必须使用经过严格校验的 v1.1 dispatch 身份。" },
+    { "from": "T2", "to": "T3", "reason": "M3 批次入口依赖 ledger 的准备和收尾契约。" },
+    { "from": "T3", "to": "T4", "reason": "batch Worktree plan 必须绑定已准备的 batch ledger。" },
+    { "from": "T4", "to": "T5", "reason": "Worker 只能在已创建的 batch Worktree 中执行。" },
+    { "from": "T5", "to": "T6", "reason": "集成必须验证 Worker execution receipt 与继承快照。" },
+    { "from": "T6", "to": "T7", "reason": "回收必须验证全部 task 的 integration receipt 和累计文件。" },
+    { "from": "T7", "to": "T8", "reason": "纵向 fixture 需要完整批次生命周期能力。" },
+    { "from": "T8", "to": "T9", "reason": "报告与最终审核必须引用当前验证证据。" }
+  ],
+  "waves": [["T1"], ["T2"], ["T3"], ["T4"], ["T5"], ["T6"], ["T7"], ["T8"], ["T9"]],
+  "globalChanges": [
+    "Harness 共享 Runtime、Schema、PowerShell 入口和生命周期证据契约"
+  ],
+  "risks": [
+    "本 DAG 是 M5-B3-B 的开发 DAG，不是 prepare-batch 的输入；批次运行时必须以临时 fixture 验证 backend/frontend 多节点 DAG，并拒绝本 DAG 的 integration/test/docs 节点。",
+    "batch 仅处理 active Story 的 implementation phase backend/frontend 业务节点；纯 phase-output、docs/test/integration 节点和其他 phase 必须继续使用既有单任务流程。",
+    "共享 Worktree 的前序未提交改动必须通过继承快照校验，不能以完全干净检查替代。",
+    "批次 Runtime 不得调用状态推进；正式 phase 结果必须由 M3 收尾后再由既有 apply 推进。",
+    "临时 Git fixture 可以执行真实 Worktree 操作；正式仓库操作持续要求用户逐次批准。",
+    "同 wave 并行、多 Worktree、自动清理和断电级持久化不在 M5-B3-B 范围内。"
+  ]
+}

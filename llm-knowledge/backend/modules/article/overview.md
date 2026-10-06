@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: article
 doc_type: overview
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:bbcf5341e6170bd7ed08d61a4a0c011601f2a3a4d843008f80dbda0d6a18662b
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:1be9274e55442429c8a5da213e792fd54df8500799df185c03b9f2242fc6efe6
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -31,9 +31,9 @@ source_files:
 - 模块路径：`backend/src/main/java/com/frontierscan/article`
 - Java 文件数：12
 - 类/接口/记录/枚举数量：11
-- Controller 数量：1
-- Entity 数量：2
-- Repository 数量：2
+- 控制器数量：1
+- 实体数量：2
+- 数据仓库数量：2
 
 ## 主要类
 
@@ -51,4 +51,4 @@ source_files:
 
 ## 语义说明
 
-Needs AI Review: 请结合 L2 语义增强确认该模块的业务边界、核心流程和跨模块依赖。
+需要 AI 审核：请结合 L2 语义增强确认该模块的业务边界、核心流程和跨模块依赖。

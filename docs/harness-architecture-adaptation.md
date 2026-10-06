@@ -2,7 +2,7 @@
 
 This document records the current FrontierScan adaptation toward a Harness Engineering workflow.
 
-The repository now contains implemented structural contracts, deterministic helpers, 13 project-local Skill definitions, a 12-role Agent registry, and a layered knowledge generator. The knowledge generator and query helpers are implemented at V1 with M1.1 content-fingerprint freshness. The Agent runtime, deterministic phase runner, lifecycle hooks, Worktree execution, and DevOps loop are not implemented.
+仓库已经具备结构契约、确定性辅助脚本、13 个项目 Skill、12 角色 Agent 注册表和分层知识生成器。M2 确定性状态运行时、M3-M4 Dispatcher 与受约束 Mock Worker、M5 Worktree Wave 能力以及 M7 单 Story 确定性闭环均已实现。M8-A 已接入首个真实只读 `code-reviewer` Provider；其他真实 Agent、写入型开发 Provider、多 Story Fork-Join、分支删除、自动 Git 交付和生产发布部署仍未实现。
 
 ## Added Structure
 
@@ -24,6 +24,10 @@ llm-knowledge/
   common/
 docs/
   harness-m0-m1/
+    PLAN.md
+    REPORT.md
+  harness-m4-runtime-compatibility/
+    DESIGN.md
     PLAN.md
     REPORT.md
   harness-architecture-adaptation.md
@@ -102,7 +106,7 @@ publisher
 git-committer
 ```
 
-The registry records responsibilities and file-modification boundaries. It is not an active Agent runtime yet.
+The registry records responsibilities and file-modification boundaries. M3 uses these owners in structured task files, but the registry still does not launch Agent workers.
 
 ## Current Skill System
 
@@ -132,9 +136,9 @@ frontier-build-publish
 frontier-git-delivery
 ```
 
-Knowledge generation, query, freshness, structural validation, and planning helpers have executable V1 implementations. Requirement, state, DAG, review, test, verification, build, and delivery Skills primarily remain guidance contracts around read-only helpers. Automatic Skill discovery and Agent dispatch are not implemented.
+知识生成、查询、新鲜度检查、结构校验、M2 状态转换和 M3 单 Story 文件式派发均已有可执行 V1。需求、DAG、审核、验证、构建和交付 Skill 仍以确定性辅助脚本和流程指导为主。目标 Windows CLI 的项目 Skill 发现已通过 M4-A 验证，真实 Agent Worker 执行仍未实现。
 
-`frontier-state-runner` now includes basic workflow guidance and references for:
+`frontier-state-runner` now documents and exposes the implemented M2 workflow runtime for:
 
 - phase model
 - state update discipline
@@ -156,7 +160,7 @@ The query is index-first with Markdown fallback, mode/area-aware ranking, Common
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode all -DryRun -Json
 ```
 
-The generator produces L1 Markdown/facts, L2 OpenAI semantic documents with graceful degradation, and an L3 local index. Current output covers 7 backend and 7 frontend modules plus Common knowledge, with 324 chunks. M1.1 records SHA-256 content fingerprints for area, module, document, chunk, metadata, and manifest isolation.
+The generator produces L1 Markdown/facts, L2 OpenAI semantic documents with graceful degradation, and an L3 local index. Current output covers 7 backend and 7 frontend modules plus Common knowledge; the current chunk count is reported in `llm-knowledge/overview.md`. M1.1 records SHA-256 content fingerprints for area, module, document, chunk, metadata, and manifest isolation.
 
 `frontier-kb-refresh-check` includes freshness guidance and a read-only metadata/source/index check:
 
@@ -253,13 +257,102 @@ The shared knowledge base also includes `llm-knowledge/common/conventions/delive
 
 These templates make future Skill and Agent outputs stable and parseable.
 
-## Next Implementation Steps
+## M4-B 受约束 Mock Worker
 
-M0, M1, and M1.1 are complete. The authoritative records are `docs/harness-m0-m1/REPORT.md` and `docs/harness-m1-1-source-fingerprint/REPORT.md`.
+M4-B 受约束 Mock Worker 已实现。`worker-runtime.mjs` 消费 M3 task Schema `1.0`，按 12 角色 JSON 策略加载显式 context，通过测试注入 provider 获取候选文件，并在身份、Schema、权限、路径和 2/8 MiB 限额全部通过后最后写入 `result.json`。provider 异常、最多 30 秒超时、越权或非法结果不会调用 M2/M3；只有显式 `apply` 才推进状态。
 
-The next independent capability is a controlled live L2 semantic-enrichment acceptance using the configured OpenAI environment key. It must verify source-file traceability, model metadata, success output, and graceful degradation without reading or printing credentials or changing business code.
+M4-B 不提供 mock CLI，不启动真实 Agent，也不把同进程 provider 声称为操作系统安全沙箱。M2/M3 继续独占固定 Adapter、证据门禁和状态推进。
 
-After that acceptance, implement M2 deterministic state runtime: active-run initialization, atomic transitions, evidence gates, locking, blocking/resume, and a single-story recovery test. Do not implement automatic Agent dispatch or parallel Worktree execution before M2 and the single-story vertical slice are stable.
+## M5-B1 Worktree 内 Worker
+
+M5-B1 通过内部 `runWorktreeWorker` 组合 M5-A 与 M4-B。它绑定当前 M3 prepared checkpoint、单任务 DAG 和 owner，按 manifest 把当前 run Harness 输入复制到已创建 Worktree，并直接使用固定 base 上的源码/文档上下文。Worker 完成后重新对账 Git 事实：只有 phase output 时写入主工作树正式 result 并返回 `ready-for-apply`；存在 backend/frontend 写入时不复制业务代码、不写正式 result，只返回 `ready-for-integration` 独立证据。
+
+M5-B1 支持已授权 base context 的同路径候选更新、receipt 幂等复用、Provider 失败后的输入快照复用和 phase-output 回收恢复；`main-run` 与未声明候选的上下文保持不可变。没有 durable candidate list 的业务写入中断恢复失败关闭。Runtime 不提供 CLI，不创建/合并/删除 Worktree，也不调用 M3 `apply`。
+
+## M5-B2 单 Worktree 业务候选受控集成
+
+M5-B2 通过 `runWorktreeIntegration` 和 `run-worktree-integration.ps1` 消费 M5-B1 `ready-for-integration` 凭据。Plan 重新绑定 active state、M3 prepared task/checkpoint、单 pending DAG task、M5-A Git 事实和 M5-B1 receipt/manifest/result，并把业务候选、phase output 和正式 result 固化为 SHA-256 bundle。Status 不依赖 Worktree 长期存在，而是用主工作树 HEAD、Git 业务差异、Git 逻辑 base 和 candidate 哈希重建状态；Git 逻辑比较兼容 Windows checkout filter。
+
+Apply 同时要求外部用户批准和 `ConfirmApply`，使用任务级独占锁及逐文件原子 rename，固定按业务文件、phase output、正式 `result.json`、integration receipt 写入。中断后已匹配 candidate 的文件跳过，未知内容失败关闭；Runtime 不自动回滚，也不调用 M3 `apply`。调用方只在 `ready-for-apply` 后显式执行一次 M3 apply。
+
+M5-B2 仍只支持单 Worktree、单任务、单 dispatch；不执行 Git merge/remove、自动提交、真实 Agent、多任务聚合或并发 Apply。开发测试中的真实集成只发生在临时 Git 仓库。
+
+## M5-C 单 Worktree 生命周期回收
+
+M5-C 在既有 `run-worktree.ps1` 与 `worktree-runtime.mjs` 中增加 `Retire`，不创建第二套 Runtime。它只接受已完成且已完成 M5-B2 集成的目标 Story；调用方必须同时获得外部用户逐次批准并传入 `-ConfirmRetire`。
+
+Retire 先重新验证 M5-A plan/history status、M5-B1 manifest/execution receipt、持久化 Worker result、M5-B2 integration plan/receipt、已集成候选和正式 `result.json` 的身份与 SHA-256。随后核对主工作树、任务分支、Worktree HEAD、可解释的 Worktree 变更集合和所有生命周期锁。锁协议是双向的：Retire 持锁后重检 `create/execute/integrate` 锁，Create、Worker 和 Apply 持有自身锁后也检查 `retire.lock`。只有全部证据仍一致时，才通过固定 Git argv 执行 `git worktree remove --force <派生路径>`。
+
+集成回执的文件集合必须按路径、类型、SHA-256 和字节数完整覆盖 M5-B1 候选；Worktree 中被 `.gitignore` 隐藏的文件也单独通过 Git 对账，未知 ignored 内容不得被强制移除。PowerShell 入口的 JSON 和普通文本模式均返回一致的成功状态。
+
+移除成功后写入不可扩展的 `retirement-receipt.json`；若 Git 已移除但 receipt 未写入，重试只会在分支仍指向原 `baseCommit` 且所有历史证据仍一致时补写 `recovered: true` receipt。M5-A `status.json` 是会随观测时间更新的当前事实，因此 Retire 校验其身份、created 状态和 plan 绑定，但不要求其当前哈希等于 M5-B1 receipt 的历史哈希；M5-B2 plan 另以路径和 SHA-256 绑定 execution receipt。该能力不删除任务分支、不执行 `git worktree prune`、不合并、不调用 M3 `apply`，也不修改 M2/M3 的 phase 或 revision。临时 Git fixture 已真实跑通 M5-A→M5-B1→M5-B2→M3→M2→M5-C，并覆盖真实移除、锁内重检、证据漂移拒绝、重复调用和中断恢复；正式仓库回收仍须逐次审批。
+
+## M5-B3-A 多任务协议兼容性验证
+
+M5-B3-A 已确认当前 M3 phase 级 dispatch 只能处理单 task：`task.json`、`result.json` 和 checkpoint 没有 task 身份，首次 M3 apply 会推进全局 phase；M5-B1 也刻意拒绝多节点 DAG，M5-B2/M5-C 的证据链按单 task 保存。直接循环现有接口会覆盖产物或越过状态边界，不能采用。
+
+后续 M5-B3-B 应先增加兼容的 task-scoped dispatch v1.1、batch-scoped Worktree plan 与独立 serial batch ledger：每项 task 有独立 dispatch、结果、checkpoint 和 M5-B1/B2 receipt；一次只执行一项；全部选中任务完成后才允许受控 phase 推进，M5-C 只在目标 Story 完成后回收 batch Worktree。该设计保留 M2/M3 的唯一状态权，不自动进入并行、多 Worktree 或 Fork-Join。
+
+## M5-B3-B 单 Worktree 串行多任务批次运行时
+
+M5-B3-B 将 M5-B3-A 的兼容性结论实现为受限运行时。v1.0 仍是单任务和非 `implementation` phase 的严格协议；只有 active Story 在 `implementation` phase 拥有至少两个 backend/frontend 任务时，`run-story.ps1 prepare-batch` 才会生成 v1.1 task-scoped dispatch、独立任务目录和 serial batch ledger。每项任务必须绑定相同的 `batchId`、`taskId`、`taskRoot` 和 prepared revision，不能复用 phase 级的 `task.json/result.json`。
+
+`batch-runtime.mjs` 不执行 Git，也不修改 M2/M3 状态；它只维护确定性任务顺序、batch 锁、继承快照和每项执行/集成回执。`batch-base-contract.mjs` 通过固定 Git argv 解析并校验 `dev` 的不可变基准。`worktree-runtime.mjs` 的 `batch-plan/status/create/retire` 从 ledger 派生唯一分支、路径和基准，拒绝外部任务、路径或基准注入；Create 与 Retire 仍分别要求真实用户批准和显式确认。
+
+共享 Worktree 中，每次只可 claim 一个下一任务。Worker 在任务开始前记录前序已集成候选的继承快照，候选路径必须匹配当前任务的 `predictedFiles`；M5-B2 批次集成以全部前序 integration receipt 与当前主树哈希为基线。任一 Provider 异常、非法输出、未解释的改动、哈希漂移或遗留锁都会失败关闭，不产生可推进后继的回执。
+
+只有全部任务已集成，`finalize-batch` 才生成唯一正式 phase result 和 batch receipt；它不推进状态。正式 implementation 的 `task.json`、`result.json` 和 `implementation-notes.md` 的路径与 SHA-256 由 `batch-finalization-contract.mjs` 固定到 receipt 的 `finalizationArtifacts`，ledger 再固定 receipt 哈希；M3 `apply` 与 `batch-retire` 均重新验证这条证据链。收尾使用 `batch-finalization.lock` 串行化 ledger finalization 与 checkpoint binding，并发调用失败关闭并可在首个调用完成后重试；receipt-to-ledger 和 ledger-to-checkpoint 两个中断窗口均可受限恢复。既有 M3 `apply` 是唯一 phase 推进入口，并由两任务真实 Git fixture 验证仅推进一次。目标 Story 到达 `done/completed` 后，`batch-retire` 才能验证全量批次证据并执行受审批的 `git worktree remove --force`；它保留分支，支持 Git 成功但回执未写入的受限恢复。
+
+`M5-B3-B-001` 已完成最终测试、双重审核和批准门控的 Git 交付，Harness 状态为 `done/completed`、revision `24`。业务修改提交为 `e3d77a4479916fb529f3561b1527941d00eeed7f`；截至 2026-07-30，本地 `dev` 与 `origin/dev` 一致。该交付未修改 `backend/src/**`、`frontend/src/**`，也未执行正式仓库 Worktree、发布或部署操作。
+
+## M5-D-A 同 Wave 多 Worktree 只读兼容层
+
+M5-D-A 继续复用 `worktree-runtime.mjs`，增加 `wave-plan/wave-status`，但不提供 `wave-create`。目标 wave 必须属于 active `implementation` Story，包含至少两个 pending backend/frontend 任务且没有 `globalChanges`；共享 `task-dag-contract.mjs` 继续是任务归属、依赖顺序和同 wave 文件冲突的唯一校验来源。
+
+计划把一个 `baseRef` 固定为统一 SHA，并按稳定任务顺序生成每项分支和 Worktree 路径。状态通过一次 `git worktree list --porcelain` 和逐分支 ref 探测识别 `absent/branch-only/created`，再聚合为 `absent/partial/ready`。计划任务集合、DAG 哈希、基准、分支、路径、HEAD、junction、计划外 Worktree 或分支被其他路径占用时均失败关闭；Runtime 不修复 Git 事实，也不改 M2/M3 状态。
+
+真实双 Worktree 只在临时 Git fixture 中挂载，用于验证 partial、ready 和恢复兼容性。正式 FrontierScan 仓库只允许生成计划和读取状态，不执行创建、Worker、合并、回收或分支操作。
+
+## M5-D-B 审批门控 WaveCreate
+
+M5-D-B 继续扩展同一 `worktree-runtime.mjs`，不创建第二套 Runtime。`wave-create` 只消费已经落盘的 WavePlan，
+调用方必须明确确认创建并提供计划文件当前 SHA-256；Runtime 在取锁前、取锁后、每次 Git 写入前、状态写入前和回执写入前
+重新读取计划，任何漂移都会使本次批准失效。
+
+普通创建通过同一 run/Story 的共享 `waves/create.lock` 获得波次所有权，因此不同 wave 在任何 Worktree 出现前也不能同时
+进入创建临界区。锁包含随机 `lockId`，所有 Git、状态、回执和释放动作前都重新验证身份、
+内容哈希和恢复锁不存在。遗留锁不按时间或 PID 自动失效；恢复必须确认旧进程均已停止，并绑定 `WaveStatus` 返回的全部现存
+锁哈希。恢复以共享 `waves/create-recovery.lock` 为活动所有权，保留旧 `create.lock` 作为接管证据；替换恢复锁后必须
+验证磁盘 `lockId` 等于本次生成值。旧所有者一旦看到恢复锁就失去继续副作用和删除锁的资格，恢复异常保留两把锁。
+
+创建状态继续以 Git 事实为权威。`created` 项只复核，`branch-only/absent` 项按计划稳定顺序补齐；中途失败不回滚已创建项，
+后续重试只处理缺失项。动态锁事实只在命令结果顶层返回，稳定 `status.json` 不包含锁，因此完成回执可以绑定不随锁生命周期
+变化的 `statusSha256`。首次 WavePlan 初始化状态后，复用 WavePlan 和普通 WaveStatus 只返回动态事实，不持久化；后续稳定
+状态只由持锁 WaveCreate 更新，避免陈旧查询覆盖回执绑定状态。只有全部任务当前均为 `ready` 时才写
+`creation-receipt.json`，其中固定计划、DAG、状态和每项 HEAD。
+
+正式 FrontierScan 仓库没有执行 WaveCreate；真实多 Worktree、部分失败和受控中断仅在临时 Git fixture 中验证。
+
+## M5-D-C1 同 Wave 并行 Mock Worker
+
+M5-D-C1 在单个完整 implementation wave 上实现 execution-only 闭环。`prepare-wave` 获取统一 implementation owner，
+生成 v1.2 task/checkpoint 与 execution ledger；ordinary、serial batch 和 worktree wave 三种 owner 互斥，既有
+`prepare/prepare-batch/apply` 不能绕过 wave owner。
+
+每个任务使用不可变 attempt 目录、claim 和 task execute.lock。`execute-wave` 按稳定顺序 claim pending 任务，再通过
+`Promise.allSettled` 并行调用不同 Worktree 中的 Mock Worker。候选、attempt result、execution receipt、ledger 更新和
+锁释放前均验证当前 `attemptId/claimId/lockId`、锁哈希、dispatch、DAG、WavePlan 和 creation receipt。两个同进程 Worker
+只对短期 ledger mutation 做有界串行等待；外部 PID 或遗留锁继续失败关闭。
+
+部分失败不会覆盖成功 receipt，也不会写主工作树。blocked 任务只能通过独立 `ConfirmWaveTaskRetry` 和旧 failure 哈希创建
+新 attempt。`recover-attempt` 显式处理 claim-only、lock-before-running、完整 result/receipt、blocked 锁释放中断和
+孤儿 Worktree 候选；恢复不按时间或 PID 自动接管。
+
+## M5-D-C1 当时的下一步（已完成）
+
+该阶段当时要求以独立 Story 实现 M5-D-C2：冻结 integration manifest、主工作树串行受控集成、wave receipt、
+`finalize-wave` 和最终 M3 `apply`。M5-D-C2 与后续 M5-D-D 现均已完成；本段保留为阶段历史，当前下一步以文末
+M6-A 为准。
 
 ## Safety Boundaries
 
@@ -268,3 +361,78 @@ After that acceptance, implement M2 deterministic state runtime: active-run init
 - Do not commit, push, or publish without explicit user confirmation.
 - Do not overwrite unrelated dirty files.
 - Keep B2B admin UI changes aligned with project UI guidelines.
+## M5-D-C2 Wave 集成与阶段收尾
+
+M5-D-C2 在全部任务 `ready-for-integration` 后原子冻结 integration manifest，并关闭 C1 的 attempt 变更入口。
+主工作树只允许按 WavePlan 稳定任务顺序形成“已集成前缀 + 当前任务”差异；中断保留前缀，由显式 recovery owner
+继续剩余任务。全部任务集成后，`finalize-wave` 生成正式 phase 产物、wave receipt、finalized ledger 与
+`checkpoint.waveFinalization`，随后仍由 M3 `apply` 唯一推进 phase。
+
+## M5-D-D Wave Worktree 回收
+
+M5-D-D 继续扩展 `worktree-runtime.mjs`，增加 `wave-retire`，不新建第二套回收 Runtime。入口只接受
+`done/completed` Story、`finalized` execution ledger、已完成 M3 apply 的 checkpoint 和完整正式产物证据。
+调用方必须批准当前 ledger 与 wave receipt 的精确 SHA-256，不能自行指定任务、分支、路径或基准。
+
+首次删除前执行全局预检，覆盖所有任务 Worktree、保留分支、主树 applied files、execution/integration receipt
+和全部 Wave/implementation writer 锁。普通 `worktree-retire.lock` 与
+`worktree-retire-recovery.lock` 形成显式 recovery owner；替换锁会立即 fence 旧 owner。
+
+回收按 WavePlan 稳定顺序进行。每个 Worktree 删除后必须完成 Git 注册、目录与分支后验，之后才写
+task retirement receipt。中断恢复只接受完整有序的 receipt 前缀，允许对“Git 已删除但 receipt 未写”的当前首项
+补写 `recovered: true`。全部任务完成后写 wave retirement receipt，绑定完成态、M3、Wave 与所有 task receipt。
+首版保留任务分支，不执行 `prune`、自动提交、推送、发布或部署。
+
+M5-D-D 已通过完整 Runtime 回归和两轮独立审核，`M5-D-D-001` 在 revision `18` 进入 `done/completed`；
+提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 已推送到 `origin/dev`。
+
+## M6-A 单业务开发闭环验收
+
+M6-A 的目标不是继续扩展 Worktree 或设计通用验收引擎，而是用一个真实、范围较小的业务任务验证现有架构能否完成
+单 Story 开发闭环。该任务应按现有 E2E 工作流推进，实际修改业务源码，并执行与修改范围匹配的测试、构建和 API/UI
+验证；所有阶段证据继续由 State Runtime 绑定。
+
+首版约束：
+
+- 当前会话串行执行，继续使用现有 Skill、State、Dispatcher 和质量门禁。
+- 可以由 Codex 完成真实业务代码修改，但不声称 Mock Worker 已成为恶意代码安全沙箱。
+- 不新增通用 M6 Engine，不引入多 Story Fork-Join、真实 Agent 自动派发或生产部署。
+- Git 暂存、提交、推送和 PR 仍由用户逐次明确批准，不属于自动闭环验收条件。
+- 中断恢复必须依赖 State 和仓库阶段产物，不依赖旧聊天记录。
+
+通过标准是一个真实业务 Story 从 requirement 推进到 `done/completed`，真实测试、审核、构建和接口验证均有可复核证据，
+且过程不需要手工编辑 State。通过 M6-A 后，再依据暴露出的真实缺口决定 M7 加固或真实 Agent 接入范围。
+
+## M7-C 知识新鲜度闭环
+
+M7-C 不新增工作流阶段，而是把知识闭环嵌入 `technical-design` attempt。`check-knowledge` 为 relevant area 生成
+content-addressed freshness evidence 和 refresh task；已有 completed result 时可以在 Story 写锁内原子重查并替换单个
+area，用于 source fingerprint 漂移后的正式恢复。
+
+`refresh-knowledge` 只消费白名单 `area/module/mode`，生成器执行前验证全部可写知识根目录，不允许 symlink、junction、
+reparse point、仓库外 realpath 或 `..` 目录前缀绕过。backend/frontend 只保护自身；common 因实际执行 `Area all`，
+显式保护 backend、frontend、common 三域。生成文件、index 和 log 被复制为 attempt 内不可变 evidence，因此多个 relevant
+area 顺序刷新后历史 receipt 仍可组合审计；`custom/` 始终保持当前内容不变。
+
+`knowledge-stale` 与 `verification-gap` 使用互斥 approval 契约。Runtime 不自动选择刷新或接受 stale，M7-C 完成也不表示
+已经执行 Git 提交或推送。
+
+## M7-D 双重闭环验收
+
+M7-D 通过里程碑 acceptance suite 和 `M7-D-001` Dashboard 阅读状态筛选真实 Story 验证了单 Story 确定性闭环。最终 State 为 `done/completed` revision `19`，五项 required criterion 均为 `verified`，且 `delivery.gitStatus=not-requested`。
+
+真实 UI 验收触发一次严格受限的 late-stage rework：只能从 blocked `delivery-preparation` 回到 `implementation`，历史结果通过 supersession 保留，随后重新经过 unit-test、code-review、build-publish、interface-verification 和 delivery-preparation。该机制不是任意回退，也不引入 Agent、Worktree、并行或 Git 自动化。
+
+`verify-story-closure.ps1` 只读取 completed State 和正式绑定证据，深检 phase-result 及其内嵌 outputs/records，并复用正式 projector 核对 supersession 后九阶段有效 result 与最终 State 投影，随后输出需求、决策、知识、DAG、实现、测试、审核、构建、验证与交付摘要。M7-D 还修复了大量控制产物参与交付复制身份折叠的性能问题，并明确构建产物与固定证据目录使用不同的安全读取边界。
+
+M7 单 Story 串行目标已完成。
+
+## M8-A 只读审核 Provider
+
+M8-A 已通过 `M8-A-001` 接入首个真实只读 `code-reviewer` Provider。Runtime 冻结 task、最小上下文、角色策略、Profile 和模型来源，以固定参数启动本机 `codex exec`，校验结构化响应和仓库完整性后生成正式 evidence、审核报告、execution receipt 和 phase result。
+
+Provider 配置支持 `role -> profile -> adapter/model`、项目默认和本地覆盖；未指定模型时不传 `--model`。M8-A 只开放 `codex-cli` Adapter 和 `code-reviewer`，`read-only` 仅表示同一操作系统用户下的写入边界，不是严格文件读取 ACL。
+
+最终 State 为 `done/completed` revision `51`，五项 required criterion 均为 `verified`。审核任务启动后可独立执行，但完整 `Prepare -> Run -> Materialize -> Apply`、finding 复核和返工仍由当前 Codex 会话编排。
+
+下一阶段是经用户批准后设计 M8-B：单任务、单隔离 Worktree、串行的 backend/frontend developer Provider。当前不开放并行、Fork-Join、自动 Git、发布或部署。

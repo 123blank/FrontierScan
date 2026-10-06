@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-B3-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "固化多任务协议兼容性结论",
+      "type": "docs",
+      "status": "pending",
+      "predictedFiles": [
+        "docs/harness-m5b3-multi-task-protocol/**",
+        ".harness/runs/M5-B3-001/**",
+        ".harness/structure-manifest.yaml",
+        "docs/harness-architecture-adaptation.md",
+        "docs/AI-handover.md",
+        "docs/harness-structure-checklist.md",
+        "llm-knowledge/overview.md"
+      ],
+      "acceptanceCriteria": [
+        "M5-B3-A 明确现有单任务契约与多任务冲突点。",
+        "推荐的串行协议不改变 M2/M3 状态推进权，也不实现并行或多 Worktree。"
+      ],
+      "ownerAgent": "requirement-analyst",
+      "knowledgeUsed": [
+        "llm-knowledge/overview.md",
+        "docs/harness-m5b-worktree-worker/DESIGN.md",
+        "docs/harness-m5b2-worktree-integration/DESIGN.md",
+        "docs/harness-m5c-worktree-lifecycle/DESIGN.md"
+      ],
+      "risk": "后续 Runtime 会触及 M3/M5 共享契约，必须先完成独立技术设计和 TDD。"
+    }
+  ],
+  "edges": [],
+  "waves": [["T1"]],
+  "globalChanges": [],
+  "risks": [
+    "M5-B3-A 仅产出设计结论，不能把文档结论误当作已实现的多任务能力。",
+    "多 Worktree、同 wave 并行、Fork-Join 和自动合并继续延期。"
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M3-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "Resolve run-scoped workflow artifacts",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/state-runtime.mjs",
+        ".harness/scripts/tests/state-runtime.test.mjs",
+        ".harness/workflows/e2e-development.yaml"
+      ],
+      "acceptanceCriteria": [
+        "Expand {runId} in required outputs to the current story run directory.",
+        "Validate the expanded run-scoped task DAG path.",
+        "Keep workflows without placeholders and all M2 regression tests compatible."
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T2",
+      "title": "Prepare and inspect structured dispatch tasks",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/story-runtime.mjs",
+        ".harness/scripts/run-story.ps1",
+        ".harness/scripts/tests/story-runtime.test.mjs",
+        ".harness/schemas/dispatch-task.schema.json",
+        ".harness/schemas/dispatch-result.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "prepare writes task.json with owner, revision, expected outputs, and allowed adapters.",
+        "Repeated prepare reuses the dispatchId and status remains read-only.",
+        "Blocked, completed, or identity-mismatched runs do not create tasks."
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T3",
+      "title": "Run fixed command adapters and apply results",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/story-runtime.mjs",
+        ".harness/scripts/run-story.ps1",
+        ".harness/scripts/tests/story-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "run-adapter accepts fixed IDs and argv only and writes structured evidence.",
+        "apply validates story, phase, dispatchId, output set, and run directory boundary.",
+        "completed, failed, and blocked results advance, stay, or call M2 block respectively, with resumable partial apply.",
+        "Failed tests and unresolved BLOCKER findings cannot pass M2 gates."
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T4",
+      "title": "Verify the complete vertical slice and Harness integration",
+      "type": "test",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/tests/story-runtime.test.mjs",
+        ".harness/scripts/smoke-harness-flow.ps1",
+        ".harness/structure-manifest.yaml",
+        ".harness/scripts/README.md",
+        "docs/harness-m3-agent-dispatcher/PLAN.md",
+        "docs/harness-m3-agent-dispatcher/REPORT.md",
+        "docs/AI-handover.md"
+      ],
+      "acceptanceCriteria": [
+        "A fixture story reaches delivery summary and completes when approval evidence exists.",
+        "Tests cover missing artifacts, failed adapters, BLOCKER findings, and restart recovery.",
+        "M2 and M3 tests, structure, state, DAG, smoke, and diff checks pass.",
+        "Documentation distinguishes implemented M3 behavior from M4 and later scope."
+      ],
+      "ownerAgent": "unit-tester"
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "Dispatch tasks must reference resolved run-scoped required outputs."
+    },
+    {
+      "from": "T2",
+      "to": "T3",
+      "reason": "Result application and adapters reuse the task and checkpoint contract."
+    },
+    {
+      "from": "T3",
+      "to": "T4",
+      "reason": "The vertical test requires completed dispatch and apply behavior."
+    }
+  ],
+  "waves": [
+    ["T1"],
+    ["T2"],
+    ["T3"],
+    ["T4"]
+  ],
+  "globalChanges": [
+    "Switch e2e workflow required outputs to run-scoped placeholders while preserving M2 compatibility.",
+    "Register the M3 runtime, schemas, tests, and docs in the Harness structure manifest."
+  ],
+  "risks": [
+    "T1 through T3 share runtime files and must execute serially with targeted M2 and M3 regression checks.",
+    "The active M3 bootstrap state uses legacy global outputs and must enter implementation before the workflow switches paths."
+  ]
+}

@@ -2,9 +2,9 @@
 
 > 本文档目标：让零上下文的新 AI 或工程师在阅读后，能够理解项目现状、关键约定、已完成业务、验证方式和下一步开发方向。
 >
-> 最后更新：2026-07-13
+> 最后更新：2026-08-23
 > 项目版本：0.1.0-SNAPSHOT
-> 当前重点：业务系统仍以采集可靠性、LLM 摘要治理、全文摘要 Map-Reduce、标签评分流水线和分类管理增强为基础；Harness 的 M0、M1 与 M1.1 内容指纹新鲜度已完成。当前具备 14 模块 L1 基线、mock 验证的可降级 L2、324 块本地索引、模块刷新、模式感知查询和可修复 refresh-task 输出；backend、frontend、common 的 L1/L3 均为 fresh，L2 均为 pending。下一独立能力是受控的真实 L2 语义增强验收，之后再进入 M2 确定性状态运行时；正式 Skill/Agent 自动接入、Worktree 并行和验证/交付适配仍未实现。
+> 当前重点：M7 与 M8 已完成。M8-A 接入真实只读 `code-reviewer`，M8-B 接入单任务、单 Worktree、串行的 backend/frontend developer Provider，并通过真实 Codex CLI fixture 和真实 backend Story。完整 Provider 链与阶段推进仍由当前 Codex 会话编排。下一阶段是待批准的 M9 条件式单 Story 并行；多 Story Fork-Join、自动 Git 和生产发布仍未实现。
 
 ---
 
@@ -1027,7 +1027,7 @@ llm-knowledge/index/manifest.json
 
 - 后端 7 个：`article/auth/category/collection/common/llm/site`。
 - 前端 7 个：`api/components/layouts/router/stores/styles/views`。
-- 本地索引共 105 个 Chunk。
+- 本地索引共 327 个 Chunk。
 - 每个模块均保留 `custom/` 目录和追加式 `log.md`。
 
 知识生成入口：
@@ -1040,6 +1040,15 @@ llm-knowledge/index/manifest.json
 .\.harness\scripts\generate-kb.ps1 -Area all -Mode all -WithEmbeddings
 ```
 
+Embedding 当前配置协议：
+
+- 密钥：`EMBEDDING_API_KEY`，未配置时回退到 `DASHSCOPE_API_KEY`。
+- 端点：`EMBEDDING_BASE_URL`，默认 `https://dashscope.aliyuncs.com/compatible-mode/v1`。
+- 模型：`EMBEDDING_MODEL`，默认 `text-embedding-v4`；`OPENAI_EMBEDDING_MODEL` 仅作为旧配置兼容兜底。
+- L2 语义增强继续独立使用 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和 `OPENAI_MODEL`。
+- `text-embedding-v4` 同步接口每批最多 10 条；当前实现已按该上限分批。
+- 未经单独批准，不执行真实 Embedding 数据上传。
+
 知识查询入口：
 
 ```powershell
@@ -1050,7 +1059,7 @@ llm-knowledge/index/manifest.json
 当前可确认状态：
 
 - L1 baseline：backend/frontend 均为 `fresh`。
-- L2 semantic：backend/frontend 均为 `pending`，未完成真实 OpenAI 成功路径验证。
+- L2 semantic：`backend/article` 已完成 `gpt-5.5` 真实兼容服务验收；其他模块仍为 `pending`，因此区域和全局状态保持 `pending`。
 - L3 index：`fresh`，Embedding 为 `skipped`。
 - `kb-query.ps1` 优先消费本地索引，没有索引命中时回退 Markdown/YAML。
 - `check-kb-freshness.ps1` 检查 Git hash、工作区源码变化、Baseline、Semantic、Index 和 Manifest。
@@ -1129,15 +1138,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.harness\scripts\smoke
 
 结果：
 
-- Harness 结构校验通过：14 个目录、92 个必需文件、13 个 Skill 文件。
+- Harness 结构校验通过：16 个目录、102 个必需文件、13 个 Skill 文件。
 - `generate-kb` 测试通过。
 - `kb-query` 测试通过。
 - Harness smoke flow 通过。
 - `e2e` 状态模板校验通过。
 - `product` 状态模板校验通过。
 - Task DAG 示例校验通过。
-- Knowledge Dry Run 识别 14 个模块，计划 137 个写入，实际写入 0。
-- 本地索引包含 105 个 Chunk：backend 56、frontend 49。
+- Knowledge Dry Run 识别 14 个模块，计划 139 个写入，实际写入 0。
+- 本地索引包含 327 个 Chunk，并同时索引业务基线、公共知识、Harness、Skill 和人工 Custom 内容。
 - 未启用 `-WithEmbeddings` 时不会生成 `embeddings.jsonl`。
 
 Freshness：
@@ -1157,7 +1166,8 @@ Freshness：
 
 未覆盖：
 
-- 真实 OpenAI Semantic 成功路径。
+- 其他 13 个模块的真实 L2 语义增强。
+- 阿里百炼 Embedding 的真实连通性、向量维度和调用成本。
 - 真实 Embedding 调用与检索消费。
 - 真实业务需求从 requirement 到 delivery 的状态推进。
 - 自动 Agent 调度、Worktree 执行、部署和 API/UI 验证。
@@ -1242,7 +1252,7 @@ frontier-common
 
 注意：以上只是人工/Codex 执行时的推荐职责链，不代表当前已由运行时自动派发。
 
-### 16.9 2026-07-06 最新补充：AGENTS 默认入口规范已落地
+### 16.9 2026-07-06 历史记录：AGENTS 默认入口规范已落地
 
 > 本节保留 2026-07-06 的历史验证记录；当前文件数量、知识状态和下一步以 16.6、16.10、16.11 为准。
 
@@ -1278,20 +1288,20 @@ git -C 'D:\ProjectStudy\FrontierScan' diff --check -- AGENTS.md
 Select-String -Path 'D:\ProjectStudy\FrontierScan\AGENTS.md' -Pattern 'FrontierScan Harness Default Entry Rules','Knowledge-First Development','Project Skill Routing','Agent Registry Usage','Harness Workflow Triggers','Required Harness Checks','Approval and Safety Boundaries'
 ```
 
-验证结论：
+当时验证结论：
 
 - `validate-structure.ps1` 通过：14 个目录、87 个文件、13 个 Skill 文件。
 - `smoke-harness-flow.ps1` 通过：结构、状态模板、Task DAG、知识查询、知识 freshness 检查、worktree 规划、接口用例草稿、build plan、delivery summary 均可执行。
 - `git diff --check -- AGENTS.md` 未发现空白错误；仅提示 Windows 下 Git 未来可能将 LF 转为 CRLF。
 - `AGENTS.md` 中已能定位到新增的默认入口章节：Default Entry Rules、Knowledge-First Development、Project Skill Routing、Agent Registry Usage、Harness Workflow Triggers、Required Harness Checks、Approval and Safety Boundaries。
 
-下一步推荐：
+当时下一步推荐：
 
 1. 将 `frontier-*` Skills 从项目脚手架进一步接入到当前 Codex 可用 Skill runtime，或补充本地 loader 需要的 metadata。
-2. 优先实现真正的 `frontier-kb-generate`，让 `llm-knowledge/` 能从 `backend/src` 和 `frontend/src` 自动刷新。
+2. 优先实现真正的 `frontier-kb-generate`，让 `llm-knowledge/` 能从 `backend/src` 和 `frontend/src` 自动刷新。该项现已完成。
 3. 在首次真实业务需求开始时，创建 active state 文件和具体 `.harness/outputs/task-dag.json`，不要直接改 template 文件。
 
-### 16.10 2026-07-11 最新补充：分层混合知识工程实现状态
+### 16.10 2026-07-11 历史记录：分层混合知识工程实现状态
 
 `frontier-kb-generate` 已从“半自动骨架”升级为可运行的分层混合知识工程首版：
 
@@ -1318,7 +1328,7 @@ L0 source truth
 - L1 自动提取源码事实，后端按包拆分，前端按目录区域拆分。
 - L2 使用 OpenAI 官方 API；缺少 `OPENAI_API_KEY` 或调用失败时降级，不阻塞 L1/L3。
 - L3 默认生成本地 `chunks.json` 和 `manifest.json`，同时索引 Common、Harness、Skill 和人工 Custom 内容。
-- `-WithEmbeddings` 当前明确返回 `disabled`；在向量查询消费者完成前不生成只写不读的 `embeddings.jsonl`。
+- `-WithEmbeddings` 已支持通过阿里百炼独立配置生成 `embeddings.jsonl`；默认模型为 `text-embedding-v4`，每批最多 10 条。未配置专用密钥或请求失败时降级为 `pending/failed`，不阻塞本地索引。
 - `kb-query.ps1` 已优先消费 `llm-knowledge/index/chunks.json`，再回退 Markdown/YAML 搜索。
 - `check-kb-freshness.ps1` 已识别 baseline、semantic、index 三类 freshness。
 
@@ -1331,14 +1341,14 @@ L0 source truth
 当前验证状态：
 
 - L1 和 L3 已运行并通过测试。
-- L2 mock 成功、HTTP 失败、timeout、malformed JSON、schema-invalid 和混合模块状态均已通过测试；真实 OpenAI 调用未执行。
-- 14 个模块和 186 个 Chunk 已生成。
+- L2 mock 成功、HTTP 失败、timeout、malformed JSON、schema-invalid 和混合模块状态均已通过测试；`backend/article` 已完成真实 `gpt-5.5` 兼容服务调用。
+- 14 个模块和 327 个 Chunk 已生成。
 - Area 和 Module 局部刷新保留无关文档、日志、meta 和索引已通过回归测试。
 - 知识工程实现仍在未提交工作区中，交付前必须检查 tracked 与 untracked 文件。
 
 不要把本节理解为“文章架构已全部实现”。当前实现的是知识工程首版；状态运行时、自动 Agent、并行 Worktree、真实接口验证和 DevOps 闭环仍未实现。
 
-### 16.11 2026-07-11 最新交接：文章对照结论与下一阶段计划
+### 16.11 2026-07-11 历史记录：文章对照结论与下一阶段计划
 
 对照《从 AI Coding 到 Harness Engineering 的端到端工程开发实践》后的结论：
 
@@ -1353,7 +1363,7 @@ L0 source truth
 | --- | --- | --- |
 | Knowledge | M1 已验收；L1/L3 fresh，L2 当前 pending 但 mock 路径已验证 | 真实 OpenAI Smoke 可选；Embedding 需等向量检索消费者 |
 | State | Schema、模板、Validator 已有 | Active state、原子更新、合法转换、断点恢复、锁 |
-| Skill | 13 个项目内定义 | 当前 Codex 运行时未确认自动发现/安装 |
+| Skill | 13 个项目内定义；Windows `codex-cli 0.144.1` 已验证项目级发现 | IDE、桌面端、非 Windows 和 CLI 升级后的兼容性待按需复验 |
 | Agent | 12 类角色注册 | Dispatcher、上下文隔离、模型选择、工具权限执行 |
 | Parallel | DAG 和 Worktree 计划 | 波次强校验、实际创建/合并、冲突停止、Fork-Join |
 | Quality | Test/Review/Build/Verify 辅助脚本 | 真实命令执行、证据落盘、Fix 循环、API/UI 请求 |
@@ -1408,7 +1418,7 @@ D:\学习\个人实习\frontierscan-harness-engineering-sop.md
 
 该 SOP 包含项目背景、方案取舍、四个排查案例、验证证据、量化数字、简历 Bullet、STAR 和面试问答。项目交接以本文件和仓库内计划文档为准；SOP 用于个人复盘和求职表达。
 
-### 16.12 2026-07-11 M0 + M1 最终交接
+### 16.12 2026-07-11 历史记录：M0 + M1 最终交接
 
 M0 基线统一和 M1 Knowledge Reliability V2 已实现。权威实施报告：
 
@@ -1416,7 +1426,7 @@ M0 基线统一和 M1 Knowledge Reliability V2 已实现。权威实施报告：
 docs/harness-m0-m1/REPORT.md
 ```
 
-当前可依赖能力：
+该阶段可依赖能力：
 
 - 7 个后端模块 + 7 个前端模块的 L1 基线、`facts.json` 和 `source-coverage.json`。
 - Controller 签名/绑定/安全、事务、服务依赖、配置、Flyway、`.stg` 提示模板抽取。
@@ -1424,12 +1434,12 @@ docs/harness-m0-m1/REPORT.md
 - `-Area <area> -Module <module>` 精确刷新，保留无关模块、人工 Custom、日志、meta 和索引。
 - 186 个生成/精选 Chunk；`quality gate` 在 `Area all` 下优先返回 Common 规范。
 - OpenAI Semantic 使用严格 schema、超时和降级，mock 成功及异常路径已验证；当前文档仍为 `pending`。
-- Embedding 明确 `disabled`，不产生只写不读的向量文件。
+- 该阶段尚未启用 Embedding 生成；后续已完成阿里百炼独立配置和可选 JSONL 生成能力。
 - freshness 可通过 `-WriteRefreshTask` 生成刷新任务，但不会自动执行。
 
 下一步只进入 M2 确定性状态运行时。不要在 M2 完成前实现 Agent 自动派发或并行 Worktree，也不要把当前 Smoke 结果解释为文章级端到端自动交付已经完成。
 
-### 16.13 2026-07-13 M1.1 内容指纹新鲜度交接
+### 16.13 2026-07-13 历史记录：M1.1 内容指纹新鲜度交接
 
 权威计划和报告：
 
@@ -1446,6 +1456,377 @@ M1.1 已将知识新鲜度的判定权从 Git 提交或工作区状态切换为�
 - Area 指纹用于 backend、frontend、common 索引新鲜度；Module 指纹用于单模块 L1/L2 文档的新鲜度与局部刷新隔离。
 - 缺少指纹的旧产物按 fail-closed 处理为 stale，并提示一次 `-Mode baseline` 迁移；新鲜度检查只写可选 refresh task，绝不自动刷新。
 
-已验证的真实项目状态：14 个模块、125 个知识产物、324 个 chunk；backend、frontend、common 均为 Baseline `fresh`、Semantic `pending`、Index `fresh`，且后端与前端 coverage 的 `failed_files` 均为 0。`ArticleController`、`dashboard` 和 `quality gate` 查询均走本地索引并报告 fresh。
+该阶段已验证的项目状态：14 个模块、125 个知识产物、324 个 chunk；backend、frontend、common 均为 Baseline `fresh`、Semantic `pending`、Index `fresh`，且后端与前端 coverage 的 `failed_files` 均为 0。`ArticleController`、`dashboard` 和 `quality gate` 查询均走本地索引并报告 fresh。
 
-本批未读取、输出或调用现有 `OPENAI_API_KEY`，未修改 `backend/src` 或 `frontend/src`，也没有 stage、commit、push、发布、部署或 Worktree 操作。后续应先以受控方式完成真实 L2 语义增强验收，确认模型输出的来源、模型元数据与降级路径；验收后再启动 M2 状态运行时。
+该批未读取、输出或调用现有 `OPENAI_API_KEY`，未修改 `backend/src` 或 `frontend/src`，也没有 stage、commit、push、发布、部署或 Worktree 操作。该阶段规划的真实 L2 单模块语义增强验收现已完成，后续进入 M2 状态运行时。
+
+### 16.14 2026-07-15 当前状态：L2 真实验收与百炼 Embedding 配置
+
+当前权威计划和报告：
+
+```text
+docs/harness-l2-live-acceptance/PLAN.md
+docs/harness-l2-live-acceptance/REPORT.md
+```
+
+当前可依赖状态：
+
+- 14 个业务模块的 L1 基线和本地索引已生成，backend、frontend、common 新鲜度均为 `fresh`。
+- `backend/article` 已使用 `https://coding.xiaofeilun.cn/v1` 和 `gpt-5.5` 完成受控真实 L2 语义增强；其余模块仍为 `pending`，所以全局语义状态保持 `pending`。
+- 当前索引包含 327 个 Chunk，文章语义分块记录 `semantic_provider: coding.xiaofeilun.cn`。
+- Embedding 使用 `EMBEDDING_API_KEY`，未配置时回退到 `DASHSCOPE_API_KEY`；端点由 `EMBEDDING_BASE_URL` 配置，模型由 `EMBEDDING_MODEL` 配置，默认模型为 `text-embedding-v4`。
+- `text-embedding-v4` 每批最多 10 条，生成器已通过多批次回归测试校验数量完整性。
+- 当前 `embeddings_status` 为 `skipped`，本轮没有向阿里百炼发送真实知识分块。
+- `.harness/scripts/README.md`、`.codex/skills/frontier-kb-generate/SKILL.md`、本交接文档和 `llm-knowledge/index/chunks.json` 由自动契约测试共同约束，旧配置不能再次进入现行操作入口。
+
+下一步仍是 M2 确定性状态运行时。未经单独批准，不执行真实 Embedding、提交、推送、发布或部署。
+
+### 16.15 2026-07-16 当前状态：M2 确定性状态运行时
+
+当前权威设计、计划和报告：
+
+```text
+docs/harness-m2-state-runtime/DESIGN.md
+docs/harness-m2-state-runtime/PLAN.md
+docs/harness-m2-state-runtime/REPORT.md
+```
+
+M2 已把单 Story E2E 模板升级为可执行、可恢复、可审计的确定性状态运行时：
+
+- `.harness/scripts/run-state.ps1` 提供 `init/status/validate/record/next/block/resume/complete` 统一入口。
+- `.harness/scripts/lib/state-runtime.mjs` 负责工作流解析、产物证据、质量门禁、独占锁、原子写入和恢复。
+- `.harness/states/active-run.json` 作为唯一活动运行指针；显式 `-StateFile` 可覆盖指针。
+- 活动状态、指针、JSONL 事件和锁按 Story 隔离；状态和指针支持 `.tmp/.bak` 高 revision 恢复。
+- 更新事务使用 `intent/committed` 协议；孤立 intent 会在下次写操作时确定性补记 `committed` 或 `aborted`。
+- 必需产物会记录 SHA-256 证据；测试门禁按证据路径读取最新结果，当前失败测试、未解决 `BLOCKER`、无效 DAG 和缺失产物都不能推进阶段。
+- 显式 `-StateFile` 不依赖活动指针，并且不会污染其他运行的活动指针。
+- 事件日志支持清理进程中断留下的最后一条不完整 JSON；中间损坏继续失败关闭。
+- 纯构建可以离开 `build-publish`；完成 `git-delivery` 前必须存在当前阶段的显式用户批准记录，任何真实发布仍在执行前单独批准。
+- 测试记录必须绑定仓库内证据文件；同一路径重跑时以最新结果判断当前门禁，推进时重新校验 SHA-256，历史结果仍保留。
+- 审批记录必须包含 `actor=user`、非空说明和仓库内证据文件，并持久化 SHA-256；同一路径的 `denied` 撤销旧批准，推进时重新校验当前文件哈希，真实用户身份由调用方确认。
+- `completed` 是不可变终态，更新命令不能继续增加 revision 或改写审计记录。
+- 完成态写命令会先对账孤立事务事件，再拒绝状态修改，保证终态状态不可变且日志闭合。
+- 纯构建无需状态内审批即可推进；M2 不执行发布，真实发布仍由 `frontier-build-publish` 在执行前获取用户批准。
+- 重复 `init` 不得覆盖同一 Story 已存在的正式状态、临时文件或备份。
+- 初始化和定位会恢复正式指针、`.tmp` 与 `.bak`，跨 Story 指针候选按当前原子写入身份选择，旧高 revision 备份不会遮蔽新运行。
+- 指针 revision 领先可恢复状态时失败关闭；普通命令校验 runtime，初始化和默认定位校验活动指针契约。
+- 同 revision 初始化重试会把被后续提交取代的早期孤立 intent 对账为 `aborted`；即使成功重试缺少 committed 尾事件，也只有最后一个孤立 intent 可补记为 `committed`。
+- 状态与指针按 `pointer stage -> state commit -> pointer promote` 更新；临时指针领先状态时回退正式指针，状态达到目标 revision 后才恢复临时指针。
+- 新 Story 初始化发现旧运行已完成时，会在全局初始化锁内获取旧 Story 锁、重新读取并闭合旧事务；仍在执行的 `complete` 会阻止并发初始化，释放锁后可重试。
+- `frontier-state-runner` 已登记为 `implemented-v1`，活动 E2E 状态不再允许手工推进阶段。
+- 完整 Harness 冒烟会在系统临时目录执行 `init/status/validate`，不会在仓库留下活动状态。
+
+当前边界：
+
+- 运行时只覆盖单 Story，不覆盖 `product-fork-join` 多 Story 编排。
+- `.codex/agents/agents.yaml` 仍是角色注册表，没有 Dispatcher 和自动派发能力。
+- Worktree 脚本仍只生成计划，不会创建、合并或删除 Worktree。
+- Build、接口验证、发布和 Git 交付仍是辅助计划或人工门禁，没有端到端自动执行。
+- 本批未修改业务源码，未使用 API 密钥，也未执行暂存、提交、推送或合并。
+
+下一阶段建议只进入 M3 Agent Dispatcher：先让单个 Agent 通过结构化输入/输出与 M2 状态运行时协作，再考虑 M4 Worktree 并行。不要把 M2 状态可恢复解释为文章级自动交付已经完成。
+
+### 16.16 2026-07-17 当前状态：M3 单 Story 文件式 Dispatcher
+
+当前权威设计、计划和报告：
+
+```text
+docs/harness-m3-agent-dispatcher/DESIGN.md
+docs/harness-m3-agent-dispatcher/PLAN.md
+docs/harness-m3-agent-dispatcher/REPORT.md
+```
+
+M3 已按 Single-Story Vertical Slice 打通 M2 上层的结构化派发闭环：
+
+- `.harness/scripts/run-story.ps1` 提供 `prepare/status/run-adapter/apply`。
+- `prepare` 从 M2 状态和 workflow 生成包含 owner、revision、预期输出、允许 adapter 和 next 的 task。
+- 当前 Codex 会话或人工执行者负责认知工作，并写入阶段产物和 `result.json`；M3 不启动真实模型或 Agent 进程。
+- `run-adapter` 只执行代码内固定命令，使用 `execFile` 与 `shell: false`，保存 exit code、stdout、stderr、耗时和时间戳。
+- `apply` 校验 Story、phase、dispatch、完整输出集合、普通文件、run 目录边界和 adapter evidence SHA-256，只通过 M2 `record/next/block/complete` 更新状态。
+- 新阶段产物统一位于 `.harness/runs/<storyId>/phases/<order>-<phase>/`，task、result、checkpoint 和命令证据可跨进程读取。
+- unit-test 失败、未解决 `BLOCKER`、缺失产物和失败 build adapter 均不能推进；同 adapter 重跑通过后可按最新证据恢复。
+- `no-build-required` 会固定检查 `backend/`、`frontend/` 的 staged、unstaged 和 untracked Git 差异，只有范围为空时才生成成功证据。
+- M2 已推进但 checkpoint 尚未落盘时，`apply` 会对账 `runtime.previousPhase`、workflow next 和旧派发身份，补齐 checkpoint 并返回 `already-applied`，不会重复推进状态。
+- `.gitignore` 隔离本机活动指针、E2E 活动状态、备份、临时文件、锁和事件日志；状态模板与 `.harness/runs/` 阶段证据仍可交付。
+- 九阶段临时仓库测试已从 requirement 推进到 delivery summary，并在 fixture 用户批准证据存在时进入 `done`。
+
+M3 最终交付状态：
+
+- Story `M3-001` 已进入 `done`，runtime 状态为 `completed`，revision 为 27。
+- 提交为 `107e993 feat(harness): implement M3 single-story dispatcher`，已合并到本地 `dev`；是否推送远端不由状态运行时推断。
+- 最新工作区验证和审核分别以 `.harness/runs/M3-001/phases/08-git-delivery/final-verification-report.md`、`.harness/reports/code-review-report.md` 为准；phase 4/5/6 报告只保留当时的历史证据。
+
+接手时先执行：
+
+```powershell
+.\.harness\scripts\run-state.ps1 -Command status -Json
+.\.harness\scripts\run-story.ps1 -Command status -Json
+.\.harness\scripts\check-kb-freshness.ps1
+```
+
+M4-A 兼容性结论位于 `docs/harness-m4-runtime-compatibility/`：目标 CLI 连续三次发现 13 个项目 Skill，仓库外负向对照为 0，因此保留 `.codex/skills`，不引入 Plugin。官方当前推荐 `.agents/skills`，CLI 升级或扩展到 IDE/桌面端时必须重新验证。
+
+当前边界：
+
+- `.codex/agents/agents.yaml` 仍是角色注册表，M3 不代表真实 Agent 已自动启动或获得工具权限。
+- 没有多 Story、Fork-Join、DAG 波次执行或 Worktree 生命周期；这些属于 M5。
+- 没有真实发布、部署、API/UI 环境执行或 Git 写入；这些属于 M6 且继续需要用户批准。
+- 本批未修改业务源码，未使用 API 密钥，未执行暂存、提交、推送或合并。
+
+M4-B 受约束 Mock Worker 当前实现：
+
+- `worker-runtime.mjs` 以内部模块形式消费 M3 `task.json`，没有 mock CLI。
+- `.codex/agents/worker-policies.json` 与 `agents.yaml` 的 12 个角色名称、类别一一对应，只声明 `phase-output`、backend/frontend 写入和 backend 测试写入四类固定能力。
+- context 仅加载显式仓库相对普通 UTF-8 文件；单文件 2 MiB，task/策略/context 合计 8 MiB。
+- provider 默认且最多运行 30 秒，只接收克隆的 task、当前角色策略、context 和 AbortSignal，不接收 shell、网络、Git、Adapter 或状态命令。
+- 候选文件和 M3 result 在落盘前完成身份、结构、输出、record、权限、路径和 2/8 MiB 限额校验；阶段文件先写，`result.json` 最后写。
+- provider 超时或产物写入后中断可使用同一 dispatch 显式重试；Worker 完成后 revision 不变，只有调用方执行 M3 `apply` 才推进。
+- 同进程 mock provider 不是恶意代码安全沙箱；真实 Agent 仍未启动，后续必须结合 Codex custom agent 和 sandbox 重新验收。
+
+### 16.17 2026-07-20 当前状态：M5-A 单 Worktree 受控编排
+
+权威设计、计划和报告位于 `docs/harness-m5-worktree-orchestration/`。
+
+- `lib/task-dag-contract.mjs` 统一校验任务唯一 wave、依赖顺序、精确/`/**` 路径范围冲突和 `globalChanges` 串行；`validate-task-dag.ps1` 保持兼容入口。
+- `run-worktree.ps1` 提供 `Plan/Status/Create`，计划绑定活动 Story、DAG SHA、`dev` commit、固定任务分支和 `.harness/worktrees/<story>/<task>` 路径。
+- `Status` 读取 `git worktree list --porcelain` 和引用事实；缓存 JSON 不作为创建决策依据。
+- `Create` 同时要求用户逐次批准和 `-ConfirmCreate`，使用无 shell Git argv、30 秒超时、独占锁与原子状态写入。
+- 临时 Git 仓库已覆盖真实创建、幂等复用、匹配分支续接、创建后状态中断恢复、篡改/漂移/占用拒绝；正式 FrontierScan 仓库未创建 Worktree。
+- Runtime 不调用 M2/M3，纵向 fixture 前后 Harness state 完全一致。
+- `M5-A-001` 已在 revision 19 进入 `done/completed`，业务修改以本地提交 `28e009c66a3d801208ad931037d659067e0e10ce` 交付；本次收尾已获 `git push origin dev` 批准，远程同步结果以 `origin/dev` 引用为准。
+
+下一阶段在独立方案确认前不要进入 M5-B 多 Worktree 波次、Worker 执行/结果收集、merge/remove 或 Fork-Join，也不要进入 M6 真实模型、发布、部署和 Git 自动交付。本批未修改业务源码；M5-A 本地提交已完成，本次收尾已获推送批准，未执行合并、发布或部署。
+
+### 16.18 2026-07-21 当前状态：M5-B1 Worktree 内 Worker 执行与分级回收
+
+权威设计、计划和报告位于 `docs/harness-m5b-worktree-worker/`。
+
+- `lib/worktree-worker-runtime.mjs` 只消费 M5-A 已创建 Worktree，并在执行前绑定 M3 prepared checkpoint、单任务 DAG、owner、base commit 和 Git status。
+- 当前 run Harness 输入按 manifest 复制到 Worktree；已提交源码和文档直接使用固定 base Worktree，主工作树未提交业务源码不会被复制。
+- Worker 输出必须同时通过 M4-B 候选门禁和 M5-B1 Git 完整变更对账。
+- Worker 可更新作为 `worktree-base` 上下文读取且明确声明为候选的现有业务文件；`main-run` 输入和未声明候选的上下文仍不可修改。
+- 仅 phase output 返回 `ready-for-apply`，但 Runtime 不调用 M3 `apply`；调用方显式 apply 后才推进 revision。
+- 存在 backend/frontend 写入时返回 `ready-for-integration`，主工作树业务代码和 M3 正式 result 均不变化。
+- receipt 支持幂等复用；Provider 失败可复用已验证输入；phase-output 回收中断可恢复。无 durable candidate list 的业务写入中断恢复失败关闭。
+- M5-B1 不提供 CLI，不创建、合并、删除 Worktree，不启动真实 Agent，也不实现多任务或多 Worktree。
+
+下一阶段应独立规划 M5-B2 的业务代码集成、task-level dispatch、多任务聚合和多 Worktree 波次。未经批准不要进入 merge/remove、Fork-Join、真实模型、发布、部署或 Git 自动交付。
+
+### 16.19 2026-07-21 当前状态：M5-B2 单 Worktree 业务候选受控集成
+
+权威设计、计划和报告位于 `docs/harness-m5b2-worktree-integration/`。
+
+- `lib/worktree-integration-runtime.mjs` 提供 `plan/status/apply`，PowerShell 入口为 `run-worktree-integration.ps1`。
+- Plan 只接受 M5-B1 `ready-for-integration`，绑定当前 state、M3 prepared task/checkpoint、单 pending DAG task、M5-A plan/status 和 M5-B1 receipt/manifest/result。
+- 候选以 SHA-256 bundle 固化；单文件 2 MiB、总量 8 MiB。重复 Plan 必须重验 receipt、base 和固定 result 路径，不能只信任旧 plan。
+- Status 要求主工作树 HEAD 等于 `baseCommit`，业务 Git 差异全部可由 plan 解释，并按 Git 逻辑 base/candidate 哈希分类；`core.autocrlf` 等 checkout filter 不会把 Git 状态干净的文件误判为漂移。
+- Apply 需要真实用户批准和 `-ConfirmApply`，写入顺序为业务文件、phase output、正式 result、integration receipt；遗留锁和未知目标内容失败关闭。
+- 逐文件中断和 result 后中断可显式恢复；重复 M5-B2 Apply 复用匹配 receipt。Runtime 不自动回滚、不调用 M3 apply。
+- 临时 Git fixture 覆盖已有文件更新、新文件创建、符号链接、HEAD/证据/bundle 漂移、CLI、恢复和 M3 单次显式推进；正式业务源码没有被测试修改。
+- 当前 M3 `already-applied` 只处理状态已推进但 checkpoint 尚未完成的中断窗口；正常完成后的第二次 apply 不是公开幂等入口。
+- `M5-B2-001` 已完成测试、Review、no-build 和接口验证；用户随后批准 Git 交付，业务 Runtime 以 `d557e540d78033a317601de8edc516f859fdcd83` 提交，运行资产忽略规则以 `9e380e9eb2a6bbb7124258c426ea2678c28d68e6` 提交，均已推送至 `origin/dev`。Story 最终为 `done/completed`、revision 29。
+
+下一阶段应先形成 M5-C Worktree 生命周期收尾的独立方案，再评估 M5-B3 多任务协议。未经确认不要执行正式仓库 Apply、merge/remove、Worktree 清理、Git 自动交付、真实模型、发布或部署。
+
+### 16.20 2026-07-22 当前状态：M5-C 单 Worktree 生命周期回收
+
+权威设计、计划和报告位于 `docs/harness-m5c-worktree-lifecycle/`。
+
+- `run-worktree.ps1` 和 `lib/worktree-runtime.mjs` 已扩展 `Retire`；入口只接受已完成的目标 M5-B2 Story，`stateFile` 指向待回收目标，而不是 M5-C 自身状态。
+- Retire 同时要求真实用户逐次批准与 `-ConfirmRetire`，并在执行 `git worktree remove --force` 前重新验证 M5-A plan/history status、M5-B1 manifest/execution receipt/Worker result、M5-B2 plan/receipt、主工作树候选和正式 `result.json` 的 SHA-256。
+- Runtime 还核对目标 Worktree 的 branch/HEAD、可解释 Git 变更集、主工作树清洁性和 `create/execute/integrate/retire` 锁。锁协议为双向互斥：Retire 持锁后重检其他锁，Create、Worker 和 Apply 持有自身锁后也检查 `retire.lock`，后加锁的一方在副作用前退出。
+- M5-B2 `appliedFiles` 必须完整覆盖 M5-B1 候选，ignored 文件也必须在允许集合中；普通文本和 JSON 两种 Retire CLI 输出均已回归验证。
+- M5-B2 计划会合法刷新 M5-A `status.json` 的观测时间；Retire 不再将其当前哈希与 M5-B1 receipt 的历史 `statusSha256` 强制比较，而是校验当前 created/身份/plan 绑定及 M5-B2 plan 对 execution receipt 的不可变 SHA-256 绑定。
+- 成功后写入 `retirement-receipt.json`；Git 已移除但 receipt 未写入时，只在证据和分支仍一致时补写 `recovered: true` receipt。重复 Retire 复用匹配 receipt。
+- Retire 保留 `harness/...` 分支，不执行 `prune`、分支删除、合并、状态推进、Git 提交、推送、发布或部署。真实 FrontierScan 仓库尚未执行回收，测试仅操作临时 Git 仓库。
+- 临时 fixture 已通过公开 Runtime 跑通 M5-A→M5-B1→M5-B2→M3→M2→M5-C 全链路，并确认 Retire 前后完成态 state、已集成业务候选和正式 `result.json` 字节不变；M5-C 测试为 15/15。
+
+本 Story 的完整回归、结构校验和 M5-C owned diff 审核证据记录在 `REPORT.md`。完成 Git 交付前，下一阶段只能评估 M5-B3 多任务协议；不得自动进入多 Worktree、Fork-Join、分支清理、真实 Agent、发布、部署或 Git 自动交付。
+
+### 16.21 2026-07-23 当前状态：M5-B3-A 多任务协议兼容性验证
+
+权威设计、计划和报告位于 `docs/harness-m5b3-multi-task-protocol/`。
+
+- 已确认 M3 v1.0 是 phase 级单 dispatch：固定 `task.json`、`result.json` 和 checkpoint 不能被多个 task 安全复用，首次 `apply` 还会推进全局 phase。
+- M5-B1 对多节点 DAG 的拒绝、M5-B2 的单 task 集成和 M5-C 的单 task 回收均是当前正确边界，不应被批次循环绕过。
+- 推荐 M5-B3-B 引入兼容的 task-scoped dispatch v1.1、batch-scoped Worktree 和独立 serial batch ledger；每项 task 独立保存凭据，一次只执行一项，批次不能自行推进 M2/M3 状态，M5-C 只在 Story 完成后回收 batch Worktree。
+- 未实现多任务 Runtime、并行、多 Worktree、Fork-Join、自动 merge/cleanup、真实 Agent、发布、部署或 Git 自动交付。
+
+### 16.22 2026-07-28 当前状态：M5-B3-B 单 Worktree 串行多任务批次运行时
+
+权威设计、实施计划和报告位于 `docs/harness-m5b3-batch-runtime/`。
+
+- v1.0 phase 级单任务 dispatch 保持兼容；active Story 的 `implementation` phase 只有包含至少两个 backend/frontend 节点时才可用 `prepare-batch` 生成 v1.1 task-scoped dispatch。每项任务独立拥有 `task.json`、`result.json`、checkpoint、`task-report.md`、Worker execution receipt 与 integration receipt，并严格绑定 `batchId/taskId/taskRoot`。
+- `batch-runtime.mjs` 只维护 serial batch ledger、顺序、锁、继承快照和回执状态，不执行 Git 或 M2/M3 状态命令；`batch-base-contract.mjs` 使用固定 Git argv 得到并验证 `dev` 基准。每次只允许 claim 一个任务，Provider 异常与非法输出不会推进任务状态。
+- `BatchPlan/BatchStatus/BatchCreate/BatchRetire` 仅从 ledger 派生 Worktree 身份、分支、路径和基准，拒绝外部路径、任务和基准参数。正式 Create、Apply、Retire 继续分别要求真实用户逐次批准及 `-ConfirmCreate`、`-ConfirmApply`、`-ConfirmRetire`。
+- M5-B1 只允许当前任务写入其 `predictedFiles`，并验证前序集成候选的继承快照；M5-B2 按逐项 integration receipt 与当前主树哈希进行内容寻址集成。所有任务 `integrated` 前不能生成正式 phase result；`finalize-batch` 不推进状态，既有 M3 `apply` 是唯一推进入口且只推进一次。
+- 批次收尾把正式 implementation 的 `task.json`、`result.json` 和 `implementation-notes.md` 的路径与 SHA-256 固定进 `batch-receipt.json.finalizationArtifacts`，再由 ledger 固定 receipt 哈希；`apply` 与 `batch-retire` 均复核该可信链。`finalize-batch` 以 `batch-finalization.lock` 串行化 ledger 收尾和 checkpoint binding，并发调用明确拒绝、完成后允许显式重试。receipt 已写但 ledger 未落盘、以及 ledger 已完成但 binding 未落盘均已在临时 Git fixture 通过受控中断恢复验证。
+- 临时 Git fixture 已跑通两任务的 prepare、batch Worktree、T1 集成、T2 Provider 异常后的同 dispatch 重试、收尾、一次 M3 apply、目标 Story 完成、batch Retire 中断恢复与 receipt 复用。正式 FrontierScan 仓库未创建或回收 Worktree，未修改 `backend/src/**`、`frontend/src/**`。`M5-B3-B-001` 已完成最终门禁和双重审核，状态为 `done/completed`、revision `24`；业务修改以提交 `e3d77a4479916fb529f3561b1527941d00eeed7f` 交付，截至 2026-07-30 本地 `dev` 与 `origin/dev` 一致。未执行发布或部署。
+
+后续只能在独立方案中评估同 wave 并行、多 Worktree 波次、Fork-Join、自动 merge、分支删除、`git worktree prune`、真实 Agent、发布、部署和 Git 自动交付；不得把当前单 batch 串行能力扩展为自动并行。
+
+### 16.23 2026-07-30 当前状态：M5-D-A 同 Wave 多 Worktree 只读兼容层
+
+权威设计、实施计划和报告位于 `docs/harness-m5d-multi-worktree-wave/`。
+
+- `run-worktree.ps1` 与 `worktree-runtime.mjs` 新增 `WavePlan/WaveStatus`，不创建第二套 Runtime。
+- 目标必须是 active Story 的 `implementation` phase、至少两个 pending 的 backend/frontend 任务、无 `globalChanges`，并先通过共享 DAG 的 wave、依赖和文件冲突校验。
+- `WavePlan` 将 `dev` 固化为统一 `baseCommit`，按大小写不敏感的 `taskId` 稳定排序，派生 `harness/<story>/wave-<wave>-<task>-<slug>` 分支和 `.harness/worktrees/<story>/wave-<wave>/<taskId>` 路径。
+- `WaveStatus` 只读取 Git 事实；任务级状态为 `absent/branch-only/created`，聚合状态为 `absent/partial/ready`。相同事实复用已有状态证据。
+- DAG、基准、计划任务集合、分支、路径、HEAD、junction、计划外 Worktree，以及计划分支被挂载在其他路径时均失败关闭。
+- 临时 Git fixture 真实创建两个 Worktree 验证 `partial -> ready`；正式 FrontierScan 仓库没有创建、合并、回收或修改 Worktree。
+- M5-D-A 不提供 `WaveCreate`，不启动并行 Worker，不生成合并结果，不删除分支或调用 M2/M3 状态命令。
+- `M5-D-A-001` 已完成实现、回归和 Review，Harness 状态为 `done/completed`、revision `20`；核心实现以提交 `b6b95d9` 交付。
+- 2026-08-04 用户已批准将文档收尾提交与 `b6b95d9` 一并推送至 `origin/dev`；未创建 PR，未执行发布或部署。
+
+该阶段提出的 M5-D-B 设计工作已在下节实施；M5-D-A 本身仍保持只读规划和状态能力，不应被解释为创建授权。
+
+### 16.24 2026-08-04 当前状态：M5-D-B 审批门控 WaveCreate
+
+权威设计、实施计划和报告位于 `docs/harness-m5d-wave-create/`，活动 Story 为 `M5-D-B-001`。
+
+- `run-worktree.ps1` 与 `worktree-runtime.mjs` 新增 `WaveCreate/wave-create`，继续复用 M5-D-A 的 WavePlan、WaveStatus、固定 Git argv、路径校验和原子 JSON。
+- 每次创建只处理一个明确 wave，必须传入 `ConfirmWaveCreate` 和当前 `plan.json` 的 `ExpectedPlanSha256`；Runtime 在所有关键副作用前重新验证计划，计划漂移会使批准立即失效。
+- 同一 run/Story 的所有 wave 共享带随机 `lockId` 的 `waves/create.lock`，不同 wave 在首个 Git 写入前即互斥。遗留锁不按时间或 PID 自动失效；恢复必须确认旧进程停止，并绑定 `WaveStatus` 顶层 `locks` 中全部现存锁 SHA-256。
+- 恢复期间共享 `waves/create-recovery.lock` 是活动所有权，旧 `create.lock` 保留为接管证据。恢复替换后必须匹配本次生成的 `lockId`；旧创建所有者观察到恢复锁后不能继续 Git、写状态/回执或删除锁，恢复异常保留两把锁。
+- 创建按计划稳定顺序处理 `branch-only/absent` 项；部分失败保留已创建 Worktree，重试只补齐缺失项。Git 成功但状态写入中断、以及 ready 后回执写入中断均可从当前事实受控恢复。
+- 动态锁快照不写入稳定 `status.json`。只有完整 Git 事实为 `ready` 时才写 `creation-receipt.json`，并绑定计划、DAG、稳定状态哈希、基准和每个任务 HEAD。
+- 首次 WavePlan 初始化状态后，复用 WavePlan 和普通 WaveStatus 只返回动态 Git 事实；稳定状态只由持锁 WaveCreate 更新，陈旧查询不能覆盖完成回执绑定状态。
+- 同一 Story 其他 wave、计划外 Worktree、异地挂载、主工作树不干净以及计划/DAG/基准/路径/HEAD 漂移均失败关闭。
+- 独立 Review 发现并修复了恢复异常误清锁、并发恢复采用他人 owner、不同 wave 独立锁，以及 Git/状态实际写入点 fencing 不足；新增真实临时 Git 用例覆盖这些竞态。
+- 第二轮复审又补出恢复写前锁集合变化和陈旧 WaveStatus 覆盖回执状态，两项均新增 RED 并修复。
+- 正式 FrontierScan 仓库未创建、合并、回收或删除 Worktree；未执行 `git add/commit/push/PR`、发布或部署。
+
+下一阶段只能在独立方案与审批中评估同 wave Worker 并行、跨 Worktree 结果汇总/集成和生命周期回收。`WaveCreate` 批准不构成 Worker、merge/remove、Fork-Join、发布、部署或 Git 交付授权。
+
+### 16.25 2026-08-06 当前状态：M5-D-C1 同 Wave 并行 Mock Worker
+
+权威设计与实施计划位于 `docs/harness-m5d-wave-execution/`，活动 Story 为 `M5-D-C1-001`。
+
+- `story-runtime.mjs prepare-wave` 只接受覆盖全部 pending implementation 任务的唯一无依赖、无冲突 wave，并生成 v1.2 task/checkpoint、统一 implementation owner 和 execution ledger；ordinary、serial batch 与 worktree wave owner 互斥。
+- `worker-runtime.mjs` 支持 v1.2 attempt result 路径、`predictedFiles` 和 candidate/result rename 前 guard；v1.0/v1.1 行为保持兼容。
+- `worktree-wave-execution-runtime.mjs` 管理不可变 attempt、claim、execute.lock、短期 ledger mutation lock、`execute-wave`、`retry-task` 和 `recover-attempt`。
+- `execute-wave` 按稳定顺序 claim 所有 pending 任务，再通过 `Promise.allSettled` 并行调用独立 Worktree Worker；barrier 测试证明两个 Provider 同时进入。Promise 返回值不作为成功事实，最终状态只从 result、receipt、Git 与 ledger 重读。
+- 部分失败保留成功 execution receipt，失败任务稳定为 blocked；普通 execute 不自动重试 blocked，`retry-task` 必须重新批准并绑定旧 failure 哈希，生成新 attempt 且保留旧目录。
+- 恢复覆盖 claim-only、lock-before-running、完整 result/receipt、blocked 锁释放中断和孤儿 Worktree 候选。孤儿候选保留并失败关闭，不自动 reset 或删除。
+- candidate、result、receipt、ledger 和 lock release 五个写点均有 owner fencing；替换锁后旧 Worker 不能继续写入，也不能删除新锁。
+- 同进程并行 Worker 只对短期 ledger mutation lock 做最多 5 秒有界等待；不同 PID、损坏锁或超时仍失败关闭。
+- 正式 FrontierScan 仓库未执行 `WaveCreate`、Worker、Worktree 创建/回收、主树集成或 M3 apply，未修改 `backend/src/**`、`frontend/src/**`，未执行 `git add/commit/push/PR`、发布或部署。
+
+下一阶段为独立的 M5-D-C2：integration manifest freeze、主工作树串行受控集成、wave receipt、`finalize-wave` 和最终 M3 apply。不得把 C1 Worker 执行批准解释为集成、回收或 Git 交付批准。
+### 16.26 2026-08-06 当前状态：M5-D-C2 Wave 集成与阶段收尾
+
+M5-D-C2 已实现 integration manifest 原子冻结、`recover-freeze`、wave 级 integration/recovery owner、稳定任务顺序
+主树集成、partial 前缀恢复、wave receipt、`finalize-wave` 与 M3 `apply` 单次推进。所有真实 Git/Worktree
+变更只在临时 fixture 中验证；正式仓库未执行 Worker 或候选集成。Worktree/分支回收、真实 Agent、自动提交、
+推送、PR、发布和部署仍不在范围内。
+
+### 16.27 2026-08-07 当前状态：M5-D-D WaveRetire
+
+权威设计、实施计划和报告位于 `docs/harness-m5d-wave-retire/`，活动 Story 为 `M5-D-D-001`。
+
+- `run-worktree.ps1` 与 `worktree-runtime.mjs` 新增 `WaveRetire/wave-retire`。
+- 只接受 `done/completed` Story、finalized execution ledger、wave receipt、M3 apply checkpoint 和正式产物完整的单个 wave。
+- 首次删除前执行全局零删除预检；任一任务、主树、分支、Worktree 或 writer lock 漂移时不删除任何 Worktree。
+- 普通/recovery 双锁绑定 WavePlan、creation receipt、ledger 与 wave receipt SHA-256，并以 `lockId` fencing。
+- 按 WavePlan 顺序删除 Worktree，删除后重验注册消失、目录不存在、保留分支仍指向 `baseCommit`，再写 task receipt。
+- partial recovery 只接受完整有序 receipt 前缀；最终回执绑定完成态、M3、Wave 和全部 task receipt，可完整重验后幂等复用。
+- 首版不删除分支，不执行 `git worktree prune`，不修改完成态 State，不自动提交、推送、发布或部署。
+- 正式仓库没有执行真实 WaveRetire；所有 Git 删除只发生在临时 fixture。
+- Worker Runtime 97/97、Worktree lifecycle 39/39、Wave 35/35、Wave execution 9/9 和 Story Runtime 均通过；两轮独立审核及闭环复审最终无 BLOCKER/WARNING。
+- `M5-D-D-001` 已在 revision `18` 进入 `done/completed`，实现提交 `2b7269d57ad3a7f286faef707e5cd8d69ef4c558` 已推送到 `origin/dev`。
+
+### 16.28 2026-08-10 历史计划：M6-A 单业务开发闭环验收
+
+M6-A 不先新增通用 Runtime，而是选择一个范围较小、验收标准明确的真实业务任务，使用当前 Harness 完成一次真实闭环：
+
+```text
+requirement -> technical-design -> task-dag -> implementation -> unit-test
+-> code-review -> build-publish -> interface-verification -> git-delivery -> done
+```
+
+以上是 M6-A 当时使用的 State v1 历史流程。当前 State v2 的末阶段已经调整为：
+
+```text
+requirement -> technical-design -> task-dag -> implementation -> unit-test
+-> code-review -> build-publish -> interface-verification
+-> delivery-preparation -> done
+```
+
+`done` 只表示业务开发和交付准备闭环完成。后续获批的 Git 事实通过独立、版本化的
+`delivery-receipt.json` 记录，不修改完成态 State。
+
+验收要求：
+
+- 修改真实 `backend/`、`frontend/` 或二者关联的业务代码，不再只依赖 Harness fixture。
+- 由当前会话/Codex 按现有 State Runtime 推进，不手工编辑 State。
+- 按修改范围执行真实测试、构建和 API/UI 验证，并将证据绑定到 State。
+- 中断后能够从活动 State 和阶段产物继续，不依赖旧聊天上下文。
+- Git 提交、推送和 PR 继续逐次由用户批准，不纳入首版自动闭环。
+- 发现缺口时只补完成该业务闭环所需的最小 Adapter，不提前实现通用 M6 Engine、真实 Agent 自动派发或 Fork-Join。
+
+M6-A 是对“单个真实业务任务能否由当前 Harness 完成开发闭环”的历史验收，不代表 Harness 全部路线完成。其发现的结构化状态、证据去重、知识新鲜度和交付归属问题已在 M7 中继续加固。
+
+### 16.29 2026-08-18 当前状态：M7 单 Story 确定性闭环完成
+
+权威路线位于 `docs/harness-m7-m12-roadmap/`，M7-D 设计、计划和报告位于
+`docs/harness-m7d-closure-acceptance/`，真实验收 Story 为 `M7-D-001`。
+
+- M7-A1 至 M7-A4 已完成 State v2 契约、统一阶段结果投影、验收追踪门禁、运行时一致性和交付语义。
+- M7-B 已提供确定性串行入口，由程序根据 State 返回唯一下一动作；认知任务仍由当前 Codex 会话完成。
+- M7-C 已把任务相关知识新鲜度、最小刷新、重检和逐区域 `accepted-stale` 纳入正式状态与门禁。
+- M7-D 异常 fixture 覆盖阻塞恢复、缺口批准、知识过期批准、结果漂移、重复 apply、中断恢复、无 Git 完成和独立交付回执。
+- `M7-D-001` 已完成真实 API 与 Chrome UI 验收，五项 required acceptance criterion 全部为 `verified`。
+- 最终 State 为 `done/completed` revision `19`，交付准备认领 9 个业务文件，`delivery.gitStatus=not-requested`。
+- `verify-story-closure.ps1` 能只依赖完成态 State 和绑定证据复核需求、DAG、修改、测试、审核、构建、界面验收与交付准备事实。
+- M7-D 验收中发现的后期返工需求通过受限 rework/supersession 闭环处理：只允许未完成 State v2 从阻塞的 `delivery-preparation` 返回 `implementation`，随后完整重走质量阶段。
+- 当前工作区尚未执行 Git 暂存、提交或推送。
+
+以上为 M7 完成时的历史状态；后续 M8-A 已完成，当前状态见下一节。
+
+### 16.30 2026-08-21 当前状态：M8-A 只读审核 Provider 完成
+
+权威设计、计划、报告、勘误和自动化能力评估位于
+`docs/harness-m8a-review-provider/`，真实验收 Story 为 `M8-A-001`。
+
+- 已接入首个真实只读 `code-reviewer` Provider，仅允许 `code-review` 阶段调用。
+- Runtime 冻结 task、最小上下文、角色策略、Profile 和模型来源，以固定参数启动本机 `codex exec`。
+- 项目配置支持 `role -> profile -> adapter/model`；本地覆盖被 Git 忽略。未指定模型时不传 `--model`，不声称继承父 UI 会话临时模型。
+- Agent 只返回结构化审核结果，正式 evidence、报告、execution receipt 和 phase result 由 Runtime 生成。
+- `read-only` 是同一操作系统用户下的写入边界，不是严格文件读取 ACL。
+- 最终 State 为 `done/completed` revision `51`，五项 required criterion 均为 `verified`。
+- State 和 owned manifest 的权威 owned 文件数量为 37；`PLAN.md` 是唯一 initial dirty/unrelated 文件，旧交付摘要中的 38 已由 `ERRATA.md` 更正。
+- M8-A 实现提交为 `ecc987e`，本地运行资产忽略规则提交为 `b98a55a`，文档同步提交为 `a315850`，知识基线提交为 `65761a9`；这些提交尚未推送，动态 HEAD 和 ahead/behind 必须现场运行 Git 命令读取。
+- 审核任务启动后可独立完成，但 `Prepare -> Run -> Materialize -> Apply`、finding 复核和返工仍由当前 Codex 会话编排，不属于无人干预流水线。
+- backend、frontend、common 知识基线和索引均为 `fresh`，语义增强仍为 `pending`。
+- M8-A 完成时的下一阶段是 M8-B；该阶段现已完成，当前进度见下一节。
+- M8-B 之前不开放主树直接写入、并行、Fork-Join、自动 Git、发布或部署。
+
+### 16.31 2026-08-23 当前状态：M8-B 单任务开发 Provider 完成
+
+权威设计、计划和报告位于 `docs/harness-m8b-development-provider/`，实施 Story 为
+`M8-B-001`，真实业务验收 Story 为 `M8-B-REAL-001`。
+
+- 已接入 `backend-developer` 与 `frontend-developer` 的单任务 Development Provider。
+- Agent 只直接写已创建的任务 Worktree；主树只由 M5-B2 Runtime 受控集成。
+- Runtime 冻结 DAG node、criterion、`predictedFiles`、知识、角色策略、模型路由、
+  Worktree 和 Git baseline，并从真实磁盘差异生成候选。
+- 固定测试通过后才生成 candidate/test/development receipt 和 implementation
+  notes/result 候选。
+- 删除、重命名、symlink、submodule、二进制、越权路径、ignored 副作用和 Git
+  元数据漂移均失败关闭。
+- 真实 Codex CLI fixture 完成 Worktree 写入、Maven 测试、候选冻结、M5-B2 集成和
+  Story Apply；Git 探针被 sandbox 拒绝或被 Runtime 对账识别。
+- `M8-B-REAL-001` 在独立临时仓库完成 SiteService 字段首尾空白归一化，完整后端
+  166 项测试、只读审核和 Maven package 通过，三项验收均为 `verified`。
+- 真实 Story 最终 State 为 `done/completed` revision `10`，
+  `delivery.gitStatus=not-requested`。
+- 真实验收发现 knowledge 与 DAG predicted source 重复时 Context Builder 误拒绝，
+  已按 predicted source 优先的最小规则完成 TDD 修复。
+- 正式实施 Story 在 Delivery 对账发现 initialization 前 dirty 文件归属错误后执行
+  受限 rework，并完整重走 implementation 至 delivery-preparation；最终 State 为
+  `done/completed` revision `29`，八项 required criterion 均为 `verified`。
+- Delivery Runtime 已按 TDD 忽略 `.harness/tmp/` 嵌套临时仓库目录，其他非规范路径
+  继续失败关闭；最终 manifest 绑定 29 个 owned files，Git 为 `not-requested`。
+- M8-B 不自动创建或回收 Worktree，不自动提交、推送、发布或部署，也不启用并行。
+- 下一阶段是经专项设计、独立审核和用户批准后的 M9 条件式单 Story 并行。

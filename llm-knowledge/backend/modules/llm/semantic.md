@@ -4,8 +4,9 @@ layer: L2-semantic
 area: backend
 module: llm
 doc_type: semantic
-git_hash: 4ab9d045a22ba2f5b92b19ec2f8c37ae327556a4
-generated_at: 2026-07-11T06:36:15.029Z
+git_hash: f12d893896617845242abb75e23d577fc730d579
+source_fingerprint: sha256:5862707da6dc63e015b169d263bc4240c28c694d02c2070395d54422159c6615
+generated_at: 2026-08-14T09:28:32.334Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -44,7 +45,7 @@ semantic_model: gpt-4.1-mini
 
 ## 当前状态
 
-- 本次未运行 L2 语义增强。
+- 未配置 OPENAI_API_KEY，已降级为 L1 基线文档，L2 语义增强待补充。
 
 ## 待增强内容
 

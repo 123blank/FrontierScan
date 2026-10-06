@@ -73,6 +73,7 @@ export interface Article {
   sourceHash: string;
   publishedAt: string | null;
   collectedAt: string;
+  readAt: string | null;
   createdAt: string;
 }
 
@@ -106,6 +107,7 @@ export interface FavoriteArticle {
   sourceUrl: string;
   publishedAt: string | null;
   collectedAt: string;
+  readAt: string | null;
   favoritedAt: string;
 }
 

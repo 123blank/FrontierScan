@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-integration-receipt.schema.json",
+  "title": "FrontierScan Harness Wave Integration Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "runId",
+    "phase",
+    "waveId",
+    "waveIndex",
+    "taskId",
+    "dispatchId",
+    "manifestSha256",
+    "baseCommit",
+    "appliedFiles",
+    "completedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "phase": { "const": "implementation" },
+    "waveId": { "type": "string", "pattern": "^wave-[a-f0-9]{16}$" },
+    "waveIndex": { "type": "integer", "minimum": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "manifestSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "appliedFiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["taskId", "path", "type", "sha256", "bytes"],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["backend", "frontend", "phase-output"] },
+          "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "completedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

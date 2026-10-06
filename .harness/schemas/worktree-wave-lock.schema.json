@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-lock.schema.json",
+  "title": "FrontierScan Harness Worktree Wave Lock",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "lockId",
+    "mode",
+    "storyId",
+    "runId",
+    "wave",
+    "planSha256",
+    "pid",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "lockId": { "type": "string", "format": "uuid" },
+    "mode": { "type": "string", "enum": ["create", "recovery"] },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "wave": { "type": "integer", "minimum": 1 },
+    "planSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "pid": { "type": "integer", "minimum": 1 },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

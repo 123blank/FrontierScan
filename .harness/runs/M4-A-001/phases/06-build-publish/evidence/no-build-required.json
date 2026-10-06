@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M4-A-001",
+  "phase": "build-publish",
+  "dispatchId": "647d32a6-c850-4f9a-9c4b-6aab91960784",
+  "adapter": "no-build-required",
+  "executable": "git",
+  "args": [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "--",
+    "backend",
+    "frontend"
+  ],
+  "cwd": "D:/ProjectStudy/FrontierScan",
+  "status": "passed",
+  "exitCode": 0,
+  "startedAt": "2026-07-17T07:51:23.843Z",
+  "finishedAt": "2026-07-17T07:51:23.937Z",
+  "durationMs": 93,
+  "stdout": "",
+  "stderr": ""
+}

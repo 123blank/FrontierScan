@@ -24,7 +24,8 @@ Use this Skill after a task changes files or fixes a defect, before code review,
 3. Read `references/test-selection-policy.md`.
 4. Read `references/command-policy.md` before running commands.
 5. Run the recommended commands that apply to the change.
-6. Record command results in `.harness/reports/test-report.md` using `.harness/templates/test-report.md`.
+6. Define stable test cases with `criterionIds`, then record commands, results, current evidence path and SHA-256 in the phase `result.json`.
+7. Write the human report using `.harness/templates/test-report.md`.
 
 ## Default Commands
 
@@ -44,5 +45,7 @@ npm run build
 - Backend/data changes require backend tests.
 - Frontend changes require frontend build.
 - Harness/Skill/state changes require Harness structure validation.
-- Skipped tests require a recorded reason and risk.
-- A failed required command blocks review, publish, interface verification, and delivery until fixed or explicitly accepted by the user.
+- Every required criterion must be covered by at least one required test case.
+- Unrelated passed tests and optional cases do not satisfy required criterion coverage.
+- Required test results must be `passed` and their evidence hash must still match at apply time.
+- Failed required commands, skipped/blocked required cases, missing results, or evidence drift block progression.

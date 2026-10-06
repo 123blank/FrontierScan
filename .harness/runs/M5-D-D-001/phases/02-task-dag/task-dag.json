@@ -1,0 +1,169 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-D-D-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "定义 WaveRetire 接口和严格 Schema",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/run-worktree.ps1",
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-lifecycle-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-wave-runtime.test.mjs",
+        ".harness/schemas/worktree-wave-retirement-lock.schema.json",
+        ".harness/schemas/worktree-wave-retirement-recovery-lock.schema.json",
+        ".harness/schemas/worktree-wave-task-retirement-receipt.schema.json",
+        ".harness/schemas/worktree-wave-retirement-receipt.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "WaveRetire 只接受完成态 Wave 身份参数并拒绝调用方自定义 task、branch、path 或 base",
+        "普通锁、recovery 锁、任务回执和最终回执均具有严格 JSON Schema",
+        "旧 Retire、BatchRetire、WavePlan、WaveStatus 和 WaveCreate 参数行为保持兼容"
+      ]
+    },
+    {
+      "taskId": "T2",
+      "title": "实现完成态证据和全局零删除预检",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-lifecycle-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "只接受 done/completed、finalized ledger 和完整 M3 apply/正式产物证据",
+        "首次删除前验证全部任务、主树文件、Worktree、分支和冲突锁",
+        "任一任务预检失败时所有 Wave Worktree 均保持存在"
+      ]
+    },
+    {
+      "taskId": "T3",
+      "title": "实现 retirement 双锁恢复与 owner fencing",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-lifecycle-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "普通回收并发只有一个 owner",
+        "遗留锁只能在显式恢复确认和全部现存锁 SHA-256 绑定下接管",
+        "旧 owner 失权后不能删除 Worktree、写回执或释放 replacement lock",
+        "全部 Wave 和 implementation 生命周期冲突锁在删除前失败关闭"
+      ]
+    },
+    {
+      "taskId": "T4",
+      "title": "实现稳定任务回收和 partial recovery",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-lifecycle-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "Worktree 按 WavePlan 稳定任务顺序删除并写任务回执",
+        "主树允许集只增加当前 owner 锁和已验证的稳定任务回执前缀",
+        "Git 删除后必须确认注册消失、目录不存在且保留分支仍指向 baseCommit",
+        "Git 已删除但回执未写时只能在证据完整时补写 recovered 回执"
+      ]
+    },
+    {
+      "taskId": "T5",
+      "title": "实现最终回执和 WaveRetire 纵向闭环",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-lifecycle-runtime.test.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "最终回执绑定完成态、M3、Wave 和全部有序任务回执证据",
+        "最终回执缺失中断可恢复，已有最终回执仅在完整重验后复用",
+        "临时 Git fixture 跑通 WaveCreate 到 Story done 再到 WaveRetire 的完整闭环",
+        "全部 Worktree 消失、任务分支保留且完成态 State 和主树业务事实不变"
+      ]
+    },
+    {
+      "taskId": "T6",
+      "title": "完成结构登记、文档和最终质量门禁",
+      "type": "docs",
+      "status": "pending",
+      "ownerAgent": "task-planner",
+      "predictedFiles": [
+        ".harness/structure-manifest.yaml",
+        ".harness/README.md",
+        ".harness/scripts/README.md",
+        ".harness/runs/M5-D-D-001/phases/03-implementation/implementation-notes.md",
+        ".harness/runs/M5-D-D-001/phases/04-unit-test/test-report.md",
+        ".harness/runs/M5-D-D-001/phases/05-code-review/code-review-report.md",
+        ".harness/runs/M5-D-D-001/phases/06-build-publish/build-report.md",
+        ".harness/runs/M5-D-D-001/phases/07-interface-verification/interface-verification-report.md",
+        ".harness/runs/M5-D-D-001/phases/08-git-delivery/delivery-report.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        "docs/AI-handover.md",
+        "docs/harness-m5d-wave-retire/DESIGN.md",
+        "docs/harness-m5d-wave-retire/PLAN.md",
+        "docs/harness-m5d-wave-retire/REPORT.md",
+        "llm-knowledge/overview.md"
+      ],
+      "acceptanceCriteria": [
+        "WaveRetire 专项和 Retire/BatchRetire/Wave/Worker/Story 直接回归通过",
+        "结构、状态、DAG、Smoke、知识新鲜度和差异门禁通过",
+        "文档准确说明审批、恢复、分支保留和延期边界",
+        "最终审核无未解决 BLOCKER 或 WARNING"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "完成态证据必须建立在稳定接口和严格 Schema 上"
+    },
+    {
+      "from": "T2",
+      "to": "T3",
+      "reason": "retirement owner 必须绑定已经验证的完整 Wave 证据"
+    },
+    {
+      "from": "T3",
+      "to": "T4",
+      "reason": "任何 Git 删除和任务回执写入前都必须先有可恢复的 owner fencing"
+    },
+    {
+      "from": "T4",
+      "to": "T5",
+      "reason": "最终回执只能消费完整且有序的任务 retirement receipt 前缀"
+    },
+    {
+      "from": "T5",
+      "to": "T6",
+      "reason": "结构登记、文档和最终门禁必须基于完整纵向闭环"
+    }
+  ],
+  "waves": [
+    ["T1"],
+    ["T2"],
+    ["T3"],
+    ["T4"],
+    ["T5"],
+    ["T6"]
+  ],
+  "globalChanges": [],
+  "risks": [
+    "所有实现任务共享 worktree-runtime.mjs 和生命周期测试，必须串行执行",
+    "多 Worktree 删除不是全局事务，恢复正确性依赖全局预检、稳定回执前缀和 owner fencing",
+    "正式仓库不得执行真实 WaveRetire，所有 Git 删除只允许在临时 fixture 中发生",
+    "无关未跟踪文件 CODEX-CROSS-SESSION-HANDOFF.md 不得修改、暂存或纳入交付"
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-A-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "强化 Task DAG 安全契约",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/task-dag-contract.mjs",
+        ".harness/scripts/validate-task-dag.ps1",
+        ".harness/scripts/tests/task-dag.test.ps1",
+        ".harness/schemas/task-dag.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "任务 wave 唯一归属、依赖顺序、路径冲突和全局变更串行校验采用失败关闭。",
+        "现有合法 DAG 和 PowerShell 调用方式保持兼容。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T2",
+      "title": "实现确定性 Worktree 计划与状态",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/run-worktree.ps1",
+        ".harness/scripts/tests/worktree-runtime.test.mjs",
+        ".harness/schemas/worktree-plan.schema.json",
+        ".harness/schemas/worktree-status.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "plan 固化 dev SHA 并生成稳定分支、路径和原子 JSON。",
+        "status 以 Git 事实识别 absent、created 和 inconsistent。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T3",
+      "title": "实现批准门禁、幂等与恢复",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "无批准、脏仓库、基准漂移、路径或分支冲突时不创建。",
+        "同一计划重复调用可复用，部分创建可恢复。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T4",
+      "title": "验证临时 Git 仓库纵向闭环",
+      "type": "test",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/tests/worktree-runtime.test.mjs",
+        ".harness/scripts/tests/task-dag.test.ps1"
+      ],
+      "acceptanceCriteria": [
+        "临时仓库完成 validate、plan、status、create、status。",
+        "创建前后 Harness revision 和 phase 不变。"
+      ],
+      "ownerAgent": "unit-tester"
+    },
+    {
+      "taskId": "T5",
+      "title": "完成回归、审核与中文文档",
+      "type": "docs",
+      "status": "pending",
+      "predictedFiles": [
+        "docs/harness-m5-worktree-orchestration/**",
+        "docs/AI-handover.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        ".harness/structure-manifest.yaml",
+        ".harness/scripts/README.md",
+        "llm-knowledge/overview.md"
+      ],
+      "acceptanceCriteria": [
+        "Harness 回归、结构、知识和 diff 门禁通过。",
+        "最终审核无影响稳定性、基本可用性或近期扩展的 BLOCKER/WARNING。"
+      ],
+      "ownerAgent": "code-reviewer"
+    }
+  ],
+  "edges": [
+    { "from": "T1", "to": "T2", "reason": "Worktree Runtime 复用强化后的 DAG 契约。" },
+    { "from": "T2", "to": "T3", "reason": "创建门禁建立在确定性计划和事实状态之上。" },
+    { "from": "T3", "to": "T4", "reason": "纵向闭环验证完整创建与恢复行为。" },
+    { "from": "T4", "to": "T5", "reason": "文档和审核基于新鲜验证证据。" }
+  ],
+  "waves": [["T1"], ["T2"], ["T3"], ["T4"], ["T5"]],
+  "globalChanges": [
+    "Task DAG 校验由共享 Node 契约统一提供。",
+    "新增单 Worktree 的计划、状态和批准创建 Harness 入口。"
+  ],
+  "risks": [
+    "真实 Git 操作仅在临时 fixture 执行，正式仓库创建仍需单独批准。",
+    "多 Worktree、合并、删除和遗留锁自动回收延后实现。"
+  ]
+}

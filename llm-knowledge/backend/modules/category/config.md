@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: category
 doc_type: config
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:bf542397a093edd156fb9223292162dcc41b0ec444379ab679282c4ea32c9137
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:3ee916797c4b6364e522b078f89a697da2144c6b3989aa6836de821d10366ee7
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -20,14 +20,14 @@ source_files:
 
 # category 配置基线
 
-## Configuration Properties
+## 配置属性
 
 - 暂无自动识别结果。
 
-## 异步/调度配置线索
+## 异步与调度配置线索
 
 - 暂无自动识别结果。
 
 ## 待增强说明
 
-Needs AI Review: 请补充环境变量、默认值、生产风险和降级行为。
+需要 AI 审核：请补充环境变量、默认值、生产风险和降级行为。

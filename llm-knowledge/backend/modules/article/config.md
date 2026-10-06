@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: article
 doc_type: config
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:bbcf5341e6170bd7ed08d61a4a0c011601f2a3a4d843008f80dbda0d6a18662b
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:1be9274e55442429c8a5da213e792fd54df8500799df185c03b9f2242fc6efe6
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -26,14 +26,14 @@ source_files:
 
 # article 配置基线
 
-## Configuration Properties
+## 配置属性
 
 - app.summary-recovery -> ArticleSummaryRecoveryProperties (backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryProperties.java)
 
-## 异步/调度配置线索
+## 异步与调度配置线索
 
 - ArticleSummaryRecoveryScheduler (backend/src/main/java/com/frontierscan/article/ArticleSummaryRecoveryScheduler.java)
 
 ## 待增强说明
 
-Needs AI Review: 请补充环境变量、默认值、生产风险和降级行为。
+需要 AI 审核：请补充环境变量、默认值、生产风险和降级行为。

@@ -79,6 +79,11 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
             and (cast(:tagId as bigint) is null or exists (select 1 from article_tags m where m.article_id = a.id and m.tag_id = cast(:tagId as bigint)))
             and (cast(:startDate as timestamp with time zone) is null or a.published_at >= cast(:startDate as timestamp with time zone))
             and (cast(:endDate as timestamp with time zone) is null or a.published_at <= cast(:endDate as timestamp with time zone))
+            and (
+              :readStatus = 'all'
+              or (:readStatus = 'unread' and a.read_at is null)
+              or (:readStatus = 'read' and a.read_at is not null)
+            )
             order by a.collected_at desc
             """,
             countQuery = """
@@ -90,10 +95,16 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
             and (cast(:tagId as bigint) is null or exists (select 1 from article_tags m where m.article_id = a.id and m.tag_id = cast(:tagId as bigint)))
             and (cast(:startDate as timestamp with time zone) is null or a.published_at >= cast(:startDate as timestamp with time zone))
             and (cast(:endDate as timestamp with time zone) is null or a.published_at <= cast(:endDate as timestamp with time zone))
+            and (
+              :readStatus = 'all'
+              or (:readStatus = 'unread' and a.read_at is null)
+              or (:readStatus = 'read' and a.read_at is not null)
+            )
             """,
             nativeQuery = true)
     Page<Article> findWithFilters(@Param("userId") Long userId, @Param("categoryId") Long categoryId,
             @Param("siteId") Long siteId, @Param("keywordPattern") String keywordPattern, @Param("tagId") Long tagId,
-            @Param("startDate") String startDate, @Param("endDate") String endDate, Pageable pageable);
+            @Param("startDate") String startDate, @Param("endDate") String endDate,
+            @Param("readStatus") String readStatus, Pageable pageable);
 
 }

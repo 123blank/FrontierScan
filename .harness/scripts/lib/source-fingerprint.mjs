@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +18,15 @@ function sanitizedFailure(file, stage, error) {
   const rawCode = typeof error?.code === "string" ? error.code : "UNKNOWN";
   const code = /^[A-Za-z0-9_-]+$/.test(rawCode) ? rawCode : "UNKNOWN";
   return { file, stage, error: `Read failed (${code}).` };
+}
+
+function canonicalFingerprintBytes(content) {
+  const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  const text = bytes.toString("utf8");
+  if (!Buffer.from(text, "utf8").equals(bytes)) {
+    return bytes;
+  }
+  return Buffer.from(text.replaceAll("\r\n", "\n"), "utf8");
 }
 
 function resolveRepositoryFile(root, relativeFile) {
@@ -40,7 +48,13 @@ async function collectFiles(root, relativeEntry) {
   } catch {
     return [];
   }
-  if (!existsSync(resolved.fullPath)) return [];
+  const entryInfo = await lstat(resolved.fullPath).catch(() => null);
+  if (!entryInfo || entryInfo.isSymbolicLink()) return [];
+
+  if (entryInfo.isFile()) {
+    return [resolved.relative];
+  }
+  if (!entryInfo.isDirectory()) return [];
 
   const entries = await readdir(resolved.fullPath, { withFileTypes: true }).catch(() => null);
   if (entries === null) {
@@ -78,7 +92,7 @@ export async function computeFileSetFingerprint(root, relativeFiles, options = {
 
     try {
       const content = await readFileImpl(resolved.fullPath);
-      const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content);
+      const bytes = canonicalFingerprintBytes(content);
       hash.update(resolved.relative, "utf8");
       hash.update("\0", "utf8");
       hash.update(String(bytes.length), "utf8");

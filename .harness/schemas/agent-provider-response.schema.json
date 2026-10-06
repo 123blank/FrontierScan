@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-provider-response.schema.json",
+  "title": "FrontierScan Code Reviewer Provider Response",
+  "$defs": {
+    "nullableTokenCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    }
+  },
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "providerRequestId",
+    "dispatchId",
+    "storyId",
+    "runId",
+    "phase",
+    "role",
+    "status",
+    "summary",
+    "findings",
+    "diagnostics",
+    "usage"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "providerRequestId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "dispatchId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "storyId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "phase": {
+      "type": "string",
+      "const": "code-review"
+    },
+    "role": {
+      "type": "string",
+      "const": "code-reviewer"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "failed"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "findingId",
+          "severity",
+          "status",
+          "summary",
+          "file",
+          "line",
+          "evidenceText",
+          "rationale"
+        ],
+        "properties": {
+          "findingId": {
+            "type": "string",
+            "pattern": "^F-[0-9]{3}$"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "BLOCKER",
+              "WARNING",
+              "INFO"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "const": "open"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "evidenceText": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "maxItems": 32
+    },
+    "usage": {
+      "type": "object",
+      "required": [
+        "reportedModel",
+        "inputTokens",
+        "outputTokens"
+      ],
+      "properties": {
+        "reportedModel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inputTokens": {
+          "$ref": "#/$defs/nullableTokenCount"
+        },
+        "outputTokens": {
+          "$ref": "#/$defs/nullableTokenCount"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: views
 doc_type: pitfalls
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:8e05d0ba495c62dcaf99f82e9de779d8cc507d286073065776fe0087e3b12402
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:87f5bf9c15531d9bde3e1102112e126cca6874103515925154b63b3d336e4038
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -22,4 +22,4 @@ source_files:
 
 - 存在 Vue 组件，需关注 B2B 后台一致性和响应式布局。
 
-Needs AI Review: 请补充页面级业务风险、测试缺口和已知 UI 陷阱。
+需要 AI 审核：请补充页面级业务风险、测试缺口和已知 UI 陷阱。

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M4-A-001",
+  "phase": "unit-test",
+  "dispatchId": "a6f56154-5620-413e-a5ee-c924f285c668",
+  "adapter": "harness-structure",
+  "executable": "powershell.exe",
+  "args": [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    "D:\\ProjectStudy\\FrontierScan\\.harness\\scripts\\validate-structure.ps1",
+    "-Root",
+    "D:\\ProjectStudy\\FrontierScan"
+  ],
+  "cwd": "D:/ProjectStudy/FrontierScan",
+  "status": "passed",
+  "exitCode": 0,
+  "startedAt": "2026-07-17T07:38:14.870Z",
+  "finishedAt": "2026-07-17T07:38:16.225Z",
+  "durationMs": 1353,
+  "stdout": "Harness structure validation passed.\r\nDirectories checked: 20\r\nFiles checked: 121\r\nSkill files checked: 13\r\n",
+  "stderr": ""
+}

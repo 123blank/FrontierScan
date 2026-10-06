@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-attempt-claim.schema.json",
+  "title": "FrontierScan Harness Wave Attempt Claim",
+  "type": "object",
+  "required": [
+    "schemaVersion", "storyId", "runId", "phase", "waveId", "waveIndex",
+    "taskId", "dispatchId", "attemptId", "claimId", "lockId",
+    "wavePlanSha256", "creationReceiptSha256", "taskSha256", "checkpointSha256",
+    "claimFile", "lockFile", "claimedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "phase": { "const": "implementation" },
+    "waveId": { "type": "string", "pattern": "^wave-[a-f0-9]{16}$" },
+    "waveIndex": { "type": "integer", "minimum": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "dispatchId": { "type": "string", "format": "uuid" },
+    "attemptId": { "type": "string", "pattern": "^attempt-[a-f0-9]{16}$" },
+    "claimId": { "type": "string", "pattern": "^claim-[a-f0-9]{16}$" },
+    "lockId": { "type": "string", "pattern": "^lock-[a-f0-9]{16}$" },
+    "wavePlanSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "creationReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "taskSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "checkpointSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "claimFile": { "type": "string", "minLength": 1 },
+    "lockFile": { "type": "string", "minLength": 1 },
+    "claimedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

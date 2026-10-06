@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/task-dag-v2.schema.json",
+  "title": "FrontierScan Task DAG v2",
+  "type": "object",
+  "required": ["schemaVersion", "storyId", "nodes", "edges", "waves", "globalChanges", "risks"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "storyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["taskId", "title", "type", "status", "ownerAgent", "predictedFiles", "criterionIds"],
+        "properties": {
+          "taskId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+          "title": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["backend", "frontend", "database", "docs", "test", "integration", "unknown"] },
+          "status": { "const": "pending" },
+          "ownerAgent": { "type": "string", "minLength": 1 },
+          "predictedFiles": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "criterionIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "edges": { "type": "array" },
+    "waves": { "type": "array", "minItems": 1 },
+    "globalChanges": { "type": "array" },
+    "risks": { "type": "array" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M4-B-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "共享 Dispatch 契约并校验 Worker 策略",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/dispatch-contract.mjs",
+        ".harness/scripts/lib/story-runtime.mjs",
+        ".harness/scripts/lib/worker-runtime.mjs",
+        ".harness/scripts/tests/worker-runtime.test.mjs",
+        ".harness/schemas/worker-policies.schema.json",
+        ".codex/agents/worker-policies.json"
+      ],
+      "acceptanceCriteria": [
+        "M3 和 Worker 共享 task/result Schema 1.0 结构校验。",
+        "策略缺失、重复、未知角色、类别漂移或非法能力在 provider 调用前失败。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T2",
+      "title": "限制上下文和 Provider 执行边界",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worker-runtime.mjs",
+        ".harness/scripts/tests/worker-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "context 仅加载角色允许的显式普通 UTF-8 文件并满足 2/8 MiB 限额。",
+        "provider 异常或超时不产生候选文件、result 或状态修改。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T3",
+      "title": "校验并原子写入候选结果",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worker-runtime.mjs",
+        ".harness/scripts/tests/worker-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "非法身份、输出、record、capability、路径或大小在任何候选落盘前失败。",
+        "阶段产物先写，result.json 最后写入。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T4",
+      "title": "验证中断恢复和单 Story 纵向闭环",
+      "type": "test",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/tests/worker-runtime.test.mjs",
+        ".harness/scripts/tests/story-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "同一 dispatch 可从超时或产物写入后中断中恢复。",
+        "prepare、mock Worker、apply 纵向闭环只由 apply 推进一次。"
+      ],
+      "ownerAgent": "unit-tester"
+    },
+    {
+      "taskId": "T5",
+      "title": "完成 Harness 集成、文档和审核",
+      "type": "docs",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/structure-manifest.yaml",
+        ".harness/scripts/README.md",
+        "docs/harness-m4-worker-runtime/REPORT.md",
+        "docs/AI-handover.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        "llm-knowledge/overview.md"
+      ],
+      "acceptanceCriteria": [
+        "所有 Harness 和知识门禁通过，backend/frontend 无业务差异。",
+        "最终审核无未解决 BLOCKER/WARNING，延期边界写入报告。"
+      ],
+      "ownerAgent": "code-reviewer"
+    }
+  ],
+  "edges": [
+    { "from": "T1", "to": "T2", "reason": "上下文执行依赖已校验的任务与角色策略。" },
+    { "from": "T2", "to": "T3", "reason": "候选写入只能发生在 provider 安全返回之后。" },
+    { "from": "T3", "to": "T4", "reason": "恢复和纵向闭环依赖 result-last 写入语义。" },
+    { "from": "T4", "to": "T5", "reason": "集成文档和最终审核依赖完整行为证据。" }
+  ],
+  "waves": [["T1"], ["T2"], ["T3"], ["T4"], ["T5"]],
+  "globalChanges": [
+    "新增所有 12 个 Agent 角色的 Worker 策略注册表。",
+    "M3 与 Worker 共享 Dispatch Schema 1.0 结构校验。",
+    "新增 Harness Worker runtime、测试、Schema 和中文文档登记。"
+  ],
+  "risks": [
+    "同进程 mock provider 不是恶意代码安全沙箱，真实 Agent 接入需另行验证 Codex sandbox。",
+    "T1-T4 共享 Worker 测试和运行时文件，必须串行执行。"
+  ]
+}

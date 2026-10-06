@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-wave-task-retirement-receipt.schema.json",
+  "title": "FrontierScan Harness Wave Task Worktree Retirement Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "storyId",
+    "runId",
+    "waveId",
+    "waveIndex",
+    "retirementId",
+    "taskId",
+    "branch",
+    "worktreePath",
+    "baseCommit",
+    "resultFile",
+    "resultSha256",
+    "executionReceiptFile",
+    "executionReceiptSha256",
+    "integrationReceiptFile",
+    "integrationReceiptSha256",
+    "appliedFiles",
+    "retiredAt",
+    "recovered"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "waveId": { "type": "string", "pattern": "^wave-[a-f0-9]{16}$" },
+    "waveIndex": { "type": "integer", "minimum": 1 },
+    "retirementId": { "type": "string", "format": "uuid" },
+    "taskId": { "type": "string", "minLength": 1 },
+    "branch": { "type": "string", "minLength": 1 },
+    "worktreePath": { "type": "string", "minLength": 1 },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "resultFile": { "type": "string", "minLength": 1 },
+    "resultSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "executionReceiptFile": { "type": "string", "minLength": 1 },
+    "executionReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "integrationReceiptFile": { "type": "string", "minLength": 1 },
+    "integrationReceiptSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "appliedFiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["taskId", "path", "type", "sha256", "bytes"],
+        "properties": {
+          "taskId": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "enum": ["backend", "frontend", "phase-output"] },
+          "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "retiredAt": { "type": "string", "format": "date-time" },
+    "recovered": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

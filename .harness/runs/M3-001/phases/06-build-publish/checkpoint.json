@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "fab1d40f-626c-4108-a195-0771aa2ffd55",
+  "storyId": "M3-001",
+  "phase": "build-publish",
+  "status": "completed",
+  "preparedAt": "2026-07-16T15:09:56.465Z",
+  "updatedAt": "2026-07-16T15:10:38.503Z",
+  "adapterRuns": [
+    {
+      "adapter": "no-build-required",
+      "status": "passed",
+      "evidencePath": ".harness/runs/M3-001/phases/06-build-publish/evidence/no-build-required.json",
+      "finishedAt": "2026-07-16T15:10:07.253Z"
+    }
+  ],
+  "resultReceivedAt": "2026-07-16T15:10:38.503Z",
+  "completedAt": "2026-07-16T15:10:38.503Z"
+}

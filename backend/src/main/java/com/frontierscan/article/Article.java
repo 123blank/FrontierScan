@@ -84,6 +84,8 @@ public class Article {
     private OffsetDateTime publishedAt;
     @Column(name = "collected_at", nullable = false)
     private OffsetDateTime collectedAt;
+    @Column(name = "read_at")
+    private OffsetDateTime readAt;
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 }

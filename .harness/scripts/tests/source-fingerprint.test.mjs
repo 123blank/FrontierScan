@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -110,6 +110,41 @@ async function testFileSetAndReadFailureSafety() {
   }
 }
 
+async function testTextLineEndingsDoNotChangeFingerprint() {
+  const root = await createFixture();
+  try {
+    const file = "AGENTS.md";
+    await write(root, file, "# Project rules\n\n- Keep knowledge fresh.\n");
+    const lf = await computeFileSetFingerprint(root, [file]);
+
+    await write(root, file, "# Project rules\r\n\r\n- Keep knowledge fresh.\r\n");
+    const crlf = await computeFileSetFingerprint(root, [file]);
+
+    assert.equal(crlf.fingerprint, lf.fingerprint);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testSymlinkedRootAgentsFileDoesNotAffectCommonFingerprint() {
+  const root = await createFixture();
+  const externalRoot = await mkdtemp(path.join(os.tmpdir(), "frontier-source-fingerprint-external-"));
+  try {
+    await rm(path.join(root, "AGENTS.md"), { force: true });
+    const before = await computeAreaSourceFingerprint(root, "common");
+    const externalFile = path.join(externalRoot, "private-agents.md");
+    await writeFile(externalFile, "PRIVATE AGENTS CONTENT OUTSIDE THE REPOSITORY");
+    await symlink(externalFile, path.join(root, "AGENTS.md"), "file");
+
+    const after = await computeAreaSourceFingerprint(root, "common");
+    assert.equal(after.status, "complete");
+    assert.equal(after.fingerprint, before.fingerprint);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(externalRoot, { recursive: true, force: true });
+  }
+}
+
 async function testJsonCli() {
   const root = await createFixture();
   try {
@@ -129,5 +164,7 @@ async function testJsonCli() {
 
 await testDeterminismAndAreaIsolation();
 await testFileSetAndReadFailureSafety();
+await testTextLineEndingsDoNotChangeFingerprint();
+await testSymlinkedRootAgentsFileDoesNotAffectCommonFingerprint();
 await testJsonCli();
 console.log("source-fingerprint tests passed");

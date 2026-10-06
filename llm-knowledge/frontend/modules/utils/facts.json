@@ -1,0 +1,27 @@
+{
+  "area": "frontend",
+  "module": "utils",
+  "root_path": "frontend/src/utils",
+  "source_files": [
+    "frontend/src/utils/readStatusFilter.ts"
+  ],
+  "file_count": 1,
+  "files": [
+    {
+      "file": "frontend/src/utils/readStatusFilter.ts",
+      "kind": "ts"
+    }
+  ],
+  "api_calls": [],
+  "routes": [],
+  "route_guards": [],
+  "stores": [],
+  "exports": [
+    {
+      "name": "ReadStatusFilter",
+      "file": "frontend/src/utils/readStatusFilter.ts"
+    }
+  ],
+  "api_dependencies": [],
+  "components": []
+}

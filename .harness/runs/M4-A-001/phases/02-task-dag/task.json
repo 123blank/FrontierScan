@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "47d6eee2-90eb-4d87-9718-15441d70b9bb",
+  "storyId": "M4-A-001",
+  "phase": "task-dag",
+  "ownerAgent": "task-planner",
+  "purpose": "Split work into tasks, dependencies, waves, predicted file touches, and global changes.",
+  "preparedRevision": 3,
+  "preparedAt": "2026-07-17T07:18:32.280Z",
+  "expectedOutputs": [
+    ".harness/runs/M4-A-001/phases/02-task-dag/task-dag.json"
+  ],
+  "allowedAdapters": [],
+  "next": "implementation"
+}

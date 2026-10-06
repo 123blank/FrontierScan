@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "5986e115-5282-4ccb-87dd-5a094a66e3b4",
+  "storyId": "M4-A-001",
+  "phase": "technical-design",
+  "status": "completed",
+  "summary": "M4-A 已确定使用 CLI prompt context 正负对照、注册表一致性和官方资料形成兼容性结论。",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/01-technical-design/technical-design.md"
+    }
+  ],
+  "records": []
+}

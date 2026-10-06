@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: collection
 doc_type: architecture
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:989e52a4506cb7a3a3f671a7d940614b1270a0f23460cd17c63d2f182d89b958
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:4e9f1793b07cc45e7a704d995e2e646a580692abd1703f60cae725f4320b482f
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -55,11 +55,11 @@ source_files:
 - backend/src/main/java/com/frontierscan/collection/TagEvaluationAsyncService.java
 - backend/src/main/java/com/frontierscan/collection/package-info.java
 
-## 定时/异步执行
+## 定时与异步执行
 
 - CollectionScheduler (backend/src/main/java/com/frontierscan/collection/CollectionScheduler.java)
 - CollectionOrchestrator -> frontierScanCollectionExecutor (backend/src/main/java/com/frontierscan/collection/CollectionOrchestrator.java)
 
 ## 待增强说明
 
-Needs AI Review: 请补充核心调用链、事务边界、异步补偿流程和跨模块协作方式。
+需要 AI 审核：请补充核心调用链、事务边界、异步补偿流程和跨模块协作方式。

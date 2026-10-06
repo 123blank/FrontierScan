@@ -4,9 +4,9 @@ layer: L1-baseline
 area: backend
 module: collection
 doc_type: interfaces
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:989e52a4506cb7a3a3f671a7d940614b1270a0f23460cd17c63d2f182d89b958
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:4e9f1793b07cc45e7a704d995e2e646a580692abd1703f60cae725f4320b482f
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -33,17 +33,17 @@ source_files:
 
 # collection 接口与集成点
 
-## Controllers
+## 控制器
 
 - CollectionRunController：/api/collection-runs (backend/src/main/java/com/frontierscan/collection/CollectionRunController.java)
 
-## HTTP Endpoints
+## HTTP 接口
 
 - GET /api/collection-runs -> CollectionRunController (backend/src/main/java/com/frontierscan/collection/CollectionRunController.java)
 - GET /api/collection-runs/{runId} -> CollectionRunController (backend/src/main/java/com/frontierscan/collection/CollectionRunController.java)
 - POST /api/collection-runs/{runId}/retry -> CollectionRunController (backend/src/main/java/com/frontierscan/collection/CollectionRunController.java)
 - POST /api/collection-runs/sites/{siteId} -> CollectionRunController (backend/src/main/java/com/frontierscan/collection/CollectionRunController.java)
 
-## 外部调用/集成提示
+## 外部调用与集成提示
 
-Needs AI Review: 自动基线只识别 Spring MVC 注解，复杂参数、权限、响应体和异常语义需由 L2 或人工补充。
+需要 AI 审核：自动基线只识别 Spring MVC 注解，复杂参数、权限、响应体和异常语义需由 L2 或人工补充。

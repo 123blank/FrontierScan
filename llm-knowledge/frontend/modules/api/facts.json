@@ -53,6 +53,20 @@
       "file": "frontend/src/api/articles.ts"
     },
     {
+      "method": "PUT",
+      "path": "/articles/${id}/read",
+      "response_type": "ApiResponse<Article>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/articles/${id}/read",
+      "response_type": "ApiResponse<Article>",
+      "request_types": [],
+      "file": "frontend/src/api/articles.ts"
+    },
+    {
       "method": "POST",
       "path": "/articles/${id}/summary/retry",
       "response_type": "ApiResponse<Article>",

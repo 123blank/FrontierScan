@@ -2,12 +2,14 @@ schema_version: "1.0"
 description: Required structural files for the FrontierScan Harness scaffold.
 required_directories:
   - .harness
+  - .harness/config
   - .harness/schemas
   - .harness/states
   - .harness/workflows
   - .harness/templates
   - .harness/reports
   - .harness/outputs
+  - .harness/runs
   - .harness/scripts
   - .codex/agents
   - .codex/skills
@@ -17,14 +19,102 @@ required_directories:
   - llm-knowledge/common
   - docs/harness-m0-m1
   - docs/harness-m1-1-source-fingerprint
+  - docs/harness-m2-state-runtime
+  - docs/harness-m3-agent-dispatcher
+  - docs/harness-m4-runtime-compatibility
+  - docs/harness-m4-worker-runtime
+  - docs/harness-m5-worktree-orchestration
+  - docs/harness-m5b-worktree-worker
+  - docs/harness-m5b2-worktree-integration
+  - docs/harness-m5c-worktree-lifecycle
+  - docs/harness-m5b3-multi-task-protocol
+  - docs/harness-m5b3-batch-runtime
+  - docs/harness-m5d-multi-worktree-wave
+  - docs/harness-m5d-wave-create
+  - docs/harness-m5d-wave-execution
+  - docs/harness-m5d-wave-retire
+  - docs/harness-m7-m12-roadmap
+  - docs/harness-m7a1-state-v2
+  - docs/harness-m7a2-phase-result
+  - docs/harness-m7a3-acceptance-gates
+  - docs/harness-m7a4-runtime-delivery
+  - docs/harness-m7b-serial-driver
+  - docs/harness-m7c-kb-freshness-loop
+  - docs/harness-m8a-review-provider
+  - docs/harness-m8b-development-provider
 required_files:
   - .harness/README.md
+  - .harness/config/agent-providers.json
+  - .harness/schemas/agent-provider-config.schema.json
+  - .harness/schemas/agent-provider-request.schema.json
+  - .harness/schemas/agent-provider-context.schema.json
+  - .harness/schemas/agent-provider-response.schema.json
+  - .harness/schemas/agent-provider-execution-receipt.schema.json
+  - .harness/schemas/agent-development-request.schema.json
+  - .harness/schemas/agent-development-context.schema.json
+  - .harness/schemas/agent-development-response.schema.json
+  - .harness/schemas/agent-development-execution-receipt.schema.json
+  - .harness/schemas/agent-development-candidate-manifest.schema.json
+  - .harness/schemas/agent-development-test-receipt.schema.json
+  - .harness/schemas/agent-development-receipt.schema.json
   - .harness/schemas/product-state.schema.json
   - .harness/schemas/e2e-state.schema.json
+  - .harness/schemas/e2e-state-v2.schema.json
+  - .harness/schemas/active-run.schema.json
   - .harness/schemas/task-dag.schema.json
+  - .harness/schemas/task-dag-v2.schema.json
+  - .harness/schemas/approval-receipt.schema.json
+  - .harness/schemas/knowledge-freshness-evidence.schema.json
+  - .harness/schemas/knowledge-refresh-task.schema.json
+  - .harness/schemas/knowledge-refresh-receipt.schema.json
+  - .harness/schemas/dispatch-task.schema.json
+  - .harness/schemas/dispatch-result.schema.json
+  - .harness/schemas/dispatch-task-v2.schema.json
+  - .harness/schemas/dispatch-result-v2.schema.json
+  - .harness/schemas/dispatch-task-v1.1.schema.json
+  - .harness/schemas/dispatch-result-v1.1.schema.json
+  - .harness/schemas/dispatch-task-v1.2.schema.json
+  - .harness/schemas/dispatch-result-v1.2.schema.json
+  - .harness/schemas/implementation-owner.schema.json
+  - .harness/schemas/serial-batch-ledger.schema.json
+  - .harness/schemas/worker-policies.schema.json
+  - .harness/schemas/worktree-plan.schema.json
+  - .harness/schemas/worktree-status.schema.json
+  - .harness/schemas/worktree-worker-input-manifest.schema.json
+  - .harness/schemas/worktree-worker-receipt.schema.json
+  - .harness/schemas/worktree-integration-plan.schema.json
+  - .harness/schemas/worktree-integration-status.schema.json
+  - .harness/schemas/worktree-integration-receipt.schema.json
+  - .harness/schemas/worktree-retirement-receipt.schema.json
+  - .harness/schemas/worktree-batch-plan.schema.json
+  - .harness/schemas/worktree-batch-status.schema.json
+  - .harness/schemas/worktree-batch-receipt.schema.json
+  - .harness/schemas/worktree-batch-retirement-receipt.schema.json
+  - .harness/schemas/worktree-wave-plan.schema.json
+  - .harness/schemas/worktree-wave-status.schema.json
+  - .harness/schemas/worktree-wave-lock.schema.json
+  - .harness/schemas/worktree-wave-creation-receipt.schema.json
+  - .harness/schemas/worktree-wave-execution-ledger.schema.json
+  - .harness/schemas/worktree-wave-attempt-claim.schema.json
+  - .harness/schemas/worktree-wave-attempt-lock.schema.json
+  - .harness/schemas/worktree-wave-attempt-failure.schema.json
+  - .harness/schemas/worktree-wave-manifest-preparation-lock.schema.json
+  - .harness/schemas/worktree-wave-integration-manifest.schema.json
+  - .harness/schemas/worktree-wave-integration-lock.schema.json
+  - .harness/schemas/worktree-wave-integration-recovery-lock.schema.json
+  - .harness/schemas/worktree-wave-integration-receipt.schema.json
+  - .harness/schemas/worktree-wave-receipt.schema.json
+  - .harness/schemas/worktree-wave-retirement-lock.schema.json
+  - .harness/schemas/worktree-wave-retirement-recovery-lock.schema.json
+  - .harness/schemas/worktree-wave-task-retirement-receipt.schema.json
+  - .harness/schemas/worktree-wave-retirement-receipt.schema.json
+  - .harness/schemas/owned-manifest.schema.json
+  - .harness/schemas/delivery-receipt.schema.json
   - .harness/states/product-state.template.json
   - .harness/states/e2e-state.template.json
+  - .harness/states/e2e-state-v2.template.json
   - .harness/workflows/e2e-development.yaml
+  - .harness/workflows/e2e-development-v2.yaml
   - .harness/workflows/product-fork-join.yaml
   - .harness/templates/requirement-breakdown.md
   - .harness/templates/technical-design.md
@@ -39,22 +129,102 @@ required_files:
   - .harness/scripts/kb-query.ps1
   - .harness/scripts/generate-kb.ps1
   - .harness/scripts/lib/generate-kb.mjs
+  - .harness/scripts/lib/provider-config.mjs
+  - .harness/scripts/lib/provider-contract.mjs
+  - .harness/scripts/lib/development-provider-contract.mjs
+  - .harness/scripts/lib/development-provider-context.mjs
+  - .harness/scripts/lib/development-provider-runtime.mjs
+  - .harness/scripts/lib/provider-context.mjs
+  - .harness/scripts/lib/provider-adapters/codex-cli.mjs
+  - .harness/scripts/lib/provider-runtime.mjs
   - .harness/scripts/lib/source-fingerprint.mjs
+  - .harness/scripts/lib/state-runtime.mjs
+  - .harness/scripts/lib/state-contract.mjs
+  - .harness/scripts/lib/acceptance-contract.mjs
+  - .harness/scripts/lib/acceptance-gate.mjs
+  - .harness/scripts/lib/approval-contract.mjs
+  - .harness/scripts/lib/story-runtime.mjs
+  - .harness/scripts/lib/dispatch-contract.mjs
+  - .harness/scripts/lib/phase-data-contract.mjs
+  - .harness/scripts/lib/phase-result-projector.mjs
+  - .harness/scripts/lib/worker-runtime.mjs
+  - .harness/scripts/lib/task-dag-contract.mjs
+  - .harness/scripts/lib/worktree-runtime.mjs
+  - .harness/scripts/lib/worktree-worker-runtime.mjs
+  - .harness/scripts/lib/worktree-integration-runtime.mjs
+  - .harness/scripts/lib/batch-base-contract.mjs
+  - .harness/scripts/lib/batch-finalization-contract.mjs
+  - .harness/scripts/lib/batch-runtime.mjs
+  - .harness/scripts/lib/implementation-owner-contract.mjs
+  - .harness/scripts/lib/record-contract.mjs
+  - .harness/scripts/lib/delivery-contract.mjs
+  - .harness/scripts/lib/delivery-runtime.mjs
+  - .harness/scripts/lib/e2e-runtime.mjs
+  - .harness/scripts/lib/knowledge-runtime.mjs
+  - .harness/scripts/lib/story-closure-verifier.mjs
+  - .harness/scripts/lib/worktree-wave-execution-runtime.mjs
   - .harness/scripts/tests/generate-kb.test.mjs
+  - .harness/scripts/tests/provider-config.test.mjs
+  - .harness/scripts/tests/provider-contract.test.mjs
+  - .harness/scripts/tests/development-provider-contract.test.mjs
+  - .harness/scripts/tests/development-provider-context.test.mjs
+  - .harness/scripts/tests/development-provider-runtime.test.mjs
+  - .harness/scripts/tests/development-provider-e2e.test.mjs
+  - .harness/scripts/tests/provider-context.test.mjs
+  - .harness/scripts/tests/codex-cli-provider.test.mjs
+  - .harness/scripts/tests/codex-cli-development-provider.test.mjs
+  - .harness/scripts/tests/provider-runtime.test.mjs
   - .harness/scripts/tests/source-fingerprint.test.mjs
   - .harness/scripts/tests/kb-query.test.ps1
   - .harness/scripts/tests/kb-freshness.test.ps1
   - .harness/scripts/tests/harness-status.test.mjs
+  - .harness/scripts/tests/state-runtime.test.mjs
+  - .harness/scripts/tests/story-runtime.test.mjs
+  - .harness/scripts/tests/phase-result-projector.test.mjs
+  - .harness/scripts/tests/acceptance-gate.test.mjs
+  - .harness/scripts/tests/approval-contract.test.mjs
+  - .harness/scripts/tests/select-tests.test.ps1
+  - .harness/scripts/tests/worker-runtime.test.mjs
+  - .harness/scripts/tests/worktree-runtime.test.mjs
+  - .harness/scripts/tests/worktree-worker-runtime.test.mjs
+  - .harness/scripts/tests/worktree-integration-runtime.test.mjs
+  - .harness/scripts/tests/worktree-lifecycle-runtime.test.mjs
+  - .harness/scripts/tests/batch-runtime.test.mjs
+  - .harness/scripts/tests/serial-batch-runtime.test.mjs
+  - .harness/scripts/tests/worktree-wave-runtime.test.mjs
+  - .harness/scripts/tests/worktree-wave-execution-runtime.test.mjs
+  - .harness/scripts/tests/record-contract.test.mjs
+  - .harness/scripts/tests/delivery-runtime.test.mjs
+  - .harness/scripts/tests/delivery-cli.test.ps1
+  - .harness/scripts/tests/e2e-runtime.test.mjs
+  - .harness/scripts/tests/provider-cli.test.ps1
+  - .harness/scripts/tests/development-provider-cli.test.ps1
+  - .harness/scripts/tests/knowledge-runtime.test.mjs
+  - .harness/scripts/tests/e2e-cli.test.ps1
+  - .harness/scripts/tests/story-closure-verifier.test.mjs
+  - .harness/scripts/tests/story-closure-verifier-cli.test.ps1
+  - .harness/scripts/tests/m7d-closure-acceptance.test.mjs
+  - .harness/scripts/tests/task-dag.test.ps1
   - .harness/scripts/collect-diff-context.ps1
   - .harness/scripts/select-tests.ps1
+  - .harness/scripts/run-worktree-integration.ps1
   - .harness/scripts/scan-knowledge-inputs.ps1
+  - .harness/scripts/verify-story-closure.ps1
   - .harness/scripts/check-kb-freshness.ps1
   - .harness/scripts/plan-worktrees.ps1
   - .harness/scripts/derive-interface-cases.ps1
   - .harness/scripts/plan-build.ps1
   - .harness/scripts/summarize-delivery.ps1
   - .harness/scripts/smoke-harness-flow.ps1
+  - .harness/scripts/run-state.ps1
+  - .harness/scripts/run-story.ps1
+  - .harness/scripts/run-worktree.ps1
+  - .harness/scripts/run-delivery.ps1
+  - .harness/scripts/run-e2e.ps1
+  - .harness/scripts/run-provider.ps1
+  - .harness/scripts/run-development-provider.ps1
   - .codex/agents/agents.yaml
+  - .codex/agents/worker-policies.json
   - .codex/skills/README.md
   - .codex/skills/skill-registry.yaml
   - .codex/skills/frontier-common/SKILL.md
@@ -116,16 +286,100 @@ required_files:
   - llm-knowledge/common/conventions/execution-verification.md
   - llm-knowledge/common/conventions/quality-gates.md
   - docs/harness-m0-m1/PLAN.md
+  - docs/harness-engineering-target-and-gap.md
   - docs/harness-architecture-adaptation.md
   - docs/harness-m0-m1/REPORT.md
   - docs/harness-m1-1-source-fingerprint/PLAN.md
   - docs/harness-m1-1-source-fingerprint/REPORT.md
+  - docs/harness-m2-state-runtime/DESIGN.md
+  - docs/harness-m2-state-runtime/PLAN.md
+  - docs/harness-m2-state-runtime/REPORT.md
+  - docs/harness-m3-agent-dispatcher/DESIGN.md
+  - docs/harness-m3-agent-dispatcher/PLAN.md
+  - docs/harness-m3-agent-dispatcher/REPORT.md
+  - docs/harness-m4-runtime-compatibility/DESIGN.md
+  - docs/harness-m4-runtime-compatibility/PLAN.md
+  - docs/harness-m4-runtime-compatibility/REPORT.md
+  - docs/harness-m4-worker-runtime/DESIGN.md
+  - docs/harness-m4-worker-runtime/PLAN.md
+  - docs/harness-m4-worker-runtime/REPORT.md
+  - docs/harness-m5-worktree-orchestration/DESIGN.md
+  - docs/harness-m5-worktree-orchestration/PLAN.md
+  - docs/harness-m5-worktree-orchestration/REPORT.md
+  - docs/harness-m5b-worktree-worker/DESIGN.md
+  - docs/harness-m5b-worktree-worker/PLAN.md
+  - docs/harness-m5b-worktree-worker/REPORT.md
+  - docs/harness-m5b2-worktree-integration/DESIGN.md
+  - docs/harness-m5b2-worktree-integration/PLAN.md
+  - docs/harness-m5b2-worktree-integration/REPORT.md
+  - docs/harness-m5c-worktree-lifecycle/DESIGN.md
+  - docs/harness-m5c-worktree-lifecycle/PLAN.md
+  - docs/harness-m5c-worktree-lifecycle/REPORT.md
+  - docs/harness-m5b3-multi-task-protocol/DESIGN.md
+  - docs/harness-m5b3-multi-task-protocol/PLAN.md
+  - docs/harness-m5b3-multi-task-protocol/REPORT.md
+  - docs/harness-m5b3-batch-runtime/DESIGN.md
+  - docs/harness-m5b3-batch-runtime/PLAN.md
+  - docs/harness-m5b3-batch-runtime/REPORT.md
+  - docs/harness-m5d-multi-worktree-wave/DESIGN.md
+  - docs/harness-m5d-multi-worktree-wave/PLAN.md
+  - docs/harness-m5d-multi-worktree-wave/REPORT.md
+  - docs/harness-m5d-wave-create/DESIGN.md
+  - docs/harness-m5d-wave-create/PLAN.md
+  - docs/harness-m5d-wave-create/REPORT.md
+  - docs/harness-m5d-wave-execution/DESIGN.md
+  - docs/harness-m5d-wave-execution/PLAN-C1.md
+  - docs/harness-m5d-wave-execution/REPORT-C1.md
+  - docs/harness-m5d-wave-execution/PLAN-C2.md
+  - docs/harness-m5d-wave-execution/REPORT-C2.md
+  - docs/harness-m5d-wave-retire/DESIGN.md
+  - docs/harness-m5d-wave-retire/PLAN.md
+  - docs/harness-m5d-wave-retire/REPORT.md
+  - docs/harness-m7-m12-roadmap/DESIGN.md
+  - docs/harness-m7-m12-roadmap/PLAN.md
+  - docs/harness-m7a1-state-v2/DESIGN.md
+  - docs/harness-m7a1-state-v2/PLAN.md
+  - docs/harness-m7a1-state-v2/REPORT.md
+  - docs/harness-m7a2-phase-result/DESIGN.md
+  - docs/harness-m7a2-phase-result/PLAN.md
+  - docs/harness-m7a2-phase-result/REPORT.md
+  - docs/harness-m7a3-acceptance-gates/DESIGN.md
+  - docs/harness-m7a3-acceptance-gates/PLAN.md
+  - docs/harness-m7a3-acceptance-gates/REPORT.md
+  - docs/harness-m7a4-runtime-delivery/DESIGN.md
+  - docs/harness-m7a4-runtime-delivery/PLAN.md
+  - docs/harness-m7a4-runtime-delivery/REPORT.md
+  - docs/harness-m7b-serial-driver/DESIGN.md
+  - docs/harness-m7b-serial-driver/PLAN.md
+  - docs/harness-m7b-serial-driver/REPORT.md
+  - docs/harness-m7c-kb-freshness-loop/DESIGN.md
+  - docs/harness-m7c-kb-freshness-loop/PLAN.md
+  - docs/harness-m7c-kb-freshness-loop/REPORT.md
+  - docs/harness-m8a-review-provider/DESIGN.md
+  - docs/harness-m8a-review-provider/PLAN.md
+  - docs/harness-m8a-review-provider/REPORT.md
+  - docs/harness-m8a-review-provider/ERRATA.md
+  - docs/harness-m8a-review-provider/AUTOMATION-ASSESSMENT.md
+  - docs/harness-m8b-development-provider/DESIGN.md
+  - docs/harness-m8b-development-provider/PLAN.md
+  - docs/harness-m8b-development-provider/REPORT.md
 status_notes:
   structure: implemented
   skill_logic: mixed-guidance-and-v1-executable-knowledge-workflows
   knowledge_generation: implemented-v1
   knowledge_query: implemented-v1
   knowledge_semantic: mock-verified-current-pending
-  agent_runtime: deferred
-  deterministic_scripts: mixed-read-only-helpers-and-knowledge-writer
-  business_code_changes: none-required-for-m0-m1
+  state_runtime: implemented-v2-with-v1-read-only-compatibility
+  agent_runtime: single-story-dispatcher-v1-constrained-mock-worker-v1-task-scoped-dispatch-v1.2-single-worktree-runtime-v1-serial-batch-runtime-v1-worktree-worker-collection-v1-worktree-integration-v1-worktree-retirement-v1-multi-worktree-wave-execution-v1-wave-retirement-v1-readonly-code-review-provider-v1-single-task-development-provider-v1
+  deterministic_scripts: mixed-read-only-helpers-state-story-provider-batch-worktree-worker-integration-retirement-runtimes-and-knowledge-writer
+  business_code_changes: none-required-for-m0-m5dd-m6a-and-m7d-real-stories-completed
+  roadmap_planning: m7-m12-documentation-approved-m7-complete-m8-complete-m9-next
+  m7a1_state_v2: implemented-fixture-verified-independent-review-passed
+  m7a2_phase_result: implemented-fixture-verified-independent-review-passed
+  m7a3_acceptance_gates: implemented-fixture-verified-independent-review-passed
+  m7a4_runtime_delivery: implemented-fixture-verified-independent-review-passed
+  m7b_serial_driver: implemented-nine-phase-fixture-verified-independent-review-passed
+  m7c_knowledge_freshness: implemented-fixture-verified-independent-review-passed
+  m7d_closure_acceptance: completed-fixture-and-real-story-verified
+  m8a_review_provider: completed-real-codex-cli-reviewer-verified
+  m8b_development_provider: completed-real-codex-cli-fixture-and-backend-story-verified

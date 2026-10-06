@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "2.0",
+  "storyId": "M7-D-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "为文章阅读状态筛选增加后端失败测试",
+      "type": "test",
+      "status": "pending",
+      "ownerAgent": "unit-tester",
+      "predictedFiles": [
+        "backend/src/test/java/com/frontierscan/article/ArticleServiceFilterTest.java",
+        "backend/src/test/java/com/frontierscan/article/ArticleFilterIntegrationTest.java",
+        "backend/src/test/java/com/frontierscan/article/ArticleReadStatusApiIntegrationTest.java",
+        "backend/src/test/java/com/frontierscan/security/UserDataIsolationIntegrationTest.java"
+      ],
+      "criterionIds": [
+        "AC-READ-FILTER-1",
+        "AC-READ-FILTER-2",
+        "AC-READ-FILTER-3",
+        "AC-READ-FILTER-4"
+      ]
+    },
+    {
+      "taskId": "T2",
+      "title": "实现文章列表阅读状态参数与组合查询",
+      "type": "backend",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        "backend/src/main/java/com/frontierscan/article/ArticleController.java",
+        "backend/src/main/java/com/frontierscan/article/ArticleService.java",
+        "backend/src/main/java/com/frontierscan/article/ArticleRepository.java"
+      ],
+      "criterionIds": [
+        "AC-READ-FILTER-1",
+        "AC-READ-FILTER-2",
+        "AC-READ-FILTER-3",
+        "AC-READ-FILTER-4"
+      ]
+    },
+    {
+      "taskId": "T3",
+      "title": "实现 Dashboard 阅读状态分段筛选",
+      "type": "frontend",
+      "status": "pending",
+      "ownerAgent": "frontend-developer",
+      "predictedFiles": [
+        "frontend/src/api/articles.ts",
+        "frontend/src/views/DashboardView.vue"
+      ],
+      "criterionIds": [
+        "AC-READ-FILTER-1",
+        "AC-READ-FILTER-2",
+        "AC-READ-FILTER-3",
+        "AC-READ-FILTER-5"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "后端生产代码必须由新增失败测试驱动。"
+    },
+    {
+      "from": "T2",
+      "to": "T3",
+      "reason": "前端筛选依赖已确定并通过测试的 readStatus API 契约。"
+    }
+  ],
+  "waves": [
+    [
+      "T1"
+    ],
+    [
+      "T2"
+    ],
+    [
+      "T3"
+    ]
+  ],
+  "globalChanges": [],
+  "risks": [
+    "RISK-READ-COUNT：主查询和 countQuery 条件可能不一致。",
+    "RISK-READ-UI：前端没有组件测试框架，需要在后续界面验证阶段证明请求与分页行为。"
+  ]
+}

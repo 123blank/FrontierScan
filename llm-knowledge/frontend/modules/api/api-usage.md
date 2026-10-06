@@ -4,9 +4,9 @@ layer: L1-baseline
 area: frontend
 module: api
 doc_type: api-usage
-git_hash: 4ab9c49f8ef459e1ab90bd143c1799fef2a46aa1
-source_fingerprint: sha256:3e142de410653b7af917a1ce1d4ed598a58ccd3b2032b732bb3aa148c2fa1e70
-generated_at: 2026-07-11T17:38:46.678Z
+git_hash: 6c3553298fe6e6b638a221c689eaf794f6dfa87a
+source_fingerprint: sha256:0fc4832ffc61a9dfb5cdb9dbcefe9e6a1bad9c7ac2d22a61cb8adabb9e5ae2df
+generated_at: 2026-08-23T10:10:03.337Z
 baseline_status: fresh
 semantic_status: pending
 source_files:
@@ -22,6 +22,8 @@ source_files:
 
 - GET /articles (frontend/src/api/articles.ts)
 - GET /articles/${id} (frontend/src/api/articles.ts)
+- PUT /articles/${id}/read (frontend/src/api/articles.ts)
+- DELETE /articles/${id}/read (frontend/src/api/articles.ts)
 - POST /articles/${id}/summary/retry (frontend/src/api/articles.ts)
 - POST /articles/${id}/favorite (frontend/src/api/articles.ts)
 - DELETE /articles/${id}/favorite (frontend/src/api/articles.ts)
@@ -44,4 +46,4 @@ source_files:
 - GET /tags/domains (frontend/src/api/tags.ts)
 - GET /tags/domains/${domainName} (frontend/src/api/tags.ts)
 
-Needs AI Review: 请求参数、错误处理、加载状态和后端契约兼容性需补充。
+需要 AI 审核：请求参数、错误处理、加载状态和后端契约兼容性需补充。

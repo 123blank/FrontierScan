@@ -1,0 +1,1208 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
+import {
+  validateDispatchResultStructure,
+  validateDispatchTaskStructure,
+} from "../lib/dispatch-contract.mjs";
+import { runStateCommand } from "../lib/state-runtime.mjs";
+import { runStoryCommand } from "../lib/story-runtime.mjs";
+import { loadWorkerPolicies, runWorkerTask } from "../lib/worker-runtime.mjs";
+
+const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const DISPATCH_ID = "00000000-0000-4000-8000-000000000001";
+const FIXED_NOW = "2026-07-17T00:00:00.000Z";
+const execFileAsync = promisify(execFile);
+
+async function write(root, relativePath, content) {
+  const filePath = path.join(root, relativePath);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, content, "utf8");
+  return filePath;
+}
+
+function dispatchTask(overrides = {}) {
+  return {
+    schemaVersion: "1.0",
+    dispatchId: DISPATCH_ID,
+    storyId: "M4-B-TEST",
+    phase: "requirement",
+    ownerAgent: "requirement-analyst",
+    purpose: "Clarify the story.",
+    preparedRevision: 1,
+    preparedAt: "2026-07-17T00:00:00.000Z",
+    expectedOutputs: [".harness/runs/M4-B-TEST/phases/00-requirement/requirement-breakdown.md"],
+    allowedAdapters: [],
+    next: "technical-design",
+    ...overrides,
+  };
+}
+
+function dispatchResult(task, overrides = {}, files = []) {
+  if (task.schemaVersion === "2.0") {
+    return {
+      schemaVersion: "2.0",
+      dispatchId: task.dispatchId,
+      storyId: task.storyId,
+      runId: task.runId,
+      phase: task.phase,
+      preparedRevision: task.preparedRevision,
+      status: "completed",
+      summary: "Mock worker completed the phase.",
+      outputs: task.expectedOutputs.map((output) => {
+        const content = files.find((file) => file.path === output)?.content ?? "";
+        return {
+          path: output,
+          sha256: `sha256:${createHash("sha256").update(content, "utf8").digest("hex")}`,
+          bytes: Buffer.byteLength(content, "utf8"),
+        };
+      }),
+      records: [],
+      payload: {
+        acceptanceCriteria: [{
+          criterionId: "AC-001",
+          description: "The requirement is captured.",
+          source: "fixture",
+          required: true,
+        }],
+        openQuestions: [],
+        inScope: ["Worker vertical fixture"],
+        outOfScope: [],
+      },
+      ...overrides,
+    };
+  }
+  return {
+    schemaVersion: "1.0",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    phase: task.phase,
+    status: "completed",
+    summary: "Mock worker completed the phase.",
+    outputs: task.expectedOutputs.map((output) => ({ path: output })),
+    records: [],
+    ...overrides,
+  };
+}
+
+function dispatchTaskV11(overrides = {}) {
+  const taskRoot = ".harness/runs/M5-B3-TEST/phases/00-requirement/tasks/T1";
+  return {
+    schemaVersion: "1.1",
+    dispatchId: DISPATCH_ID,
+    storyId: "M5-B3-TEST",
+    phase: "requirement",
+    batchId: "requirement-a1b2c3d4e5f6",
+    taskId: "T1",
+    taskRoot,
+    ownerAgent: "requirement-analyst",
+    purpose: "Clarify the first task.",
+    preparedRevision: 1,
+    preparedAt: "2026-07-17T00:00:00.000Z",
+    expectedOutputs: [`${taskRoot}/requirement-breakdown.md`],
+    allowedAdapters: [],
+    next: "technical-design",
+    ...overrides,
+  };
+}
+
+function dispatchResultV11(task, overrides = {}) {
+  return {
+    schemaVersion: "1.1",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    phase: task.phase,
+    batchId: task.batchId,
+    taskId: task.taskId,
+    taskRoot: task.taskRoot,
+    status: "completed",
+    summary: "Mock worker completed the task.",
+    outputs: task.expectedOutputs.map((output) => ({ path: output })),
+    records: [],
+    ...overrides,
+  };
+}
+
+function dispatchTaskV12(overrides = {}) {
+  const storyId = "M5-D-C1-WORKER";
+  const waveId = "wave-0123456789abcdef";
+  const taskId = "T1";
+  const taskRoot = `.harness/runs/${storyId}/waves/${waveId}/tasks/${taskId}`;
+  return {
+    schemaVersion: "1.2",
+    dispatchId: DISPATCH_ID,
+    storyId,
+    runId: storyId,
+    phase: "implementation",
+    waveId,
+    waveIndex: 1,
+    taskId,
+    taskRoot,
+    ownerAgent: "backend-developer",
+    purpose: "Implement the wave task.",
+    preparedRevision: 7,
+    preparedAt: FIXED_NOW,
+    expectedOutputs: [`${taskRoot}/task-report.md`],
+    allowedAdapters: [],
+    next: "unit-test",
+    ...overrides,
+  };
+}
+
+function dispatchResultV12(task, overrides = {}) {
+  return {
+    schemaVersion: "1.2",
+    dispatchId: task.dispatchId,
+    storyId: task.storyId,
+    runId: task.runId,
+    phase: task.phase,
+    waveId: task.waveId,
+    waveIndex: task.waveIndex,
+    taskId: task.taskId,
+    taskRoot: task.taskRoot,
+    status: "completed",
+    summary: "Mock worker completed the wave task.",
+    outputs: task.expectedOutputs.map((output) => ({ path: output })),
+    records: [],
+    ...overrides,
+  };
+}
+
+const AGENTS = `schema_version: "1.0"
+agents:
+  - name: requirement-analyst
+    category: planning
+    responsibilities:
+      - Clarify a story.
+    may_modify_files: true
+  - name: code-reviewer
+    category: review
+    responsibilities:
+      - Review changes.
+    may_modify_files: false
+`;
+
+function policies(overrides = {}) {
+  return {
+    schemaVersion: "1.0",
+    roles: [
+      {
+        name: "requirement-analyst",
+        category: "planning",
+        readPathPrefixes: [".harness/", "docs/"],
+        writePathPrefixes: [".harness/runs/"],
+        capabilities: ["phase-output"],
+      },
+      {
+        name: "code-reviewer",
+        category: "review",
+        readPathPrefixes: [".harness/", "backend/", "frontend/"],
+        writePathPrefixes: [".harness/runs/"],
+        capabilities: ["phase-output"],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+async function createPolicyFixture(value = policies(), agents = AGENTS) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "frontier-worker-policy-"));
+  await write(root, ".codex/agents/agents.yaml", agents);
+  await write(root, ".codex/agents/worker-policies.json", `${JSON.stringify(value, null, 2)}\n`);
+  return root;
+}
+
+async function createWorkerFixture() {
+  const root = await createPolicyFixture();
+  const task = dispatchTask();
+  const taskFile = `.harness/runs/${task.storyId}/phases/00-requirement/task.json`;
+  await write(root, taskFile, `${JSON.stringify(task, null, 2)}\n`);
+  return { root, task, taskFile };
+}
+
+async function createVerticalFixture(storyId = "M4-B-VERTICAL") {
+  const root = await createPolicyFixture();
+  await execFileAsync("git", ["init", "-b", "dev"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["config", "user.email", "worker-runtime@example.test"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["config", "user.name", "Worker Runtime Test"], { cwd: root, windowsHide: true });
+  await write(root, "seed.txt", "seed\n");
+  await execFileAsync("git", ["add", "seed.txt"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["commit", "-m", "seed"], { cwd: root, windowsHide: true });
+  const template = {
+    schemaVersion: "1.0",
+    storyId: "S1",
+    phase: "requirement",
+    requirement: { summary: "", openQuestions: [], acceptanceCriteria: [] },
+    knowledge: { loadedFiles: [], staleFiles: [], missingAreas: [] },
+    tasks: [],
+    dag: { nodes: [], edges: [], waves: [] },
+    worktrees: [],
+    tests: { commands: [], results: [] },
+    review: { findings: [], status: "pending" },
+    verification: { cases: [], results: [] },
+    delivery: { ownedFiles: [], commit: null, pr: null },
+    logs: [],
+  };
+  await write(root, ".harness/states/e2e-state.template.json", `${JSON.stringify(template, null, 2)}\n`);
+  await write(
+    root,
+    ".harness/states/e2e-state-v2.template.json",
+    await readFile(path.join(REPOSITORY_ROOT, ".harness/states/e2e-state-v2.template.json"), "utf8"),
+  );
+  await write(root, ".harness/workflows/e2e-development-v2.yaml", `schema_version: "2.0"
+name: frontier-e2e-development-v2
+state_file: .harness/states/e2e-state-v2.template.json
+phases:
+  - id: requirement
+    order: 0
+    owner_agent: requirement-analyst
+    purpose: Clarify the story.
+    required_outputs:
+      - .harness/runs/{runId}/phases/00-requirement/requirement-breakdown.md
+    next:
+      - technical-design
+  - id: technical-design
+    order: 1
+    owner_agent: requirement-analyst
+    purpose: Design the change.
+    required_outputs:
+      - .harness/runs/{runId}/phases/01-technical-design/technical-design.md
+    next:
+      - done
+quality_gates: []
+`);
+  await execFileAsync("git", ["add", ".harness", ".codex"], { cwd: root, windowsHide: true });
+  await execFileAsync("git", ["commit", "-m", "add harness fixtures"], { cwd: root, windowsHide: true });
+  await runStateCommand({ root, command: "init", storyId, summary: "M4-B fixture", now: () => FIXED_NOW });
+  const prepared = await runStoryCommand({
+    root,
+    command: "prepare",
+    now: () => FIXED_NOW,
+    randomUUID: () => DISPATCH_ID,
+  });
+  return { root, storyId, prepared };
+}
+
+async function exists(root, relativePath) {
+  return access(path.join(root, relativePath)).then(() => true, () => false);
+}
+
+async function testDispatchContractsValidateSchemaShape() {
+  const task = dispatchTask();
+  const result = dispatchResult(task);
+  assert.equal(validateDispatchTaskStructure(task), task);
+  assert.equal(validateDispatchResultStructure(result), result);
+
+  assert.throws(
+    () => validateDispatchTaskStructure({ ...task, unexpected: true }),
+    /unsupported field|additional/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({ ...result, status: "unknown" }),
+    /status/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({ ...result, outputs: [...result.outputs, result.outputs[0]] }),
+    /unique|duplicate/i,
+  );
+
+  assert.throws(
+    () => validateDispatchTaskStructure({ ...task, taskId: "T1" }),
+    /unsupported field|additional/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({ ...result, taskId: "T1" }),
+    /unsupported field|additional/i,
+  );
+}
+
+async function testDispatchContractsValidateTaskScopedV11Shape() {
+  const task = dispatchTaskV11();
+  const result = dispatchResultV11(task);
+
+  assert.equal(validateDispatchTaskStructure(task), task);
+  assert.equal(validateDispatchResultStructure(result), result);
+
+  assert.throws(
+    () => validateDispatchTaskStructure({ ...task, taskId: "" }),
+    /taskId/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({ ...result, taskRoot: "../escape" }),
+    /taskRoot/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({
+      ...result,
+      outputs: [{ path: ".harness/runs/M5-B3-TEST/phases/00-requirement/result.md" }],
+    }),
+    /taskRoot|output/i,
+  );
+  assert.throws(
+    () => validateDispatchTaskStructure({
+      ...task,
+      expectedOutputs: [`${task.taskRoot}/../escaped.md`],
+    }),
+    /taskRoot|output/i,
+  );
+  assert.throws(
+    () => validateDispatchResultStructure({
+      ...result,
+      outputs: [{ path: `${task.taskRoot}/..\\escaped.md` }],
+    }),
+    /taskRoot|output/i,
+  );
+}
+
+async function testTaskScopedDispatchSchemasDescribeStrictV11Contracts() {
+  const taskSchema = JSON.parse(await readFile(
+    path.join(REPOSITORY_ROOT, ".harness/schemas/dispatch-task-v1.1.schema.json"),
+    "utf8",
+  ));
+  const resultSchema = JSON.parse(await readFile(
+    path.join(REPOSITORY_ROOT, ".harness/schemas/dispatch-result-v1.1.schema.json"),
+    "utf8",
+  ));
+  for (const schema of [taskSchema, resultSchema]) {
+    assert.equal(schema.properties.schemaVersion.const, "1.1");
+    assert.equal(schema.additionalProperties, false);
+    for (const field of ["batchId", "taskId", "taskRoot"]) {
+      assert.ok(schema.required.includes(field));
+      assert.ok(schema.properties[field]);
+    }
+  }
+}
+
+async function testRepositoryWorkerPoliciesMatchAgentRegistry() {
+  const loaded = await loadWorkerPolicies({ root: REPOSITORY_ROOT });
+  assert.equal(loaded.size, 12);
+  assert.deepEqual(
+    loaded.get("code-reviewer").capabilities,
+    ["phase-output"],
+  );
+  assert.deepEqual(
+    loaded.get("code-fixer").capabilities,
+    ["phase-output", "backend-write", "frontend-write"],
+  );
+}
+
+async function testWorkerPolicyLoaderRejectsRegistryDrift() {
+  const cases = [
+    {
+      label: "missing role",
+      value: policies({ roles: policies().roles.slice(0, 1) }),
+      pattern: /missing.*code-reviewer|registry.*match/i,
+    },
+    {
+      label: "duplicate role",
+      value: policies({ roles: [...policies().roles, policies().roles[0]] }),
+      pattern: /duplicate.*requirement-analyst/i,
+    },
+    {
+      label: "unknown role",
+      value: policies({ roles: [...policies().roles, { ...policies().roles[0], name: "unknown-role" }] }),
+      pattern: /unknown.*unknown-role|registry.*match/i,
+    },
+    {
+      label: "category drift",
+      value: policies({ roles: [{ ...policies().roles[0], category: "execution" }, policies().roles[1]] }),
+      pattern: /category.*requirement-analyst/i,
+    },
+    {
+      label: "unsupported capability",
+      value: policies({ roles: [{ ...policies().roles[0], capabilities: ["git-write"] }, policies().roles[1]] }),
+      pattern: /capability.*git-write/i,
+    },
+    {
+      label: "planning role capability escalation",
+      value: policies({
+        roles: [{
+          ...policies().roles[0],
+          writePathPrefixes: [".harness/runs/", "backend/src/"],
+          capabilities: ["phase-output", "backend-write"],
+        }, policies().roles[1]],
+      }),
+      pattern: /capability.*requirement-analyst|requirement-analyst.*capability/i,
+    },
+    {
+      label: "unsafe path",
+      value: policies({ roles: [{ ...policies().roles[0], readPathPrefixes: ["../outside"] }, policies().roles[1]] }),
+      pattern: /path.*repository-relative|path.*unsafe|unsafe.*path/i,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const root = await createPolicyFixture(testCase.value);
+    try {
+      await assert.rejects(
+        loadWorkerPolicies({ root }),
+        testCase.pattern,
+        testCase.label,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+}
+
+async function testWorkerLoadsOnlyAllowedExplicitContext() {
+  const { root, taskFile } = await createWorkerFixture();
+  try {
+    await write(root, "docs/input.md", "允许的上下文\n");
+    await assert.rejects(
+      runWorkerTask({
+        root,
+        taskFile,
+        contextFiles: ["docs/input.md"],
+        provider: ({ task, policy, context, signal }) => {
+          assert.equal(task.ownerAgent, "requirement-analyst");
+          assert.equal(policy.name, "requirement-analyst");
+          assert.deepEqual(context, [{ path: "docs/input.md", content: "允许的上下文\n" }]);
+          assert.equal(signal.aborted, false);
+          throw new Error("provider-observed-context");
+        },
+      }),
+      /provider-observed-context/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRejectsInvalidContextBeforeProvider() {
+  const cases = [
+    {
+      label: "read path outside role policy",
+      prepare: async (root) => write(root, "backend/secret.txt", "secret"),
+      contextFiles: ["backend/secret.txt"],
+      pattern: /not allowed.*read|read.*policy/i,
+    },
+    {
+      label: "single context file over limit",
+      prepare: async (root) => write(root, "docs/large.txt", "x".repeat(2 * 1024 * 1024 + 1)),
+      contextFiles: ["docs/large.txt"],
+      pattern: /2 MiB|file.*limit/i,
+    },
+    {
+      label: "invalid UTF-8 context",
+      prepare: async (root) => {
+        const target = path.join(root, "docs/invalid.txt");
+        await mkdir(path.dirname(target), { recursive: true });
+        await writeFile(target, Buffer.from([0xc3, 0x28]));
+      },
+      contextFiles: ["docs/invalid.txt"],
+      pattern: /UTF-8/i,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const { root, taskFile } = await createWorkerFixture();
+    let providerCalled = false;
+    try {
+      await testCase.prepare(root);
+      await assert.rejects(
+        runWorkerTask({
+          root,
+          taskFile,
+          contextFiles: testCase.contextFiles,
+          provider: () => { providerCalled = true; },
+        }),
+        testCase.pattern,
+        testCase.label,
+      );
+      assert.equal(providerCalled, false, testCase.label);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+
+  const linked = await createWorkerFixture();
+  const outside = await mkdtemp(path.join(os.tmpdir(), "frontier-worker-outside-"));
+  let providerCalled = false;
+  try {
+    const externalFile = await write(outside, "outside.txt", "outside");
+    await mkdir(path.join(linked.root, "docs"), { recursive: true });
+    await symlink(externalFile, path.join(linked.root, "docs/linked.txt"), "file");
+    await assert.rejects(
+      runWorkerTask({
+        root: linked.root,
+        taskFile: linked.taskFile,
+        contextFiles: ["docs/linked.txt"],
+        provider: () => { providerCalled = true; },
+      }),
+      /symbolic link|symlink/i,
+    );
+    assert.equal(providerCalled, false);
+  } finally {
+    await rm(linked.root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRejectsContextTotalOverLimit() {
+  const { root, taskFile } = await createWorkerFixture();
+  let providerCalled = false;
+  try {
+    const contextFiles = [];
+    for (let index = 0; index < 5; index += 1) {
+      const relative = `docs/context-${index}.txt`;
+      await write(root, relative, "x".repeat(1_700_000));
+      contextFiles.push(relative);
+    }
+    await assert.rejects(
+      runWorkerTask({
+        root,
+        taskFile,
+        contextFiles,
+        provider: () => { providerCalled = true; },
+      }),
+      /context.*8 MiB|8 MiB.*context/i,
+    );
+    assert.equal(providerCalled, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerProviderFailureAndTimeoutLeaveNoResult() {
+  const failure = await createWorkerFixture();
+  const resultFile = `.harness/runs/${failure.task.storyId}/phases/00-requirement/result.json`;
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root: failure.root,
+        taskFile: failure.taskFile,
+        provider: () => { throw new Error("provider failed"); },
+      }),
+      /provider failed/,
+    );
+    assert.equal(await exists(failure.root, resultFile), false);
+  } finally {
+    await rm(failure.root, { recursive: true, force: true });
+  }
+
+  const timeout = await createWorkerFixture();
+  let aborted = false;
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root: timeout.root,
+        taskFile: timeout.taskFile,
+        timeoutMs: 20,
+        provider: ({ signal }) => new Promise(() => signal.addEventListener("abort", () => { aborted = true; })),
+      }),
+      /timed out.*20|20.*timed out/i,
+    );
+    assert.equal(aborted, true);
+    assert.equal(await exists(timeout.root, resultFile), false);
+  } finally {
+    await rm(timeout.root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRejectsInvalidTimeoutBeforeProvider() {
+  for (const timeoutMs of [0, -1, 30_001, 1.5]) {
+    const { root, taskFile } = await createWorkerFixture();
+    let providerCalled = false;
+    try {
+      await assert.rejects(
+        runWorkerTask({ root, taskFile, timeoutMs, provider: () => { providerCalled = true; } }),
+        /timeout.*1.*30000|timeout.*30/i,
+      );
+      assert.equal(providerCalled, false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+}
+
+function workerResponse(task, overrides = {}) {
+  const output = task.expectedOutputs[0];
+  const files = overrides.files ?? [{ path: output, content: "# Requirement\n", capability: "phase-output" }];
+  return {
+    files,
+    result: overrides.result ?? dispatchResult(task, {}, files),
+  };
+}
+
+async function testWorkerWritesValidatedFilesAndResultLast() {
+  const { root, task, taskFile } = await createWorkerFixture();
+  const resultFile = `.harness/runs/${task.storyId}/phases/00-requirement/result.json`;
+  try {
+    const completed = await runWorkerTask({
+      root,
+      taskFile,
+      provider: ({ task: providerTask }) => workerResponse(providerTask),
+    });
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.resultFile, resultFile);
+    assert.equal(await readFile(path.join(root, task.expectedOutputs[0]), "utf8"), "# Requirement\n");
+    assert.deepEqual(JSON.parse(await readFile(path.join(root, resultFile), "utf8")), dispatchResult(task));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRejectsInvalidCandidatesBeforeAnyWrite() {
+  const cases = [
+    {
+      label: "provider response has extra field",
+      response: (task) => ({ ...workerResponse(task), extra: true }),
+      pattern: /provider response.*unsupported field|unsupported field.*extra/i,
+    },
+    {
+      label: "result identity mismatch",
+      response: (task) => workerResponse(task, {
+        result: dispatchResult(task, { dispatchId: "00000000-0000-4000-8000-000000000009" }),
+      }),
+      pattern: /result.*current task|identity/i,
+    },
+    {
+      label: "completed output is missing from candidates",
+      response: (task) => workerResponse(task, { files: [] }),
+      pattern: /output.*candidate|candidate.*output/i,
+    },
+    {
+      label: "duplicate candidate path",
+      response: (task) => {
+        const response = workerResponse(task);
+        return { ...response, files: [...response.files, response.files[0]] };
+      },
+      pattern: /candidate.*(?:duplicate|collide)|unique.*candidate/i,
+    },
+    {
+      label: "unsupported capability",
+      response: (task) => {
+        const response = workerResponse(task);
+        return { ...response, files: [...response.files, { path: "backend/src/main/Bad.java", content: "bad", capability: "git-write" }] };
+      },
+      pattern: /capability.*git-write/i,
+    },
+    {
+      label: "role does not own backend capability",
+      response: (task) => {
+        const response = workerResponse(task);
+        return { ...response, files: [...response.files, { path: "backend/src/main/Bad.java", content: "bad", capability: "backend-write" }] };
+      },
+      pattern: /not allowed.*capability|capability.*not allowed/i,
+    },
+    {
+      label: "candidate escapes repository",
+      response: (task) => {
+        const response = workerResponse(task);
+        return { ...response, files: [...response.files, { path: "../outside.txt", content: "bad", capability: "phase-output" }] };
+      },
+      pattern: /repository-relative|repository root/i,
+    },
+    {
+      label: "record references stale evidence",
+      response: (task) => workerResponse(task, {
+        result: dispatchResult(task, {
+          records: [{ type: "note", status: "recorded", path: ".harness/runs/M4-B-TEST/phases/00-requirement/stale.md", message: "stale" }],
+        }),
+      }),
+      pattern: /record.*candidate|candidate.*record/i,
+    },
+    {
+      label: "test record lacks evidence path",
+      response: (task) => workerResponse(task, {
+        result: dispatchResult(task, {
+          records: [{ type: "test", status: "passed", message: "missing evidence" }],
+        }),
+      }),
+      pattern: /test.*evidence path|test.*path/i,
+    },
+    {
+      label: "candidate file exceeds limit",
+      response: (task) => {
+        const response = workerResponse(task);
+        response.files[0] = { ...response.files[0], content: "x".repeat(2 * 1024 * 1024 + 1) };
+        return response;
+      },
+      pattern: /candidate.*2 MiB|2 MiB.*candidate/i,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const { root, task, taskFile } = await createWorkerFixture();
+    const output = task.expectedOutputs[0];
+    const resultFile = `.harness/runs/${task.storyId}/phases/00-requirement/result.json`;
+    try {
+      await write(root, output, "original\n");
+      await assert.rejects(
+        runWorkerTask({ root, taskFile, provider: ({ task: providerTask }) => testCase.response(providerTask) }),
+        testCase.pattern,
+        testCase.label,
+      );
+      assert.equal(await readFile(path.join(root, output), "utf8"), "original\n", testCase.label);
+      assert.equal(await exists(root, resultFile), false, testCase.label);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+}
+
+async function testWorkerRejectsCandidateTotalOverLimit() {
+  const root = await createPolicyFixture(policies({
+    roles: [
+      {
+        ...policies().roles[0],
+        name: "backend-developer",
+        category: "execution",
+        readPathPrefixes: [".harness/", "backend/"],
+        writePathPrefixes: [".harness/runs/", "backend/src/"],
+        capabilities: ["phase-output", "backend-write"],
+      },
+      policies().roles[1],
+    ],
+  }), AGENTS.replace("requirement-analyst", "backend-developer").replace("category: planning", "category: execution"));
+  const task = dispatchTask({ ownerAgent: "backend-developer" });
+  const taskFile = `.harness/runs/${task.storyId}/phases/00-requirement/task.json`;
+  await write(root, taskFile, `${JSON.stringify(task, null, 2)}\n`);
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root,
+        taskFile,
+        provider: ({ task: providerTask }) => {
+          const response = workerResponse(providerTask);
+          for (let index = 0; index < 5; index += 1) {
+            response.files.push({
+              path: `backend/src/generated/File${index}.java`,
+              content: "x".repeat(1_700_000),
+              capability: "backend-write",
+            });
+          }
+          return response;
+        },
+      }),
+      /candidate.*8 MiB|8 MiB.*candidate/i,
+    );
+    assert.equal(await exists(root, task.expectedOutputs[0]), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function createBackendWorkerFixture() {
+  const backendAgents = AGENTS.replace("requirement-analyst", "backend-developer").replace("category: planning", "category: execution");
+  const backendPolicy = {
+    ...policies().roles[0],
+    name: "backend-developer",
+    category: "execution",
+    readPathPrefixes: [".harness/", "backend/"],
+    writePathPrefixes: [".harness/runs/", "backend/src/"],
+    capabilities: ["phase-output", "backend-write"],
+  };
+  const root = await createPolicyFixture(policies({ roles: [backendPolicy, policies().roles[1]] }), backendAgents);
+  const task = dispatchTask({ ownerAgent: "backend-developer" });
+  const taskFile = `.harness/runs/${task.storyId}/phases/00-requirement/task.json`;
+  await write(root, taskFile, `${JSON.stringify(task, null, 2)}\n`);
+  return { root, task, taskFile };
+}
+
+async function createTaskScopedBackendWorkerFixture() {
+  const backendAgents = AGENTS.replace("requirement-analyst", "backend-developer").replace("category: planning", "category: execution");
+  const backendPolicy = {
+    ...policies().roles[0],
+    name: "backend-developer",
+    category: "execution",
+    readPathPrefixes: [".harness/", "backend/"],
+    writePathPrefixes: [".harness/runs/", "backend/src/"],
+    capabilities: ["phase-output", "backend-write"],
+  };
+  const root = await createPolicyFixture(policies({ roles: [backendPolicy, policies().roles[1]] }), backendAgents);
+  const task = dispatchTaskV11({ ownerAgent: "backend-developer" });
+  const taskFile = `${task.taskRoot}/task.json`;
+  await write(root, taskFile, `${JSON.stringify(task, null, 2)}\n`);
+  return { root, task, taskFile };
+}
+
+async function createWaveScopedBackendWorkerFixture() {
+  const backendAgents = AGENTS.replace("requirement-analyst", "backend-developer").replace("category: planning", "category: execution");
+  const backendPolicy = {
+    ...policies().roles[0],
+    name: "backend-developer",
+    category: "execution",
+    readPathPrefixes: [".harness/", "backend/"],
+    writePathPrefixes: [".harness/runs/", "backend/src/"],
+    capabilities: ["phase-output", "backend-write"],
+  };
+  const root = await createPolicyFixture(policies({ roles: [backendPolicy, policies().roles[1]] }), backendAgents);
+  const task = dispatchTaskV12();
+  const taskFile = `${task.taskRoot}/task.json`;
+  const resultFile = `${task.taskRoot}/attempts/attempt-0123456789abcdef/result.json`;
+  await write(root, taskFile, `${JSON.stringify(task, null, 2)}\n`);
+  return { root, task, taskFile, resultFile };
+}
+
+function taskScopedWorkerResponse(task, businessPath = "backend/src/main/TaskScopedWorker.java") {
+  return {
+    files: [
+      { path: task.expectedOutputs[0], content: "# Task scoped requirement\n", capability: "phase-output" },
+      { path: businessPath, content: "class TaskScopedWorker {}\n", capability: "backend-write" },
+    ],
+    result: dispatchResultV11(task),
+  };
+}
+
+async function testWaveScopedWorkerUsesAttemptResultAndGuardsEveryRename() {
+  const fixture = await createWaveScopedBackendWorkerFixture();
+  const guarded = [];
+  try {
+    const completed = await runWorkerTask({
+      root: fixture.root,
+      taskFile: fixture.taskFile,
+      resultFile: fixture.resultFile,
+      predictedFiles: ["backend/src/main/**"],
+      beforeCommit: async (entry) => guarded.push(entry),
+      provider: ({ task }) => ({
+        files: [
+          { path: task.expectedOutputs[0], content: "# Wave task\n", capability: "phase-output" },
+          { path: "backend/src/main/WaveTask.java", content: "class WaveTask {}\n", capability: "backend-write" },
+        ],
+        result: dispatchResultV12(task),
+      }),
+    });
+
+    assert.equal(completed.resultFile, fixture.resultFile);
+    assert.deepEqual(guarded.map((entry) => entry.kind), ["candidate", "candidate", "result"]);
+    assert.deepEqual(
+      guarded.map((entry) => entry.path),
+      [...completed.files].sort((left, right) => left.localeCompare(right)).concat(fixture.resultFile),
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testTaskScopedWorkerWritesResultIntoItsTaskRootAndEnforcesTaskIdentity() {
+  const fixture = await createTaskScopedBackendWorkerFixture();
+  try {
+    const completed = await runWorkerTask({
+      root: fixture.root,
+      taskFile: fixture.taskFile,
+      predictedFiles: ["backend/src/main/**"],
+      provider: ({ task }) => taskScopedWorkerResponse(task),
+    });
+    assert.equal(completed.resultFile, `${fixture.task.taskRoot}/result.json`);
+    assert.equal(await exists(fixture.root, completed.resultFile), true);
+    assert.equal(await exists(fixture.root, ".harness/runs/M5-B3-TEST/phases/00-requirement/result.json"), false);
+
+    const mismatch = await createTaskScopedBackendWorkerFixture();
+    try {
+      await assert.rejects(
+        runWorkerTask({
+          root: mismatch.root,
+          taskFile: mismatch.taskFile,
+          predictedFiles: ["backend/src/main/**"],
+          provider: ({ task }) => ({
+            ...taskScopedWorkerResponse(task, "backend/src/main/Mismatch.java"),
+            result: dispatchResultV11(task, { taskId: "T2" }),
+          }),
+        }),
+        /taskId|taskRoot|identity/i,
+      );
+      assert.equal(await exists(mismatch.root, "backend/src/main/Mismatch.java"), false);
+    } finally {
+      await rm(mismatch.root, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testTaskScopedWorkerRejectsBusinessCandidatesOutsidePredictedFilesBeforeWriting() {
+  const fixture = await createTaskScopedBackendWorkerFixture();
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root: fixture.root,
+        taskFile: fixture.taskFile,
+        predictedFiles: ["backend/src/main/**"],
+        provider: ({ task }) => taskScopedWorkerResponse(task, "backend/src/other/OutsidePrediction.java"),
+      }),
+      /predicted file|predictedFiles|outside.*predicted/i,
+    );
+    assert.equal(await exists(fixture.root, fixture.task.expectedOutputs[0]), false);
+    assert.equal(await exists(fixture.root, "backend/src/other/OutsidePrediction.java"), false);
+    assert.equal(await exists(fixture.root, `${fixture.task.taskRoot}/result.json`), false);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRejectsResultSchemaVersionThatDoesNotMatchItsDispatch() {
+  const fixture = await createWorkerFixture();
+  const taskRoot = `.harness/runs/${fixture.task.storyId}/phases/00-requirement/tasks/T1`;
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root: fixture.root,
+        taskFile: fixture.taskFile,
+        provider: ({ task }) => workerResponse(task, {
+          result: {
+            schemaVersion: "1.1",
+            dispatchId: task.dispatchId,
+            storyId: task.storyId,
+            phase: task.phase,
+            batchId: "batch-a1b2c3d4e5f6",
+            taskId: "T1",
+            taskRoot,
+            status: "failed",
+            summary: "Wrong result protocol version.",
+            outputs: [],
+            records: [],
+          },
+        }),
+      }),
+      /schemaVersion|protocol version|schema.*task/i,
+    );
+    assert.equal(await exists(fixture.root, fixture.task.expectedOutputs[0]), false);
+    assert.equal(await exists(fixture.root, `.harness/runs/${fixture.task.storyId}/phases/00-requirement/result.json`), false);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRejectsResultsThatM3CannotApply() {
+  const invalidStatus = await createWorkerFixture();
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root: invalidStatus.root,
+        taskFile: invalidStatus.taskFile,
+        provider: ({ task }) => workerResponse(task, {
+          result: dispatchResult(task, {
+            records: [{ type: "note", status: "unknown", path: task.expectedOutputs[0], message: "invalid" }],
+          }),
+        }),
+      }),
+      /record.*status/i,
+    );
+  } finally {
+    await rm(invalidStatus.root, { recursive: true, force: true });
+  }
+
+  for (const field of ["outputs", "records"]) {
+    const fixture = await createBackendWorkerFixture();
+    const businessPath = "backend/src/main/WorkerGenerated.java";
+    try {
+      await assert.rejects(
+        runWorkerTask({
+          root: fixture.root,
+          taskFile: fixture.taskFile,
+          provider: ({ task }) => ({
+            files: [{ path: businessPath, content: "class WorkerGenerated {}\n", capability: "backend-write" }],
+            result: dispatchResult(task, {
+              status: "failed",
+              outputs: field === "outputs" ? [{ path: businessPath }] : [],
+              records: field === "records"
+                ? [{ type: "note", status: "recorded", path: businessPath, message: "invalid path" }]
+                : [],
+            }),
+          }),
+        }),
+        /phase directory/i,
+      );
+      assert.equal(await exists(fixture.root, businessPath), false);
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  }
+}
+
+async function testWorkerRejectsCollidingCandidatePathsBeforeWrite() {
+  const cases = [
+    ["backend/src/main/generated", "backend/src/main/generated/File.java"],
+  ];
+  if (process.platform === "win32") {
+    cases.push(["backend/src/main/WorkerCase.java", "backend/src/main/workercase.java"]);
+  }
+
+  for (const paths of cases) {
+    const fixture = await createBackendWorkerFixture();
+    try {
+      await assert.rejects(
+        runWorkerTask({
+          root: fixture.root,
+          taskFile: fixture.taskFile,
+          provider: ({ task }) => {
+            const response = workerResponse(task);
+            response.files.push(
+              ...paths.map((candidatePath) => ({
+                path: candidatePath,
+                content: "candidate\n",
+                capability: "backend-write",
+              })),
+            );
+            return response;
+          },
+        }),
+        /candidate.*(?:collide|overlap)|(?:collide|overlap).*candidate/i,
+      );
+      assert.equal(await exists(fixture.root, fixture.task.expectedOutputs[0]), false);
+      for (const candidatePath of paths) assert.equal(await exists(fixture.root, candidatePath), false);
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  }
+}
+
+async function testWorkerRecoversAfterFilesWrittenInterruption() {
+  const { root, prepared } = await createVerticalFixture("M4-B-INTERRUPT");
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root,
+        taskFile: prepared.taskFile,
+        provider: ({ task }) => workerResponse(task),
+        afterFilesWritten: () => { throw new Error("simulated worker interruption"); },
+      }),
+      /simulated worker interruption/,
+    );
+    assert.equal(await exists(root, prepared.task.expectedOutputs[0]), true);
+    assert.equal(await exists(root, prepared.resultFile), false);
+    const interruptedState = await runStateCommand({ root, command: "status" });
+    assert.equal(interruptedState.state.runtime.revision, 1);
+
+    await runWorkerTask({
+      root,
+      taskFile: prepared.taskFile,
+      provider: ({ task }) => {
+        return workerResponse(task, {
+          files: [{
+            path: task.expectedOutputs[0],
+            content: "# Retried requirement\n",
+            capability: "phase-output",
+          }],
+        });
+      },
+    });
+    assert.equal(await readFile(path.join(root, prepared.task.expectedOutputs[0]), "utf8"), "# Retried requirement\n");
+    const applied = await runStoryCommand({ root, command: "apply", now: () => FIXED_NOW });
+    assert.equal(applied.state.phase, "technical-design");
+    assert.equal(applied.state.runtime.revision, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRetriesSameDispatchAfterTimeout() {
+  const { root, prepared } = await createVerticalFixture("M4-B-TIMEOUT");
+  try {
+    await assert.rejects(
+      runWorkerTask({
+        root,
+        taskFile: prepared.taskFile,
+        timeoutMs: 20,
+        provider: () => new Promise(() => {}),
+      }),
+      /timed out/i,
+    );
+    assert.equal((await runStateCommand({ root, command: "status" })).state.runtime.revision, 1);
+    const completed = await runWorkerTask({
+      root,
+      taskFile: prepared.taskFile,
+      provider: ({ task }) => workerResponse(task),
+    });
+    assert.equal(completed.result.dispatchId, prepared.task.dispatchId);
+    const applied = await runStoryCommand({ root, command: "apply", now: () => FIXED_NOW });
+    assert.equal(applied.state.runtime.revision, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerRejectsRepeatedDispatchAfterResultExists() {
+  const { root, prepared } = await createVerticalFixture("M4-B-REPEATED");
+  try {
+    await runWorkerTask({
+      root,
+      taskFile: prepared.taskFile,
+      provider: ({ task }) => workerResponse(task),
+    });
+    const originalContent = await readFile(path.join(root, prepared.task.expectedOutputs[0]), "utf8");
+    let repeatedProviderCalls = 0;
+    const repeat = () => runWorkerTask({
+      root,
+      taskFile: prepared.taskFile,
+      provider: ({ task }) => {
+        repeatedProviderCalls += 1;
+        return workerResponse(task, {
+          files: [{
+            path: task.expectedOutputs[0],
+            content: "# Duplicate execution\n",
+            capability: "phase-output",
+          }],
+        });
+      },
+    });
+
+    await assert.rejects(repeat(), /result.*already exists|already.*result/i);
+    assert.equal(repeatedProviderCalls, 0);
+    assert.equal(await readFile(path.join(root, prepared.task.expectedOutputs[0]), "utf8"), originalContent);
+
+    await runStoryCommand({ root, command: "apply", now: () => FIXED_NOW });
+    await assert.rejects(repeat(), /result.*already exists|already.*result/i);
+    assert.equal(repeatedProviderCalls, 0);
+    assert.equal(await readFile(path.join(root, prepared.task.expectedOutputs[0]), "utf8"), originalContent);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+async function testWorkerVerticalSliceLeavesStateToM3Apply() {
+  const { root, prepared } = await createVerticalFixture();
+  try {
+    const before = await runStateCommand({ root, command: "status" });
+    assert.equal(before.state.runtime.revision, 1);
+    await runWorkerTask({
+      root,
+      taskFile: prepared.taskFile,
+      provider: ({ task }) => workerResponse(task),
+    });
+    const afterWorker = await runStateCommand({ root, command: "status" });
+    assert.equal(afterWorker.state.runtime.revision, 1);
+    assert.equal(afterWorker.state.phase, "requirement");
+
+    const applied = await runStoryCommand({ root, command: "apply", now: () => FIXED_NOW });
+    assert.equal(applied.state.phase, "technical-design");
+    assert.equal(applied.state.runtime.revision, 2);
+    const current = await runStateCommand({ root, command: "status" });
+    assert.equal(current.state.runtime.revision, 2);
+    assert.equal(current.state.logs.filter((entry) => entry.type === "transition").length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+await testDispatchContractsValidateSchemaShape();
+await testDispatchContractsValidateTaskScopedV11Shape();
+await testTaskScopedDispatchSchemasDescribeStrictV11Contracts();
+await testRepositoryWorkerPoliciesMatchAgentRegistry();
+await testWorkerPolicyLoaderRejectsRegistryDrift();
+await testWorkerLoadsOnlyAllowedExplicitContext();
+await testWorkerRejectsInvalidContextBeforeProvider();
+await testWorkerRejectsContextTotalOverLimit();
+await testWorkerProviderFailureAndTimeoutLeaveNoResult();
+await testWorkerRejectsInvalidTimeoutBeforeProvider();
+await testWorkerWritesValidatedFilesAndResultLast();
+await testWorkerRejectsInvalidCandidatesBeforeAnyWrite();
+await testWorkerRejectsCandidateTotalOverLimit();
+await testWaveScopedWorkerUsesAttemptResultAndGuardsEveryRename();
+await testTaskScopedWorkerWritesResultIntoItsTaskRootAndEnforcesTaskIdentity();
+await testTaskScopedWorkerRejectsBusinessCandidatesOutsidePredictedFilesBeforeWriting();
+await testWorkerRejectsResultSchemaVersionThatDoesNotMatchItsDispatch();
+await testWorkerRejectsResultsThatM3CannotApply();
+await testWorkerRejectsCollidingCandidatePathsBeforeWrite();
+await testWorkerRecoversAfterFilesWrittenInterruption();
+await testWorkerRetriesSameDispatchAfterTimeout();
+await testWorkerRejectsRepeatedDispatchAfterResultExists();
+await testWorkerVerticalSliceLeavesStateToM3Apply();
+console.log("worker-runtime tests passed");

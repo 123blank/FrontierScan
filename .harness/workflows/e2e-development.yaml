@@ -8,7 +8,7 @@ phases:
     owner_agent: requirement-analyst
     purpose: Clarify the story, acceptance criteria, affected modules, and blocking questions.
     required_outputs:
-      - .harness/outputs/requirement-breakdown.md
+      - .harness/runs/{runId}/phases/00-requirement/requirement-breakdown.md
     next:
       - technical-design
   - id: technical-design
@@ -16,7 +16,7 @@ phases:
     owner_agent: requirement-analyst
     purpose: Produce a technical design using only relevant knowledge files.
     required_outputs:
-      - .harness/outputs/technical-design.md
+      - .harness/runs/{runId}/phases/01-technical-design/technical-design.md
     next:
       - task-dag
   - id: task-dag
@@ -24,7 +24,7 @@ phases:
     owner_agent: task-planner
     purpose: Split work into tasks, dependencies, waves, predicted file touches, and global changes.
     required_outputs:
-      - .harness/outputs/task-dag.json
+      - .harness/runs/{runId}/phases/02-task-dag/task-dag.json
     next:
       - implementation
   - id: implementation
@@ -32,7 +32,7 @@ phases:
     owner_agent: backend-developer
     purpose: Implement task-owned changes only.
     required_outputs:
-      - .harness/outputs/implementation-notes.md
+      - .harness/runs/{runId}/phases/03-implementation/implementation-notes.md
     next:
       - unit-test
   - id: unit-test
@@ -40,7 +40,7 @@ phases:
     owner_agent: unit-tester
     purpose: Run selected backend/frontend tests and record results.
     required_outputs:
-      - .harness/reports/test-report.md
+      - .harness/runs/{runId}/phases/04-unit-test/test-report.md
     next:
       - code-review
   - id: code-review
@@ -48,7 +48,7 @@ phases:
     owner_agent: code-reviewer
     purpose: Review code changes and emit findings without modifying files.
     required_outputs:
-      - .harness/reports/code-review-report.md
+      - .harness/runs/{runId}/phases/05-code-review/code-review-report.md
     next:
       - build-publish
   - id: build-publish
@@ -56,7 +56,7 @@ phases:
     owner_agent: publisher
     purpose: Build and optionally publish after explicit confirmation.
     required_outputs:
-      - .harness/reports/build-report.md
+      - .harness/runs/{runId}/phases/06-build-publish/build-report.md
     next:
       - interface-verification
   - id: interface-verification
@@ -64,7 +64,7 @@ phases:
     owner_agent: interface-verifier
     purpose: Verify API/UI behavior against acceptance criteria where an environment is available.
     required_outputs:
-      - .harness/reports/interface-verification-report.md
+      - .harness/runs/{runId}/phases/07-interface-verification/interface-verification-report.md
     next:
       - git-delivery
   - id: git-delivery
@@ -72,7 +72,7 @@ phases:
     owner_agent: git-committer
     purpose: Summarize owned changes and prepare commit/PR only after explicit confirmation.
     required_outputs:
-      - .harness/reports/delivery-report.md
+      - .harness/runs/{runId}/phases/08-git-delivery/delivery-report.md
     next:
       - done
 quality_gates:

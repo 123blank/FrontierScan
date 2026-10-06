@@ -7,6 +7,7 @@
     "schemaVersion",
     "storyId",
     "phase",
+    "runtime",
     "requirement",
     "knowledge",
     "tasks",
@@ -40,6 +41,67 @@
         "done",
         "blocked"
       ]
+    },
+    "runtime": {
+      "type": "object",
+      "required": [
+        "runId",
+        "workflow",
+        "status",
+        "revision",
+        "previousPhase",
+        "blocked",
+        "records",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+        "workflow": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["template", "active", "blocked", "completed"] },
+        "revision": { "type": "integer", "minimum": 0 },
+        "previousPhase": { "type": ["string", "null"] },
+        "blocked": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["previousPhase", "reason", "owner", "suggestedAction", "blockedAt", "resumedAt"],
+              "properties": {
+                "previousPhase": { "type": "string" },
+                "reason": { "type": "string" },
+                "owner": { "type": "string" },
+                "suggestedAction": { "type": "string" },
+                "blockedAt": { "type": "string" },
+                "resumedAt": { "type": ["string", "null"] }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "phase", "status", "path", "message", "actor", "createdAt"],
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string", "enum": ["output", "test", "review", "approval", "note"] },
+              "phase": { "type": "string" },
+              "status": { "type": "string" },
+              "path": { "type": ["string", "null"] },
+              "message": { "type": "string" },
+              "actor": { "type": "string" },
+              "createdAt": { "type": "string" },
+              "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "createdAt": { "type": ["string", "null"] },
+        "updatedAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
     },
     "requirement": {
       "type": "object",

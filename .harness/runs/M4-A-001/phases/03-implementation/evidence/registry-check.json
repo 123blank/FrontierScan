@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "collectedAt": "2026-07-17T15:31:15.4530547+08:00",
+  "skillRegistry": {
+    "registeredNameCount": 13,
+    "registeredPathCount": 13,
+    "directoryCount": 13,
+    "allFrontmatterNamesMatchDirectories": true,
+    "allDescriptionsPresent": true,
+    "allDirectoriesRegistered": true,
+    "passed": true
+  },
+  "agentRegistry": {
+    "roleCount": 12,
+    "workflowOwnerCount": 8,
+    "missingWorkflowOwners": [],
+    "passed": true
+  },
+  "lineEndingCompatibility": "frontmatter probe accepts LF and CRLF",
+  "passed": true
+}

@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-D-B-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "绑定批准计划并暴露锁事实",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-runtime.test.mjs",
+        ".harness/schemas/worktree-wave-lock.schema.json",
+        ".harness/schemas/worktree-wave-status.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "WaveCreate 缺少确认或计划哈希时在任何 Git 写入前失败",
+        "WaveStatus 以结构化字段展示当前创建锁和恢复锁哈希"
+      ]
+    },
+    {
+      "taskId": "T2",
+      "title": "实现普通 WaveCreate 与波次 allowlist",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "合法 wave 按稳定顺序创建多个 Worktree",
+        "同一 Story 其他 wave 或计划外 Worktree 被拒绝"
+      ]
+    },
+    {
+      "taskId": "T3",
+      "title": "实现恢复锁与所有权 fencing",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "旧创建所有者在恢复锁出现后不能继续副作用或删除锁",
+        "恢复再次中断后可通过新批准和新锁哈希继续"
+      ]
+    },
+    {
+      "taskId": "T4",
+      "title": "实现部分创建恢复与完成回执",
+      "type": "integration",
+      "status": "pending",
+      "ownerAgent": "backend-developer",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-runtime.mjs",
+        ".harness/scripts/tests/worktree-wave-runtime.test.mjs",
+        ".harness/schemas/worktree-wave-creation-receipt.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "部分失败保留已创建项并只重试缺失项",
+        "只有当前 Git 事实为 ready 时才写入可验证回执"
+      ]
+    },
+    {
+      "taskId": "T5",
+      "title": "接入 PowerShell、结构登记和项目文档",
+      "type": "docs",
+      "status": "pending",
+      "ownerAgent": "task-planner",
+      "predictedFiles": [
+        ".harness/scripts/run-worktree.ps1",
+        ".harness/structure-manifest.yaml",
+        ".harness/scripts/validate-structure.ps1",
+        ".harness/README.md",
+        ".harness/scripts/README.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        "docs/AI-handover.md",
+        "llm-knowledge/overview.md",
+        "docs/harness-m5d-wave-create/REPORT.md"
+      ],
+      "acceptanceCriteria": [
+        "PowerShell 和 Node CLI 只接受设计批准的 WaveCreate 参数",
+        "结构、回归、Smoke、知识新鲜度和 owned diff Review 通过"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "T1",
+      "to": "T2",
+      "reason": "普通创建依赖不可变计划和锁事实契约"
+    },
+    {
+      "from": "T2",
+      "to": "T3",
+      "reason": "恢复 fencing 依赖普通创建所有权模型"
+    },
+    {
+      "from": "T3",
+      "to": "T4",
+      "reason": "部分恢复和回执必须建立在稳定锁状态机上"
+    },
+    {
+      "from": "T4",
+      "to": "T5",
+      "reason": "入口和文档必须描述最终已验证行为"
+    }
+  ],
+  "waves": [
+    ["T1"],
+    ["T2"],
+    ["T3"],
+    ["T4"],
+    ["T5"]
+  ],
+  "globalChanges": [],
+  "risks": [
+    "Windows 文件锁替换和受控中断恢复必须通过真实临时 Git fixture 验证",
+    "恢复流程依赖用户确认旧创建和恢复进程均已停止"
+  ]
+}

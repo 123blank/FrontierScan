@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/worktree-status.schema.json",
+  "title": "FrontierScan Harness Worktree Status",
+  "type": "object",
+  "required": ["schemaVersion", "storyId", "runId", "taskId", "planSha256", "state", "branch", "worktreePath", "baseCommit", "headCommit", "observedAt", "details"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "storyId": { "type": "string" },
+    "runId": { "type": "string" },
+    "taskId": { "type": "string" },
+    "planSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "state": { "type": "string", "enum": ["absent", "created", "inconsistent"] },
+    "branch": { "type": "string" },
+    "worktreePath": { "type": "string" },
+    "baseCommit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "headCommit": { "type": ["string", "null"] },
+    "observedAt": { "type": "string" },
+    "details": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

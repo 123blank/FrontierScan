@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "1.0",
+  "storyId": "M5-B1-001",
+  "nodes": [
+    {
+      "taskId": "T1",
+      "title": "建立编排契约与前置门禁",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-worker-runtime.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "状态、DAG、owner、base 和 Worktree 身份在 Provider 调用前完成校验。",
+        "不支持的多任务或 owner 不一致场景失败关闭且 state 不变。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T2",
+      "title": "实现混合输入快照",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-worker-runtime.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs",
+        ".harness/schemas/worktree-worker-input-manifest.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "当前 run Harness 输入按相对路径复制并记录哈希。",
+        "源码和文档直接使用 base Worktree，非法路径、链接和大小超限在 Provider 前拒绝。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T3",
+      "title": "执行 Worker 并核验写入集合",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-worker-runtime.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs"
+      ],
+      "acceptanceCriteria": [
+        "复用 M4-B Worker 的上下文、超时、策略和候选写入门禁。",
+        "输入篡改、删除和未识别 Git 差异不会生成成功凭据。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T4",
+      "title": "实现分级回收与恢复",
+      "type": "integration",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/lib/worktree-worker-runtime.mjs",
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs",
+        ".harness/schemas/worktree-worker-receipt.schema.json"
+      ],
+      "acceptanceCriteria": [
+        "phase-output-only 返回 ready-for-apply，业务写入返回 ready-for-integration。",
+        "相同 dispatch 的中断恢复不重复调用 Provider，正式 result 始终最后写入。"
+      ],
+      "ownerAgent": "backend-developer"
+    },
+    {
+      "taskId": "T5",
+      "title": "完成纵向回归审核与中文文档",
+      "type": "test",
+      "status": "pending",
+      "predictedFiles": [
+        ".harness/scripts/tests/worktree-worker-runtime.test.mjs",
+        ".harness/structure-manifest.yaml",
+        ".harness/scripts/README.md",
+        "docs/harness-m5b-worktree-worker/**",
+        "docs/AI-handover.md",
+        "docs/harness-architecture-adaptation.md",
+        "docs/harness-structure-checklist.md",
+        "llm-knowledge/overview.md"
+      ],
+      "acceptanceCriteria": [
+        "临时 Git 仓库跑通 ready-for-apply 与 ready-for-integration 两条链路。",
+        "Harness 回归、结构、Smoke、知识和 diff 门禁通过，最终 Review 无 BLOCKER/WARNING。"
+      ],
+      "ownerAgent": "unit-tester"
+    }
+  ],
+  "edges": [
+    { "from": "T1", "to": "T2", "reason": "输入快照必须建立在身份与 Worktree 前置门禁之上。" },
+    { "from": "T2", "to": "T3", "reason": "Worker 只能消费已验证并固化的输入清单。" },
+    { "from": "T3", "to": "T4", "reason": "分级回收依赖经过核验的 Worker 写入集合。" },
+    { "from": "T4", "to": "T5", "reason": "纵向验收和文档必须基于完整回收与恢复行为。" }
+  ],
+  "waves": [["T1"], ["T2"], ["T3"], ["T4"], ["T5"]],
+  "globalChanges": [
+    "新增 M5-B1 Worktree Worker 内部编排与独立证据契约。"
+  ],
+  "risks": [
+    "业务代码尚未集成时写入 M3 正式 result 会导致状态领先，因此 ready-for-integration 必须使用独立证据路径。",
+    "同进程 mock Provider 不是操作系统沙箱，真实 Agent 运行时隔离延后复验。"
+  ]
+}

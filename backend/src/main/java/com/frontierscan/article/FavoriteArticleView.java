@@ -31,5 +31,6 @@ public record FavoriteArticleView(
         String sourceUrl,
         OffsetDateTime publishedAt,
         OffsetDateTime collectedAt,
+        OffsetDateTime readAt,
         OffsetDateTime favoritedAt
 ) {}

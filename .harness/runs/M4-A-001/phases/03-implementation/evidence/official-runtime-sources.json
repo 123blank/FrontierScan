@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0",
+  "collectedAt": "2026-07-17T15:31:15.4530547+08:00",
+  "sources": [
+    {
+      "topic": "repo skills and progressive disclosure",
+      "url": "https://learn.chatgpt.com/docs/customization/overview#skills",
+      "relevantConclusion": "Current documentation recommends .agents/skills for repository Skills and describes metadata-first discovery."
+    },
+    {
+      "topic": "plugin packaging",
+      "url": "https://learn.chatgpt.com/docs/build-plugins#create-a-plugin-manually",
+      "relevantConclusion": "A Plugin adds a manifest, packaged skills and marketplace installation; it is unnecessary for the current single-repository compatibility target."
+    },
+    {
+      "topic": "project config and permissions",
+      "url": "https://learn.chatgpt.com/docs/config-file/config-reference#configtoml",
+      "relevantConclusion": "Trusted projects may load project-scoped .codex/config.toml; permissions and skills.config can constrain future runtime workers."
+    },
+    {
+      "topic": "custom agent schema",
+      "url": "https://learn.chatgpt.com/docs/agent-configuration/subagents#custom-agent-file-schema",
+      "relevantConclusion": "Custom agents require name, description and developer instructions and may include model, sandbox, MCP and Skill settings."
+    },
+    {
+      "topic": "agent orchestration",
+      "url": "https://learn.chatgpt.com/docs/agent-configuration/subagents#orchestration-and-thread-controls",
+      "relevantConclusion": "Codex owns subagent orchestration; the FrontierScan YAML registry alone is not an active runtime."
+    }
+  ],
+  "decision": "Keep .codex/skills for codex-cli 0.144.1 because direct target-runtime evidence passed; re-evaluate on CLI upgrade or additional Codex surfaces.",
+  "pluginRequired": false
+}

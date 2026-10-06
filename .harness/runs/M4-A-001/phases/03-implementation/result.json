@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "dispatchId": "141578fe-b7d8-4b5a-bef2-6845557e7430",
+  "storyId": "M4-A-001",
+  "phase": "implementation",
+  "status": "completed",
+  "summary": "M4-A 完成 CLI Skill 正负对照、注册表校验、官方机制分析、12 角色映射和中文 DAG UTF-8 修复。",
+  "outputs": [
+    {
+      "path": ".harness/runs/M4-A-001/phases/03-implementation/implementation-notes.md"
+    }
+  ],
+  "records": [
+    {
+      "type": "note",
+      "status": "recorded",
+      "path": ".harness/runs/M4-A-001/phases/03-implementation/evidence/skill-discovery.json",
+      "message": "Target CLI discovered all 13 project Skills in three runs; outside-repository control discovered none.",
+      "actor": "codex"
+    },
+    {
+      "type": "note",
+      "status": "recorded",
+      "path": ".harness/runs/M4-A-001/phases/03-implementation/evidence/agent-runtime-mapping.json",
+      "message": "All 12 registry roles have a future constrained Worker mapping; no Worker was started.",
+      "actor": "codex"
+    }
+  ]
+}

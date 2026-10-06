@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontierscan.local/harness/agent-development-receipt.schema.json",
+  "title": "FrontierScan Agent Development Receipt",
+  "type": "object",
+  "required": ["schemaVersion", "executorKind", "storyId", "runId", "dispatchId", "taskId", "phase", "ownerAgent", "providerRequestId", "providerExecutionId", "baseCommit", "headCommit", "outcome", "requestFile", "requestSha256", "executionReceiptFile", "executionReceiptSha256", "candidateManifestFile", "candidateManifestSha256", "testReceiptFile", "testReceiptSha256", "resultEvidenceFile", "resultSha256", "contextEvidenceFile", "contextEvidenceSha256", "files", "completedAt"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"}, "executorKind": {"const": "development-provider"}, "storyId": {"type": "string"}, "runId": {"type": "string"}, "dispatchId": {"type": "string", "format": "uuid"}, "taskId": {"type": "string"}, "phase": {"const": "implementation"},
+    "ownerAgent": {"enum": ["backend-developer", "frontend-developer"]}, "providerRequestId": {"type": "string", "format": "uuid"}, "providerExecutionId": {"type": "string", "format": "uuid"},
+    "baseCommit": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}, "headCommit": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"}, "outcome": {"const": "ready-for-integration"},
+    "requestFile": {"type": "string"}, "requestSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "executionReceiptFile": {"type": "string"}, "executionReceiptSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "candidateManifestFile": {"type": "string"}, "candidateManifestSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "testReceiptFile": {"type": "string"}, "testReceiptSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "resultEvidenceFile": {"type": "string"}, "resultSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "contextEvidenceFile": {"type": "string"}, "contextEvidenceSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "files": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["path", "sha256", "bytes", "kind"], "properties": {"path": {"type": "string"}, "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "bytes": {"type": "integer", "minimum": 0, "maximum": 2097152}, "kind": {"enum": ["backend", "frontend", "phase-output"]}}, "additionalProperties": false}},
+    "completedAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}
